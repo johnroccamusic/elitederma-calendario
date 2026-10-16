@@ -9,10 +9,12 @@
 // piu' una trentina di campi: un muro che nessuno legge. Qui si apre una
 // cosa alla volta, e il regolamento ha i suoi nove punti ciascuno per
 // conto suo — come sull'originale.
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Field } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, inputStyle } from "../ui/stile.js";
 import { INTRO, SEZIONI, CONSENSI } from "./contenuto.js";
+import { leggiScelte, salvaScelta, etichettaOrigine, ORIGINE_PROPOSTA } from "./campi.js";
+import { supabase } from "../supabase.js";
 
 function Apribile({ titolo, sottotitolo, aperto, onToccata, bordoOro = false, children }) {
   return (
@@ -38,6 +40,45 @@ function Apribile({ titolo, sottotitolo, aperto, onToccata, bordoOro = false, ch
         </span>
       </button>
       {aperto && <div style={{ padding: "4px 14px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>{children}</div>}
+    </div>
+  );
+}
+
+// La barra sopra ogni campo: le due spunte che decidono il modulo.
+//
+// "Va sul modulo" e' la domanda principale. "Arriva gia' compilato"
+// esiste perche' a volte si vuole che sia l'allieva a riscrivere un dato
+// che pure abbiamo — il telefono, per esempio, per sapere se quello in
+// scheda e' ancora buono. Un campo escluso non ha la seconda spunta:
+// non c'e' niente da precompilare in un campo che non esce.
+function ComandiCampo({ c, scelta, onCambia, salvando }) {
+  const incluso = scelta?.incluso !== false;
+  const origine = scelta?.precompilato_da ?? null;
+  const proposta = ORIGINE_PROPOSTA[c.chiave] || null;
+  const puoPrecompilare = !!proposta;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
+      padding: "6px 10px", marginBottom: 6,
+      background: incluso ? "#FAF8F3" : "#F3F1EC",
+      border: `1px solid ${CREAM_BORDER}`, borderRadius: 9,
+    }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: 12, fontWeight: 700, color: incluso ? NAVY : MUTED }}>
+        <input type="checkbox" checked={incluso} disabled={salvando}
+               onChange={() => onCambia({ incluso: !incluso })} />
+        Va sul modulo
+      </label>
+      {incluso && puoPrecompilare && (
+        <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: 12, color: origine ? "#1B7F4C" : MUTED }}>
+          <input type="checkbox" checked={!!origine} disabled={salvando}
+                 onChange={() => onCambia({ precompilato_da: origine ? null : proposta })} />
+          Arriva già compilato
+          {origine && <b style={{ fontWeight: 700 }}>· {etichettaOrigine(origine)}</b>}
+        </label>
+      )}
+      {incluso && !puoPrecompilare && (
+        <span style={{ fontSize: 12, color: MUTED }}>Lo compila l'allieva</span>
+      )}
     </div>
   );
 }
@@ -81,6 +122,37 @@ function CampoDisegnato({ c, valore, onCambia }) {
 }
 
 export default function ModuloIscrizione() {
+  const [scelte, setScelte] = useState({});
+  const [erroreScelte, setErroreScelte] = useState("");
+  const [salvando, setSalvando] = useState("");
+  const [chi, setChi] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    leggiScelte().then(({ scelte: s, errore }) => {
+      if (!vivo) return;
+      if (errore) setErroreScelte(errore); else setScelte(s);
+    });
+    supabase.auth.getUser().then(({ data }) => { if (vivo) setChi(data?.user?.email || ""); });
+    return () => { vivo = false; };
+  }, []);
+
+  async function cambiaScelta(chiave, patch) {
+    const prima = scelte[chiave] || { chiave, incluso: true, precompilato_da: null };
+    // si accende subito e si corregge solo se il database rifiuta: una
+    // spunta che aspetta la rete sembra rotta
+    setScelte((s) => ({ ...s, [chiave]: { ...prima, ...patch } }));
+    setSalvando(chiave);
+    const errore = await salvaScelta(chiave, { incluso: prima.incluso, precompilato_da: prima.precompilato_da, ...patch }, chi);
+    setSalvando("");
+    if (errore) { setErroreScelte(errore); setScelte((s) => ({ ...s, [chiave]: prima })); }
+    else setErroreScelte("");
+  }
+
+  const tuttiCampi = SEZIONI.filter((s) => s.tipo === "campi").flatMap((s) => s.campi);
+  const quantiInclusi = tuttiCampi.filter((c) => scelte[c.chiave]?.incluso !== false).length;
+  const quantiPrecompilati = tuttiCampi.filter(
+    (c) => scelte[c.chiave]?.incluso !== false && scelte[c.chiave]?.precompilato_da).length;
+
   const [aperta, setAperta] = useState("regolamento");
   const [puntoAperto, setPuntoAperto] = useState(null);
   const [risposte, setRisposte] = useState({});
@@ -92,9 +164,21 @@ export default function ModuloIscrizione() {
         border: `1px solid ${GOLD}`, background: "#FDF8EF", borderRadius: 12,
         padding: "10px 12px", marginBottom: 14, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5,
       }}>
-        Copia fedele del modulo che gira oggi sul sito. <b style={{ color: NAVY }}>Non salva e non invia niente</b>:
-        serve a vederlo tutto insieme prima di cambiarlo.
+        Questo è il modulo che verrà mandato all'allieva. Con le spunte decidi <b style={{ color: NAVY }}>quali campi
+        ci finiscono</b> e <b style={{ color: NAVY }}>quali arrivano già compilati</b> da quello che il venditore ha
+        scritto nella scheda. Il testo qui sotto è la copia fedele del modulo del sito: compilarlo da qui non
+        salva e non invia niente.
+        <div style={{ marginTop: 8, fontWeight: 700, color: NAVY }}>
+          {quantiInclusi} camp{quantiInclusi === 1 ? "o" : "i"} su {tuttiCampi.length} sul modulo
+          {" · "}{quantiPrecompilati} {quantiPrecompilati === 1 ? "arriva" : "arrivano"} già compilat{quantiPrecompilati === 1 ? "o" : "i"}
+          {" · "}{quantiInclusi - quantiPrecompilati} da compilare
+        </div>
       </div>
+      {erroreScelte && (
+        <div style={{ fontSize: 12.5, color: "#B3261E", marginBottom: 10 }}>
+          Non riesco a salvare le spunte: {erroreScelte}
+        </div>
+      )}
 
       <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, lineHeight: 1.35 }}>{INTRO.titolo}</div>
       <div style={{ fontSize: 12, color: MUTED, margin: "4px 0 14px", lineHeight: 1.45 }}>{INTRO.sottotitolo}</div>
@@ -129,16 +213,26 @@ export default function ModuloIscrizione() {
 
             {s.tipo === "campi" && (
               <div style={{ marginTop: 10 }}>
-                {s.campi.map((c) => (
-                  <div key={c.chiave + c.etichetta}>
-                    {c.soloPer && (
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: GOLD, marginBottom: 4 }}>
-                        Solo per {c.soloPer}
+                {s.campi.map((c) => {
+                  const scelta = scelte[c.chiave];
+                  const incluso = scelta?.incluso !== false;
+                  return (
+                    <div key={c.chiave + c.etichetta} style={{ marginBottom: 10 }}>
+                      {c.soloPer && (
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: GOLD, marginBottom: 4 }}>
+                          Solo per {c.soloPer}
+                        </div>
+                      )}
+                      <ComandiCampo c={c} scelta={scelta} salvando={salvando === c.chiave}
+                                    onCambia={(patch) => cambiaScelta(c.chiave, patch)} />
+                      {/* un campo escluso resta visibile ma spento: serve
+                          vedere cosa si sta togliendo, non farlo sparire */}
+                      <div style={{ opacity: incluso ? 1 : 0.4, pointerEvents: incluso ? undefined : "none" }}>
+                        <CampoDisegnato c={c} valore={risposte[c.chiave]} onCambia={metti(c.chiave)} />
                       </div>
-                    )}
-                    <CampoDisegnato c={c} valore={risposte[c.chiave]} onCambia={metti(c.chiave)} />
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
