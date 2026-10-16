@@ -5451,11 +5451,35 @@ function marginePercentualeMedio(prodotti) {
 // Dividere per 1,22 e' il conto giusto per un IMPORTO espresso al netto,
 // non per una percentuale, e faceva uscire il 24,59% al posto del 30%:
 // un terzo di sconto in meno di quello scritto sul coupon.
+// LA PERCENTUALE DA MANDARE A WOOCOMMERCE.
+//
+// WooCommerce sa fare una cosa sola: togliere una percentuale dal prezzo
+// esposto, che da noi e' il lordo. Se la base scelta sul coupon e' un'
+// altra — il netto, il margine — al sito non si manda quella percentuale,
+// si manda quella che toglie gli STESSI EURO.
+//
+// NETTO. Il 30% di 100 € imponibili sono 30 €. Su un prezzo esposto di
+// 122 € quei 30 € sono il 24,59%. Quindi `30 / 1,22`.
+//
+// QUESTO E' IL GUASTO CHE TORNAVA DA MESI. Fino al 16/10/2026 questo
+// ramo tornava `pct` tale e quale: al sito andava 30 invece di 24,59, e
+// WooCommerce faceva il 30% sul lordo mentre il POS faceva il 30% sul
+// netto. Ogni 100 € di imponibile il sito regalava 6,60 € in piu'. Si
+// correggeva a mano sul coupon, e al primo riallineamento dall'app
+// tornava 30, perche' il numero lo ricalcola questa funzione. Il segno
+// era li' sotto gli occhi: `fattoreIva` veniva calcolato e nel ramo
+// "netto" non lo usava nessuno.
+//
+// IL LIMITE, detto chiaro: la conversione usa l'aliquota standard. Su un
+// prodotto con un'aliquota diversa il sito sbaglierebbe di quella
+// differenza, perche' un coupon WooCommerce porta un numero solo e non
+// puo' cambiarlo prodotto per prodotto. Per quei casi serve il frammento
+// a fasce, che il prezzo netto lo legge da ogni riga.
 function percentualeWooEquivalente(percentuale, base, margineMedioPct) {
   const pct = Number(percentuale) || 0;
   if (!(pct > 0)) return pct;
   const fattoreIva = 1 + ALIQUOTA_IVA_STANDARD / 100;
-  if (base === "netto") return round2(pct);
+  if (base === "netto") return round2(pct / fattoreIva);
   if (base === "margine") return round2((pct * (Number(margineMedioPct) || 0)) / 100 / fattoreIva);
   return round2(pct);
 }
