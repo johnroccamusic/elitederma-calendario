@@ -115,12 +115,38 @@ export default function ModuloIscrizione({ icone = {} }) {
   }
 
   // un campo del modulo: l'etichetta con la spunta, e sotto la casella
-  // vuota com'e' sul modulo del venditore
-  function Campo({ chiave, larghezza = "1 1 140px", minLabelHeight }) {
+  // vuota com'e' sul modulo del venditore.
+  //
+  // `scelte` lo fa diventare una fila di tasti invece di una casella:
+  // l'intestazione Privato/Azienda sulla scheda e' cosi', e qui deve
+  // essere uguale — se no non e' piu' lo specchio di niente.
+  function Campo({ chiave, larghezza = "1 1 140px", minLabelHeight, opzioni = null }) {
+    const on = acceso(chiave);
     return (
       <div style={{ flex: larghezza, minWidth: 0 }}>
         <Field label={<Etichetta chiave={chiave} />} minLabelHeight={minLabelHeight}>
-          <input style={{ ...campoAreaScheda, background: acceso(chiave) ? "#fff" : "#F1EEE7" }} value="" disabled readOnly />
+          {opzioni ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              {opzioni.map((o, i) => (
+                <div
+                  key={o}
+                  style={{
+                    ...fontBody, flex: 1, minHeight: 40, borderRadius: 10,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 13, fontWeight: 700,
+                    background: i === 0 ? (on ? NAVY : "#B9B2A4") : "#fff",
+                    color: i === 0 ? "#fff" : NAVY,
+                    border: `1px solid ${i === 0 ? (on ? NAVY : "#B9B2A4") : CREAM_BORDER}`,
+                    opacity: on ? 1 : 0.6,
+                  }}
+                >
+                  {o}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <input style={{ ...campoAreaScheda, background: on ? "#fff" : "#F1EEE7" }} value="" disabled readOnly />
+          )}
         </Field>
       </div>
     );
@@ -169,7 +195,9 @@ export default function ModuloIscrizione({ icone = {} }) {
           <Campo chiave="telefono" larghezza="1 1 150px" />
         </RigaLettura>
         <RigaLettura><Campo chiave="tutor" larghezza="1 1 180px" /></RigaLettura>
-        <RigaLettura><Campo chiave="tipo_cliente" larghezza="1 1 100%" /></RigaLettura>
+        <RigaLettura>
+          <Campo chiave="tipo_cliente" larghezza="1 1 260px" opzioni={["Privato", "Azienda"]} />
+        </RigaLettura>
       </div>
 
       <div style={pannello}>

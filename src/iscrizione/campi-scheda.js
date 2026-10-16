@@ -23,7 +23,7 @@ export const CAMPI_MODULO = [
   { chiave: "email", etichetta: "Email" },
   { chiave: "telefono", etichetta: "Cellulare (+39...)" },
   { chiave: "tutor", etichetta: "Tutor" },
-  { chiave: "tipo_cliente", etichetta: "Intestazione (Privato / Azienda)" },
+  { chiave: "tipo_cliente", etichetta: "Intestazione" },
   // Dati di fatturazione
   { chiave: "fattura_ditta", etichetta: "Nome ditta", soloSe: { chiave: "tipo_cliente", valore: "azienda" } },
   { chiave: "fattura_indirizzo", etichetta: "Indirizzo", soloSe: { chiave: "tipo_cliente", valore: "azienda" } },
