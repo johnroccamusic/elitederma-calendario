@@ -234,23 +234,22 @@ export default function TestoContratto({ Icona, amministratore = true }) {
                   onChange={(e) => scriviNellaBozza((c) => { c[campo] = e.target.value; })} />
               </Field>
             ))}
-            <Field label="Informativa sul trattamento dei dati — un capoverso per riga">
-              <textarea style={{ ...areaTesto, minHeight: 260 }}
-                value={aRighe(bozza.informativaTesto)}
-                onChange={(e) => scriviNellaBozza((c) => { c.informativaTesto = daRighe(e.target.value); })} />
-            </Field>
-            <Field label="Autorizzazione alle immagini">
-              <textarea style={{ ...areaTesto, minHeight: 160 }}
-                value={bozza.immaginiTesto || ""}
-                onChange={(e) => scriviNellaBozza((c) => { c.immaginiTesto = e.target.value; })} />
+            {/* L'informativa e le immagini NON si correggono da qui: sono
+                il Punto 9 e il Punto 10 del regolamento, e si correggono
+                la' insieme agli altri punti. Due caselle che scrivessero
+                lo stesso testo in due posti porterebbero, prima o poi, a
+                un modulo che dice una cosa nel regolamento e un'altra in
+                fondo alla pagina. */}
+            <Field label="Rimando all'informativa">
+              <input style={{ ...campoAreaScheda, width: "100%", boxSizing: "border-box", minWidth: 0 }}
+                value={bozza.informativaRimando || ""}
+                onChange={(e) => scriviNellaBozza((c) => { c.informativaRimando = e.target.value; })} />
             </Field>
           </>
         ) : (
           <>
             <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{testi.consensi.informativaEtichetta}</div>
-            {(testi.consensi.informativaTesto || []).map((p, i) => <p key={i} style={paragrafo}>{p}</p>)}
-            <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, margin: "18px 0 4px" }}>Autorizzazione alle immagini</div>
-            <p style={{ ...paragrafo, whiteSpace: "pre-line" }}>{testi.consensi.immaginiTesto}</p>
+            <p style={paragrafo}>{testi.consensi.informativaRimando}</p>
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, fontSize: 11.5, color: MUTED, lineHeight: 1.7 }}>
               Sul modulo l'allieva vede anche: <b style={{ color: NAVY }}>{testi.consensi.regolamentoEtichetta}</b> ·
               {" "}<b style={{ color: NAVY }}>{testi.consensi.firmaEtichetta}</b> ·

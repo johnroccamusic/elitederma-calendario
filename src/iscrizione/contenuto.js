@@ -1,5 +1,10 @@
-// IL MODULO DI ISCRIZIONE, copiato dal modulo che gira oggi su
-// elitederma.eu/modulo-iscrizione-corsi.
+// IL MODULO DI ISCRIZIONE.
+//
+// Il regolamento e' quello REVISIONATO del 17/10/2026, consegnato gia'
+// corretto: undici punti al posto dei nove di prima. Il Punto 9 e' la
+// nuova informativa privacy (art. 13 GDPR), il Punto 10 il consenso
+// facoltativo su immagini e video, il Punto 11 foro e legge applicabile.
+// Prima veniva dal modulo in rete su elitederma.eu/modulo-iscrizione-corsi.
 //
 // IL TESTO E' TRASCRITTO, NON RISCRITTO. Regolamento, informativa e
 // consensi sono stati presi parola per parola dall'HTML della pagina e
@@ -7,7 +12,7 @@
 // vorrebbe dire firmare una cosa diversa da quella che si e' letta. Se
 // vanno cambiati, si cambiano di proposito — non per sbaglio.
 //
-// E' diviso in SEZIONI perche' tutto di fila e' un muro: nove punti di
+// E' diviso in SEZIONI perche' tutto di fila e' un muro: undici punti di
 // regolamento piu' trenta campi non si leggono. Ognuna si apre e si
 // chiude da sola, come sull'originale.
 //
@@ -52,125 +57,133 @@ export const SEZIONI = [
     "titolo": "Regolamento di partecipazione",
     "tipo": "testo",
     "blocchi": [
-      {
-        "titolo": "PUNTO 1 - SEDE DEL CORSO",
-        "punti": [
-          "a) Il corso si terrà presso la sede che sarà comunicata da Elitederma Srl tramite i propri rappresentanti ufficiali prima dell’inizio.",
-          "b) In caso di forza maggiore (es. provvedimenti delle autorità, emergenze sanitarie, motivi politici/amministrativi/sociali o esigenze organizzative), Elitederma Srl potrà rinviare la data o modificare la sede (nella stessa città o provincia), informando gli iscritti con preavviso minimo di 5 giorni di calendario. In tal caso, l’acconto resta valido e potrà essere utilizzato per lo stesso corso o per un altro corso Elitederma, in data/sede diversa. Non saranno dovuti rimborsi dell’acconto, interessi o rimborsi/indennizzi per viaggi, alloggi, penali o altre spese.",
-          "c) L’ammissione al corso è subordinata alla valutazione insindacabile di Elitederma Srl in funzione dell’omogeneità dell’aula, dei prerequisiti richiesti e delle norme vigenti.",
-          "d) Elitederma Srl può rifiutare l’iscrizione (anche se già pagata) comunicandolo all’interessata entro 5 giorni antecedenti l’inizio; in tal caso, le somme versate saranno rimborsate tramite bonifico. Non saranno dovuti ulteriori rimborsi o indennizzi."
-        ]
-      },
-      {
-        "titolo": "PUNTO 2 - CONDIZIONI DI PARTECIPAZIONE E PAGAMENTO",
-        "punti": [
-          "a) L’iscrizione è riservata a maggiorenni ed è valida solo con il versamento dell’acconto secondo importi e modalità previsti in fase di iscrizione.",
-          "b) La ricevuta di pagamento va inviata a Elitederma Srl (e-mail/WhatsApp/consegna a mano). Faranno fede la ricevuta di pagamento e la sottoscrizione del presente contratto generata dal sito.",
-          "c) Il saldo della quota va effettuato quando previsto, parte entro 15 giorni dal corso ed eventuale saldo all’arrivo in aula: contanti, assegno circolare o bonifico eseguito almeno 5 giorni prima (con ricevuta).",
-          "d) Non sono ammessi pagamenti parziali o dilazionati, salvo diverso accordo preventivamente concordato con l’amministrazione. In tali casi, le modalità e le tempistiche di pagamento verranno definite al momento dell’iscrizione, previa valutazione della fattibilità da parte di Elitederma Srl.",
-          "Eventuali pagamenti rateali o posticipati dovranno essere formalizzati esclusivamente prima dell’inizio del corso, con approvazione scritta da parte di Elitederma Srl.",
-          "In assenza del saldo completo alla data del corso, l’accesso potrà essere negato senza che ciò comporti diritto a rimborso o compensazione."
-        ]
-      },
-      {
-        "titolo": "PUNTO 3 - DISDETTE, RINVII E PENALI",
-        "punti": [
-          "a) Ai sensi degli articoli 52 e seguenti del D.Lgs. 206/2005 (Codice del Consumo), le quote versate a titolo di acconto, iscrizione parziale o saldo sono rimborsabili solo entro 14 giorni dal pagamento, termine entro il quale è esercitabile il diritto di recesso per i contratti conclusi a distanza. Decorso tale termine, il diritto di rimborso decade e le somme corrisposte diventano non rimborsabili. Resta comunque possibile, a discrezione dell’organizzazione, spostare la data di partecipazione al corso fino a 30 giorni prima dell’inizio con le modalità previste al successivo paragrafo b.",
-          "b) In caso di rinvio richiesto entro 30 giorni dalla data del corso è dovuta una penale di €150; senza il pagamento della penale lo spostamento non sarà possibile e l’acconto sarà trattenuto a copertura delle spese organizzative sostenute.",
-          "c) Ai sensi dell’articolo 59, lettera a) del D.Lgs. 206/2005 (Codice del Consumo), il diritto di recesso non si applica alle prestazioni di servizi la cui esecuzione sia iniziata o debba iniziare entro il periodo di recesso di 14 giorni, con il consenso espresso del consumatore. Pertanto, per le iscrizioni effettuate nei 15 giorni precedenti la data di inizio del corso, il partecipante accetta espressamente che l’Accademia dia immediato avvio alle procedure organizzative (prenotazione aula, materiale didattico, modella, personale docente, acquisto dei kit, ecc.) e riconosce che, per tale motivo, non potrà esercitare il diritto di recesso né richiedere il rimborso o il rinvio.",
-          "In tali casi, le somme versate restano definitivamente acquisite a titolo di copertura delle spese organizzative anticipate.",
-          "d) Le comunicazioni ufficiali (recesso/rinvio) devono avvenire esclusivamente via PEC:",
-          "📧 [email protected]",
-          "e) I rimborsi approvati saranno effettuati da Elitederma Srl entro 30 giorni dalla richiesta valida ovvero via PEC.",
-          "f) In caso di assenza dell’allievo/a al corso, ritardi, interruzione della frequenza o rinuncia alle esercitazioni post-corso (Web Academy e livelli online), non sono previsti rimborsi totali o parziali. La Web Academy è parte integrante del corso in aula e non è rimborsabile separatamente.",
-          "g) Sono esclusi rimborsi per eventuali materiali acquistati autonomamente dall’allievo/a."
-        ]
-      },
-      {
-        "titolo": "PUNTO 4 - KIT MATERIALI E ATTREZZATURE",
-        "punti": [
-          "a) a) La didattica è calibrata su prodotti/attrezzature consigliati da Elitederma Srl; l’azienda non risponde di problematiche derivanti da strumenti non distribuiti/approvati (es. aghi, dermografi portati dall’allievo/a).",
-          "b) La quota comprende: attività didattiche, kit fornito, uso delle attrezzature d’aula (lettino, carrellino, lampada), assistenza docenti, attestato finale, eventuale supporto post-corso e kit/prodotti/attrezzature come scelti in fase di iscrizione.",
-          "c) Le attrezzature d’aula sono concesse in comodato d’uso gratuito per la durata del corso e vanno usate con diligenza; non è consentito l’uso di attrezzature non autorizzate.",
-          "d) Il kit di prodotti e materiali fornito al corso ha esclusiva finalità didattica ed è destinato a consentire all’allievo/a di svolgere le esercitazioni previste durante il percorso formativo e, se previsto, quelle successive a casa.",
-          "Eventuali quantità residue non utilizzate durante il corso potranno essere impiegate dall’allievo/a per la propria attività professionale o per ulteriori esercitazioni personali, fermo restando che tutti i materiali sono forniti in quantità idonee allo svolgimento delle esercitazioni e non costituiscono una scorta di prodotti a uso commerciale. Pertanto, non è dovuto alcun reintegro, sostituzione o fornitura aggiuntiva per i prodotti utilizzati, terminati o danneggiati durante le attività pratiche o teoriche.",
-          "L’allievo/a riconosce che il valore del kit costituisce parte integrante e inscindibile del corso di formazione e non possiede un valore autonomo separabile dal costo complessivo del corso.",
-          "e) Dal momento della consegna, l’allievo/a è l’unico/a responsabile del kit; in caso di furto/smarrimento o danni alle attrezzature fornite nel kit non è previsto rimborso né reintegro e l’allievo/a risponderà dei danni.",
-          "f) Le indicazioni sul numero di trattamenti realizzabili con il kit sono stimate, basate su un uso ottimale. Consumi eccedenti, sprechi o uso in parte durante il corso possono ridurre il numero di trattamenti possibili e non danno diritto a reintegri o sostituzioni gratuite."
-        ]
-      },
-      {
-        "titolo": "PUNTO 5 – REGOLAMENTO DI PARTECIPAZIONE E FREQUENZA",
-        "punti": [
-          "a) La frequenza integrale di tutte le giornate di corso, comprese le eventuali prove pratiche, è obbligatoria per il rilascio dell’attestato di partecipazione.",
-          "L’attestato certifica esclusivamente la formazione frequentata e non costituisce abilitazione professionale. L’allievo/a dovrà informarsi in merito ai requisiti regionali necessari per esercitare la professione (es. diploma di estetista o attestato regionale tatuaggio/dermopigmentazione).",
-          "b) È richiesta massima puntualità e partecipazione attiva alle attività teoriche e pratiche.",
-          "In caso di rinuncia alla pratica o di pratica parziale su modella, Elitederma Srl si riserva la facoltà di non rilasciare l’attestato.",
-          "c) L’iscrizione ai corsi è strettamente personale e non cedibile a terzi. Gli allievi dovranno attenersi alle istruzioni e alle direttive impartite dai docenti e dal personale Elitederma Srl. Durante le lezioni è vietato consumare cibi o bevande e utilizzare telefoni cellulari. Riprese fotografiche o video sono consentite solo previa autorizzazione dell’organizzazione.",
-          "d) Tutte le spese di trasferta, vitto, alloggio, pranzi e cene sono interamente a carico dell’allievo/a.",
-          "e) Una volta avviato il corso e consegnato il kit didattico, non saranno possibili rimborsi, sostituzioni o cambi di corso, indipendentemente dalla motivazione.",
-          "f) Elitederma Srl e i docenti si riservano il diritto di allontanare immediatamente dal corso l’allievo/a che, con comportamenti non consoni, scorretti, diffamatori o pregiudizievoli, comprometta il regolare svolgimento dell’attività formativa o arrechi disturbo a docenti, personale incaricato o altri partecipanti.",
-          "In tali casi nessun rimborso, indennizzo o compensazione sarà dovuto, nemmeno a titolo di spese di viaggio, vitto, alloggio, penali o interessi.",
-          "g) Tutti i materiali didattici, teorici e pratici (testi, immagini, metodi, protocolli, video, marchi, loghi e documenti) sono di proprietà esclusiva di Elitederma Srl e tutelati ai sensi degli artt. 2575 e seguenti del Codice Civile e della Legge 633/1941 sul diritto d’autore. È vietata qualsiasi riproduzione, copia, condivisione o utilizzo non autorizzato, anche parziale.",
-          "Chi utilizza tali materiali per scopi formativi o commerciali non autorizzati potrà essere perseguito nelle sedi civili e penali competenti.",
-          "h) Ai sensi della normativa vigente sulla tutela dei dati personali (Reg. UE 2016/679), il partecipante autorizza Elitederma Srl a trattare i propri dati per finalità organizzative, amministrative, statistiche e informative, consapevole della possibilità di richiedere in ogni momento la cancellazione o rettifica dei dati scrivendo a:",
-          "📧 [email protected]"
-        ]
-      },
-      {
-        "titolo": "PUNTO 6 – REGOLAMENTO E REQUISITI MODELLE/I",
-        "punti": [
-          "a) Le modelle dovranno essere reperite dagli allievi a propria cura e spese e dovranno intervenire al corso in base agli orari comunicati dall’organizzazione. Non sono ammessi spostamenti dell’orario in cui devono intervenire le modelle se non autorizzati 15 giorni prima del corso.",
-          "b) Qualora l’allievo/a non riesca a reperire una modella, oppure la modella designata non si presenti o non possa, per qualsiasi motivo, partecipare alle sessioni pratiche, e di conseguenza l’allievo/a non possa svolgere la parte pratica del corso, nessuna responsabilità potrà essere attribuita a Elitederma Srl.",
-          "In tali circostanze, l’allievo/a potrà recuperare la parte pratica partecipando a una sessione successiva, previo versamento di un contributo organizzativo pari a €180,00 per ciascuna modella.",
-          "In tale eventualità, l’allievo/a avrà la possibilità di partecipare a una sessione successiva per recuperare la pratica, previo versamento di un contributo organizzativo pari a €180,00 per ciascuna modella.",
-          "c) Le modelle dovranno essere maggiorenni; se minorenni, occorrerà avere l’autorizzazione di entrambi i genitori (o chi ne fa le veci).",
-          "d) Modelle e accompagnatori non possono assistere o sostare in aula.",
-          "e) Le modelle devono essere in buona salute; per microblading/PMU non devono avere lavori pregressi sulla zona da trattare.",
-          "f) Non sono idonee modelle con: terapie in corso (antibiotici, cortisonici, chemioterapici, ecc.), febbre/sintomi influenzali, allergie/dermatiti, malattie cutanee/autoimmuni, diabete, gravidanza o allattamento. Eventuali condizioni vanno comunicate tempestivamente all’organizzazione.",
-          "g) Per quanto riguarda il corso di Tricopigmentazione, ogni allievo/a è tenuto/a a reperire autonomamente il proprio modello/a per lo svolgimento delle esercitazioni pratiche.",
-          "Non sarà possibile incaricare Elitederma Srl del reperimento dei modelli. Qualora l’allievo/a non riesca a procurarsi un modello/a, potrà svolgere la pratica su un modello/a condiviso messo a disposizione da Elitederma Srl insieme agli altri partecipanti.",
-          "In tale circostanza, nessuna responsabilità potrà essere imputata a Elitederma Srl, né sarà dovuto alcun rimborso, totale o parziale, della quota di partecipazione al corso."
-        ]
-      },
-      {
-        "titolo": "PUNTO 7 – REPERIMENTO MODELLE A CURA DI ELITEDERMA SRL PER ALLIEVI LONTANI DALLA SEDE DEL CORSO",
-        "punti": [
-          "a) Unicamente nel caso in cui l’allievo/a provenga da una città diversa da quella in cui si tiene il corso, con una distanza superiore ai 50 km, potrà richiedere ad Elitederma Srl di reperire le modelle necessarie alle esercitazioni: €60/modello/a se la richiesta avviene entro 7 giorni dal corso; €100/modella se la richiesta avviene nei 7 giorni precedenti il corso.",
-          "Tale opzione non è applicabile al corso di tricopigmentazione che in caso di mancanza del modello/a potrà comunque avvalersi del modello/a condiviso messo a disposizione dell’accademia.",
-          "b) Il reperimento non garantisce la disponibilità effettiva delle modelle, vista la natura del servizio; in caso di rinuncia/mancata disponibilità non è dovuto alcun rimborso del corso.",
-          "c) Non sono ammesse obiezioni su tipologia/estetica/caratteristiche fisiche della modella, poiché la selezione avviene per disponibilità.",
-          "d) Se, dopo aver richiesto il servizio, l’allievo/a reperisce una modella per proprio conto, il servizio resta dovuto (a copertura delle spese per sponsorizzazioni, pubblicità e costi di ricerca già sostenuti).",
-          "e) Se Elitederma Srl non reperisce la modella richiesta, l'importo del servizio sarà rimborsato.",
-          "f) Il pagamento del servizio va effettuato la mattina del primo giorno; in mancanza del pagamento, le modelle reperite saranno disdette e nulla sarà dovuto a titolo di rimborso."
-        ]
-      },
-      {
-        "titolo": "PUNTO 8 – RESPONSABILITÀ, SICUREZZA E OBBLIGHI DELL’ALLIEVO/A",
-        "punti": [
-          "a) Elitederma Srl e i docenti forniscono con la massima attenzione istruzioni, procedure e dimostrazioni volte a garantire un apprendimento sicuro, igienico e tecnicamente corretto.",
-          "b) Durante l’esecuzione pratica, ogni gesto tecnico è svolto sotto la diretta responsabilità dell’allievo/a.",
-          "Eventuali esiti indesiderati dovuti a imperizia, imprudenza, distrazione o inosservanza delle indicazioni non sono imputabili a Elitederma Srl, ai docenti o ai master incaricati. L’azienda assicura comunque costante supervisione per prevenire o ridurre al minimo tali eventualità.",
-          "c) Se la modella non rispetta le norme di igiene, sicurezza o comportamento impartite dai docenti, eventuali danni o disagi a sé stessa o all’allievo/a non potranno in alcun modo essere imputati a Elitederma Srl, ai docenti o ai master.",
-          "d) Poiché l’allievo è il diretto esecutore dei trattamenti, la responsabilità del proprio operato rimane personale. L’allievo riconosce di essere il diretto esecutore dei trattamenti svolti sulle modelle e si assume ogni responsabilità per eventuali danni, lesioni o effetti indesiderati derivanti dal proprio operato, esonerando integralmente l’organizzazione e i formatori da qualsiasi obbligo risarcitorio.",
-          "e) Il partecipante solleva Elitederma Srl, i docenti e i master designati da ogni responsabilità civile, penale e amministrativa derivante da proprie azioni, condotte o errori durante le esercitazioni pratiche.",
-          "f) Elitederma Srl non garantisce risultati assoluti né può prevedere le reazioni individuali delle modelle, comprese eventuali intolleranze, comportamenti imprevedibili, rifiuti o condizioni non dichiarate (patologie, stati di salute, farmaci, ecc.). L’attività pratica costituisce un momento formativo e supervisionato, non una prestazione professionale verso terzi.",
-          "g) Restano fermi gli obblighi di diligenza e prudenza previsti dagli artt. 2043, 2046 e 2050 del Codice Civile e dall’art. 43 del Codice Penale; l’allievo/a è personalmente responsabile dell’uso corretto delle tecniche.",
-          "h) Con la sottoscrizione del presente regolamento, l’allievo/a dichiara di aver compreso che Elitederma Srl adotta tutte le misure necessarie per assicurare un ambiente sicuro e controllato, ma che la corretta applicazione delle tecniche apprese rimane nella propria sfera di controllo e responsabilità."
-        ]
-      },
-      {
-        "titolo": "PUNTO 9 – TRATTAMENTO DEI DATI PERSONALI (ART. 13 REG. UE 2016/679)",
-        "punti": [
-          "Con la sottoscrizione del presente contratto, l’allievo/a autorizza implicitamente Elitederma Srl al trattamento dei propri dati personali, nel rispetto del GDPR, per finalità connesse a organizzazione, gestione amministrativa/didattica e comunicazioni su corsi/eventi/aggiornamenti (art. 6, par. 1, lett. b–f).",
-          "I dati sono trattati da personale autorizzato, con strumenti cartacei ed elettronici, secondo gli artt. 5 e 32 GDPR; possono essere comunicati a soggetti terzi solo se necessari all’erogazione del corso (docenti, collaboratori, consulenti, enti partner, autorità competenti).",
-          "Il conferimento è necessario per l’esecuzione del rapporto formativo; eventuali dati appartenenti a categorie particolari (art. 9 GDPR) saranno trattati nella misura strettamente necessaria.",
-          "Diritti dell’interessata (artt. 15–22 GDPR): accesso, rettifica, cancellazione, limitazione, portabilità, opposizione, revoca del consenso (senza pregiudizio per i trattamenti già effettuati) e reclamo al Garante (art. 77).",
-          "📧 Per esercitare i diritti scrivere a: [email protected]",
-          "Dati personali del corsista"
-        ]
-      }
-    ]
+        {
+          "titolo": "PUNTO 1 – SEDE DEL CORSO",
+          "punti": [
+            "a) Il corso si svolge presso la sede indicata nel modulo di iscrizione o comunicata da Elitederma Srl, tramite i propri rappresentanti ufficiali, prima dell’inizio del corso.",
+            "b) In caso di forza maggiore (ad esempio provvedimenti delle autorità, emergenze sanitarie, eventi di natura politica, amministrativa o sociale) o di comprovate esigenze organizzative, Elitederma Srl può rinviare la data del corso o modificarne la sede, nella stessa città o provincia, informando gli iscritti con un preavviso minimo di 5 giorni di calendario. In tal caso le somme versate restano valide e possono essere utilizzate per lo stesso corso o per un altro corso Elitederma, in data o sede diversa. Non sono dovuti rimborsi per spese di viaggio, alloggio, penali o altri costi sostenuti dall’allievo/a.",
+            "c) Se l’allievo/a non può partecipare al corso nella nuova data o nella nuova sede, può chiedere entro 7 giorni dalla comunicazione il rimborso delle somme già versate, che sarà effettuato entro 30 giorni.",
+            "d) L’ammissione al corso è subordinata alla valutazione di Elitederma Srl in funzione dell’omogeneità dell’aula, dei prerequisiti richiesti e delle norme vigenti.",
+            "e) Elitederma Srl può rifiutare l’iscrizione, anche se già pagata, comunicandolo all’interessato/a entro 5 giorni prima dell’inizio del corso. In tal caso le somme versate sono rimborsate integralmente tramite bonifico. Non sono dovuti ulteriori rimborsi o indennizzi."
+          ]
+        },
+        {
+          "titolo": "PUNTO 2 – CONDIZIONI DI PARTECIPAZIONE E PAGAMENTO",
+          "punti": [
+            "a) L’iscrizione è riservata ai maggiorenni ed è valida solo con il versamento dell’acconto, negli importi e con le modalità indicati nel modulo di iscrizione.",
+            "b) Il contratto si considera concluso con la sottoscrizione del modulo di iscrizione online e il versamento dell’acconto. Fanno fede il modulo sottoscritto e la registrazione del pagamento da parte di Elitederma Srl.",
+            "c) Il pagamento della quota avviene secondo quanto indicato nel modulo di iscrizione: quota pre corso entro 15 giorni dall’inizio del corso ed eventuale saldo all’arrivo in aula, in contanti nei limiti di legge, con POS, con assegno circolare o con bonifico eseguito almeno 5 giorni prima del corso.",
+            "d) Pagamenti parziali, rateali o posticipati sono ammessi solo se concordati con l’amministrazione e approvati per iscritto da Elitederma Srl prima dell’inizio del corso. Modalità e tempi sono indicati nel modulo di iscrizione.",
+            "e) Se alla data di inizio del corso la quota dovuta non è stata saldata, Elitederma Srl può negare l’accesso al corso. In tal caso si applicano le regole del Punto 3 sulle somme già versate."
+          ]
+        },
+        {
+          "titolo": "PUNTO 3 – RECESSO, RINVII E PENALI",
+          "punti": [
+            "a) Diritto di recesso. Ai sensi degli artt. 52 e seguenti del D.Lgs. 206/2005 (Codice del Consumo), l’allievo/a che agisce come consumatore può recedere dal contratto entro 14 giorni dalla sua conclusione, senza indicarne il motivo, ottenendo il rimborso integrale delle somme versate entro 14 giorni dalla comunicazione del recesso.",
+            "b) Dopo i 14 giorni. Decorso il termine di recesso, le somme versate a titolo di acconto e di quota pre corso non sono rimborsabili, in quanto destinate a coprire le spese organizzative sostenute da Elitederma Srl (aula, docenti, kit, materiali, modelle).",
+            "c) Rinvio. L’allievo/a può chiedere, una sola volta, di spostare la partecipazione a un’altra edizione dello stesso corso fino a 30 giorni prima della data di inizio, previo pagamento di una penale di € 150. Senza il pagamento della penale lo spostamento non è possibile. Nei 30 giorni precedenti l’inizio del corso il rinvio non è più possibile.",
+            "d) Iscrizioni a meno di 15 giorni dal corso. Ai sensi dell’art. 59, lett. a) del Codice del Consumo, per le iscrizioni effettuate nei 15 giorni precedenti l’inizio del corso l’allievo/a, con apposita richiesta espressa nel modulo di iscrizione, chiede che Elitederma Srl avvii immediatamente l’organizzazione (prenotazione dell’aula, docenti, kit, modelle) e prende atto che per questo motivo perde il diritto di recesso. In tali casi le somme versate restano acquisite a copertura delle spese organizzative.",
+            "e) Come comunicare. Il recesso può essere comunicato con qualsiasi dichiarazione esplicita inviata via PEC a [PEC: da inserire] o via e-mail a commerciale.elitederma@gmail.com. Le richieste di rinvio vanno inviate agli stessi indirizzi.",
+            "f) Tempi di rimborso. I rimborsi dovuti per recesso sono effettuati entro 14 giorni dalla comunicazione; gli altri rimborsi previsti dal presente regolamento entro 30 giorni dalla richiesta.",
+            "g) Assenze e rinunce. In caso di assenza, ritardo, interruzione della frequenza o rinuncia alle esercitazioni post-corso (Web Academy e livelli online) non sono previsti rimborsi totali o parziali. La Web Academy è parte integrante del corso in aula e non è rimborsabile separatamente.",
+            "h) Non sono rimborsabili i materiali acquistati autonomamente dall’allievo/a."
+          ]
+        },
+        {
+          "titolo": "PUNTO 4 – KIT, MATERIALI E ATTREZZATURE",
+          "punti": [
+            "a) La didattica è calibrata su prodotti e attrezzature distribuiti o approvati da Elitederma Srl. Elitederma Srl non risponde di problemi derivanti dall’uso di strumenti non distribuiti o non approvati, ad esempio aghi o dermografi portati dall’allievo/a.",
+            "b) La quota comprende: attività didattiche, kit didattico, eventuale dermografo e altri prodotti o attrezzature come indicati nel modulo di iscrizione, uso delle attrezzature d’aula (lettino, carrellino, lampada), assistenza dei docenti, attestato finale ed eventuale supporto post-corso.",
+            "c) Le attrezzature d’aula sono concesse in comodato d’uso gratuito per la durata del corso e vanno usate con diligenza. Non è consentito l’uso di attrezzature non autorizzate.",
+            "d) Il kit ha finalità didattica: consente all’allievo/a di svolgere le esercitazioni previste durante il corso e, se previsto, quelle successive a casa. Le quantità residue possono essere utilizzate dall’allievo/a per la propria attività o per ulteriori esercitazioni. Il kit non costituisce una scorta di prodotti a uso commerciale e non è dovuto alcun reintegro dei prodotti utilizzati, terminati o danneggiati durante le attività. Il valore del kit è parte integrante del prezzo del corso e non è separabile da esso.",
+            "e) Dalla consegna l’allievo/a è responsabile del kit e dell’eventuale dermografo. In caso di furto, smarrimento o danni causati dall’allievo/a non sono previsti rimborsi né reintegri. Restano salvi i diritti di garanzia previsti dalla legge per i prodotti difettosi.",
+            "f) Il numero di trattamenti realizzabili con il kit è una stima basata su un uso ottimale. Consumi eccedenti o sprechi possono ridurlo e non danno diritto a reintegri gratuiti."
+          ]
+        },
+        {
+          "titolo": "PUNTO 5 – PARTECIPAZIONE E FREQUENZA",
+          "punti": [
+            "a) Per il rilascio dell’attestato di partecipazione è obbligatoria la frequenza di tutte le giornate del corso, comprese le prove pratiche. L’attestato certifica esclusivamente la formazione frequentata e non costituisce abilitazione professionale. L’allievo/a è tenuto/a a informarsi sui requisiti regionali per esercitare la professione (ad esempio diploma di estetista o attestato regionale di tatuaggio e dermopigmentazione).",
+            "b) Sono richieste puntualità e partecipazione attiva alle attività teoriche e pratiche. In caso di rinuncia alla pratica su modella, o di pratica solo parziale, Elitederma Srl può non rilasciare l’attestato.",
+            "c) L’iscrizione è strettamente personale e non cedibile a terzi. Gli allievi devono attenersi alle istruzioni dei docenti e del personale di Elitederma Srl. Durante le lezioni non è consentito consumare cibi o bevande né utilizzare il telefono cellulare. Foto e video in aula sono consentiti solo con l’autorizzazione dell’organizzazione.",
+            "d) Le spese di trasferta, vitto e alloggio sono a carico dell’allievo/a.",
+            "e) Una volta iniziato il corso e consegnato il kit didattico non sono possibili rimborsi, sostituzioni o cambi di corso.",
+            "f) Elitederma Srl e i docenti possono allontanare dal corso l’allievo/a che, con comportamenti scorretti, offensivi o diffamatori, comprometta il regolare svolgimento delle lezioni o arrechi disturbo a docenti, personale o altri partecipanti. In tal caso non è dovuto alcun rimborso o indennizzo, comprese le spese di viaggio, vitto e alloggio.",
+            "g) Tutti i materiali didattici (testi, immagini, metodi, protocolli, video, marchi, loghi e documenti) sono di proprietà esclusiva di Elitederma Srl e tutelati dagli artt. 2575 e seguenti del Codice Civile e dalla Legge 633/1941 sul diritto d’autore. È vietata qualsiasi riproduzione, copia, condivisione o uso non autorizzato, anche parziale. Ogni violazione potrà essere perseguita nelle sedi competenti."
+          ]
+        },
+        {
+          "titolo": "PUNTO 6 – MODELLE E MODELLI",
+          "punti": [
+            "a) Le modelle sono reperite dall’allievo/a a propria cura e spese, salvo il servizio previsto al Punto 7. Devono presentarsi negli orari comunicati dall’organizzazione. Cambi di orario sono ammessi solo se autorizzati almeno 15 giorni prima del corso.",
+            "b) Se l’allievo/a non trova una modella, o se la modella non si presenta o non può partecipare per qualsiasi motivo, e di conseguenza l’allievo/a non può svolgere la parte pratica, nessuna responsabilità è attribuibile a Elitederma Srl. L’allievo/a può recuperare la pratica in una sessione successiva, versando un contributo organizzativo di € 180 per ciascuna modella.",
+            "c) Le modelle devono essere maggiorenni.",
+            "d) Modelle e accompagnatori non possono assistere alle lezioni né sostare in aula.",
+            "e) Le modelle devono essere in buona salute e, per microblading e trucco permanente, non devono avere lavori precedenti sulla zona da trattare.",
+            "f) Non sono idonee le modelle con: terapie in corso (antibiotici, cortisonici, chemioterapici e simili), febbre o sintomi influenzali, allergie o dermatiti, malattie della pelle o autoimmuni, diabete, gravidanza o allattamento. Eventuali condizioni vanno comunicate tempestivamente all’organizzazione. Ogni modella sottoscrive il proprio modulo di consenso informato prima del trattamento.",
+            "g) Tricopigmentazione. Ogni allievo/a reperisce autonomamente il proprio modello o la propria modella; non è possibile incaricare Elitederma Srl della ricerca. Se l’allievo/a non trova un modello, può svolgere la pratica su un modello condiviso messo a disposizione da Elitederma Srl insieme agli altri partecipanti. In tal caso non è dovuto alcun rimborso, totale o parziale, della quota."
+          ]
+        },
+        {
+          "titolo": "PUNTO 7 – REPERIMENTO MODELLE A CURA DI ELITEDERMA SRL PER ALLIEVI LONTANI DALLA SEDE DEL CORSO",
+          "punti": [
+            "a) Unicamente nel caso in cui l’allievo/a provenga da una città diversa da quella in cui si tiene il corso, con una distanza superiore ai 50 km, potrà richiedere ad Elitederma Srl di reperire le modelle necessarie alle esercitazioni: €60/modello/a se la richiesta avviene entro 7 giorni dal corso; €100/modella se la richiesta avviene nei 7 giorni precedenti il corso.",
+            "Tale opzione non è applicabile al corso di tricopigmentazione che in caso di mancanza del modello/a potrà comunque avvalersi del modello/a condiviso messo a disposizione dell’accademia.",
+            "b) Il reperimento non garantisce la disponibilità effettiva delle modelle, vista la natura del servizio; in caso di rinuncia/mancata disponibilità non è dovuto alcun rimborso del corso.",
+            "c) Non sono ammesse obiezioni su tipologia/estetica/caratteristiche fisiche della modella, poiché la selezione avviene per disponibilità.",
+            "d) Se, dopo aver richiesto il servizio, l’allievo/a reperisce una modella per proprio conto, il servizio resta dovuto (a copertura delle spese per sponsorizzazioni, pubblicità e costi di ricerca già sostenuti).",
+            "e) Se Elitederma Srl non reperisce la modella richiesta, l'importo del servizio sarà rimborsato.",
+            "f) Il pagamento del servizio va effettuato la mattina del primo giorno; in mancanza del pagamento, le modelle reperite saranno disdette e nulla sarà dovuto a titolo di rimborso."
+          ]
+        },
+        {
+          "titolo": "PUNTO 8 – RESPONSABILITÀ E SICUREZZA",
+          "punti": [
+            "a) Elitederma Srl e i docenti forniscono istruzioni, procedure e dimostrazioni per un apprendimento sicuro, igienico e tecnicamente corretto, e assicurano una supervisione costante durante le esercitazioni pratiche.",
+            "b) Durante le esercitazioni l’allievo/a è il diretto esecutore dei trattamenti sulle modelle e ne risponde personalmente. Esiti indesiderati dovuti a imperizia, imprudenza, distrazione o mancato rispetto delle indicazioni dei docenti non sono imputabili a Elitederma Srl, ai docenti o ai master incaricati.",
+            "c) Se la modella non rispetta le norme di igiene, sicurezza o comportamento indicate dai docenti, eventuali danni o disagi che ne derivano non sono imputabili a Elitederma Srl, ai docenti o ai master.",
+            "d) Elitederma Srl non garantisce risultati assoluti e non può prevedere le reazioni individuali delle modelle, comprese intolleranze o condizioni di salute non dichiarate. L’attività pratica è un momento formativo supervisionato e non una prestazione professionale verso terzi.",
+            "e) L’allievo/a solleva Elitederma Srl, i docenti e i master dalle responsabilità derivanti dalle proprie azioni, condotte o errori durante le esercitazioni, nei limiti consentiti dalla legge.",
+            "f) Le limitazioni di responsabilità previste dal presente regolamento non si applicano in caso di dolo o colpa grave di Elitederma Srl, dei docenti o dei master (art. 1229 c.c.), né ai danni alla persona derivanti da fatti a loro imputabili.",
+            "g) Restano fermi gli obblighi di diligenza e prudenza previsti dagli artt. 2043, 2046 e 2050 del Codice Civile: l’allievo/a è personalmente responsabile dell’uso corretto delle tecniche apprese."
+          ]
+        },
+        {
+          "titolo": "PUNTO 9 – TRATTAMENTO DEI DATI PERSONALI (ART. 13 REG. UE 2016/679)",
+          "punti": [
+            "a) Titolare del trattamento è Elitederma S.r.l., con sede legale in Via Terni 90/a, 00182 Roma, P. IVA 16179891003, in persona del legale rappresentante.",
+            "b) Dati trattati. Dati anagrafici e di contatto, codice fiscale, dati di fatturazione, copia del documento di identità, dati relativi ai pagamenti e alla frequenza del corso.",
+            "c) Finalità e base giuridica. I dati sono trattati per:",
+            "• organizzare e gestire il corso, l’iscrizione e i pagamenti: base giuridica l’esecuzione del contratto (art. 6, par. 1, lett. b);",
+            "• adempiere agli obblighi fiscali e contabili: base giuridica l’obbligo di legge (art. 6, par. 1, lett. c);",
+            "• inviare comunicazioni su nuovi corsi, eventi e offerte: solo con il consenso facoltativo dell’interessato (art. 6, par. 1, lett. a), revocabile in ogni momento.",
+            "Il conferimento dei dati per le prime due finalità è necessario: senza di essi non è possibile iscriversi al corso.",
+            "d) Modalità. I dati sono trattati da personale autorizzato, con strumenti cartacei ed elettronici e con misure di sicurezza adeguate (artt. 5 e 32 GDPR).",
+            "e) Destinatari. I dati possono essere comunicati, nella misura necessaria, a docenti e master incaricati, consulenti fiscali e legali, fornitori di servizi tecnici e informatici (hosting, invio di e-mail, pagamenti) nominati responsabili del trattamento, e alle autorità competenti.",
+            "f) Conservazione. I dati sono conservati per la durata del rapporto e successivamente per il tempo previsto dagli obblighi di legge (dati contabili: 10 anni). I dati usati per le comunicazioni promozionali sono conservati fino alla revoca del consenso.",
+            "g) Diritti dell’interessato (artt. 15–22 GDPR): accesso, rettifica, cancellazione, limitazione, portabilità, opposizione e revoca del consenso, senza pregiudizio per i trattamenti già effettuati. L’interessato può proporre reclamo al Garante per la protezione dei dati personali (art. 77 GDPR). Per esercitare i diritti: commerciale.elitederma@gmail.com"
+          ]
+        },
+        {
+          "titolo": "PUNTO 10 – IMMAGINI E VIDEO (CONSENSO FACOLTATIVO)",
+          "punti": [
+            "a) Con il consenso facoltativo espresso nel modulo di iscrizione, l’allievo/a autorizza Elitederma Srl, a titolo gratuito, a pubblicare foto e video in cui compare, realizzati durante il corso, sul sito internet, sui canali social, su materiale stampato e su altri mezzi di comunicazione di Elitederma Srl, per finalità informative e promozionali, ai sensi degli artt. 10 c.c. e 96 e 97 della Legge 633/1941.",
+            "b) Il consenso è facoltativo: negarlo non incide in alcun modo sull’iscrizione o sulla partecipazione al corso.",
+            "c) Il consenso può essere revocato in qualsiasi momento scrivendo a commerciale.elitederma@gmail.com. Dopo la revoca Elitederma Srl non effettua nuove pubblicazioni e rimuove, per quanto tecnicamente possibile, i contenuti già pubblicati sui propri canali.",
+            "d) Le immagini sono conservate negli archivi di Elitederma Srl fino alla revoca del consenso."
+          ]
+        },
+        {
+          "titolo": "PUNTO 11 – LEGGE APPLICABILE E FORO COMPETENTE",
+          "punti": [
+            "a) Il presente contratto è regolato dalla legge italiana.",
+            "b) Se l’allievo/a è un consumatore, per qualsiasi controversia è competente il foro del luogo di residenza o domicilio dell’allievo/a (art. 66-bis del Codice del Consumo).",
+            "c) Se l’allievo/a agisce come professionista o azienda (iscrizione con partita IVA), è competente in via esclusiva il Foro di Roma.",
+            "d) Per quanto non previsto dal presente regolamento si applicano le norme del Codice Civile e del Codice del Consumo."
+          ]
+        }
+      ]
   },
   {
     "chiave": "anagrafica",
@@ -418,31 +431,23 @@ export const SEZIONI = [
 
 export const CONSENSI = {
   "regolamentoEtichetta": "Accettazione del Regolamento *",
-  "regolamentoSpunta": "Dichiaro di aver preso visione di quanto specificato nel regolamento composto da 6 punti",
-  "immaginiTesto": "Autorizzo inoltre, a titolo gratuito, senza limiti di tempo, anche ai sensi degli artt. 10 e 320 cod.civ. e degli artt. 96 e 97 legge 22.4.1941, n. 633, Legge sul diritto d’autore, alla pubblicazione e/o diffusione in qualsiasi forma delle proprie immagini, scattate e/o riprese in occasione del corso, sul sito internet di Elitederma srl, su carta stampata e/o su qualsiasi altro mezzo di diffusione, nonché autorizza la conservazione delle foto e dei video stessi negli archivi informatici di Elitederma srl e prende atto che la finalità di tali pubblicazioni sono meramente di carattere informativo ed eventualmente promozionale.\nSi applica la nostra dichiarazione sulla Informativa Privacy.",
+  "regolamentoSpunta": "Dichiaro di aver preso visione di quanto specificato nel regolamento composto da 11 punti",
+
+  // L'INFORMATIVA NON STA PIU' QUI. Sta nel Punto 9 del regolamento, che
+  // e' il testo che l'allieva legge e firma: una sola scrittura, non due
+  // che un giorno direbbero cose diverse. Qui resta solo il rimando.
+  //
+  // Quella di prima e' stata eliminata il 17/10/2026 per tre motivi: era
+  // ancora costruita sul consenso ex art. 23 del D.Lgs. 196/03, cioe' su
+  // una norma superata dal GDPR; chiedeva un consenso unico per cose
+  // diverse, che il GDPR non ammette; e conteneva nome e codice fiscale
+  // del legale rappresentante, dato personale di una persona viva dentro
+  // un repository pubblico.
   "informativaEtichetta": "Informativa per il trattamento dei dati personali *",
-  "informativaScelte": [
-    "ACCONSENTE",
-    "NON ACCONSENTE"
-  ],
-  "informativaTesto": [
-    "I dati personali da Lei conferiti e che La riguardano saranno trattati nel rispetto dell’art. 13 del Regolamento UE 2016/67 (“Codice in materia di protezione dei dati personali”), dei principi di liceità e correttezza, garantendo la sua riservatezza e la protezione dei dati.",
-    "I dati saranno utilizzati esclusivamente per lo svolgimento dell’attività della Elitederma S.r.l. con sede in Roma. Il trattamento dei dati raccolti sarà svolto esclusivamente dai soggetti incaricati secondo apposita autorizzazione da parte del titolare dei dati medesimi, in forma manuale/cartacea e mediante strumenti elettronici, ed in forma mista. I dati saranno raccolti e trattati nel pieno rispetto della normativa in materia di tutela dei dati personali.",
-    "Finalità del trattamento: I dati personali forniti sono necessari ai fini per cui gli incaricati al trattamento dei dati svolgono funzioni di raccolta ed elaborazione dati per lo svolgimento dell’attività della Elitederma S.r.l.",
-    "Diritti dell’interessato: In relazione ai dati oggetto del trattamento di cui alla presente informativa all’interessato è riconosciuto in qualsiasi momento il diritto di:",
-    "- Accesso (art. 15 Regolamento UE n. 2016/679);",
-    "- Rettifica (art. 16 Regolamento UE n. 2016/679);",
-    "- Cancellazione (art. 17 Regolamento UE n. 2016/679);",
-    "- Limitazione (art. 18 Regolamento UE n. 2016/679);",
-    "- Portabilità, intesa come diritto ad ottenere dal titolare del trattamento i dati in un formato strutturato di uso comune e leggibile da dispositivo automatico per trasmetterli ad un altro titolare del trattamento senza impedimenti (art. 20",
-    "Regolamento UE n. 2016/679);",
-    "- Opposizione al trattamento (art. 21Regolamento UE n. 2016/679);",
-    "- Revoca del consenso al trattamento, senza pregiudizio per la liceità del trattamento basata sul consenso acquisito prima della revoca (art. 7, par. 3 Regolamento UE n. 2016/679);",
-    "- Proporre reclamo all’Autorità Garante per la Protezione dei dati personali (art. 51 Regolamento UE n. 2016/679).",
-    "Titolare de trattamento è Elitederma S.r.l. con sede legale in Via Terni 90/a – 00182 Roma Partita Iva 16179891003 in nome del suo legale rappresentante Gianluca Rocca cod. fiscale RCCGLC68H03L719U",
-    "Autorizzazione/consenso al trattamento ex. Art.23 D. Lgs. 196/03. ai sensi e per gli effetti dell’art. 7 e ss. del Regolamento (UE) 2016/679, con la sottoscrizione del presente modulo al trattamento dei dati personali secondo le modalità e nei limiti di cui all’informativa allegata ivi inclusi quelli considerati come categorie particolari di dati."
-  ],
+  "informativaRimando": "L'informativa completa è il Punto 9 del regolamento qui sopra.",
+
   "firmaEtichetta": "Firma *",
   "notaObbligatori": "*Campi obbligatori",
   "tastoInvio": "Accetto e Invio"
 };
+
