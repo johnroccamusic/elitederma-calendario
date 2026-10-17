@@ -102,7 +102,7 @@ class ConfineErrori extends React.Component {
 // Il confronto fra le due liste non lo fa nessuno: se un giorno si vuole
 // smettere di scoprirlo per caso, va messo un controllo che le guardi
 // tutte e due.
-const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti", "consenso", "ricevuta", "modulo"];
+const PARAMETRI_PUBBLICI = ["master", "modelle", "biglietti", "consenso", "ricevuta", "modulo", "recesso"];
 
 function rottaPubblica() {
   if (typeof window === "undefined") return false;

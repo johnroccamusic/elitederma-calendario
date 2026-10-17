@@ -136,3 +136,12 @@ alter table public.recessi_rimborsi enable row level security;
 drop policy if exists "recessi_rimborsi_staff" on public.recessi_rimborsi;
 create policy "recessi_rimborsi_staff" on public.recessi_rimborsi
   for all to authenticated using (true) with check (true);
+
+-- Applicate via MCP il 17/10/2026, nello stesso giro:
+--   recesso_importo(iscritti)  l'importo da rimborsare, con le sue voci
+--   recesso_vista(text)        quello che la pagina pubblica disegna
+--   recesso_registra(...)      l'atto + il cambio di stato, in una
+--                              transazione sola; eseguibile SOLO da
+--                              service_role, cioe' solo dalla edge
+--                              function: dal browser non si registra un
+--                              recesso senza far partire gli avvisi.

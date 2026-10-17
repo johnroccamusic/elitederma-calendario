@@ -51,6 +51,7 @@ import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 import ModelliEmail from "./email/ModelliEmail.jsx";
 import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
+import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
@@ -79829,6 +79830,12 @@ export default function App() {
   // non avra' mai un account.
   const paramModulo = new URLSearchParams(window.location.search).get("modulo");
   if (paramModulo) return <PaginaModulo token={paramModulo} />;
+
+  // il recesso: stessa regola del modulo, e per lo stesso motivo. Chi
+  // scioglie un contratto non deve passare da un account — e qui conta
+  // il doppio, perche' e' un diritto con una scadenza di 14 giorni.
+  const paramRecesso = new URLSearchParams(window.location.search).get("recesso");
+  if (paramRecesso) return <PaginaRecesso token={paramRecesso} />;
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
   // chi ha fatto accesso: "user" (password generica, tutti), "amministratore"
