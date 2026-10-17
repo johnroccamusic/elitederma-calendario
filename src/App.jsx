@@ -31814,9 +31814,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
 
   // salvataggio automatico: usato quando si esce da un campo (onBlur) o si
   // cambia un metodo/radio, solo se si sta già modificando un iscritto esistente
+  //
+  // DUE CHIAMATE PER UNA SOLA USCITA. I campi con `salvaUscendo` (codice
+  // fiscale, indirizzo, email...) chiedono il salvataggio per conto loro, e
+  // il riquadro che li contiene lo chiede di nuovo quando il fuoco se ne va:
+  // misurato, uscendo dal codice fiscale partivano DUE update identici sulla
+  // stessa riga, uno addosso all'altro. Il secondo si butta — ma solo se
+  // arriva nello stesso giro di eventi del primo (per questo il permesso
+  // torna al primo microtask e non alla fine della scrittura): un blur che
+  // arriva dopo porta dati nuovi e deve salvare.
+  const autosalvaGiaChiesto = React.useRef(false);
   async function autosalva() {
     if (!modificandoId) return; // un iscritto nuovo va prima creato col pulsante
     if (!nome.trim() || !cognome.trim()) return; // non salvare stati incompleti
+    if (autosalvaGiaChiesto.current) return;
+    autosalvaGiaChiesto.current = true;
+    Promise.resolve().then(() => { autosalvaGiaChiesto.current = false; });
     const ok = await persistiIscritto();
     if (ok) setMsg("Salvato.");
   }

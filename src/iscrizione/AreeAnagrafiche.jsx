@@ -85,6 +85,21 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta }) {
       maxLength={lunghezza}
       placeholder={suggerimento}
       inputMode={tipo === "telefono" ? "tel" : undefined}
+      // IL RIEMPIMENTO AUTOMATICO DEL BROWSER STA FUORI DA QUI.
+      //
+      // Questi campi non sono i dati di chi usa l'app: sono quelli
+      // dell'allieva che ha davanti. Lasciati liberi, il browser e il
+      // gestore di password ci mettono i dati del titolare dell'account e
+      // indovinano male — e' cosi' che nome e cognome si sono trovati
+      // invertiti in una scheda vera. I due `data-` non sono standard: li
+      // leggono LastPass e 1Password, che `autoComplete="off"` da solo non
+      // fermerebbe.
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize={maiuscolo ? "characters" : "off"}
+      spellCheck={false}
+      data-lpignore="true"
+      data-form-type="other"
       onChange={(e) => {
         let t = e.target.value;
         if (maiuscolo) t = t.toUpperCase();
