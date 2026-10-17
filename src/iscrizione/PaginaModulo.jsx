@@ -255,6 +255,13 @@ export default function PaginaModulo({ token }) {
   const [spunte, setSpunte] = useState({});
   const [spedendo, setSpedendo] = useState(false);
   const [spedito, setSpedito] = useState(false);
+  // IL REGOLAMENTO PARTE CHIUSO. Era stato aperto per intero, perche'
+  // una tendina nasconde dietro un gesto in piu' il testo che si firma;
+  // ma undici punti in mezzo al modulo li si scorre via senza leggerli,
+  // e allontanano la firma e il tasto d'invio. Il titolare l'ha chiesto
+  // chiuso (17/10/2026). Che si firmi quel testo resta detto due volte:
+  // sul tasto stesso e nel riquadro della firma.
+  const [regolamentoAperto, setRegolamentoAperto] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -486,19 +493,34 @@ export default function PaginaModulo({ token }) {
 
         <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
           <IntestazioneArea>{testi.regolamento.titolo || "Regolamento di partecipazione"}</IntestazioneArea>
-          {/* IL REGOLAMENTO STA APERTO. C'era una tendina "Leggi il
-              regolamento": chiusa di suo, nascondeva il testo che si
-              firma dietro un gesto in piu'. Si legge scorrendo, come un
-              contratto di carta. */}
-          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
-            {quantiPunti} {quantiPunti === 1 ? "punto" : "punti"} · lo accetti firmando qui sotto
-          </div>
-          {(testi.regolamento.blocchi || []).map((b, i) => (
-            <div key={i} style={{ marginBottom: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{b.titolo}</div>
-              {(b.punti || []).map((p, j) => <p key={j} style={paragrafo}>{p}</p>)}
+          <button
+            type="button" onClick={() => setRegolamentoAperto((v) => !v)}
+            aria-expanded={regolamentoAperto}
+            style={{
+              ...fontBody, width: "100%", boxSizing: "border-box", minHeight: 48, borderRadius: 10,
+              border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer",
+              fontSize: 13.5, fontWeight: 700, display: "flex", alignItems: "center",
+              justifyContent: "space-between", gap: 10, padding: "0 14px", textAlign: "left",
+            }}
+          >
+            <span>
+              {regolamentoAperto ? "Chiudi il regolamento" : "Leggi il regolamento"}
+              <span style={{ display: "block", fontWeight: 400, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                {quantiPunti} {quantiPunti === 1 ? "punto" : "punti"} · lo accetti firmando qui sotto
+              </span>
+            </span>
+            <span style={{ fontSize: 16, color: MUTED, transform: regolamentoAperto ? "rotate(180deg)" : "none" }}>⌄</span>
+          </button>
+          {regolamentoAperto && (
+            <div style={{ marginTop: 14 }}>
+              {(testi.regolamento.blocchi || []).map((b, i) => (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{b.titolo}</div>
+                  {(b.punti || []).map((p, j) => <p key={j} style={paragrafo}>{p}</p>)}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
 
         <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
