@@ -310,8 +310,21 @@ export default function PaginaModulo({ token }) {
   const paragrafo = { fontSize: 12.5, color: GRAFITE, lineHeight: 1.65, margin: "8px 0" };
   const quantiPunti = (testi.regolamento.blocchi || []).length;
 
-  // una riga dell'anagrafica: chi ha gia' un valore si legge, gli altri sono suoi
-  const RigaSua = ({ campi, spenti = false }) => (
+  // UNA RIGA DELL'ANAGRAFICA: chi ha gia' un valore si legge, gli altri
+  // sono suoi.
+  //
+  // E' una funzione che restituisce JSX, e si chiama — `{rigaSua(...)}` —
+  // invece di essere montata come componente — `<RigaSua .../>`. La
+  // differenza non e' di stile: dichiarata qui dentro, a ogni disegno
+  // nasceva una funzione nuova, e per React una funzione diversa e' un
+  // componente diverso. Quindi a ogni lettera battuta smontava l'intera
+  // riga e ne costruiva un'altra: il campo in cui si stava scrivendo
+  // veniva distrutto sotto il dito, il fuoco se ne andava senza nemmeno
+  // un evento di uscita, e sul telefono si chiudeva la tastiera.
+  // Misurato il 17/10/2026 sul modulo vero: sedici caselle rifatte in
+  // tre lettere. Chiamandola, i figli restano `Letto`/`DaRiempire`, che
+  // stanno fuori di qui e non cambiano mai identita'.
+  const rigaSua = (campi, spenti = false) => (
     <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
       {campi.map((campo) => {
         const d = c(campo.chiave);
@@ -331,7 +344,7 @@ export default function PaginaModulo({ token }) {
 
   // un riquadro commerciale: di sola lettura per intero, e senza le
   // righe che il venditore ha lasciato vuote
-  const RigaLetta = ({ chiavi }) => (
+  const rigaLetta = (chiavi) => (
     <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
       {chiavi.map((k) => <Letto key={k} etichetta={etichettaDi(k)} valore={mostra(k, c(k)?.valore)} />)}
     </div>
@@ -363,7 +376,7 @@ export default function PaginaModulo({ token }) {
 
         <div style={pannello}>
           <IntestazioneArea>I tuoi dati</IntestazioneArea>
-          {AREA_ALLIEVO.righe.map((r, i) => <RigaSua key={i} campi={r.campi} />)}
+          {AREA_ALLIEVO.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r.campi)}</React.Fragment>)}
         </div>
 
         <div style={pannello}>
@@ -373,7 +386,7 @@ export default function PaginaModulo({ token }) {
               ? "Servono tutti, altrimenti la fattura non si può emettere."
               : "Si compilano solo se sopra scegli Azienda. Da privata non servono."}
           </div>
-          {AREA_FATTURAZIONE.righe.map((r, i) => <RigaSua key={i} campi={r.campi} spenti={!eAzienda} />)}
+          {AREA_FATTURAZIONE.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r.campi, !eAzienda)}</React.Fragment>)}
         </div>
 
         <div style={pannello}>
@@ -381,7 +394,7 @@ export default function PaginaModulo({ token }) {
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
             Carta d'identità o patente. Le foto restano riservate: non sono raggiungibili da nessun indirizzo pubblico.
           </div>
-          <RigaSua campi={["doc_tipo", "doc_numero"].filter((k) => c(k)).map((k) => ({ chiave: k }))} />
+          {rigaSua(["doc_tipo", "doc_numero"].filter((k) => c(k)).map((k) => ({ chiave: k })))}
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
             {c("doc_fronte") && <Foto etichetta="Fronte" file={docFronte} onCambia={setDocFronte} obbligatorio={c("doc_fronte").obbligatorio} />}
             {c("doc_retro")  && <Foto etichetta="Retro"  file={docRetro}  onCambia={setDocRetro}  obbligatorio={c("doc_retro").obbligatorio} />}
@@ -398,7 +411,7 @@ export default function PaginaModulo({ token }) {
           return (
             <div key={g.titolo} style={pannello}>
               <IntestazioneArea>{g.titolo}</IntestazioneArea>
-              <RigaLetta chiavi={presenti} />
+              {rigaLetta(presenti)}
             </div>
           );
         })}
