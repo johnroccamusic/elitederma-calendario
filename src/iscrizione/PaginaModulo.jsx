@@ -299,6 +299,24 @@ export default function PaginaModulo({ token }) {
       if (error) throw new Error(error.message);
       if (!data?.ok) throw new Error(data?.errore || "Non è stato possibile inviare il modulo.");
       setSpedito(true);
+
+      // LA CONFERMA DI RICEZIONE, dopo e non prima.
+      //
+      // Parte solo a modulo scritto: quella mail dice "abbiamo ricevuto",
+      // e mandarla prima del salvataggio vorrebbe dire prometterlo senza
+      // saperlo. La manda il server — vedi la funzione `modulo-ricevuto`:
+      // da questa pagina nessuno ha una sessione, e `invia-email` non
+      // accetta la chiave pubblicabile.
+      //
+      // Se non parte, qui non succede niente: il modulo E' arrivato, e
+      // dirle "errore" dopo che il suo documento e' al sicuro la
+      // spingerebbe a rimandare tutto. Il guasto resta scritto nel
+      // registro degli invii, dove qualcuno lo vede.
+      try {
+        await supabase.functions.invoke("modulo-ricevuto", { body: { token } });
+      } catch (e) {
+        console.error("conferma di ricezione non partita:", e?.message || e);
+      }
     } catch (e) {
       setErrore(e.message || String(e));
     } finally {

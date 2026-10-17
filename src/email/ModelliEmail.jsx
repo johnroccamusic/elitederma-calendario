@@ -21,6 +21,7 @@
 //    tornerebbe al punto 1.
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
+import { componiMailRicezione, valoriCorso } from "../../supabase/functions/_shared/email.js";
 import { Button, Field } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle } from "../ui/stile.js";
 import { MODELLI, SEGNAPOSTI, leggiModello, salvaModello, leggiRegole, salvaRegola, provaInviiAutomatici, frasePeriodo } from "./modelli.js";
@@ -33,6 +34,31 @@ const riquadro = {
 // Impostazioni > Modulo di iscrizione, dove la mail che accompagna il
 // modulo si scrive li' accanto a tutto il resto del modulo invece che in
 // un'altra pagina.
+// OGNI MODELLO HA LA SUA COMPOSIZIONE.
+//
+// `componi` arriva da fuori ed e' quella della mail di conferma: andava
+// bene finche' i modelli erano uno. Adesso la conferma di RICEZIONE ha
+// una composizione sua — un piede diverso, nessun tasto, nessun link — e
+// con un compositore solo l'anteprima avrebbe mostrato una mail che
+// all'allieva non arriva. E' lo stesso motivo per cui la composizione
+// vive in _shared: una sola scrittura, due posti che la usano.
+//
+// Chi non e' in questa tabella usa `componi`, come sempre.
+const COMPOSITORI = {
+  ricezione_modulo: ({ nome, corso, corsoData, loc, societa, modello }) => {
+    const { valori, righe } = valoriCorso({
+      nome,
+      nomeCorso: corso?.nome,
+      dataInizio: corsoData?.data_inizio,
+      dataFine: corsoData?.data_fine,
+      citta: corsoData?.citta || loc?.citta || loc?.nome,
+      sede: loc?.nome_sede,
+      indirizzo: corsoData?.indirizzo || loc?.indirizzo,
+    });
+    return componiMailRicezione({ valori, righe, modello, societa });
+  },
+};
+
 export default function ModelliEmail({ componi, soloChiave = null }) {
   const [chiave, setChiave] = useState(soloChiave || MODELLI[0].chiave);
   const modello = MODELLI.find((m) => m.chiave === chiave) || MODELLI[0];
@@ -47,6 +73,9 @@ export default function ModelliEmail({ componi, soloChiave = null }) {
   const [iscrittoId, setIscrittoId] = useState("");
   const [contesto, setContesto] = useState(null); // { nome, corso, corsoData, loc }
   const [mioIndirizzo, setMioIndirizzo] = useState("");
+  // chi firma il piede della mail: senza, l'anteprima mostrava un piede
+  // monco mentre la mail vera arriva con ragione sociale e indirizzo
+  const [societa, setSocieta] = useState(null);
 
   const campoTesto = useRef(null);
   const campoOggetto = useRef(null);
@@ -82,6 +111,11 @@ export default function ModelliEmail({ componi, soloChiave = null }) {
       if (vivo) setMioIndirizzo(sessione?.session?.user?.email || "");
     });
     return () => { vivo = false; };
+  }, []);
+
+  useEffect(() => {
+    supabase.from("intestazione_societa").select("*").limit(1).maybeSingle()
+      .then(({ data }) => setSocieta(data || null));
   }, []);
 
   // le ultime iscritte con un indirizzo, per l'anteprima
@@ -122,8 +156,15 @@ export default function ModelliEmail({ componi, soloChiave = null }) {
 
   // l'anteprima: la stessa funzione che compone la mail quando parte per
   // davvero, non una seconda scrittura che un giorno direbbe un'altra cosa
-  const anteprima = contesto && (oggetto.trim() || testo.trim())
-    ? componi({ ...contesto, modello: { oggetto, testo } })
+  const componiQuesta = COMPOSITORI[chiave] || componi;
+  // A MODELLO VUOTO L'ANTEPRIMA NON SPARISCE: mostra il testo scritto nel
+  // codice, che e' esattamente quello che parte quando qui non c'e'
+  // niente. Prima la casella diceva «scrivi oggetto e testo per vedere
+  // l'anteprima», e cosi' l'unica mail che non si poteva guardare era
+  // proprio quella che l'allieva riceve piu' spesso.
+  const scritto = oggetto.trim() || testo.trim();
+  const anteprima = contesto
+    ? componiQuesta({ ...contesto, societa, modello: scritto ? { oggetto, testo } : null })
     : null;
 
   function inserisci(segnaposto) {
@@ -278,7 +319,7 @@ export default function ModelliEmail({ componi, soloChiave = null }) {
             </div>
           ) : (
             <div style={{ ...riquadro, fontSize: 13, color: MUTED }}>
-              {iscritti.length ? "Scrivi oggetto e testo per vedere l'anteprima." : "Serve un'iscritta con l'email per fare l'anteprima."}
+              {iscritti.length ? "Scegli un'iscritta per vedere l'anteprima." : "Serve un'iscritta con l'email per fare l'anteprima."}
             </div>
           )}
           <InviiAutomatici />

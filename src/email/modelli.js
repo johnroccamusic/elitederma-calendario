@@ -24,6 +24,11 @@ export const MODELLI = [
     aChi: "All'allieva, dal passo «Invia modulo» sulla fascia della sua scheda. Deve contenere {link}: è l'indirizzo del modulo da compilare e firmare.",
   },
   {
+    chiave: "ricezione_modulo",
+    titolo: "Conferma di ricezione del modulo",
+    aChi: "All'allieva, da sola, appena preme Invia sul modulo e il modulo viene scritto. Parte dal server, perché su quella pagina non c'è nessuna sessione: se qui il testo manca vale quello scritto nel codice, e la mail parte lo stesso.",
+  },
+  {
     chiave: "dettagli_organizzativi",
     titolo: "Dettagli organizzativi prima del corso",
     aChi: "Alle iscritte della classe, da sole, nei giorni prima dell'inizio. Parte solo se la regola è accesa in «Invii automatici» e questo testo non è vuoto.",

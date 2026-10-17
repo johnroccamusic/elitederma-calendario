@@ -110,3 +110,78 @@ export function componiDaModello(modello, { valori, righe }) {
     html: `${APRE_HTML}${applicaSegnaposti(proteggi(modello.testo).replace(/\n/g, "<br>"), perHtml)}\n</div>`,
   };
 }
+
+// IL PIEDE DELLA MAIL: chi la manda, e perche' sta arrivando.
+//
+// Non e' decorazione. La prima mail da questo dominio e' finita nello
+// spam, ed e' quello che succede a un messaggio appena nato: nessuna
+// storia alle spalle e niente che dica chi scrive. Un mittente che si
+// firma con ragione sociale e indirizzo — e che spiega perche' quella
+// mail e' arrivata — e' quello che distingue una comunicazione vera.
+//
+// Stava in src/iscrizioni/invio.js, cioe' solo dal lato browser. E' qui
+// perche' adesso lo usa anche Deno: la conferma di ricezione parte dal
+// server, e una mail col piede e una senza sarebbero due mail diverse.
+export function piede({ societa, valori }) {
+  const righe = [
+    societa?.nome,
+    societa?.indirizzo,
+    societa?.indirizzo_2,
+  ].map((r) => String(r || "").trim()).filter(Boolean);
+  const perche = `Ricevi questa mail perché risulti iscritta a ${valori.corso}.`;
+  return {
+    testo: ["", "—", perche, ...righe].join("\n"),
+    html: `<hr style="border:none;border-top:1px solid #e6dfce;margin:26px 0 14px">`
+      + `<div style="font-size:12px;line-height:1.5;color:#7a7f8c">`
+      + `${proteggi(perche)}<br>`
+      + righe.map((r) => proteggi(r)).join("<br>")
+      + `</div>`,
+  };
+}
+
+// LA CONFERMA DI RICEZIONE DEL MODULO.
+//
+// Parte da sola appena l'allieva preme Invia e il modulo e' stato
+// scritto davvero. Non chiede niente e non ha link: dice solo che il
+// modulo e' arrivato, perche' dall'altra parte c'e' qualcuno che ha
+// appena mandato un documento d'identita' e la propria firma a un
+// indirizzo che non conosce, e il silenzio e' la cosa peggiore.
+//
+// Riga mancante in `email_modelli` = vale il testo qui sotto. E' la
+// stessa regola degli altri modelli, e non e' un ripiego pigro: questa
+// mail deve partire anche il giorno in cui qualcuno svuota il modello
+// per sbaglio.
+export function diSerieRicezione({ valori }) {
+  const oggetto = `Abbiamo ricevuto il tuo modulo — ${valori.corso}`;
+  const testo = [
+    `Ciao ${valori.nome},`,
+    "",
+    "abbiamo ricevuto il tuo modulo di iscrizione, firmato e completo.",
+    "Non devi fare altro: da qui in avanti ci pensiamo noi.",
+    "",
+    "{dettagli}",
+    "",
+    "Se c'è qualcosa da correggere, rispondi a questa mail e lo sistemiamo.",
+    "",
+    "A presto,",
+    "Elitederma Academy",
+  ].join("\n");
+  return { oggetto, testo };
+}
+
+export function componiMailRicezione({ valori, righe = [], modello = null, societa = null }) {
+  const p = piede({ societa, valori });
+  const attacca = (mail) => ({
+    ...mail,
+    testo: mail.testo + p.testo,
+    html: mail.html.replace("\n</div>", `${p.html}\n</div>`),
+  });
+
+  if (modelloUsabile(modello)) return attacca(componiDaModello(modello, { valori, righe }));
+
+  // il testo di serie passa dalla stessa strada del modello scritto a
+  // mano — stesso {dettagli}, stesso HTML — cosi' le due versioni della
+  // mail non possono venire diverse
+  const d = diSerieRicezione({ valori });
+  return attacca(componiDaModello({ oggetto: d.oggetto, testo: d.testo }, { valori, righe }));
+}

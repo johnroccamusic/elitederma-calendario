@@ -60,7 +60,7 @@ import { valoriCorso } from "../../supabase/functions/_shared/email.js";
 // Il link e' quello vero dell'iscritta scelta nell'anteprima, cosi' si
 // vede quanto e' lungo in mezzo al testo — che e' la cosa che si sbaglia
 // a immaginare scrivendo.
-function anteprimaMailModulo({ nome, corso, corsoData, loc, token, modello }) {
+function anteprimaMailModulo({ nome, corso, corsoData, loc, token, societa, modello }) {
   // due cose, non una: vedi la nota in invio.js
   const { valori, righe } = valoriCorso({
     nome,
@@ -71,7 +71,7 @@ function anteprimaMailModulo({ nome, corso, corsoData, loc, token, modello }) {
     sede: loc?.nome_sede,
     indirizzo: corsoData?.indirizzo || loc?.indirizzo,
   });
-  return componiMailModulo({ valori, righe, link: linkModulo(token || "IL-GETTONE-DI-QUESTA-ISCRIZIONE"), modello });
+  return componiMailModulo({ valori, righe, link: linkModulo(token || "IL-GETTONE-DI-QUESTA-ISCRIZIONE"), modello, societa });
 }
 
 

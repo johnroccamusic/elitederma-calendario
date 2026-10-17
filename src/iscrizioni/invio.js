@@ -15,7 +15,7 @@
 // fatto che qualcuno abbia riempito una casella.
 import { supabase } from "../supabase.js";
 import { link } from "../indirizzo.js";
-import { componiDaModello, modelloUsabile, valoriCorso, proteggi, APRE_HTML } from "../../supabase/functions/_shared/email.js";
+import { componiDaModello, modelloUsabile, valoriCorso, proteggi, APRE_HTML, piede } from "../../supabase/functions/_shared/email.js";
 
 // LA MAIL DEL MODULO, composta una volta sola.
 //
@@ -87,34 +87,6 @@ export function diSerie({ valori, link }) {
     "Elitederma Academy",
   ].join("\n");
   return { oggetto, testo };
-}
-
-// IL PIEDE DELLA MAIL: chi la manda, e perche' sta arrivando.
-//
-// Non e' decorazione. La prima mail da questo dominio e' finita nello
-// spam, ed e' quello che succede a un messaggio appena nato: nessuna
-// storia alle spalle, un link a un indirizzo che nessuno ha mai visto, e
-// niente che dica chi scrive. Un mittente che si firma con ragione
-// sociale, indirizzo e partita IVA — e che spiega perche' quella mail e'
-// arrivata — e' quello che distingue una comunicazione vera.
-//
-// I dati non si inventano: vengono da `intestazione_societa`, la stessa
-// riga che finisce in cima ai documenti.
-function piede({ societa, valori }) {
-  const righe = [
-    societa?.nome,
-    societa?.indirizzo,
-    societa?.indirizzo_2,
-  ].map((r) => String(r || "").trim()).filter(Boolean);
-  const perche = `Ricevi questa mail perché risulti iscritta a ${valori.corso}.`;
-  return {
-    testo: ["", "—", perche, ...righe].join("\n"),
-    html: `<hr style="border:none;border-top:1px solid #e6dfce;margin:26px 0 14px">`
-      + `<div style="font-size:12px;line-height:1.5;color:#7a7f8c">`
-      + `${proteggi(perche)}<br>`
-      + righe.map((r) => proteggi(r)).join("<br>")
-      + `</div>`,
-  };
 }
 
 /**
