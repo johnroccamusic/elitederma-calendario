@@ -57,6 +57,7 @@ import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import { statoDi, aggiornaStatoDopoAcconto } from "./iscrizioni/stato.js";
 import { inviaModulo, linkModulo, segnaInviatoAMano } from "./iscrizioni/invio.js";
+import { INDIRIZZO_APP } from "./indirizzo.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
 import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
@@ -32030,7 +32031,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     // considerazione. "/m" non e' un file, quindi ci arriva. L'app si
     // carica lo stesso (la funzione restituisce l'index.html vero) e
     // legge "master" dalla query come prima.
-    const url = `${window.location.origin}/m`
+    const url = `${INDIRIZZO_APP}/m`
       + `?corso=${encodeURIComponent(titolo)}`
       + `&quando=${encodeURIComponent(quando)}`
       + `&master=${corsoData.token_master}`;
@@ -32074,7 +32075,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
     const dataLeggibile = `${gg}-${mm}-${aaaa}`;
     const leggibile = [slugify(corso?.nome), slugify(loc?.nome), dataLeggibile].filter(Boolean).join("/");
-    const url = `${window.location.origin}${window.location.pathname}?modelle=${leggibile}`;
+    const url = `${INDIRIZZO_APP}/?modelle=${leggibile}`;
     setLinkModelle(url);
   }
 

@@ -26,7 +26,7 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 //
 // Quindi: o si rimanda a Stripe, o si rimanda alla ricevuta dell'app,
 // che e' un sito vero e sa disegnarsi.
-const APP = (Deno.env.get("APP_URL") || "https://elitederma-calendario.vercel.app").replace(/\/$/, "");
+const APP = (Deno.env.get("APP_URL") || "https://app.elitederma.net").replace(/\/$/, "");
 
 function versoLApp(codice: string, stato = 200) {
   return new Response(null, {

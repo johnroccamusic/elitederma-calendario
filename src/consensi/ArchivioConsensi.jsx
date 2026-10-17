@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, MUTED, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
+import { INDIRIZZO_APP } from "../indirizzo.js";
 import { qrSvg } from "../ui/qr.js";
 import { CONSENSI, contenutoDaVersione } from "../content/consensi";
 import { leggiConsensi, filtraConsensi, urlFirmato } from "./dati";
@@ -38,7 +39,10 @@ const soloData = (g) => {
 // gia' dentro una scheda, e due cornici una dentro l'altra sembrano un
 // errore di disegno.
 export function Codice({ modello, isMobile, edizione = null, sottotitolo = null, nudo = false }) {
-  const indirizzo = `${window.location.origin}${window.location.pathname}?consenso=${modello.codice}${edizione ? `&edizione=${edizione}` : ""}`;
+  // l'indirizzo buono dell'app, non quello della finestra: questo QR
+  // finisce stampato e appeso in aula, e vive piu' a lungo di chi lo ha
+  // generato
+  const indirizzo = `${INDIRIZZO_APP}/?consenso=${modello.codice}${edizione ? `&edizione=${edizione}` : ""}`;
   const svg = useMemo(() => qrSvg(indirizzo, { lato: isMobile ? 190 : 220 }), [indirizzo, isMobile]);
 
   return (

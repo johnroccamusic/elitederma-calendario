@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
   // Supabase rispondono "text/plain" con una CSP "sandbox", e una
   // pagina HTML servita da qui il telefono non la disegna — se la
   // scarica come file, col sorgente dentro. La ricevuta la fa l'app.
-  const app = (Deno.env.get("APP_URL") || "https://elitederma-calendario.vercel.app").replace(/\/$/, "");
+  const app = (Deno.env.get("APP_URL") || "https://app.elitederma.net").replace(/\/$/, "");
   const ricevuta = `${app}/?ricevuta=${codice}`;
   const scadeIl = new Date(Date.now() + 2 * 3600 * 1000);
 

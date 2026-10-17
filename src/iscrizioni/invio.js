@@ -14,6 +14,7 @@
 // la mail di conferma: un testo contrattuale non puo' dipendere dal
 // fatto che qualcuno abbia riempito una casella.
 import { supabase } from "../supabase.js";
+import { link } from "../indirizzo.js";
 import { componiDaModello, modelloUsabile, valoriCorso } from "../../supabase/functions/_shared/email.js";
 
 // LA MAIL DEL MODULO, composta una volta sola.
@@ -42,8 +43,7 @@ export function componiMailModulo({ valori, righe = [], link, modello = null }) 
 }
 
 export function linkModulo(token) {
-  const base = typeof window !== "undefined" ? window.location.origin : "";
-  return `${base}/?modulo=${token}`;
+  return link(`/?modulo=${token}`);
 }
 
 // il testo di serie, quello che parte se nessuno ne ha scritto uno
