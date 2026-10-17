@@ -34320,6 +34320,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       stato={statoDi(i)} compatto={isMobile} larghezzaMax={isMobile ? 260 : 330}
                       onInvia={soloLettura ? null : (gia) => mandaModulo(i, gia)}
                       inviando={inviandoId === i.id}
+                      onModifica={() => apriModificaCompleta(i)}
                     />
                     {esitoModulo?.id === i.id && (
                       <div style={{ ...fontBody, fontSize: 11.5, marginTop: 6, lineHeight: 1.5, color: esitoModulo.ok ? "#2E7D32" : "#C0392B" }}>

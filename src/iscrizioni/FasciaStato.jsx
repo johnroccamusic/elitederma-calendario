@@ -69,7 +69,15 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 //
 // Senza `onInvia` la fascia e' quella di prima e non si tocca: nelle
 // liste serve a leggere, non a spedire.
-export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false }) {
+// DUE TAPPE SI PREMONO, e fanno la cosa che dicono.
+//
+//   Dati inseriti   riapre la scheda per correggerla
+//   Invia modulo    lo manda (o lo rimanda, chiedendo prima)
+//
+// Senza i rispettivi gestori la fascia e' solo da leggere e non si
+// tocca: e' il caso delle liste di sola lettura. Un pallino che sembra
+// un tasto e non fa niente e' il guasto peggiore, ed e' gia' successo.
+export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false, onModifica = null }) {
   const attuale = STATI[stato] ? stato : "dati_inseriti";
   const indice = ORDINE.indexOf(attuale);
   const palla = compatto ? 24 : 32;
@@ -106,16 +114,20 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
             )}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto", minWidth: 0 }}>
               {(() => {
-                const siPreme = !!onInvia && chiave === "modulo_inviato" && !inviando;
+                const eInvio = !!onInvia && chiave === "modulo_inviato" && !inviando;
+                const eModifica = !!onModifica && chiave === "dati_inseriti";
+                const siPreme = eInvio || eModifica;
                 const giaPartito = indice >= ORDINE.indexOf("modulo_inviato");
                 const Palla = siPreme ? "button" : "div";
                 return (
                   <Palla
                     type={siPreme ? "button" : undefined}
-                    onClick={siPreme ? () => onInvia(giaPartito) : undefined}
-                    title={siPreme
-                      ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
-                      : STATI[chiave].etichetta}
+                    onClick={eModifica ? onModifica : eInvio ? () => onInvia(giaPartito) : undefined}
+                    title={eModifica
+                      ? "Riapri la scheda per correggere i dati"
+                      : eInvio
+                        ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
+                        : STATI[chiave].etichetta}
                     style={{
                       width: palla, height: palla, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",
