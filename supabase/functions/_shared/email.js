@@ -169,12 +169,34 @@ export function diSerieRicezione({ valori }) {
   return { oggetto, testo };
 }
 
-export function componiMailRicezione({ valori, righe = [], modello = null, societa = null }) {
+// IL TASTO DEL RECESSO NELLA MAIL DI CONFERMA.
+//
+// La dicitura e' imposta dalla norma e si scrive cosi', minuscola
+// compresa. Non passa dal modello correggibile in Setting: chi riscrive
+// il testo della mail non deve poter far sparire — o rinominare — un
+// collegamento che per legge ci deve essere. Per lo stesso motivo viene
+// attaccato DOPO, sempre, qualunque cosa dica il modello.
+export const TASTO_RECEDI = "recedi dal contratto qui";
+
+function bloccoRecesso(link) {
+  return {
+    testo: `\n\nSe cambi idea hai 14 giorni per recedere dal contratto, senza dare spiegazioni:\n${TASTO_RECEDI}\n${link}`,
+    html: `<hr style="border:none;border-top:1px solid #e6dfce;margin:24px 0 16px">`
+      + `<p style="margin:0 0 12px;font-size:14px">Se cambi idea hai 14 giorni per recedere dal contratto, senza dare spiegazioni.</p>`
+      + `<p style="margin:0 0 10px">`
+      + `<a href="${link}" style="display:inline-block;background:#0E1B33;color:#ffffff;`
+      + `text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold">${TASTO_RECEDI}</a></p>`
+      + `<p style="margin:0;font-size:12px;color:#7a7f8c;word-break:break-all">${proteggi(link)}</p>`,
+  };
+}
+
+export function componiMailRicezione({ valori, righe = [], modello = null, societa = null, linkRecesso = "" }) {
   const p = piede({ societa, valori });
+  const r = linkRecesso ? bloccoRecesso(linkRecesso) : { testo: "", html: "" };
   const attacca = (mail) => ({
     ...mail,
-    testo: mail.testo + p.testo,
-    html: mail.html.replace("\n</div>", `${p.html}\n</div>`),
+    testo: mail.testo + r.testo + p.testo,
+    html: mail.html.replace("\n</div>", `${r.html}${p.html}\n</div>`),
   });
 
   if (modelloUsabile(modello)) return attacca(componiDaModello(modello, { valori, righe }));

@@ -117,7 +117,12 @@ Deno.serve(async (req) => {
   const { data: societa } = await admin
     .from("intestazione_societa").select("*").limit(1).maybeSingle();
 
-  const mail = componiMailRicezione({ valori, righe, modello, societa });
+  // IL LINK DEL RECESSO. La norma vuole che la conferma lo porti, e
+  // porta il gettone del recesso, non quello del modulo. L'indirizzo si
+  // puo' cambiare da un secret senza ripubblicare la funzione.
+  const indirizzoApp = (Deno.env.get("APP_URL") || "https://app.elitederma.net").replace(/\/+$/, "");
+  const linkRecesso = isc.token_recesso ? `${indirizzoApp}/?recesso=${isc.token_recesso}` : "";
+  const mail = componiMailRicezione({ valori, righe, modello, societa, linkRecesso });
 
   if (prova) return json({ ok: true, prova: true, ricevuto, a: destinatario, mail });
 

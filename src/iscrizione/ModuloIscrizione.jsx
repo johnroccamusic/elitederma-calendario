@@ -50,6 +50,7 @@ import { AreaAnagrafica } from "./AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE, GRUPPI_LETTURA as DA_TRASFERIRE } from "./disposizione.js";
 import TestoContratto from "./TestoContratto.jsx";
 import ImpostazioniRecesso from "../recesso/Impostazioni.jsx";
+import { ElencoRecessi } from "../recesso/Riquadro.jsx";
 import ModelliEmail from "../email/ModelliEmail.jsx";
 import { componiMailModulo, linkModulo } from "../iscrizioni/invio.js";
 import { valoriCorso } from "../../supabase/functions/_shared/email.js";
@@ -239,7 +240,13 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true, on
       </div>
 
       {linguetta === "recesso" && (
-        <ImpostazioniRecesso Icona={I.documento} amministratore={amministratore} />
+        <>
+          <ImpostazioniRecesso Icona={I.documento} amministratore={amministratore} />
+          {/* l'elenco sta qui, sotto gli indirizzi, perche' e' lo stesso
+              argomento e non serve una pagina nuova per una lista che —
+              se tutto va bene — resta quasi sempre vuota */}
+          <ElencoRecessi />
+        </>
       )}
 
       {linguetta === "contratto" && (

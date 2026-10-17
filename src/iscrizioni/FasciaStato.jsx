@@ -21,6 +21,7 @@
 // pallino acceso: tanto e' l'unica che serve leggere.
 import React from "react";
 import { STATI, ORDINE, VERDE, ROSSO } from "./stato.js";
+import { fontBody } from "../ui/stile.js";
 
 const VERDE_TENUE = "#E9F6EC";
 const ROSSO_TENUE = "#FDECEC";
@@ -79,6 +80,36 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 // un tasto e non fa niente e' il guasto peggiore, ed e' gia' successo.
 export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false, onModifica = null }) {
   const attuale = STATI[stato] ? stato : "dati_inseriti";
+
+  // IL RECESSO NON E' UNA TAPPA DELLA SCALA, ed e' per questo che qui
+  // c'e' un'uscita anticipata.
+  //
+  // Non sta in ORDINE, quindi `indexOf` darebbe -1 e la fascia
+  // mostrerebbe tutti e quattro i pallini rossi: un'iscrizione sciolta
+  // sembrerebbe appena nata, con tutto ancora da fare. Dice invece
+  // quello che e' successo, con lo stesso vestito degli altri stati —
+  // la pasticca, i suoi colori — e si vede scorrendo l'elenco.
+  if (attuale === "recesso") {
+    const s = STATI.recesso;
+    return (
+      <span
+        title="L'allieva ha esercitato il diritto di recesso"
+        style={{
+          ...fontBody, display: "inline-flex", alignItems: "center", gap: 6,
+          background: s.sfondo, color: s.colore, border: `1px solid ${s.colore}33`,
+          borderRadius: 999, padding: compatto ? "3px 10px" : "5px 13px",
+          fontSize: compatto ? 11 : 12, fontWeight: 700, letterSpacing: 0.2,
+        }}
+      >
+        <svg width={compatto ? 11 : 13} height={compatto ? 11 : 13} viewBox="0 0 24 24" fill="none"
+             stroke={s.colore} strokeWidth="2.6" strokeLinecap="round">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+        {s.etichetta}
+      </span>
+    );
+  }
+
   const indice = ORDINE.indexOf(attuale);
   const palla = compatto ? 24 : 32;
   const icona = compatto ? 12 : 15;

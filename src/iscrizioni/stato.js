@@ -51,6 +51,23 @@ export const STATI = {
     sfondo: "#F2EADC",
     acceso: false,
   },
+  // NON E' UN GRADINO DELLA SCALA: e' un'uscita.
+  //
+  // Gli altri quattro stati dicono a che punto e' arrivata
+  // un'iscrizione; questo dice che non c'e' piu'. Per questo sta fuori
+  // da ORDINE — nella fascia dei pallini non ha un posto — e per questo
+  // `decidiStato` lo lascia stare qualunque cosa succeda dopo.
+  //
+  // Il rosso scuro non e' un allarme per chi guarda: e' il colore che si
+  // riconosce a colpo d'occhio scorrendo un elenco, che e' l'unico
+  // momento in cui questo stato conta davvero.
+  recesso: {
+    chiave: "recesso",
+    etichetta: "Recesso",
+    colore: "#B3261E",
+    sfondo: "#FBE9E7",
+    acceso: true,
+  },
 };
 
 // I DUE COLORI DELLA FASCIA: fatto e da fare.
@@ -95,9 +112,30 @@ export function accontoRisultaPagato(iscritto) {
 // nessuno gli ha mai chiesto. Per questo `decidiStato` si chiama solo
 // sui passaggi — quando il modulo arriva, o quando l'acconto cambia —
 // e mai su tutta la tabella.
-export function decidiStato({ moduloInviato, moduloRicevuto, accontoPagato }) {
+export function decidiStato({ recesso, moduloInviato, moduloRicevuto, accontoPagato }) {
+  // IL RECESSO VINCE SU TUTTO, e sta in cima apposta.
+  //
+  // Gli altri stati si DERIVANO da due fatti: modulo ricevuto e acconto
+  // pagato. Un'iscrizione recessa li ha tutti e due, quindi senza questa
+  // riga il giorno in cui qualcuno segna un acconto — o rimette mano
+  // alla scheda — tornerebbe "confermato" da sola, e un contratto
+  // sciolto risulterebbe di nuovo buono. Un recesso non si disfa
+  // toccando una casella.
+  if (recesso) return "recesso";
   if (moduloRicevuto) return accontoPagato ? "confermato" : "modulo_ricevuto";
   return moduloInviato ? "modulo_inviato" : "dati_inseriti";
+}
+
+// Un'iscrizione recessa non conta nei posti occupati del corso: il posto
+// e' tornato libero. Sta qui, accanto agli stati, perche' e' la stessa
+// domanda — "questa iscrizione vale ancora?" — e perche' chi conta i
+// posti non debba ricordarsi di scrivere ogni volta la condizione.
+export function iscrizioneAttiva(iscritto) {
+  return statoDi(iscritto) !== "recesso";
+}
+
+export function iscrittiAttiviDi(iscritti, corsoDataId) {
+  return (iscritti || []).filter((i) => i.corso_data_id === corsoDataId && iscrizioneAttiva(i));
 }
 
 // Il modulo e' arrivato. `origine` dice da quale delle due strade:
@@ -105,8 +143,10 @@ export function decidiStato({ moduloInviato, moduloRicevuto, accontoPagato }) {
 // dall'allievo col link). Tutte e due passano di qui.
 export async function segnaModuloRicevuto(iscritto, origine = "manuale") {
   if (!iscritto?.id) return "Iscritto senza identificativo.";
+  if (statoDi(iscritto) === "recesso") return "Questa iscrizione è stata recessa.";
   if (origine !== "manuale" && origine !== "online") return `Origine non valida: ${origine}`;
   const stato = decidiStato({
+    recesso: false,
     moduloInviato: !!iscritto.modulo_inviato_il,
     moduloRicevuto: true,
     accontoPagato: accontoRisultaPagato(iscritto),
@@ -136,9 +176,10 @@ export async function segnaModuloRicevuto(iscritto, origine = "manuale") {
 // data e' una delle vecchie, e non si tocca.
 export async function aggiornaStatoDopoAcconto(iscritto) {
   if (!iscritto?.id) return null;
+  if (statoDi(iscritto) === "recesso") return null;   // vedi decidiStato
   const moduloRicevuto = !!iscritto.modulo_ricevuto_il;
   if (!moduloRicevuto) return null;           // niente modulo, niente da decidere
-  const atteso = decidiStato({ moduloInviato: !!iscritto.modulo_inviato_il, moduloRicevuto, accontoPagato: accontoRisultaPagato(iscritto) });
+  const atteso = decidiStato({ recesso: false, moduloInviato: !!iscritto.modulo_inviato_il, moduloRicevuto, accontoPagato: accontoRisultaPagato(iscritto) });
   if (atteso === statoDi(iscritto)) return null;
   const { data, error } = await supabase.from("iscritti")
     .update({ stato: atteso }).eq("id", iscritto.id).select("id");
