@@ -15,14 +15,16 @@
 // fatto che qualcuno abbia riempito una casella.
 import { supabase } from "../supabase.js";
 import { link } from "../indirizzo.js";
-import { componiDaModello, modelloUsabile, valoriCorso } from "../../supabase/functions/_shared/email.js";
+import { componiDaModello, modelloUsabile, valoriCorso, proteggi, APRE_HTML } from "../../supabase/functions/_shared/email.js";
 
 // LA MAIL DEL MODULO, composta una volta sola.
 //
 // La usa l'invio vero e la usa l'anteprima in Impostazioni: se fossero
 // due scritture, un giorno l'anteprima mostrerebbe una mail e l'allieva
 // ne riceverebbe un'altra.
-export function componiMailModulo({ valori, righe = [], link, modello = null }) {
+export function componiMailModulo({ valori, righe = [], link, modello = null, societa = null }) {
+  const p = piede({ societa, valori });
+
   if (modelloUsabile(modello)) {
     const mail = componiDaModello(modello, { valori: { ...valori, link }, righe });
     // IL LINK DEVE ESSERCI COMUNQUE. Se chi scrive il testo si dimentica
@@ -30,16 +32,40 @@ export function componiMailModulo({ valori, righe = [], link, modello = null }) 
     // lettera che dice "compila qui" e non dice dove.
     if (!String(mail.testo || "").includes(link)) {
       mail.testo = `${mail.testo}\n\n${link}`;
-      mail.html = `${mail.html}<p><a href="${link}">${link}</a></p>`;
+      mail.html = mail.html.replace("\n</div>", `${tastoHtml(link)}\n</div>`);
     }
-    return mail;
+    return { ...mail, testo: mail.testo + p.testo, html: mail.html.replace("\n</div>", `${p.html}\n</div>`) };
   }
+
   const d = diSerie({ valori, link });
+  // l'HTML non si fabbrica incollando <p> uno dietro l'altro: una mail
+  // senza struttura, con dentro un indirizzo nudo, e' la forma che i
+  // filtri conoscono meglio.
+  //
+  // Il tasto prende il POSTO della riga del link, non va in fondo:
+  // appeso dopo i saluti finiva sotto "A presto, Elitederma Academy",
+  // cioe' dopo la firma di una lettera.
+  const paragrafo = (r) => (r ? `<p style="margin:0 0 14px">${proteggi(r)}</p>` : "");
+  const corpo = d.testo
+    .split("\n")
+    .map((r) => (r === link ? tastoHtml(link) : paragrafo(r)))
+    .join("");
   return {
     oggetto: d.oggetto,
-    testo: d.testo,
-    html: d.testo.split("\n").map((r) => (r ? `<p>${r}</p>` : "")).join(""),
+    testo: d.testo + p.testo,
+    html: `${APRE_HTML}${corpo}${p.html}\n</div>`,
   };
+}
+
+// Il link come tasto, e sotto scritto per esteso: chi legge da telefono
+// tocca, chi diffida lo guarda prima di toccarlo. Un indirizzo nudo in
+// mezzo al testo non fa ne' l'una ne' l'altra cosa.
+function tastoHtml(link) {
+  return `<p style="margin:22px 0 10px">`
+    + `<a href="${link}" style="display:inline-block;background:#0E1B33;color:#ffffff;`
+    + `text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold">`
+    + `Apri il modulo</a></p>`
+    + `<p style="margin:0;font-size:12px;color:#7a7f8c;word-break:break-all">${proteggi(link)}</p>`;
 }
 
 export function linkModulo(token) {
@@ -61,6 +87,34 @@ export function diSerie({ valori, link }) {
     "Elitederma Academy",
   ].join("\n");
   return { oggetto, testo };
+}
+
+// IL PIEDE DELLA MAIL: chi la manda, e perche' sta arrivando.
+//
+// Non e' decorazione. La prima mail da questo dominio e' finita nello
+// spam, ed e' quello che succede a un messaggio appena nato: nessuna
+// storia alle spalle, un link a un indirizzo che nessuno ha mai visto, e
+// niente che dica chi scrive. Un mittente che si firma con ragione
+// sociale, indirizzo e partita IVA — e che spiega perche' quella mail e'
+// arrivata — e' quello che distingue una comunicazione vera.
+//
+// I dati non si inventano: vengono da `intestazione_societa`, la stessa
+// riga che finisce in cima ai documenti.
+function piede({ societa, valori }) {
+  const righe = [
+    societa?.nome,
+    societa?.indirizzo,
+    societa?.indirizzo_2,
+  ].map((r) => String(r || "").trim()).filter(Boolean);
+  const perche = `Ricevi questa mail perché risulti iscritta a ${valori.corso}.`;
+  return {
+    testo: ["", "—", perche, ...righe].join("\n"),
+    html: `<hr style="border:none;border-top:1px solid #e6dfce;margin:26px 0 14px">`
+      + `<div style="font-size:12px;line-height:1.5;color:#7a7f8c">`
+      + `${proteggi(perche)}<br>`
+      + righe.map((r) => proteggi(r)).join("<br>")
+      + `</div>`,
+  };
 }
 
 /**
@@ -99,7 +153,11 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
   const { data: riga } = await supabase
     .from("email_modelli").select("*").eq("chiave", "invio_modulo").maybeSingle();
 
-  const mail = componiMailModulo({ valori, righe: righeDettagli, link, modello: riga });
+  // chi firma la mail: la stessa riga che va in cima ai documenti
+  const { data: societa } = await supabase
+    .from("intestazione_societa").select("*").limit(1).maybeSingle();
+
+  const mail = componiMailModulo({ valori, righe: righeDettagli, link, modello: riga, societa });
 
   const { data, error } = await supabase.functions.invoke("invia-email", {
     body: { a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo },
