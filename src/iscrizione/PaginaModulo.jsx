@@ -36,6 +36,7 @@ import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from 
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA } from "./disposizione.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { DAL_CODICE } from "./testi.js";
+import { serveAvvioImmediato } from "./regole-recesso.js";
 
 const etichettaDi = (k) => PER_CHIAVE[k]?.etichetta || k;
 
@@ -205,6 +206,41 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
   );
 }
 
+// UNA DICHIARAZIONE. Sta qui fuori, non dentro PaginaModulo: un
+// componente dichiarato nel corpo di un altro nasce nuovo a ogni
+// disegno e si porta via quello che c'e' dentro — e' il guasto che
+// chiudeva la tastiera a ogni lettera.
+//
+// Tutta la riga e' cliccabile, etichetta compresa: su un telefono
+// centrare una casella di 18 pixel col pollice non funziona.
+function Dichiarazione({ casella, segnata, onCambia }) {
+  return (
+    <label
+      style={{
+        display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer",
+        padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}`,
+      }}
+    >
+      <input
+        type="checkbox" checked={segnata} onChange={onCambia}
+        style={{ width: 20, height: 20, flex: "0 0 auto", marginTop: 2, accentColor: NAVY }}
+      />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ ...fontDisplay, display: "block", fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>
+          {casella.etichetta}
+          {casella.tipo !== "facoltativa" && <span style={{ color: "#B3261E" }}> *</span>}
+        </span>
+        <span style={{ fontSize: 12.5, color: GRAFITE, lineHeight: 1.6 }}>{casella.testo}</span>
+        {casella.clausole && (
+          <span style={{ display: "block", marginTop: 6, fontSize: 12, color: GRAFITE, lineHeight: 1.7 }}>
+            {casella.clausole.map((r, i) => <span key={i} style={{ display: "block" }}>– {r}</span>)}
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
 export default function PaginaModulo({ token }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState("");
@@ -213,6 +249,10 @@ export default function PaginaModulo({ token }) {
   const [firma, setFirma] = useState(null);
   const [docFronte, setDocFronte] = useState(null);
   const [docRetro, setDocRetro] = useState(null);
+  // nessuna spunta in partenza: una casella gia' segnata non e' un
+  // consenso, e per quelle facoltative sarebbe proprio quello che il
+  // GDPR non ammette
+  const [spunte, setSpunte] = useState({});
   const [spedendo, setSpedendo] = useState(false);
   const [spedito, setSpedito] = useState(false);
 
@@ -268,6 +308,17 @@ export default function PaginaModulo({ token }) {
   if (c("doc_fronte")?.obbligatorio && !c("doc_fronte")?.bloccato && !docFronte) mancanti.push("Foto del documento — fronte");
   if (c("doc_retro")?.obbligatorio  && !c("doc_retro")?.bloccato  && !docRetro)  mancanti.push("Foto del documento — retro");
   if (!firma) mancanti.push("La firma");
+
+  // QUALI CASELLE SI MOSTRANO. Le tre obbligatorie e le due facoltative
+  // sempre; quella dell'avvio immediato solo se al corso mancano meno
+  // giorni del termine di recesso — vedi regole-recesso.js, che e'
+  // l'unico posto dove quel numero e' scritto.
+  const caselle = (testi.consensi.caselle || []).filter(
+    (c) => c.tipo !== "avvio" || serveAvvioImmediato(dati.corso?.inizio),
+  );
+  for (const c of caselle) {
+    if (c.tipo !== "facoltativa" && !spunte[c.chiave]) mancanti.push(c.etichetta);
+  }
   const puoSpedire = mancanti.length === 0 && !spedendo;
 
   async function spedisci() {
@@ -290,6 +341,10 @@ export default function PaginaModulo({ token }) {
       const { data, error } = await supabase.rpc("modulo_salva", {
         p_token: token, p_risposte: risposte,
         p_firma: pFirma, p_doc_fronte: pFronte, p_doc_retro: pRetro,
+        // le spunte vanno al database come le ha lasciate lei: la
+        // funzione rifiuta il modulo se le tre obbligatorie non ci sono,
+        // e scrive la data accanto a ognuna di quelle date
+        p_consensi: spunte,
       });
       if (error) throw new Error(error.message);
       if (!data?.ok) throw new Error(data?.errore || "Non è stato possibile inviare il modulo.");
@@ -449,6 +504,23 @@ export default function PaginaModulo({ token }) {
         <div style={{ ...pannello, borderLeft: `4px solid ${NAVY}` }}>
           <IntestazioneArea>{testi.consensi.informativaEtichetta}</IntestazioneArea>
           <p style={paragrafo}>{testi.consensi.informativaRimando}</p>
+        </div>
+
+        <div style={pannello}>
+          <IntestazioneArea>Dichiarazioni</IntestazioneArea>
+          {caselle.filter((c) => c.tipo !== "facoltativa").map((c) => (
+            <Dichiarazione key={c.chiave} casella={c} segnata={!!spunte[c.chiave]}
+              onCambia={() => setSpunte((v) => ({ ...v, [c.chiave]: !v[c.chiave] }))} />
+          ))}
+          {caselle.some((c) => c.tipo === "facoltativa") && (
+            <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{testi.consensi.titoloFacoltative}</div>
+              {caselle.filter((c) => c.tipo === "facoltativa").map((c) => (
+                <Dichiarazione key={c.chiave} casella={c} segnata={!!spunte[c.chiave]}
+                  onCambia={() => setSpunte((v) => ({ ...v, [c.chiave]: !v[c.chiave] }))} />
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={pannello}>

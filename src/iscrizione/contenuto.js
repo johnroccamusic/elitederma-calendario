@@ -446,6 +446,69 @@ export const CONSENSI = {
   "informativaEtichetta": "Informativa per il trattamento dei dati personali *",
   "informativaRimando": "L'informativa completa è il Punto 9 del regolamento qui sopra.",
 
+  // LE DICHIARAZIONI CHE L'ALLIEVA SPUNTA.
+  //
+  // Una per riga, nessuna spuntata in partenza, e mai una sola casella
+  // per cose diverse: il GDPR non ammette il consenso cumulativo, e le
+  // clausole dell'art. 1341 vanno approvate a parte proprio perche' si
+  // veda che sono state lette.
+  //
+  //   tipo "obbligatoria"  senza non si spedisce
+  //   tipo "avvio"         compare solo se al corso mancano meno di
+  //                        GIORNI_AVVIO_IMMEDIATO giorni (regole-recesso.js),
+  //                        e allora e' obbligatoria
+  //   tipo "facoltativa"   si puo' lasciare vuota e iscriversi lo stesso
+  "caselle": [
+    {
+      "chiave": "regolamento",
+      "tipo": "obbligatoria",
+      "etichetta": "Regolamento",
+      "testo": "Dichiaro di essere maggiorenne, di aver letto integralmente e compreso il Regolamento di partecipazione ai corsi Elitederma Srl (Punti da 1 a 11) e di accettarlo in ogni sua parte. Prendo atto che l’attestato certifica la sola formazione frequentata e non costituisce abilitazione professionale."
+    },
+    {
+      "chiave": "clausole",
+      "tipo": "obbligatoria",
+      "etichetta": "Approvazione specifica (artt. 1341 e 1342 c.c.)",
+      "testo": "Dichiaro di aver letto attentamente e di approvare specificamente le seguenti clausole del Regolamento:",
+      "clausole": [
+        "Punto 1, lett. b), d), e): rinvio del corso o cambio di sede; ammissione e rifiuto dell’iscrizione;",
+        "Punto 2, lett. e): mancato accesso al corso in assenza del saldo;",
+        "Punto 3, lett. b), c), d), g): non rimborsabilità di acconto e quota pre corso dopo il termine di recesso; penale di € 150 per il rinvio; perdita del recesso per iscrizioni a meno di 15 giorni dal corso; nessun rimborso per assenze o rinunce;",
+        "Punto 4, lett. a), d), e), f): esclusione di responsabilità per strumenti non forniti; nessun reintegro del kit; responsabilità su kit e dermografo;",
+        "Punto 5, lett. b), e), f): mancato rilascio dell’attestato; nessun rimborso dopo l’avvio del corso; allontanamento senza rimborso;",
+        "Punto 6, lett. a), b): reperimento delle modelle a carico dell’allievo/a; contributo di € 180 per modella per il recupero della pratica;",
+        "Punto 7, lett. b), c), d), e): servizio modelle senza garanzia di disponibilità, dovuto anche se non utilizzato;",
+        "Punto 8, lett. b), c), d), e): responsabilità personale dell’allievo/a e limitazioni di responsabilità di Elitederma Srl;",
+        "Punto 11, lett. c): foro di Roma per chi si iscrive con partita IVA."
+      ]
+    },
+    {
+      "chiave": "privacy",
+      "tipo": "obbligatoria",
+      "etichetta": "Privacy",
+      "testo": "Dichiaro di aver letto l’Informativa sul trattamento dei dati personali (Punto 9)."
+    },
+    {
+      "chiave": "avvio_immediato",
+      "tipo": "avvio",
+      "etichetta": "Avvio immediato",
+      "testo": "Ai sensi dell’art. 59, lett. a) del D.Lgs. 206/2005, chiedo espressamente che Elitederma Srl avvii subito l’organizzazione del corso e prendo atto che per questo motivo perdo il diritto di recesso (Punto 3, lett. d)."
+    },
+    {
+      "chiave": "promozionali",
+      "tipo": "facoltativa",
+      "etichetta": "Comunicazioni promozionali",
+      "testo": "Acconsento a ricevere da Elitederma Srl comunicazioni su nuovi corsi, eventi e offerte."
+    },
+    {
+      "chiave": "immagini",
+      "tipo": "facoltativa",
+      "etichetta": "Immagini e video",
+      "testo": "Autorizzo Elitederma Srl a pubblicare foto e video in cui compaio, realizzati durante il corso, come previsto al Punto 10."
+    }
+  ],
+  "titoloFacoltative": "Queste puoi lasciarle vuote: l’iscrizione vale lo stesso.",
+
   "firmaEtichetta": "Firma *",
   "notaObbligatori": "*Campi obbligatori",
   "tastoInvio": "Accetto e Invio"
