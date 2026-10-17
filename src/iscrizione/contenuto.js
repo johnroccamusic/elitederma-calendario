@@ -80,14 +80,18 @@ export const SEZIONI = [
         {
           "titolo": "PUNTO 3 – RECESSO, RINVII E PENALI",
           "punti": [
-            "a) Diritto di recesso. Ai sensi degli artt. 52 e seguenti del D.Lgs. 206/2005 (Codice del Consumo), l’allievo/a che agisce come consumatore può recedere dal contratto entro 14 giorni dalla sua conclusione, senza indicarne il motivo, ottenendo il rimborso integrale delle somme versate entro 14 giorni dalla comunicazione del recesso.",
+            "a) Diritto di recesso. Ai sensi degli artt. 52 e seguenti del D.Lgs. 206/2005 (Codice del Consumo), l'allievo/a che agisce come consumatore può recedere dal contratto entro 14 giorni dalla sua conclusione, senza indicarne il motivo, ottenendo il rimborso integrale delle somme versate entro 14 giorni dalla comunicazione del recesso.",
             "b) Dopo i 14 giorni. Decorso il termine di recesso, le somme versate a titolo di acconto e di quota pre corso non sono rimborsabili, in quanto destinate a coprire le spese organizzative sostenute da Elitederma Srl (aula, docenti, kit, materiali, modelle).",
-            "c) Rinvio. L’allievo/a può chiedere, una sola volta, di spostare la partecipazione a un’altra edizione dello stesso corso fino a 30 giorni prima della data di inizio, previo pagamento di una penale di € 150. Senza il pagamento della penale lo spostamento non è possibile. Nei 30 giorni precedenti l’inizio del corso il rinvio non è più possibile.",
-            "d) Iscrizioni a meno di 15 giorni dal corso. Ai sensi dell’art. 59, lett. a) del Codice del Consumo, per le iscrizioni effettuate nei 15 giorni precedenti l’inizio del corso l’allievo/a, con apposita richiesta espressa nel modulo di iscrizione, chiede che Elitederma Srl avvii immediatamente l’organizzazione (prenotazione dell’aula, docenti, kit, modelle) e prende atto che per questo motivo perde il diritto di recesso. In tali casi le somme versate restano acquisite a copertura delle spese organizzative.",
-            "e) Come comunicare. Il recesso può essere comunicato con qualsiasi dichiarazione esplicita inviata via PEC a [PEC: da inserire] o via e-mail a commerciale.elitederma@gmail.com. Le richieste di rinvio vanno inviate agli stessi indirizzi.",
+            "c) Rinvio. L'allievo/a può chiedere, una sola volta, di spostare la partecipazione a un'altra edizione dello stesso corso:",
+            "• senza penale, se il rinvio è richiesto più di 30 giorni prima della data di inizio del corso;",
+            "• previo pagamento di una penale di € 150, se il rinvio è richiesto nei 30 giorni precedenti la data di inizio del corso, a copertura delle spese già sostenute da Elitederma Srl (aula, viaggi e alloggi di docenti e personale, kit).",
+            "Nei 30 giorni precedenti il corso, senza il pagamento della penale lo spostamento non è possibile e l'acconto e le somme versate restano acquisiti da Elitederma Srl. In caso di rinvio, le somme già versate vengono imputate alla nuova edizione, che è soggetta alla disponibilità di posti. Un corso già rinviato non può essere rinviato una seconda volta.",
+            "d) Iscrizioni a meno di 15 giorni dal corso. Ai sensi dell'art. 59, lett. a) del Codice del Consumo, per le iscrizioni effettuate nei 15 giorni precedenti l'inizio del corso l'allievo/a, con apposita richiesta espressa nel modulo di iscrizione, chiede che Elitederma Srl avvii immediatamente l'organizzazione (prenotazione dell'aula, docenti, kit, modelle) e prende atto che per questo motivo perde il diritto di recesso. In tali casi le somme versate restano acquisite a copertura delle spese organizzative.",
+            "e) Come comunicare. Il recesso può essere esercitato tramite il pulsante «recedi dal contratto qui» presente nella pagina online dell'iscrizione, raggiungibile dal link contenuto nell'e-mail di conferma, oppure con qualsiasi dichiarazione esplicita inviata via PEC a elitedermasrl.pec@legalmail.it. Le richieste di rinvio vanno inviate allo stesso indirizzo PEC.",
             "f) Tempi di rimborso. I rimborsi dovuti per recesso sono effettuati entro 14 giorni dalla comunicazione; gli altri rimborsi previsti dal presente regolamento entro 30 giorni dalla richiesta.",
-            "g) Assenze e rinunce. In caso di assenza, ritardo, interruzione della frequenza o rinuncia alle esercitazioni post-corso (Web Academy e livelli online) non sono previsti rimborsi totali o parziali. La Web Academy è parte integrante del corso in aula e non è rimborsabile separatamente.",
-            "h) Non sono rimborsabili i materiali acquistati autonomamente dall’allievo/a."
+            "g) Mancata presentazione e assenze. Se l'allievo/a non si presenta al corso, o si assenta in tutto o in parte, non ha diritto ad alcun rimborso, totale o parziale, e l'acconto e le altre somme versate restano acquisiti da Elitederma Srl a copertura delle spese organizzative sostenute. L'allievo/a può tuttavia chiedere, entro 10 giorni dalla data di inizio del corso, il rinvio a un'altra edizione, pagando una penale di € 300: in tal caso le somme versate restano valide per la nuova edizione e si applicano le altre condizioni della lett. c). Decorsi i 10 giorni senza richiesta di rinvio e pagamento della penale, il diritto al rinvio decade e l'acconto e le somme versate si intendono definitivamente persi.",
+            "h) Rinunce post-corso. In caso di ritardo, interruzione della frequenza o rinuncia alle esercitazioni post-corso (Web Academy e livelli online) non sono previsti rimborsi totali o parziali. La Web Academy è parte integrante del corso in aula e non è rimborsabile separatamente.",
+            "i) Non sono rimborsabili i materiali acquistati autonomamente dall'allievo/a."
           ]
         },
         {
@@ -128,13 +132,14 @@ export const SEZIONI = [
         {
           "titolo": "PUNTO 7 – REPERIMENTO MODELLE A CURA DI ELITEDERMA SRL PER ALLIEVI LONTANI DALLA SEDE DEL CORSO",
           "punti": [
-            "a) Unicamente nel caso in cui l’allievo/a provenga da una città diversa da quella in cui si tiene il corso, con una distanza superiore ai 50 km, potrà richiedere ad Elitederma Srl di reperire le modelle necessarie alle esercitazioni: €60/modello/a se la richiesta avviene entro 7 giorni dal corso; €100/modella se la richiesta avviene nei 7 giorni precedenti il corso.",
-            "Tale opzione non è applicabile al corso di tricopigmentazione che in caso di mancanza del modello/a potrà comunque avvalersi del modello/a condiviso messo a disposizione dell’accademia.",
-            "b) Il reperimento non garantisce la disponibilità effettiva delle modelle, vista la natura del servizio; in caso di rinuncia/mancata disponibilità non è dovuto alcun rimborso del corso.",
-            "c) Non sono ammesse obiezioni su tipologia/estetica/caratteristiche fisiche della modella, poiché la selezione avviene per disponibilità.",
-            "d) Se, dopo aver richiesto il servizio, l’allievo/a reperisce una modella per proprio conto, il servizio resta dovuto (a copertura delle spese per sponsorizzazioni, pubblicità e costi di ricerca già sostenuti).",
-            "e) Se Elitederma Srl non reperisce la modella richiesta, l'importo del servizio sarà rimborsato.",
-            "f) Il pagamento del servizio va effettuato la mattina del primo giorno; in mancanza del pagamento, le modelle reperite saranno disdette e nulla sarà dovuto a titolo di rimborso."
+            "a) Solo se l'allievo/a proviene da una città diversa da quella del corso, a più di 50 km di distanza, può chiedere a Elitederma Srl di reperire le modelle per le esercitazioni, al costo di:",
+            "- € 60 per modella, se la richiesta arriva più di 7 giorni prima dell'inizio del corso;",
+            "- € 100 per modella, se la richiesta arriva nei 7 giorni precedenti l'inizio del corso.",
+            "Il servizio non è disponibile per il corso di tricopigmentazione, per il quale vale il Punto 6, lett. g).",
+            "b) Il reperimento dipende dalla disponibilità delle modelle e non è garantito. Se Elitederma Srl non riesce a reperire la modella richiesta, il costo del servizio è rimborsato. In nessun caso è dovuto il rimborso della quota del corso.",
+            "c) Le modelle sono selezionate in base alla disponibilità: non sono ammesse obiezioni sulle loro caratteristiche estetiche o fisiche.",
+            "d) Se, dopo aver richiesto il servizio, l'allievo/a trova una modella per proprio conto, il servizio resta dovuto, a copertura delle spese di ricerca già sostenute.",
+            "e) Il servizio si paga la mattina del primo giorno di corso. In mancanza di pagamento le modelle reperite sono disdette e non è dovuto alcun rimborso."
           ]
         },
         {
@@ -155,24 +160,24 @@ export const SEZIONI = [
             "a) Titolare del trattamento è Elitederma S.r.l., con sede legale in Via Terni 90/a, 00182 Roma, P. IVA 16179891003, in persona del legale rappresentante.",
             "b) Dati trattati. Dati anagrafici e di contatto, codice fiscale, dati di fatturazione, copia del documento di identità, dati relativi ai pagamenti e alla frequenza del corso.",
             "c) Finalità e base giuridica. I dati sono trattati per:",
-            "• organizzare e gestire il corso, l’iscrizione e i pagamenti: base giuridica l’esecuzione del contratto (art. 6, par. 1, lett. b);",
-            "• adempiere agli obblighi fiscali e contabili: base giuridica l’obbligo di legge (art. 6, par. 1, lett. c);",
-            "• inviare comunicazioni legate al corso e al percorso di studio (materiali didattici, Web Academy e livelli online, aggiornamenti tecnici, supporto post-corso): base giuridica l’esecuzione del contratto (art. 6, par. 1, lett. b); non serve un consenso;",
-            "• inviare via e-mail informazioni su corsi, masterclass e prodotti Elitederma analoghi a quelli acquistati: base giuridica il legittimo interesse (art. 6, par. 1, lett. f e art. 130, comma 4 D.Lgs. 196/2003); l’allievo/a può opporsi in ogni momento, anche con il link presente in ogni e-mail;",
-            "• inviare, via e-mail, WhatsApp o SMS, anteprime su nuovi corsi e masterclass, novità tecniche, eventi, offerte e vantaggi riservati agli allievi: solo con il consenso facoltativo dell’interessato (art. 6, par. 1, lett. a), revocabile in ogni momento.",
+            "• organizzare e gestire il corso, l'iscrizione e i pagamenti: base giuridica l'esecuzione del contratto (art. 6, par. 1, lett. b);",
+            "• adempiere agli obblighi fiscali e contabili: base giuridica l'obbligo di legge (art. 6, par. 1, lett. c);",
+            "• inviare comunicazioni legate al corso e al percorso di studio (materiali didattici, Web Academy e livelli online, aggiornamenti tecnici, supporto post-corso): base giuridica l'esecuzione del contratto (art. 6, par. 1, lett. b); non serve un consenso;",
+            "• inviare via e-mail informazioni su corsi, masterclass e prodotti Elitederma analoghi a quelli acquistati: base giuridica il legittimo interesse (art. 6, par. 1, lett. f e art. 130, comma 4 D.Lgs. 196/2003); l'allievo/a può opporsi in ogni momento, anche con il link presente in ogni e-mail;",
+            "• inviare, via e-mail, WhatsApp o SMS, anteprime su nuovi corsi e masterclass, novità tecniche, eventi, offerte e vantaggi riservati agli allievi: solo con il consenso facoltativo dell'interessato (art. 6, par. 1, lett. a), revocabile in ogni momento.",
             "Il conferimento dei dati per le prime due finalità è necessario: senza di essi non è possibile iscriversi al corso.",
             "d) Modalità. I dati sono trattati da personale autorizzato, con strumenti cartacei ed elettronici e con misure di sicurezza adeguate (artt. 5 e 32 GDPR).",
             "e) Destinatari. I dati possono essere comunicati, nella misura necessaria, a docenti e master incaricati, consulenti fiscali e legali, fornitori di servizi tecnici e informatici (hosting, invio di e-mail, pagamenti) nominati responsabili del trattamento, e alle autorità competenti.",
             "f) Conservazione. I dati sono conservati per la durata del rapporto e successivamente per il tempo previsto dagli obblighi di legge (dati contabili: 10 anni). I dati usati per le comunicazioni promozionali sono conservati fino alla revoca del consenso.",
-            "g) Diritti dell’interessato (artt. 15–22 GDPR): accesso, rettifica, cancellazione, limitazione, portabilità, opposizione e revoca del consenso, senza pregiudizio per i trattamenti già effettuati. L’interessato può proporre reclamo al Garante per la protezione dei dati personali (art. 77 GDPR). Per esercitare i diritti: commerciale.elitederma@gmail.com"
+            "g) Diritti dell'interessato (artt. 15–22 GDPR): accesso, rettifica, cancellazione, limitazione, portabilità, opposizione e revoca del consenso, senza pregiudizio per i trattamenti già effettuati. L'interessato può proporre reclamo al Garante per la protezione dei dati personali (art. 77 GDPR). Per esercitare i diritti: elitedermasrl.pec@legalmail.it"
           ]
         },
         {
           "titolo": "PUNTO 10 – IMMAGINI E VIDEO (CONSENSO FACOLTATIVO)",
           "punti": [
-            "a) Con il consenso facoltativo espresso nel modulo di iscrizione, l’allievo/a autorizza Elitederma Srl, a titolo gratuito, a pubblicare foto e video in cui compare, realizzati durante il corso, sul sito internet, sui canali social, su materiale stampato e su altri mezzi di comunicazione di Elitederma Srl, per finalità informative e promozionali, ai sensi degli artt. 10 c.c. e 96 e 97 della Legge 633/1941.",
-            "b) Il consenso è facoltativo: negarlo non incide in alcun modo sull’iscrizione o sulla partecipazione al corso.",
-            "c) Il consenso può essere revocato in qualsiasi momento scrivendo a commerciale.elitederma@gmail.com. Dopo la revoca Elitederma Srl non effettua nuove pubblicazioni e rimuove, per quanto tecnicamente possibile, i contenuti già pubblicati sui propri canali.",
+            "a) Con il consenso facoltativo espresso nel modulo di iscrizione, l'allievo/a autorizza Elitederma Srl, a titolo gratuito, a pubblicare foto e video in cui compare, realizzati durante il corso, sul sito internet, sui canali social, su materiale stampato e su altri mezzi di comunicazione di Elitederma Srl, per finalità informative e promozionali, ai sensi degli artt. 10 c.c. e 96 e 97 della Legge 633/1941.",
+            "b) Il consenso è facoltativo: negarlo non incide in alcun modo sull'iscrizione o sulla partecipazione al corso.",
+            "c) Il consenso può essere revocato in qualsiasi momento scrivendo a elitedermasrl.pec@legalmail.it. Dopo la revoca Elitederma Srl non effettua nuove pubblicazioni e rimuove, per quanto tecnicamente possibile, i contenuti già pubblicati sui propri canali.",
             "d) Le immagini sono conservate negli archivi di Elitederma Srl fino alla revoca del consenso."
           ]
         },
