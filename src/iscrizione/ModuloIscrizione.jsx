@@ -49,6 +49,7 @@ import { leggiScelte, salvaScelta } from "./campi.js";
 import { AreaAnagrafica } from "./AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, CHIAVI_ANAGRAFICHE, GRUPPI_LETTURA as DA_TRASFERIRE } from "./disposizione.js";
 import TestoContratto from "./TestoContratto.jsx";
+import ImpostazioniRecesso from "../recesso/Impostazioni.jsx";
 import ModelliEmail from "../email/ModelliEmail.jsx";
 import { componiMailModulo, linkModulo } from "../iscrizioni/invio.js";
 import { valoriCorso } from "../../supabase/functions/_shared/email.js";
@@ -207,6 +208,7 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true, on
     { chiave: "campi", etichetta: "I campi del modulo" },
     { chiave: "contratto", etichetta: "Il contratto" },
     { chiave: "mail", etichetta: "La mail che lo accompagna" },
+    { chiave: "recesso", etichetta: "Il recesso" },
   ];
 
   return (
@@ -235,6 +237,10 @@ export default function ModuloIscrizione({ icone = {}, amministratore = true, on
           );
         })}
       </div>
+
+      {linguetta === "recesso" && (
+        <ImpostazioniRecesso Icona={I.documento} amministratore={amministratore} />
+      )}
 
       {linguetta === "contratto" && (
         <TestoContratto Icona={I.documento} amministratore={amministratore} />
