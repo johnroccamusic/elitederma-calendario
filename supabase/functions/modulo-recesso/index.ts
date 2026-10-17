@@ -19,10 +19,12 @@
 // un recesso senza prova. Qui restano l'indirizzo IP, che in SQL non si
 // vede, e le mail.
 //
-// LE TRE MAIL, in quest'ordine di importanza:
+// LE MAIL, in quest'ordine di importanza:
 //   1. all'allieva: la ricevuta, con data, ora, importo e 14 giorni
 //   2. alla PEC: e' l'indirizzo che il regolamento dichiara al Punto 3
-//   3. al venditore che ha seguito l'iscrizione, se ha un indirizzo
+//
+// Il venditore che ha seguito l'iscrizione NON riceve niente da qui: lo
+// avvisa l'amministrazione, che e' fra i destinatari del punto 2.
 //
 // Se una mail non parte, il recesso resta registrato: e' un atto
 // giuridico, non puo' dipendere da un server di posta. Il guasto finisce
@@ -180,30 +182,14 @@ Deno.serve(async (req) => {
     await registra("recesso_avviso_interno", a, oggetto, d, e2, id);
   }
 
-  // ------------------------------------------------ 3. al venditore
-  // il legame con il venditore oggi e' il NOME scritto in `tutor`, non
-  // un collegamento: se nessuno corrisponde, l'avviso interno sopra e'
-  // comunque partito, e qui non si fa finta di niente ne' si blocca.
-  if (d.tutor) {
-    const { data: v } = await admin.from("venditori")
-      .select("nome, email").ilike("nome", String(d.tutor)).limit(1).maybeSingle();
-    const a = String(v?.email || "").trim();
-    if (emailValida(a) && !interni.includes(a)) {
-      const oggetto = `Recesso di ${chi} — ${corso.nome || ""}`.trim();
-      const testo = [
-        `${chi}, che hai seguito tu, ha esercitato il diritto di recesso il ${quando}.`,
-        "", tabella, "",
-        totale > 0 ? `Da rimborsare: ${euro(totale)}.` : "Nessuna somma da rimborsare.",
-      ].join("\n");
-      const html = `${APRE_HTML}`
-        + `<p style="margin:0 0 14px"><strong>${proteggi(chi)}</strong>, che hai seguito tu, ha esercitato il diritto di recesso il ${proteggi(quando)}.</p>`
-        + tabellaHtml
-        + `<p style="margin:0">${totale > 0 ? `Da rimborsare: <strong>${proteggi(euro(totale))}</strong>.` : "Nessuna somma da rimborsare."}</p>`
-        + `\n</div>`;
-      const { errore: e3, id } = await spedisci(a, oggetto, testo, html);
-      await registra("recesso_avviso_venditore", a, oggetto, d, e3, id);
-    }
-  }
+  // IL VENDITORE NON LO AVVISA L'APP: lo avvisa l'amministrazione.
+  //
+  // C'era una terza mail, legata al venditore per NOME (iscritti.tutor
+  // contro venditori.nome), che e' l'unico legame che oggi esiste fra i
+  // due: un rinominare l'avrebbe fatta smettere di partire senza che
+  // nessuno se ne accorgesse. Il titolare ha deciso il 17/10/2026 che
+  // quella comunicazione la fa l'amministrazione, che la mail la
+  // riceve. Meglio una catena corta e vera che una lunga e fragile.
 
   return json({
     ok: true, avvenuto_il: d.avvenuto_il, rimborso: d.rimborso,

@@ -145,3 +145,12 @@ create policy "recessi_rimborsi_staff" on public.recessi_rimborsi
 --                              service_role, cioe' solo dalla edge
 --                              function: dal browser non si registra un
 --                              recesso senza far partire gli avvisi.
+--
+-- 17/10/2026, dopo le risposte del titolare:
+--   recesso_importo  guarda anche la DATA del pagamento: si rimborsa
+--                    quello che e' entrato fino al recesso. Kit,
+--                    materiali e dermografo si consegnano in aula,
+--                    quindi al momento del recesso non c'e' niente di
+--                    consegnato da scalare.
+--   la terza mail al venditore e' stata tolta: lo avvisa
+--   l'amministrazione, che e' gia' fra i destinatari.
