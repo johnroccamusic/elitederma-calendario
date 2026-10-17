@@ -497,8 +497,8 @@ export const CONSENSI = {
     {
       "chiave": "promozionali",
       "tipo": "facoltativa",
-      "etichetta": "Comunicazioni promozionali",
-      "testo": "Acconsento a ricevere da Elitederma Srl comunicazioni su nuovi corsi, eventi e offerte."
+      "etichetta": "Resta aggiornata (facoltativa)",
+      "testo": "Voglio ricevere da Elitederma Srl, anche su WhatsApp, anteprime su nuovi corsi e masterclass, novità tecniche, eventi e vantaggi riservati agli allievi. Posso cancellarmi quando voglio."
     },
     {
       "chiave": "immagini",
