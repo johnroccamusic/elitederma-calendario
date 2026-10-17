@@ -28,23 +28,43 @@ introdurre librerie nuove senza una ragione forte.
 ## 3. Struttura reale
 
 ```
-src/App.jsx              25.944 righe — l'intera applicazione
+src/App.jsx              83.340 righe — ancora il grosso dell'applicazione
 src/main.jsx             entry point
-src/Accesso.jsx          gate Supabase Auth (nuovo)
+src/Accesso.jsx          gate Supabase Auth (collegato, vedi § 4)
 src/comuni-regioni.js    dati statici
-supabase/functions/      8 edge function
-supabase/migrations/     migrazioni versionate (nuovo)
-supabase-*.sql           75 script di setup storici, cumulativi e idempotenti
+src/ui/                  mattoni condivisi: Button, Field, CampoNumero, colori
+src/<modulo>/            fette già uscite dal monolite — consensi, content,
+                         email, eventi, file, iscrizione, iscrizioni, magazzino,
+                         notifiche, pos, prezzi, punti, recesso, rientri,
+                         salvataggi, spese, stampe
+supabase/functions/      40 edge function + _shared
+supabase/migrations/     324 migrazioni versionate
+supabase-*.sql           130 script di setup storici, cumulativi e idempotenti
 ```
 
-`App.jsx` è un monolite. Non è una svista da correggere di slancio: qualunque
-scomposizione va fatta a fette verificabili, una alla volta.
+`App.jsx` è ancora un monolite, e cresce. Non è una svista da correggere di
+slancio: qualunque scomposizione va fatta a fette verificabili, una alla volta —
+le cartelle qui sopra sono le fette già staccate.
 
-I 75 file `supabase-*.sql` alla radice sono la storia degli interventi sul
-database, non lo stato attuale. **Lo stato attuale è il database**: 101 tabelle,
-99 con RLS attiva. Le due senza sono `corsi_kit_prodotti_anellini_sostituiti` e
-`corsi_kit_prodotti_dermografi_rimossi`. Le migrazioni nuove vanno in
-`supabase/migrations/` con timestamp.
+I 130 file `supabase-*.sql` alla radice sono la storia degli interventi sul
+database, non lo stato attuale. **Lo stato attuale è il database**: 152 tabelle,
+8 viste, 149 policy distribuite su 145 tabelle.
+
+**Dal 17/10/2026 la RLS è attiva su tutte e 152.** Sette tabelle hanno RLS
+*senza* nessuna policy, che con la chiave pubblicabile vuol dire inaccessibili,
+e in tutti e sette i casi è voluto: `fic_connessioni`,
+`fatture_in_cloud_config`, `fic_documenti_pending` e `fic_sync_log` le tocca
+solo `service_role` dalle edge function (l'app non le interroga mai dal
+browser — verificato); `movimenti_banca_scartati_20261006`,
+`_backup_acconti_pagati_20261011` e `_backup_lunchflow_doppioni_20261013` sono i
+tre tavoli di scarto delle pulizie di ottobre, ed erano gli ultimi tre rimasti
+*senza* RLS — cioè in lettura e scrittura a chiunque avesse la chiave del
+bundle, con dentro movimenti bancari e acconti di allievi. Chiusi con
+`20261017181500_rls_sui_tre_backup.sql`. Nessuna vista, funzione o foreign key
+dipende da loro, e nel repo li nominano solo le due migrazioni che li hanno
+creati: restano in attesa di essere esportati e cancellati.
+
+Le migrazioni nuove vanno in `supabase/migrations/` con timestamp.
 
 Attenzione: lo storico remoto delle migrazioni **non** coincide con la cartella
 locale. Non usare `supabase db push` — rieseguirebbe migrazioni già applicate.
