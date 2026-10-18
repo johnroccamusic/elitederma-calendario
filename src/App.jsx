@@ -65115,6 +65115,25 @@ const CAMPI_CLIENTE_FATTURA = [
   ["email", "Email"], ["telefono", "Telefono"],
 ];
 
+// AL BANCO SI BATTE IN MAIUSCOLO.
+//
+// Gli stessi dati entrano da tre mani diverse — chi vende, la cliente
+// che li scrive sul telefono, chi li corregge qui — e uscivano scritti
+// in tre modi: "Sorso", "SORSO", "Rzzmnl90l42i452e". Non rompe niente,
+// ma due righe uguali sembrano due clienti diversi, e un codice fiscale
+// in minuscolo su un documento fiscale e' solo sciatto.
+//
+// EMAIL E PEC NO, e non e' una dimenticanza: la parte prima della
+// chiocciola, per lo standard, puo' distinguere maiuscole e minuscole, e
+// un indirizzo riscritto d'ufficio e' un indirizzo che un giorno non
+// riceve. Quelle due restano come le ha scritte chi le possiede.
+const FATTURA_COME_SCRITTO = new Set(["pec", "email"]);
+const inMaiuscoloSeServe = (chiave, valore) =>
+  FATTURA_COME_SCRITTO.has(chiave) ? valore : String(valore ?? "").toUpperCase();
+const clienteInMaiuscolo = (cliente) => Object.fromEntries(
+  Object.entries(cliente || {}).map(([k, v]) => [k, typeof v === "string" ? inMaiuscoloSeServe(k, v) : v]),
+);
+
 function testoPerGestionale(p, cliente) {
   const righe = (Array.isArray(p.righe) ? p.righe : [])
     .map((r) => `${r.quantita || 1} × ${r.nome || "Articolo"} — ${fmtEuroErp2((Number(r.prezzo) || 0) * (Number(r.quantita) || 1))}`);
@@ -65134,7 +65153,10 @@ function testoPerGestionale(p, cliente) {
 }
 
 function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
-  const [cliente, setCliente] = useState(() => ({ ...(pagamento.cliente || {}) }));
+  // in maiuscolo anche quello che e' gia' scritto: le schede vecchie
+  // portano "Sorso" e codici fiscali in minuscolo, e correggerli a mano
+  // uno per uno non lo fa nessuno
+  const [cliente, setCliente] = useState(() => clienteInMaiuscolo(pagamento.cliente || {}));
   const [numero, setNumero] = useState(pagamento.fattura_numero || "");
   const [note, setNote] = useState(pagamento.note_fattura || "");
   const [aperto, setAperto] = useState(false);
@@ -65266,7 +65288,7 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
                 <input
                   style={{ ...campo, width: "100%", boxSizing: "border-box", marginTop: 2 }}
                   value={cliente[chiave] ?? ""}
-                  onChange={(e) => setCliente((c) => ({ ...c, [chiave]: e.target.value }))}
+                  onChange={(e) => setCliente((c) => ({ ...c, [chiave]: inMaiuscoloSeServe(chiave, e.target.value) }))}
                 />
               </label>
             ))}
@@ -67556,19 +67578,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // se si e' detto che coincidono. Un posto solo da leggere, cosi' il
   // controllo e il salvataggio non possono guardare cose diverse.
   const copiaDaSpedizione = fattAttiva && spedizioneAttiva && fattComeSpedizione;
+  // Tutto in maiuscolo tranne la PEC: vedi FATTURA_COME_SCRITTO, dove c'e'
+  // scritto perche' gli indirizzi di posta restano come li scrive chi li ha.
+  const su = (v) => String(v ?? "").trim().toUpperCase();
   const fatturaFinale = {
-    ditta: fattDitta.trim(),
-    nome: (copiaDaSpedizione ? spedNome : fattNome).trim(),
-    cognome: (copiaDaSpedizione ? spedCognome : fattCognome).trim(),
+    ditta: su(fattDitta),
+    nome: su(copiaDaSpedizione ? spedNome : fattNome),
+    cognome: su(copiaDaSpedizione ? spedCognome : fattCognome),
     piva: fattPiva.trim(),
-    codice_fiscale: fattCf.trim().toUpperCase(),
-    cod_dest: fattCodDest.trim().toUpperCase(),
+    codice_fiscale: su(fattCf),
+    cod_dest: su(fattCodDest),
     pec: fattPec.trim(),
-    indirizzo: (copiaDaSpedizione ? spedIndirizzo : fattIndirizzo).trim(),
-    civico: (copiaDaSpedizione ? spedCivico : fattCivico).trim(),
-    cap: (copiaDaSpedizione ? spedCap : fattCap).trim(),
-    citta: (copiaDaSpedizione ? spedCitta : fattCitta).trim(),
-    provincia: (copiaDaSpedizione ? spedProvincia : fattProv).trim().toUpperCase(),
+    indirizzo: su(copiaDaSpedizione ? spedIndirizzo : fattIndirizzo),
+    civico: su(copiaDaSpedizione ? spedCivico : fattCivico),
+    cap: su(copiaDaSpedizione ? spedCap : fattCap),
+    citta: su(copiaDaSpedizione ? spedCitta : fattCitta),
+    provincia: su(copiaDaSpedizione ? spedProvincia : fattProv),
   };
   // Cosa manca per poterla emettere. Non si chiede tutto a tutti: una
   // ditta ha la P.IVA, un privato il codice fiscale, e la fattura arriva

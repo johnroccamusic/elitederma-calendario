@@ -13,7 +13,7 @@
 // Variabili d'ambiente: FIC_CLIENT_ID, FIC_CLIENT_SECRET.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { leggiConnessione, tokenValido, idAliquota, emettiFattura } from "../_shared/fic.ts";
+import { leggiConnessione, tokenValido, idAliquota, emettiFattura, contiSaldo } from "../_shared/fic.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -66,11 +66,37 @@ Deno.serve(async (req) => {
     const conn = await leggiConnessione(sb);
     const token = await tokenValido(sb, conn);
     const aliquotaId = await idAliquota(token, conn.company_id, ALIQUOTA);
+
+    // IL CONTO DI SALDO: dove sono entrati i soldi.
+    //
+    // Fatture in Cloud rifiuta un pagamento gia' incassato se non gli si
+    // dice su quale conto e' arrivato. Quale sia non lo puo' decidere il
+    // codice: se l'azienda ha banca, contanti e Stripe, scegliere "il
+    // primo della lista" vuol dire scrivere in contabilita' un incasso
+    // sul conto sbagliato, ed e' il genere di errore che si scopre a
+    // fine trimestre. Quindi: si usa quello scelto una volta e scritto
+    // fra le impostazioni; se non c'e' scelta e di conti ce n'e' uno
+    // solo, quello; altrimenti ci si ferma e si chiede, elencandoli.
+    const conti = await contiSaldo(token, conn.company_id);
+    const { data: scelta } = await sb.from("impostazioni_layout_tabelle")
+      .select("valore").eq("chiave", "fic_conto_saldo").maybeSingle();
+    const idScelto = Number(scelta?.valore?.id ?? scelta?.valore ?? 0) || null;
+    const conto = (idScelto && conti.find((c) => c.id === idScelto))
+      || (conti.length === 1 ? conti[0] : null);
+    if (!conto) {
+      const elenco = conti.map((c) => `${c.nome} (id ${c.id})`).join(", ") || "nessuno";
+      return risposta({
+        errore: `Non so su quale conto far risultare l'incasso. I conti di Fatture in Cloud sono: ${elenco}. `
+          + "Va scelto una volta sola: dimmi quale e lo scrivo fra le impostazioni.",
+        conti,
+      }, 409);
+    }
     const dataIso = new Date(pag.pagato_il || Date.now()).toISOString().slice(0, 10);
     const fattura = await emettiFattura(token, conn.company_id, {
       cliente, righe, aliquotaId, dataIso,
       importoPagato: Number(pag.importo) || 0,
       metodo: "Carta di credito (Stripe)",
+      contoSaldoId: conto.id,
     });
 
     await sb.from("pagamenti_pos").update({

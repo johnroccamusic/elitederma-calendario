@@ -84,16 +84,31 @@ export async function idAliquota(token: string, companyId: number, percentuale: 
 
 // Emette la fattura. `cliente` sono i dati raccolti sulla pagina di
 // pagamento; `righe` e' quello che si e' venduto, coi prezzi al netto.
+// I CONTI DI SALDO dell'azienda (banca, contanti, Stripe, PayPal...).
+//
+// Fatture in Cloud, su un pagamento segnato come incassato, vuole sapere
+// DOVE sono entrati i soldi: senza quel conto rifiuta il documento con
+// "e' necessario impostare il conto di saldo nel pagamento".
+export async function contiSaldo(token: string, companyId: number): Promise<{ id: number; nome: string }[]> {
+  const r = await fetch(`${FIC}/c/${companyId}/settings/payment_accounts?per_page=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`Non riesco a leggere i conti di saldo (${r.status}): ${await r.text()}`);
+  const dati = (await r.json())?.data || [];
+  return dati.map((c: any) => ({ id: Number(c.id), nome: String(c.name ?? "") }));
+}
+
 export async function emettiFattura(
   token: string,
   companyId: number,
-  { cliente, righe, aliquotaId, dataIso, importoPagato, metodo }: {
+  { cliente, righe, aliquotaId, dataIso, importoPagato, metodo, contoSaldoId }: {
     cliente: Record<string, any>;
     righe: { nome: string; quantita: number; prezzoNetto: number }[];
     aliquotaId: number;
     dataIso: string;
     importoPagato: number;
     metodo: string;
+    contoSaldoId?: number | null;
   },
 ): Promise<{ id: number; numero: string }> {
   // Una fattura elettronica vuole sapere DOVE mandarla: il codice
@@ -156,6 +171,9 @@ export async function emettiFattura(
         due_date: dataIso,
         paid_date: dataIso,
         status: "paid",
+        // dove sono entrati i soldi. Senza, Fatture in Cloud non accetta
+        // un pagamento gia' incassato.
+        ...(contoSaldoId ? { payment_account: { id: contoSaldoId } } : {}),
       }],
       payment_method: { name: metodo },
     },
