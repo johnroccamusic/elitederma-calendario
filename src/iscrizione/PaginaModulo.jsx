@@ -132,6 +132,8 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
         value={valore || ""} disabled={spento}
         maxLength={lunghezza}
         placeholder={spento ? "" : (suggerimento || "")}
+        // il suggerimento in grigio chiaro: vedi la regola in index.html
+        className="suggerimento-chiaro"
         inputMode={tipo === "telefono" ? "tel" : chiave === "email" ? "email" : undefined}
         onChange={(e) => {
           let v = e.target.value;

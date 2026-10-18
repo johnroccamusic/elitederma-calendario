@@ -69,6 +69,22 @@
         opacity: 1 !important;
       }
 
+      /* I SUGGERIMENTI DENTRO LE CASELLE sono esempi, non valori.
+         "ITALIA" nello stato, "+39..." nel telefono: col grigio che ci
+         mette il browser — su Chrome un nero al 54%, piu' scuro di
+         parecchio testo vero — una scheda vuota sembrava gia' compilata,
+         e chi la guardava non capiva piu' che cosa mancasse da scrivere.
+         Qui vanno in un grigio chiaro: si leggono se li si cerca, non si
+         fanno scambiare per una risposta gia' data.
+         `opacity: 1` non e' di troppo: Firefox schiarisce i placeholder
+         per conto suo, e senza quella riga li' diventerebbero illeggibili.
+         La regola sta QUI e non in linea perche' `::placeholder` e' uno
+         pseudo-elemento: in un attributo `style` non si puo' scrivere. */
+      .suggerimento-chiaro::placeholder {
+        color: #BCBFC9;
+        opacity: 1;
+      }
+
       /* Il quadro "Costi della classe": tutto in Sofia Sans Condensed. Sette
          colonne di numeri e nomi di voci lunghi su una larghezza sola: col
          carattere stretto ci stanno interi invece di tagliarsi.

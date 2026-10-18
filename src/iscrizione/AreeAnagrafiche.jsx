@@ -84,6 +84,8 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta }) {
       value={valore || ""} disabled={spenta}
       maxLength={lunghezza}
       placeholder={suggerimento}
+      // il suggerimento in grigio chiaro: vedi la regola in index.html
+      className="suggerimento-chiaro"
       inputMode={tipo === "telefono" ? "tel" : undefined}
       // IL RIEMPIMENTO AUTOMATICO DEL BROWSER STA FUORI DA QUI.
       //
