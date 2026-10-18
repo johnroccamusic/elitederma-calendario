@@ -65133,12 +65133,13 @@ function testoPerGestionale(p, cliente) {
   ].filter((r) => r !== null).join("\n");
 }
 
-function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato }) {
+function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
   const [cliente, setCliente] = useState(() => ({ ...(pagamento.cliente || {}) }));
   const [numero, setNumero] = useState(pagamento.fattura_numero || "");
   const [note, setNote] = useState(pagamento.note_fattura || "");
   const [aperto, setAperto] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [emettendo, setEmettendo] = useState(false);
   const [copiato, setCopiato] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -65170,6 +65171,47 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato }) {
     setMsg("Dati salvati.");
     onSalvato?.();
   }
+  // EMETTERE LA FATTURA DALL'APP.
+  //
+  // Il giro e' quello di prima fino all'ultimo passo: l'incasso arriva
+  // qui, Elena guarda i dati e li corregge. Cambia solo cosa succede
+  // quando preme: invece di copiare il blocco di testo e ribattere tutto
+  // su Fatture in Cloud, lo fa l'app — e il numero del documento torna
+  // indietro da solo, senza che nessuno lo trascriva.
+  //
+  // IL CONTROLLO UMANO RESTA, e non e' un residuo: una fattura emessa
+  // non si annulla, si corregge con una nota di credito. Un codice
+  // destinatario sbagliato diventa un documento da rimediare con un
+  // altro documento. Per questo la conferma c'e' e dice quello che sta
+  // per succedere.
+  //
+  // NIENTE SECONDO TENTATIVO AUTOMATICO, al contrario di quasi tutte le
+  // altre chiamate dell'app. Se la fattura e' nata su Fatture in Cloud e
+  // la risposta si e' persa per strada, riprovare ne farebbe una
+  // seconda: due documenti veri per un incasso solo. Meglio fermarsi e
+  // dire di andare a guardare.
+  async function emettiFattura() {
+    if (mancanti.length > 0) { setMsg("Errore: completa prima " + mancanti.join(", ") + "."); return; }
+    if (!window.confirm(
+      `Emetto la fattura a ${nome} per ${fmtEuroErp2(Number(pagamento.importo) || 0)}?\n\n`
+      + "La fa Fatture in Cloud adesso. Una fattura emessa non si annulla: si corregge con una nota di credito."
+    )) return;
+    setEmettendo(true); setMsg("");
+    const { data, error } = await supabase.functions.invoke("pos-emetti-fattura", {
+      body: { codice: pagamento.codice, cliente, verificatoDa: chi || null },
+    });
+    if (error) {
+      const dettaglio = await testoErroreFunzione(error);
+      setEmettendo(false);
+      setMsg("Errore: " + (dettaglio || "non sono riuscito a emetterla") + " — prima di riprovare, controlla su Fatture in Cloud che non sia stata creata lo stesso.");
+      return;
+    }
+    if (data?.errore) { setEmettendo(false); setMsg("Errore: " + data.errore); return; }
+    setEmettendo(false);
+    setMsg(data?.gia ? `Era già fatturata: numero ${data.numero || "—"}.` : `Fattura ${data?.numero || ""} emessa.`);
+    onSalvato?.();
+  }
+
   async function segnaFatturata() {
     if (!numero.trim()) { setMsg("Scrivi il numero della fattura che hai emesso."); return; }
     if (!window.confirm(`Segno questo incasso come fatturato con il numero ${numero.trim()}?\n\nLa riga esce da "Fatture da emettere".`)) return;
@@ -65204,6 +65246,13 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato }) {
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+        <Button
+          onClick={emettiFattura}
+          disabled={emettendo || salvando || mancanti.length > 0}
+          title={mancanti.length > 0 ? `Prima va completato: ${mancanti.join(", ")}` : "La fattura la emette Fatture in Cloud adesso"}
+        >
+          {emettendo ? "Emetto…" : "Emetti la fattura"}
+        </Button>
         <Button variant="ghost" onClick={() => setAperto((a) => !a)}>{aperto ? "Chiudi i dati" : "Guarda e correggi i dati"}</Button>
         <Button variant="ghost" onClick={copia}>{copiato ? "Copiato ✓" : "Copia per il gestionale"}</Button>
       </div>
@@ -65233,7 +65282,7 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato }) {
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Emessa a mano? Scrivi il numero:</span>
+        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Emessa altrove, a mano? Scrivi il numero:</span>
         <input style={{ ...campo, width: 130 }} value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="es. 124/2026" />
         <Button onClick={segnaFatturata} disabled={salvando}>Segna fatturata</Button>
       </div>
@@ -65242,7 +65291,7 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato }) {
   );
 }
 
-function PaginaFattureDaEmettere({ onBack, titolo = "Fatture da emettere" }) {
+function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emettere" }) {
   const isMobile = useIsMobile();
   const [pagamenti, setPagamenti] = useState(null);
   const [vista, setVista] = useState("daemettere");
@@ -65270,7 +65319,7 @@ function PaginaFattureDaEmettere({ onBack, titolo = "Fatture da emettere" }) {
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 16, lineHeight: 1.6 }}>
-          Gli incassi con carta al POS, coi dati di fatturazione che ha scritto la cliente. Per ora la fattura si emette a mano sul gestionale: qui si controllano i dati, si copiano e si segna il numero del documento.
+          Gli incassi con carta al POS, coi dati di fatturazione che ha scritto la cliente. Si controllano i dati — e si correggono, se la cliente ha sbagliato a scrivere — poi <b style={{ color: NAVY }}>Emetti la fattura</b>: la fa Fatture in Cloud e il numero torna qui da solo. Il controllo prima resta apposta: una fattura emessa non si annulla, si corregge con una nota di credito.
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
@@ -65289,7 +65338,7 @@ function PaginaFattureDaEmettere({ onBack, titolo = "Fatture da emettere" }) {
         )}
         {elenco.map((p) => (
           vista === "daemettere"
-            ? <SchedaFatturaDaEmettere key={p.id} pagamento={p} isMobile={isMobile} onSalvato={carica} />
+            ? <SchedaFatturaDaEmettere key={p.id} pagamento={p} isMobile={isMobile} onSalvato={carica} chi={chi} />
             : (
               <RigaAmministrazione
                 key={p.id}
@@ -83268,6 +83317,7 @@ export default function App() {
 
       {view === "fattureemettere" && (
         <PaginaFattureDaEmettere
+          chi={utenteLoggato?.nome || venditoreLoggato?.nome || ""}
           onBack={() => setView("erp")}
           titolo={etichettaTasto("amministrazione", "fattureemettere", "Fatture da emettere")}
         />
