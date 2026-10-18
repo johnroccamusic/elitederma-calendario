@@ -28,7 +28,7 @@
 // la fotocamera e non lascia scegliere; senza, iPhone e Android offrono
 // galleria, fotocamera e file. E si accettano anche i PDF, perche' da
 // computer un documento scansionato e' quasi sempre un PDF.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
 import FirmaDito from "../ui/FirmaDito.jsx";
@@ -49,6 +49,41 @@ const etichettaDi = (k) => PER_CHIAVE[k]?.etichetta || k;
 // Attenzione: `false` E' una risposta ("non richiede modelle"), e lo
 // zero pure. Vuoto e' solo null, undefined o una stringa di spazi.
 const pieno = (v) => v != null && String(v).trim() !== "";
+
+// LA BOZZA, SUL TELEFONO DI CHI COMPILA.
+//
+// Serve per un guasto che non possiamo impedire: il modulo si apre
+// quasi sempre dall'app di posta, dentro la sua finestra interna, e
+// quella finestra puo' chiudersi da sola — basta aprire la fotocamera
+// per allegare il documento e cambiare idea. Capitato davvero: si
+// tornava nella mail e il modulo era da rifare da capo.
+//
+// Qui dentro restano solo le risposte e le spunte, sul dispositivo di
+// chi sta compilando e non altrove, e vengono cancellate appena il
+// modulo parte. Le foto no: un file non si puo' mettere da parte, e
+// quelle vanno riscelte.
+const chiaveBozza = (token) => `modulo-bozza-${String(token).slice(0, 16)}`;
+
+function leggiBozza(token) {
+  try { return JSON.parse(window.localStorage.getItem(chiaveBozza(token)) || "null"); }
+  catch { return null; }
+}
+function scriviBozza(token, bozza) {
+  try { window.localStorage.setItem(chiaveBozza(token), JSON.stringify(bozza)); } catch { /* finestra privata */ }
+}
+function cancellaBozza(token) {
+  try { window.localStorage.removeItem(chiaveBozza(token)); } catch { /* finestra privata */ }
+}
+
+const quandoEsteso = (iso) => {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString("it-IT", {
+      timeZone: "Europe/Rome", day: "numeric", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return ""; }
+};
 
 const giorno = (iso) => {
   if (!iso) return "";
@@ -179,36 +214,56 @@ function SceltaIntestazione({ valore, onCambia }) {
   );
 }
 
-/** Una foto del documento: galleria, fotocamera o file del computer. */
+/** Una foto del documento: galleria, fotocamera o file del computer.
+ *
+ * NIENTE `.click()` DA CODICE, e non e' una questione di eleganza.
+ *
+ * Prima c'era un campo file nascosto (1x1, opacita' zero, pointer-events
+ * none) e un tasto che gli faceva `campo.current.click()`. Sull'iPhone
+ * funzionava la prima volta e basta: chi apriva la fotocamera e poi
+ * tornava indietro senza scattare non riusciva piu' ad aprirla: il tasto
+ * non rispondeva, e l'unico modo era chiudere la pagina e ricominciare
+ * il modulo da capo. Succede perche' iOS accetta l'apertura del
+ * selettore solo come conseguenza diretta di un tocco dell'utente, e un
+ * `click()` partito da JavaScript su un elemento che di fatto non si
+ * vede, dopo il primo annullamento, non vale piu' come tale.
+ *
+ * Adesso il tasto E' il campo: una `label` che lo contiene. Il tocco
+ * arriva al campo file senza passare da nessuna riga di codice, quindi
+ * non c'e' niente che possa smettere di valere. Il campo resta invisibile
+ * ma presente e raggiungibile — niente `pointer-events: none`, niente
+ * misure da un pixel.
+ */
 function Foto({ etichetta, file, onCambia, obbligatorio }) {
-  const campo = useRef(null);
   return (
     <div style={{ flex: "1 1 160px", minWidth: 0, marginBottom: 12 }}>
       <div style={etichettaStile}>
         {etichetta}{obbligatorio && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
       </div>
-      <input
-        ref={campo} type="file" accept="image/*,application/pdf"
-        onChange={(e) => {
-          onCambia(e.target.files?.[0] || null);
-          // si svuota: scegliendo DUE VOLTE lo stesso file, senza questo
-          // il campo non cambia valore e non succede niente
-          e.target.value = "";
-        }}
-        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-      />
-      <button
-        type="button" onClick={() => campo.current?.click()}
+      <label
         style={{
-          ...fontBody, display: "block", width: "100%", boxSizing: "border-box", minHeight: 96,
+          ...fontBody, display: "flex", flexDirection: "column", justifyContent: "center",
+          width: "100%", boxSizing: "border-box", minHeight: 96,
           border: `1px dashed ${file ? "#2E7D32" : GOLD}`, borderRadius: 12, padding: "16px 12px",
           background: file ? "#F2F9F3" : "#FFFDF8", cursor: "pointer", textAlign: "center",
           fontSize: 13, color: file ? "#2E7D32" : NAVY, fontWeight: file ? 700 : 400, lineHeight: 1.5,
         }}
       >
-        {file ? `✓ ${file.name.length > 26 ? file.name.slice(0, 24) + "…" : file.name}` : "Scegli o scatta"}
-        {!file && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>galleria, fotocamera o file</div>}
-      </button>
+        <input
+          type="file" accept="image/*,application/pdf"
+          onChange={(e) => {
+            onCambia(e.target.files?.[0] || null);
+            // si svuota: scegliendo DUE VOLTE lo stesso file, senza questo
+            // il campo non cambia valore e non succede niente
+            e.target.value = "";
+          }}
+          // invisibile ma vivo: zero dimensioni e basta. Nascondendolo con
+          // `display:none` alcuni browser smettono di aprirlo dalla label.
+          style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
+        />
+        <span>{file ? `✓ ${file.name.length > 26 ? file.name.slice(0, 24) + "…" : file.name}` : "Scegli o scatta"}</span>
+        {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>galleria, fotocamera o file</span>}
+      </label>
     </div>
   );
 }
@@ -220,16 +275,17 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
 //
 // Tutta la riga e' cliccabile, etichetta compresa: su un telefono
 // centrare una casella di 18 pixel col pollice non funziona.
-function Dichiarazione({ casella, segnata, onCambia }) {
+function Dichiarazione({ casella, segnata, onCambia, spenta = false }) {
   return (
     <label
       style={{
-        display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer",
+        display: "flex", gap: 12, alignItems: "flex-start", cursor: spenta ? "default" : "pointer",
         padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}`,
+        opacity: spenta ? 0.45 : 1,
       }}
     >
       <input
-        type="checkbox" checked={segnata} onChange={onCambia}
+        type="checkbox" checked={segnata} onChange={onCambia} disabled={spenta}
         style={{ width: 20, height: 20, flex: "0 0 auto", marginTop: 2, accentColor: NAVY }}
       />
       <span style={{ minWidth: 0 }}>
@@ -250,7 +306,21 @@ function Dichiarazione({ casella, segnata, onCambia }) {
 
 export default function PaginaModulo({ token }) {
   const [dati, setDati] = useState(null);
+  // DUE GUASTI DIVERSI, E NON VANNO NELLA STESSA SCATOLA.
+  //
+  // `errore` e' "non sono riuscito ad aprire il modulo": li' non c'e'
+  // niente da mostrare e la pagina diventa un avviso. `erroreInvio` e'
+  // "ho provato a spedire e non e' andata": il modulo compilato deve
+  // restare dov'e'.
+  //
+  // Prima erano la stessa variabile, e siccome il controllo su `errore`
+  // esce PRIMA di disegnare il modulo, un invio fallito cancellava dallo
+  // schermo tutto quello che l'allieva aveva scritto e firmato,
+  // lasciandole "Qualcosa non ha funzionato. Riprova fra poco" e niente
+  // da riprovare.
   const [errore, setErrore] = useState("");
+  const [erroreInvio, setErroreInvio] = useState("");
+  const [chiusoDopo, setChiusoDopo] = useState("");
   const [caricando, setCaricando] = useState(true);
   const [risposte, setRisposte] = useState({});
   const [firma, setFirma] = useState(null);
@@ -264,6 +334,21 @@ export default function PaginaModulo({ token }) {
   const [spedito, setSpedito] = useState(false);
   // il regolamento parte chiuso: vedi il blocco piu' sotto
   const [regolamentoAperto, setRegolamentoAperto] = useState(false);
+  // APERTO E RICHIUSO ALMENO UNA VOLTA.
+  //
+  // Finche' non succede, le dichiarazioni e la firma restano spente. Non
+  // dimostra che l'abbia letto — niente lo dimostra — ma toglie il caso
+  // in cui qualcuno firma senza aver nemmeno visto che esiste un
+  // regolamento, che e' esattamente quello che poteva succedere prima:
+  // la tendina e' chiusa di suo, e si poteva scorrere, spuntare "ho
+  // letto" e firmare senza aprirla mai.
+  //
+  // Si segna alla CHIUSURA e non all'apertura: aperto e lasciato aperto
+  // vuol dire che si e' scorso il modulo fino in fondo passandoci
+  // attraverso, ed e' la situazione da cui si veniva.
+  const [regolamentoLetto, setRegolamentoLetto] = useState(false);
+  // per dirle che non deve riscrivere tutto: vedi `chiaveBozza`
+  const [bozzaRipresa, setBozzaRipresa] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -279,17 +364,43 @@ export default function PaginaModulo({ token }) {
           const t = (data.campi || []).find((c) => c.chiave === "tipo_cliente");
           if (t?.valore) d.tipo_cliente = t.valore;
         }
-        setRisposte(d);
+        // la bozza vince sui valori di partenza: e' quello che aveva
+        // gia' scritto lei prima che la pagina si chiudesse
+        const bozza = leggiBozza(token);
+        setRisposte(bozza?.risposte ? { ...d, ...bozza.risposte } : d);
+        if (bozza?.spunte) setSpunte(bozza.spunte);
+        if (bozza?.regolamentoLetto) setRegolamentoLetto(true);
+        if (bozza) setBozzaRipresa(true);
       }
     });
     return () => { vivo = false; };
   }, [token]);
 
+  // si riscrive a ogni tocco, non ogni tanto: la finestra interna
+  // dell'app di posta non avvisa prima di chiudersi
+  useEffect(() => {
+    if (!dati || spedito) return;
+    const qualcosa = Object.keys(risposte).length || Object.keys(spunte).length || regolamentoLetto;
+    if (qualcosa) scriviBozza(token, { risposte, spunte, regolamentoLetto });
+  }, [token, dati, spedito, risposte, spunte, regolamentoLetto]);
+
   if (caricando) return <Avviso titolo="Un momento" testo="Sto aprendo il tuo modulo." />;
   if (errore) return <Avviso titolo="Qualcosa non ha funzionato" testo={`Riprova fra poco. Se continua, scrivici. (${errore})`} />;
   if (!dati) return <Avviso titolo="Questo link non è valido" testo="Può essere scaduto, oppure copiato male. Chiedi all'accademia di rimandartelo." />;
+  // IL LINK VALE UNA VOLTA SOLA, e i due modi di averlo gia' usato non
+  // sono la stessa cosa: "l'iscrizione e' confermata" e "il modulo l'hai
+  // gia' mandato" vogliono due risposte diverse. Chi ha appena spedito e
+  // riapre la mail non deve leggere una frase che non c'entra, e
+  // soprattutto non deve trovarsi davanti il modulo da rifare: rifirmare
+  // sostituiva la firma e il documento gia' archiviati.
+  if (dati.scaduto && dati.motivo === "gia_inviato") return <Avviso buono titolo="Modulo già inviato"
+    testo={`${dati.nome}, il tuo modulo è arrivato${dati.ricevuto_il ? " il " + quandoEsteso(dati.ricevuto_il) : ""} e non va rifatto. Ne hai ricevuto una copia firmata per email: se non la trovi, scrivici e te la rimandiamo.`} />;
   if (dati.scaduto) return <Avviso buono titolo="Iscrizione già confermata"
     testo={`${dati.nome}, la tua iscrizione a ${dati.corso?.nome || "questo corso"} è già completa: non serve più compilare niente. A presto!`} />;
+  if (chiusoDopo === "gia_inviato") return <Avviso buono titolo="Modulo già inviato"
+    testo={`${dati.nome}, il tuo modulo risulta già arrivato: non serve rimandarlo. Ne ricevi una copia firmata per email.`} />;
+  if (chiusoDopo) return <Avviso buono titolo="Iscrizione già confermata"
+    testo={`${dati.nome}, la tua iscrizione è già completa: non serve più compilare niente.`} />;
   if (spedito) return <Avviso buono titolo="Ricevuto, grazie!"
     testo={`${dati.nome}, abbiamo il tuo modulo firmato. Ci vediamo a ${dati.corso?.citta || "presto"}.`} />;
 
@@ -316,6 +427,7 @@ export default function PaginaModulo({ token }) {
   if (c("doc_numero")) serve({ chiave: "doc_numero" }, false);
   if (c("doc_fronte")?.obbligatorio && !c("doc_fronte")?.bloccato && !docFronte) mancanti.push("Foto del documento — fronte");
   if (c("doc_retro")?.obbligatorio  && !c("doc_retro")?.bloccato  && !docRetro)  mancanti.push("Foto del documento — retro");
+  if (!regolamentoLetto) mancanti.push("Aprire il regolamento e richiuderlo");
   if (!firma) mancanti.push("La firma");
 
   // QUALI CASELLE SI MOSTRANO. Le tre obbligatorie e le due facoltative
@@ -331,7 +443,7 @@ export default function PaginaModulo({ token }) {
   const puoSpedire = mancanti.length === 0 && !spedendo;
 
   async function spedisci() {
-    setSpedendo(true); setErrore("");
+    setSpedendo(true); setErroreInvio("");
     try {
       const cartella = token.slice(0, 16);
       const sali = async (file, nome) => {
@@ -387,7 +499,14 @@ export default function PaginaModulo({ token }) {
         },
       });
       if (error) throw new Error(error.message);
+      // il modulo risulta gia' arrivato (due dita sul tasto, o la stessa
+      // pagina aperta due volte): non e' un errore da mostrare in rosso,
+      // e' la stessa risposta che si da' a chi riapre il link
+      if (!data?.ok && data?.motivo) { setChiusoDopo(data.motivo); return; }
       if (!data?.ok) throw new Error(data?.errore || "Non è stato possibile inviare il modulo.");
+      // il modulo e' scritto: la bozza non serve piu' e non deve restare
+      // su un telefono che magari non e' nemmeno suo
+      cancellaBozza(token);
       setSpedito(true);
 
       // LA CONFERMA DI RICEZIONE, dopo e non prima.
@@ -408,7 +527,7 @@ export default function PaginaModulo({ token }) {
         console.error("conferma di ricezione non partita:", e?.message || e);
       }
     } catch (e) {
-      setErrore(e.message || String(e));
+      setErroreInvio(e.message || String(e));
     } finally {
       setSpedendo(false);
     }
@@ -468,6 +587,20 @@ export default function PaginaModulo({ token }) {
           {testi.intro.titolo}
         </div>
         <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginBottom: 16 }}>{testi.intro.sottotitolo}</div>
+
+        {/* Chi rientra dopo che la pagina si e' chiusa da sola deve
+            capire perche' i campi sono gia' pieni — e sapere subito che
+            le foto invece no, quelle vanno riprese. */}
+        {bozzaRipresa && (
+          <div style={{
+            ...fontBody, fontSize: 12.5, lineHeight: 1.6, color: "#1C5E33",
+            background: "#F2F9F3", border: "1px solid #CFE6D5", borderRadius: 10,
+            padding: "10px 12px", marginBottom: 16,
+          }}>
+            Abbiamo ritrovato quello che avevi già scritto, non devi rifarlo.
+            Le foto del documento vanno riscelte.
+          </div>
+        )}
 
         <div style={pannello}>
           <IntestazioneArea>Il tuo corso</IntestazioneArea>
@@ -543,9 +676,22 @@ export default function PaginaModulo({ token }) {
           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
             {quantiPunti} {quantiPunti === 1 ? "punto" : "punti"} · lo accetti firmando qui sotto
           </div>
+          {!regolamentoLetto && (
+            <div style={{
+              ...fontBody, fontSize: 12.5, lineHeight: 1.55, color: "#8A6A1B",
+              background: "#FFFBF0", border: "1px solid #F0E4C8", borderRadius: 10,
+              padding: "10px 12px", marginBottom: 12,
+            }}>
+              Aprilo e richiudilo per proseguire: finché non lo fai, le dichiarazioni e la firma restano bloccate.
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => setRegolamentoAperto((v) => !v)}
+            onClick={() => setRegolamentoAperto((v) => {
+              // richiudendolo si segna come letto, e non si torna indietro
+              if (v) setRegolamentoLetto(true);
+              return !v;
+            })}
             aria-expanded={regolamentoAperto}
             style={{
               ...fontBody, width: "100%", minHeight: 44, borderRadius: 10,
@@ -576,8 +722,14 @@ export default function PaginaModulo({ token }) {
 
         <div style={pannello}>
           <IntestazioneArea>Dichiarazioni</IntestazioneArea>
+          {!regolamentoLetto && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6A1B", lineHeight: 1.55, marginBottom: 12 }}>
+              Prima apri il regolamento qui sopra e richiudilo. Quello che si firma va guardato almeno una volta.
+            </div>
+          )}
           {caselle.filter((c) => c.tipo !== "facoltativa").map((c) => (
             <Dichiarazione key={c.chiave} casella={c} segnata={!!spunte[c.chiave]}
+              spenta={!regolamentoLetto}
               onCambia={() => setSpunte((v) => ({ ...v, [c.chiave]: !v[c.chiave] }))} />
           ))}
           {caselle.some((c) => c.tipo === "facoltativa") && (
@@ -585,6 +737,7 @@ export default function PaginaModulo({ token }) {
               <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{testi.consensi.titoloFacoltative}</div>
               {caselle.filter((c) => c.tipo === "facoltativa").map((c) => (
                 <Dichiarazione key={c.chiave} casella={c} segnata={!!spunte[c.chiave]}
+                  spenta={!regolamentoLetto}
                   onCambia={() => setSpunte((v) => ({ ...v, [c.chiave]: !v[c.chiave] }))} />
               ))}
             </div>
@@ -596,13 +749,25 @@ export default function PaginaModulo({ token }) {
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
             Firmando accetti il regolamento e l'informativa qui sopra.
           </div>
-          <FirmaDito onCambia={setFirma} />
+          {/* La firma compare dopo il regolamento, non prima. Una lavagna
+              per firmare messa sotto a un testo mai aperto e' un invito a
+              firmare senza leggere. */}
+          {regolamentoLetto ? <FirmaDito onCambia={setFirma} /> : (
+            <div style={{
+              ...fontBody, fontSize: 12.5, lineHeight: 1.6, color: "#8A6A1B",
+              background: "#FFFBF0", border: "1px dashed #E3D3AE", borderRadius: 12,
+              padding: "18px 14px", textAlign: "center",
+            }}>
+              Qui comparirà lo spazio per firmare.<br />
+              Prima apri il regolamento qui sopra e richiudilo.
+            </div>
+          )}
         </div>
 
-        {errore && (
+        {erroreInvio && (
           <div style={{ border: "1px solid #B3261E", background: "#FDF1F0", borderRadius: 10,
                         padding: "10px 12px", marginBottom: 12, fontSize: 13, color: GRAFITE }}>
-            {errore}
+            {erroreInvio}
           </div>
         )}
 

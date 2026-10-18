@@ -249,6 +249,53 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   `{ soloPdf: true }`, che scrive il documento senza far ripartire
   nessuna mail.
 
+  **Il link del modulo vale una volta sola (19/10/2026).** `modulo_salva`
+  si fermava solo davanti a un'iscrizione già *confermata*, ma fra «il
+  modulo è arrivato» e «l'iscrizione è confermata» passa l'acconto: in
+  mezzo chi riapriva la mail poteva rifirmare e rispedire, e la seconda
+  spedizione **riscriveva** `firma_path`, `doc_fronte` e `doc_retro`
+  (quelli arrivano pieni, il `coalesce` non li protegge) mentre
+  `contratto_firmato` e `modulo_ricevuto_il` restavano della prima. Il
+  PDF archiviato avrebbe mostrato una firma e nel secchio ce ne sarebbe
+  stata un'altra.
+
+  Adesso la serratura è `modulo_ricevuto_il`, su tutti e due i lati:
+  `modulo_vista` non apre la pagina e restituisce `motivo`
+  (`confermato` | `gia_inviato`) perché le due cose meritano due frasi
+  diverse, `modulo_salva` rifiuta, la tessera di invio della fascia non
+  si preme più e `eseguiInvio` ricontrolla sulla riga riletta. Se serve
+  far rifare un modulo **oggi non c'è modo**: va aggiunto un gesto
+  apposta, deliberato.
+
+  **Il regolamento va aperto e richiuso prima di firmare.** Non dimostra
+  che sia stato letto — niente lo dimostra — ma toglie il caso in cui si
+  scorre, si spunta «ho letto» e si firma senza sapere che esiste. Fino
+  ad allora dichiarazioni spente e, al posto della lavagna della firma,
+  un riquadro che dice perché.
+
+  **La bozza resta sul telefono di chi compila.** Il modulo si apre quasi
+  sempre dentro la finestra interna dell'app di posta, e quella finestra
+  si chiude da sola: basta aprire la fotocamera per allegare il documento
+  e cambiare idea. Risposte e spunte vanno in `localStorage`
+  (`modulo-bozza-<token>`), si ripristinano all'apertura con un avviso, e
+  si cancellano appena il modulo parte. Le foto no: un file non si mette
+  da parte.
+
+  **Il campo del documento non si apre più da codice.** Era un input
+  nascosto (1×1, `pointer-events: none`) aperto con `.click()`: su iPhone
+  funzionava una volta sola, e chi entrava in fotocamera e tornava
+  indietro non riusciva più ad allegare niente — unica via d'uscita,
+  chiudere la pagina e rifare il modulo da capo. Ora il tasto **è** il
+  campo, dentro una `label`: il tocco arriva all'input senza passare da
+  JavaScript, che è l'unica forma che iOS accetta sempre.
+
+  **E un invio fallito non cancella più il modulo.** `errore` (non sono
+  riuscito ad aprire) ed `erroreInvio` (non sono riuscito a spedire)
+  erano la stessa variabile, e il controllo sul primo esce *prima* di
+  disegnare il modulo: un rifiuto in fase di invio sostituiva l'intera
+  pagina con «Qualcosa non ha funzionato», portandosi via tutto quello
+  che era stato scritto e firmato.
+
   **Registro e invii automatici (15/10/2026).** Ogni invio lascia una riga in
   `email_inviate`, anche quando fallisce. Un indice unico *parziale*
   (`chiave_modello + iscritto_id`, solo `automatica and esito = 'ok'`) impedisce

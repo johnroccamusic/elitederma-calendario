@@ -151,7 +151,15 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
             )}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto", minWidth: 0 }}>
               {(() => {
-                const eInvio = !!onInvia && chiave === "modulo_inviato" && !inviando;
+                // RIMANDARE HA SENSO FINCHE' IL MODULO NON E' ARRIVATO.
+                //
+                // Dopo, no: il link che partirebbe non si apre piu' — vale
+                // una volta sola — quindi la mail arriverebbe all'allieva
+                // con dentro un indirizzo che le dice "gia' inviato". Si
+                // manderebbe a una persona vera una cosa inutile, e chi
+                // l'ha mandata crederebbe di aver rimediato a qualcosa.
+                const arrivato = indice >= ORDINE.indexOf("modulo_ricevuto");
+                const eInvio = !!onInvia && chiave === "modulo_inviato" && !inviando && !arrivato;
                 const eModifica = !!onModifica && chiave === "dati_inseriti";
                 const eFascicolo = !!onFascicolo && chiave === "modulo_ricevuto"
                   && indice >= ORDINE.indexOf("modulo_ricevuto");
@@ -168,7 +176,9 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                         ? "Apri il fascicolo: copia firmata, invio della conferma, presa visione"
                         : eInvio
                           ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
-                          : STATI[chiave].etichetta}
+                          : (chiave === "modulo_inviato" && arrivato)
+                            ? "Il modulo è già arrivato: non si rimanda, il link vale una volta sola"
+                            : STATI[chiave].etichetta}
                     style={{
                       width: palla, height: palla, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",

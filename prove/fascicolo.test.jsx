@@ -101,6 +101,29 @@ describe("la tessera «Modulo ricevuto»", () => {
     await p.smonta();
   });
 
+  it("il rinvio si spegne quando il modulo e' arrivato", async () => {
+    let mandati = 0;
+    const p = await monta(
+      <FasciaStato stato="modulo_ricevuto" onInvia={() => { mandati++; }} />,
+    );
+    for (const b of [...p.nodo.querySelectorAll("button")]) await clicca(b);
+    expect(mandati).toBe(0);
+    await p.smonta();
+  });
+
+  it("il rinvio funziona finche' il modulo non e' arrivato", async () => {
+    let mandati = 0;
+    const p = await monta(
+      <FasciaStato stato="modulo_inviato" onInvia={() => { mandati++; }} />,
+    );
+    const tasto = [...p.nodo.querySelectorAll("button")]
+      .find((b) => (b.title || "").includes("rimandarlo"));
+    expect(tasto).toBeTruthy();
+    await clicca(tasto);
+    expect(mandati).toBe(1);
+    await p.smonta();
+  });
+
   it("si preme da quando il modulo e' arrivato", async () => {
     let aperto = 0;
     const p = await monta(

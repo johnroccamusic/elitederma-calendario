@@ -32016,6 +32016,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         setEsitoModulo({ id: rec.id, ok: false, testo: "Questa iscrizione non ha ancora un link del modulo. Riprova fra poco." });
         return;
       }
+      // IL MODULO NON SI RIMANDA DOPO CHE E' ARRIVATO.
+      //
+      // Il controllo sta anche sulla fascia, che non fa nemmeno premere
+      // il pallino; qui si rifa' sulla riga appena riletta dal database,
+      // perche' quella in memoria puo' essere di dieci minuti fa — e nel
+      // frattempo l'allieva puo' aver spedito. Senza, partirebbe una mail
+      // vera con dentro un link che non si apre piu'.
+      if (quella.modulo_ricevuto_il || quella.stato === "confermato") {
+        setEsitoModulo({
+          id: rec.id, ok: false,
+          testo: quella.stato === "confermato"
+            ? "L'iscrizione è già confermata: il modulo non si rimanda."
+            : "Il modulo è già arrivato: il link vale una volta sola e non si apre più. Se serve farlo rifare, scrivimelo.",
+        });
+        return;
+      }
       // chi sta spedendo: la sessione Supabase, come fa gia' la mail di
       // conferma. `utenteLoggato` in questa scheda non esiste.
       const { data: utenteOra } = await supabase.auth.getUser();
