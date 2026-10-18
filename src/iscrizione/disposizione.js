@@ -38,7 +38,7 @@ export const AREA_ALLIEVO = {
     // identificarla. Prima stava fra "quello che compila l'allieva" e
     // nella scheda del venditore non c'era proprio.
     { campi: [
-      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, salvaUscendo: true },
+      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
     ] },
     { campi: [
       { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", maiuscolo: true, salvaUscendo: true },
@@ -139,3 +139,29 @@ export const NOTA_VENDITORE = {
   fattura_cod_dest: "o la PEC",
   fattura_pec:      "o il Cod. Dest.",
 };
+
+// QUANDO UN CAMPO HA UNA LUNGHEZZA PRECISA, lo dice da solo.
+//
+// Oggi e' solo il codice fiscale: sedici caratteri, e una cifra saltata
+// nel ribattere non si vede a occhio — sedici e quindici, scritti in
+// maiuscolo dentro una casella, sono la stessa macchia. Lo scopriva la
+// fattura, o il diploma, settimane dopo.
+//
+// NON BLOCCA, avvisa: un modulo che si rifiuta di partire per un campo
+// che l'allieva crede giusto e' peggio di un dato da correggere. E il
+// conto si fa solo su quello che e' gia' stato scritto — una casella
+// ancora vuota non ha sbagliato niente, sta solo aspettando.
+//
+// `maxLength` sull'input impedisce di andare oltre, quindi in pratica
+// qui si arriva solo per difetto; il caso contrario e' scritto lo stesso,
+// perche' un campo incollato da fuori quel limite lo scavalca.
+export function avvisoLunghezza(campo, valore) {
+  const attesa = campo?.lunghezzaEsatta;
+  if (!attesa) return null;
+  const quanti = String(valore ?? "").trim().length;
+  if (quanti === 0 || quanti === attesa) return null;
+  const nome = (campo.etichetta || "Questo campo").toLowerCase();
+  return quanti < attesa
+    ? `Manca${attesa - quanti === 1 ? "" : "no"} ${attesa - quanti} caratter${attesa - quanti === 1 ? "e" : "i"}: il ${nome} ne ha ${attesa}.`
+    : `Sono ${quanti} caratteri: il ${nome} ne ha ${attesa}.`;
+}
