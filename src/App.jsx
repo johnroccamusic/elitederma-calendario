@@ -65172,7 +65172,6 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
   // portano "Sorso" e codici fiscali in minuscolo, e correggerli a mano
   // uno per uno non lo fa nessuno
   const [cliente, setCliente] = useState(() => clienteInMaiuscolo(pagamento.cliente || {}));
-  const [numero, setNumero] = useState(pagamento.fattura_numero || "");
   const [note, setNote] = useState(pagamento.note_fattura || "");
   const [aperto, setAperto] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -65278,29 +65277,12 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
     onSalvato?.();
   }
 
-  async function segnaFatturata() {
-    if (!numero.trim()) { setMsg("Scrivi il numero della fattura che hai emesso."); return; }
-    if (!window.confirm(`Segno questo incasso come fatturato con il numero ${numero.trim()}?\n\nLa riga esce da "Fatture da emettere".`)) return;
-    setSalvando(true);
-    if (alBanco) {
-      const { error: erroreBanco } = await supabase.from("vendite_shop").update({
-        fattura_numero: numero.trim(), fattura_manuale: true,
-        fattura_emessa_il: new Date().toISOString(), richiede_fattura: true,
-      }).eq("id", pagamento.id);
-      setSalvando(false);
-      if (erroreBanco) { setMsg("Errore: " + testoErrore(erroreBanco)); return; }
-      onSalvato?.();
-      return;
-    }
-    const { error } = await supabase.from("pagamenti_pos").update({
-      stato: "fatturato", fattura_manuale: true, fattura_numero: numero.trim(),
-      fattura_emessa_il: new Date().toISOString(), cliente, note_fattura: note || null,
-      verificato_il: new Date().toISOString(), aggiornato_il: new Date().toISOString(),
-    }).eq("id", pagamento.id);
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    onSalvato?.();
-  }
+  // "Segna fatturata" stava qui: serviva quando la fattura la si faceva
+  // a mano sul gestionale e in app si trascriveva solo il numero. Da
+  // quando la emette l'app quel campo era un invito a sbagliare — due
+  // strade per la stessa cosa, e una che non controlla niente. Tolto il
+  // 18/10/2026. Se un giorno servisse segnare una fattura fatta altrove,
+  // il posto e' questo.
 
   const campo = { ...inputStyle, padding: isMobile ? "7px 8px" : "8px 10px", fontSize: isMobile ? 12.5 : 13 };
 
@@ -65357,11 +65339,6 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-        <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Emessa altrove, a mano? Scrivi il numero:</span>
-        <input style={{ ...campo, width: 130 }} value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="es. 124/2026" />
-        <Button onClick={segnaFatturata} disabled={salvando}>Segna fatturata</Button>
-      </div>
       {msg && <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: msg.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{msg}</div>}
     </div>
   );
