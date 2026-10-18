@@ -65385,30 +65385,13 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
   const [vista, setVista] = useState("daemettere");
   const [vendite, setVendite] = useState([]);
   const [preparandoLink, setPreparandoLink] = useState(false);
-  // IL CONTO DI SALDO.
-  //
-  // Fatture in Cloud, su una fattura gia' incassata, vuole sapere su
-  // quale conto sono entrati i soldi: lo chiede anche nella sua
-  // interfaccia, dove pero' la tendina arriva gia' compilata col conto
-  // predefinito e la si conferma senza accorgersene. Dall'API quel
-  // predefinito non si applica da solo.
-  //
-  // Sta QUI e non fra i campi dell'intestatario perche' non e' un dato
-  // della cliente: e' un conto nostro, uguale per tutte le fatture, e si
-  // sceglie una volta.
-  const [contoSaldo, salvaContoSaldo] = useImpostazioneCondivisa(CHIAVE_FIC_CONTO_SALDO, null);
-  const [conti, setConti] = useState(null);
-  const [caricandoConti, setCaricandoConti] = useState(false);
-  async function caricaConti() {
-    if (conti || caricandoConti) return;
-    setCaricandoConti(true);
-    const { data, error } = await supabase.functions.invoke("fic-conti", { body: {} });
-    setCaricandoConti(false);
-    if (error) { setMsg("Non riesco a leggere i conti di Fatture in Cloud: " + await testoErroreFunzione(error)); return; }
-    if (data?.errore) { setMsg(data.errore); return; }
-    setConti(Array.isArray(data?.conti) ? data.conti : []);
-  }
-  useEffect(() => { caricaConti(); }, []);
+  // Il conto su cui risultano entrati i soldi non si chiede a nessuno:
+  // le fatture di Elitederma finiscono sempre sullo stesso conto, e una
+  // tendina da compilare per una cosa che non cambia mai e' una domanda
+  // inutile messa davanti a chi ha fretta. Lo risolve la edge function
+  // guardando i conti veri dell'azienda — e se un giorno ce ne fossero
+  // due da distinguere, lo fa dal metodo di pagamento, che lei conosce.
+
 
   // RIFARE IL COLLEGAMENTO A FATTURE IN CLOUD.
   //
@@ -65563,30 +65546,6 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
             qualcosa si rompe. Chi apre questa pagina ogni giorno deve
             vedere le fatture, non i bottoni dell'impianto. */}
         <div style={{ marginTop: 28, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.6 }}>
-          <b style={{ color: NAVY }}>Dove risultano entrati i soldi.</b> Fatture in Cloud, su una fattura già incassata,
-          vuole sapere su quale conto è arrivato il pagamento — lo chiede anche nella sua interfaccia, dove però la
-          tendina arriva già compilata e la si conferma senza accorgersene. Si sceglie una volta: non è un dato della
-          cliente, è un conto nostro.
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "8px 0 18px" }}>
-            <select
-              style={{ ...inputStyle, maxWidth: 320, fontSize: 13 }}
-              value={contoSaldo?.id ?? ""}
-              disabled={caricandoConti || !conti}
-              onChange={(e) => {
-                const scelto = (conti || []).find((c) => String(c.id) === e.target.value);
-                salvaContoSaldo(scelto ? { id: scelto.id, nome: scelto.nome } : null);
-              }}
-            >
-              <option value="">{caricandoConti ? "Leggo i conti…" : conti ? "— scegli il conto —" : "Conti non disponibili"}</option>
-              {(conti || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-            {contoSaldo?.nome && (
-              <span style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", fontWeight: 700 }}>
-                Gli incassi con carta risultano su «{contoSaldo.nome}».
-              </span>
-            )}
-          </div>
-
           <b style={{ color: NAVY }}>Permessi di Fatture in Cloud.</b> Se premendo «Emetti la fattura» compare un errore che
           parla di <i>permessi di scrittura</i>, il collegamento va rifatto: quello di agosto era nato per leggere le
           fatture ricevute, e i permessi di un collegamento non si allargano da soli.

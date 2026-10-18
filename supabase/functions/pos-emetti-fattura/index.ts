@@ -158,40 +158,41 @@ Deno.serve(async (req) => {
     const token = await tokenValido(sb, conn);
     const aliquotaId = await idAliquota(token, conn.company_id, ALIQUOTA);
 
-    // IL CONTO DI SALDO: dove sono entrati i soldi.
+    // IL CONTO DI SALDO: dove risultano entrati i soldi.
     //
-    // Fatture in Cloud rifiuta un pagamento gia' incassato se non gli si
-    // dice su quale conto e' arrivato. Quale sia non lo puo' decidere il
-    // codice: se l'azienda ha banca, contanti e Stripe, scegliere "il
-    // primo della lista" vuol dire scrivere in contabilita' un incasso
-    // sul conto sbagliato, ed e' il genere di errore che si scopre a
-    // fine trimestre. Quindi: si usa quello scelto una volta e scritto
-    // fra le impostazioni; se non c'e' scelta e di conti ce n'e' uno
-    // solo, quello; altrimenti ci si ferma e si chiede, elencandoli.
+    // Non si chiede a nessuno. Le fatture di Elitederma finiscono sempre
+    // sullo stesso conto — la banca — e anche quello che incassa Stripe
+    // arriva li' con un versamento: una tendina da compilare per una
+    // cosa che non cambia mai e' una domanda inutile messa davanti a chi
+    // ha fretta.
+    //
+    // Si sceglie da soli, in quest'ordine: il conto eventualmente
+    // forzato fra le impostazioni (chiave `fic_conto_saldo`, che non ha
+    // piu' una schermata ma resta la via per imporre un conto diverso);
+    // se i conti dell'azienda sono uno solo, quello; altrimenti si
+    // guarda COME e' stata incassata — un pagamento Stripe cerca un
+    // conto che si chiami Stripe, tutti gli altri la banca. Solo se non
+    // somiglia niente a niente ci si ferma e si chiede, elencandoli:
+    // scrivere un incasso sul conto sbagliato e' un errore che si scopre
+    // a fine trimestre, quando non si riconcilia piu' niente.
     const conti = await contiSaldo(token, conn.company_id);
-    // se quel metodo e' gia' censito sull'azienda si manda il suo id:
-    // mandare un nome che di la' non esiste crea una voce nuova in
-    // anagrafica a ogni fattura, o fa rifiutare il documento
-    const metodi = await metodiPagamento(token, conn.company_id);
-    const metodoFic = metodi.find((m) => m.nome.toLowerCase() === nomeMetodo.toLowerCase())
-      || (daQr ? metodi.find((m) => /stripe|carta/i.test(m.nome)) : null)
-      || (metodoVendita === "contanti" ? metodi.find((m) => /contant/i.test(m.nome)) : null)
-      || (!daQr && metodoVendita === "pos" ? metodi.find((m) => /pos|bancomat/i.test(m.nome)) : null)
-      || null;
     const { data: scelta } = await sb.from("impostazioni_layout_tabelle")
       .select("valore").eq("chiave", "fic_conto_saldo").maybeSingle();
     const idScelto = Number(scelta?.valore?.id ?? scelta?.valore ?? 0) || null;
+    const somiglia = (regola: RegExp) => conti.find((c) => regola.test(c.nome));
     const conto = (idScelto && conti.find((c) => c.id === idScelto))
-      || (conti.length === 1 ? conti[0] : null);
+      || (conti.length === 1 ? conti[0] : null)
+      || (daQr ? somiglia(/stripe/i) : null)
+      || somiglia(/popolare|banca|bank|c\/c|conto corrente/i)
+      || null;
     if (!conto) {
       const elenco = conti.map((c) => `${c.nome} (id ${c.id})`).join(", ") || "nessuno";
       return risposta({
-        errore: `Non so su quale conto far risultare l'incasso. I conti di Fatture in Cloud sono: ${elenco}. `
-          + "Va scelto una volta sola: dimmi quale e lo scrivo fra le impostazioni.",
+        errore: `Non riesco a capire su quale conto far risultare l'incasso. I conti di Fatture in Cloud sono: ${elenco}. `
+          + "Dimmi quale e lo scrivo fra le impostazioni, cosi' non lo chiede piu'.",
         conti,
       }, 409);
     }
-    const dataIso = new Date(pag.pagato_il || Date.now()).toISOString().slice(0, 10);
     const fattura = await emettiFattura(token, conn.company_id, {
       cliente, righe, aliquotaId, dataIso,
       importoPagato: Number(pag.importo) || 0,
