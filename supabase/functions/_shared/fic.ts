@@ -103,20 +103,40 @@ export async function emettiFattura(
   // cassetto fiscale.
   const codiceDestinatario = String(cliente.cod_dest || "").trim().toUpperCase();
   const pec = String(cliente.pec || "").trim();
+  // NIENTE `null` DENTRO L'ENTITA'.
+  //
+  // Fatture in Cloud i campi nulli non li ignora: li rifiuta. Il
+  // 18/10/2026 la prima emissione vera si e' fermata con un 422 —
+  // "data.entity.vat_number must be a string" — su una cliente privata,
+  // che la partita IVA non ce l'ha e non puo' averla. Un campo che non
+  // si ha non si manda vuoto: si lascia proprio fuori.
+  const soloSePieno = (valore: unknown): string | undefined => {
+    const testo = valore == null ? "" : String(valore).trim();
+    return testo === "" ? undefined : testo;
+  };
   const entita: Record<string, any> = {
     name: [cliente.ditta, [cliente.nome, cliente.cognome].filter(Boolean).join(" ")].filter(Boolean)[0] || "Cliente",
-    vat_number: cliente.piva || null,
-    tax_code: cliente.codice_fiscale || null,
-    address_street: [cliente.indirizzo, cliente.civico].filter(Boolean).join(" ") || null,
-    address_postal_code: cliente.cap || null,
-    address_city: cliente.citta || null,
-    address_province: cliente.provincia || null,
     country: "Italia",
-    email: cliente.email || null,
-    certified_email: pec || null,
-    ei_code: codiceDestinatario || (pec ? "0000000" : "0000000"),
+    ei_code: codiceDestinatario || "0000000",
     type: cliente.piva ? "company" : "person",
   };
+  // Codice fiscale e provincia vanno allo SdI in maiuscolo: al banco si
+  // battono come capita, e "Rzzmnl90l42i452e" e' lo stesso codice
+  // scritto male. Qui si normalizza una volta, invece di sperare che
+  // chi scrive si ricordi del maiuscolo.
+  const facoltativi: Record<string, string | undefined> = {
+    vat_number: soloSePieno(cliente.piva),
+    tax_code: soloSePieno(cliente.codice_fiscale)?.toUpperCase(),
+    address_street: soloSePieno([cliente.indirizzo, cliente.civico].filter(Boolean).join(" ")),
+    address_postal_code: soloSePieno(cliente.cap),
+    address_city: soloSePieno(cliente.citta),
+    address_province: soloSePieno(cliente.provincia)?.toUpperCase(),
+    email: soloSePieno(cliente.email),
+    certified_email: soloSePieno(pec),
+  };
+  for (const [chiave, valore] of Object.entries(facoltativi)) {
+    if (valore !== undefined) entita[chiave] = valore;
+  }
 
   const corpo = {
     data: {
