@@ -29,6 +29,8 @@
 // prima, come per gli invii automatici.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { componiMailRicezione, valoriCorso } from "../_shared/email.js";
+import { creaPdfModulo } from "../_shared/modulo-pdf.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -46,14 +48,21 @@ const json = (corpo: unknown, status = 200) =>
 
 const emailValida = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 
-async function spedisci(a: string, mail: { oggetto: string; testo: string; html: string }) {
+async function spedisci(
+  a: string,
+  mail: { oggetto: string; testo: string; html: string },
+  allegati: { nome: string; contenuto: string }[] = [],
+) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/invia-email`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ a, oggetto: mail.oggetto, html: mail.html, testo: mail.testo }),
+    body: JSON.stringify({
+      a, oggetto: mail.oggetto, html: mail.html, testo: mail.testo,
+      ...(allegati.length ? { allegati } : {}),
+    }),
   });
   const esito = await r.json().catch(() => ({}));
   if (!r.ok || esito?.errore) return { errore: esito?.errore || `invia-email ${r.status}`, id: null };
@@ -124,7 +133,78 @@ Deno.serve(async (req) => {
   const linkRecesso = isc.token_recesso ? `${indirizzoApp}/?recesso=${isc.token_recesso}` : "";
   const mail = componiMailRicezione({ valori, righe, modello, societa, linkRecesso });
 
-  if (prova) return json({ ok: true, prova: true, ricevuto, a: destinatario, mail });
+  // IL MODULO FIRMATO, IN PDF, ALLEGATO ALLA CONFERMA.
+  //
+  // Non e' un di piu': e' la copia che l'allieva deve avere in mano di
+  // quello che ha sottoscritto — dati, dichiarazioni con la loro ora,
+  // firma, documento, e il testo del contratto com'era quel giorno. Una
+  // conferma che dice "abbiamo ricevuto" senza allegare cosa si e'
+  // ricevuto lascia tutte e due le parti senza niente in mano.
+  //
+  // Se la generazione fallisce la mail parte lo stesso, senza allegato:
+  // meglio una conferma monca di nessuna conferma. Il guasto resta
+  // scritto, e dalla scheda si potra' rigenerare.
+  const scaricaDalSecchio = async (percorso: string | null) => {
+    if (!percorso) return null;
+    const { data, error } = await admin.storage.from("moduli-iscrizione").download(percorso);
+    if (error || !data) return null;
+    return new Uint8Array(await data.arrayBuffer());
+  };
+
+  let pdf: Uint8Array | null = null;
+  let guastoPdf: string | null = null;
+  let pagine = 0;
+  let scartate: string[] = [];
+  const pesoSorgenti: Record<string, number> = {};
+  try {
+    const prendi = async (nome: string, percorso: string | null) => {
+      const b = await scaricaDalSecchio(percorso);
+      if (percorso) pesoSorgenti[nome] = b ? b.length : 0;
+      return b;
+    };
+    const esito = await creaPdfModulo({
+      iscritto: isc,
+      corso: {
+        nome: corso?.nome, citta: classe?.citta || loc?.citta || loc?.nome,
+        indirizzo: classe?.indirizzo || loc?.indirizzo,
+        inizio: classe?.data_inizio, fine: classe?.data_fine,
+      },
+      societa,
+      firma: await prendi("firma", isc.firma_path),
+      fronte: await prendi("fronte", isc.doc_fronte),
+      retro: await prendi("retro", isc.doc_retro),
+    });
+    pdf = esito.byte;
+    pagine = esito.pagine;
+    scartate = esito.scartate;
+  } catch (e) {
+    guastoPdf = e instanceof Error ? e.message : String(e);
+  }
+
+  const nomeAllegato = `Modulo iscrizione - ${String(isc.cognome || "").trim()} ${String(isc.nome || "").trim()}`.trim().replace(/\s+/g, " ") + ".pdf";
+
+  if (prova) {
+    return json({
+      ok: true, prova: true, ricevuto, a: destinatario, mail,
+      pdf: pdf ? { nome: nomeAllegato, byte: pdf.length, pagine, scartate } : null,
+      pesoSorgenti, guastoPdf,
+    });
+  }
+
+  // il PDF si archivia accanto alla firma e ai documenti, nello stesso
+  // secchio privato: da li' lo rilegge la scheda dell'iscritto
+  let percorsoPdf: string | null = null;
+  if (pdf) {
+    percorsoPdf = `${String(token).slice(0, 16)}/modulo-firmato-${Date.now()}.pdf`;
+    const { error: erroreCaricamento } = await admin.storage.from("moduli-iscrizione")
+      .upload(percorsoPdf, pdf, { contentType: "application/pdf", upsert: true });
+    if (erroreCaricamento) { percorsoPdf = null; guastoPdf = erroreCaricamento.message; }
+    else {
+      await admin.from("iscritti").update({
+        modulo_pdf_path: percorsoPdf, modulo_pdf_generato_il: new Date().toISOString(),
+      }).eq("id", isc.id);
+    }
+  }
 
   if (!emailValida(destinatario)) {
     // si registra lo stesso: una conferma mai partita perche' manca
@@ -152,7 +232,8 @@ Deno.serve(async (req) => {
     }).select("id").single();
   if (erroreRegistro) return json({ ok: true, gia: true, messaggio: "La conferma era già partita." });
 
-  const { errore, id } = await spedisci(destinatario, mail);
+  const { errore, id } = await spedisci(destinatario, mail,
+    pdf ? [{ nome: nomeAllegato, contenuto: encodeBase64(pdf) }] : []);
   if (errore) {
     await admin.from("email_inviate").update({ esito: "errore", errore }).eq("id", prenotata.id);
     return json({ ok: false, errore });

@@ -22,7 +22,8 @@
 // loro funzione. Qui si manda a pochi destinatari alla volta.
 //
 // Corpo della richiesta:
-//   { a: "x@y.it" | ["x@y.it", …], oggetto, html?, testo?, rispondiA? }
+//   { a: "x@y.it" | ["x@y.it", …], oggetto, html?, testo?, rispondiA?,
+//     allegati?: [{ nome, contenuto }] — contenuto in base64 }
 // Almeno uno fra html e testo.
 //
 // Variabili d'ambiente (Supabase → Edge Functions → Secrets):
@@ -84,6 +85,15 @@ Deno.serve(async (req) => {
   if (sbagliati.length) return json({ errore: "Indirizzi non validi: " + sbagliati.join(", ") }, 400);
 
   const oggetto = String(corpo.oggetto || "").trim();
+  // GLI ALLEGATI. Arrivano gia' in base64 da chi chiama: questa funzione
+  // non legge file e non conosce secchi, spedisce e basta. Resend accetta
+  // fino a 40 MB per messaggio, ma una casella qualunque molto meno: chi
+  // allega si preoccupa del peso prima di arrivare qui.
+  const allegati = Array.isArray(corpo.allegati)
+    ? corpo.allegati
+        .filter((a: any) => a && a.nome && a.contenuto)
+        .map((a: any) => ({ filename: String(a.nome), content: String(a.contenuto) }))
+    : [];
   const html = corpo.html ? String(corpo.html) : undefined;
   const testo = corpo.testo ? String(corpo.testo) : undefined;
   if (!oggetto) return json({ errore: "Manca l'oggetto" }, 400);
@@ -102,6 +112,7 @@ Deno.serve(async (req) => {
       subject: oggetto,
       html,
       text: testo,
+      ...(allegati.length ? { attachments: allegati } : {}),
     }),
   });
   const esito = await risposta.json().catch(() => ({}));

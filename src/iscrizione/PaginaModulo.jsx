@@ -354,6 +354,37 @@ export default function PaginaModulo({ token }) {
         // funzione rifiuta il modulo se le tre obbligatorie non ci sono,
         // e scrive la data accanto a ognuna di quelle date
         p_consensi: spunte,
+        // QUELLO CHE AVEVA DAVANTI, CONGELATO ADESSO.
+        //
+        // `testi` e' esattamente cio' che questa pagina le ha mostrato —
+        // il regolamento e le frasi sopra ogni casella, presi da
+        // `modulo_iscrizione_testi` o, se la riga manca, dal codice. Qui
+        // finisce in `iscritti.contratto_firmato` e da li' lo ricopia il
+        // PDF della conferma.
+        //
+        // Senza questo passaggio il documento che lei riceve direbbe
+        // soltanto "vale la versione in vigore": vero, ma inservibile fra
+        // due anni, quando quella versione sara' stata corretta tre volte
+        // da Setting → Il contratto e nessuno potra' piu' dire quale
+        // avesse letto. Si registra solo ora, alla firma, e non si
+        // riscrive mai piu' — la funzione usa `coalesce`.
+        p_contratto: {
+          regolamento: testi.regolamento,
+          // le caselle INTERE, non quattro campi scelti da me: quella
+          // dell'approvazione specifica si porta dietro l'elenco delle
+          // clausole degli artt. 1341-1342 c.c., ed e' proprio l'elenco
+          // che rende l'approvazione specifica. Copiandone solo il
+          // "testo" il documento si fermerebbe ai due punti.
+          //
+          // Solo quelle che le sono state davvero mostrate: la casella
+          // dell'avvio immediato compare solo a ridosso del corso.
+          consensi: caselle,
+          informativa: {
+            etichetta: testi.consensi.informativaEtichetta,
+            rimando: testi.consensi.informativaRimando,
+          },
+          firmato_il: new Date().toISOString(),
+        },
       });
       if (error) throw new Error(error.message);
       if (!data?.ok) throw new Error(data?.errore || "Non è stato possibile inviare il modulo.");
