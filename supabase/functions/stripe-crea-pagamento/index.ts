@@ -73,12 +73,31 @@ Deno.serve(async (req) => {
   const ricevuta = `${app}/?ricevuta=${codice}`;
   const scadeIl = new Date(Date.now() + 2 * 3600 * 1000);
 
+  // SERVE LA FATTURA, SI' O NO: lo decide il banco prima di mostrare il
+  // QR, e cambia tutto quello che la cliente si trova davanti.
+  //
+  // Prima questa pagina chiedeva a chiunque indirizzo completo, codice
+  // fiscale (obbligatorio) e partita IVA. Anche a chi comprava un
+  // pennello da dieci euro: una persona ferma alla cassa a scrivere su
+  // un telefono i dati di un documento che non le serve. E tutti quegli
+  // incassi finivano poi fra le "fatture da emettere", perche' i dati
+  // c'erano — non perche' qualcuno li avesse voluti.
+  //
+  // Col no si chiede solo quello che Stripe chiede comunque per
+  // incassare: la carta e un'email per la ricevuta.
+  const vuoleFattura = corpo?.richiedeFattura === true;
+
   const form = new URLSearchParams();
   form.set("mode", "payment");
   form.set("locale", "it");
-  form.set("billing_address_collection", "required");
-  form.set("tax_id_collection[enabled]", "true");
+  form.set("billing_address_collection", vuoleFattura ? "required" : "auto");
+  if (vuoleFattura) form.set("tax_id_collection[enabled]", "true");
   form.set("customer_creation", "always");
+  // Quello che la cliente legge sull'estratto conto e sulla ricevuta di
+  // Stripe. Senza fattura resta un acquisto come un altro.
+  form.set("payment_intent_data[description]", vuoleFattura
+    ? String(corpo?.descrizione || "Acquisto Elitederma").slice(0, 200)
+    : "Acquisto da shop online");
   form.set("expires_at", String(Math.floor(scadeIl.getTime() / 1000)));
   form.set("success_url", ricevuta);
   form.set("cancel_url", ricevuta);
@@ -90,11 +109,11 @@ Deno.serve(async (req) => {
     form.set(`line_items[${i}][quantity]`, String(Math.max(1, Math.round(Number(r.quantita) || 1))));
   });
   // i tre campi che Stripe non ha di suo e che servono alla fattura
-  const campi = [
+  const campi = vuoleFattura ? [
     { key: "codicefiscale", etichetta: "Codice fiscale", obbligatorio: true, max: 16 },
     { key: "codicedestinatario", etichetta: "Codice destinatario SDI (se non ce l'hai, lascia vuoto)", obbligatorio: false, max: 7 },
     { key: "pec", etichetta: "PEC (se non ce l'hai, lascia vuoto)", obbligatorio: false, max: 100 },
-  ];
+  ] : [];
   campi.forEach((c, i) => {
     form.set(`custom_fields[${i}][key]`, c.key);
     form.set(`custom_fields[${i}][label][type]`, "custom");
@@ -123,6 +142,7 @@ Deno.serve(async (req) => {
     corso_data_id: corpo?.corsoDataId || null,
     carrello_id: corpo?.carrelloId || null,
     stato: "in_attesa",
+    richiede_fattura: vuoleFattura,
     stripe_session_id: sessione.id,
     stripe_session_url: sessione.url,
     scade_il: scadeIl.toISOString(),

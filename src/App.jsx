@@ -65437,7 +65437,12 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
       .select("*").in("stato", ["da_verificare", "fatturato"])
       .order("pagato_il", { ascending: false }).limit(400);
     if (error) { setMsg("Non riesco a leggere i pagamenti: " + testoErrore(error)); setPagamenti([]); return; }
-    const daStripe = data || [];
+    // Solo gli incassi per cui la fattura e' stata chiesta davvero.
+    // Prima qui arrivava tutto, perche' la pagina di Stripe estorceva i
+    // dati a chiunque: quattro incassi in attesa di una fattura che
+    // nessuno aveva domandato. `richiede_fattura` e' la risposta data al
+    // banco prima di mostrare il QR.
+    const daStripe = (data || []).filter((p) => p.richiede_fattura || p.stato === "fatturato");
     setPagamenti(daStripe);
 
     // LE VENDITE COL TERMINALE FISICO.
@@ -67890,6 +67895,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // col suo telefono. Non sono due metodi di pagamento: per la vendita,
   // per l'IVA, per i punti e per le fasce restano tutti e due "POS".
   const [modoIncassoPos, setModoIncassoPos] = useState("esterno");
+  // LA DOMANDA PRIMA DEL QR: "serve fattura?".
+  //
+  // Finche' vale `{ perIlLink }` la domanda e' a schermo e il pagamento
+  // non e' ancora partito. La risposta cambia la pagina che vedra' la
+  // cliente — con o senza i campi della fattura — e per questo si chiede
+  // prima: dopo, quella pagina e' gia' nata.
+  const [chiedoFattura, setChiedoFattura] = useState(null);
   const [msgQr, setMsgQr] = useState("");
   // quello che l'allieva ha compilato su Stripe: nome, indirizzo, telefono.
   // E' un riferimento e non uno stato perche' serve dentro alla chiusura
@@ -68740,7 +68752,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     } catch { return false; }
   }
 
-  async function chiediPagamentoQr(perIlLink = false) {
+  async function chiediPagamentoQr(perIlLink = false, vuoleFattura = false) {
+    setChiedoFattura(null);
     setCreandoQr(true); setMsgQr("");
     const { data, error } = await supabase.functions.invoke("stripe-crea-pagamento", {
       body: {
@@ -68749,6 +68762,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         righe: righePerPagamento(),
         operatore: { tipo: operatore.tipo, id: operatore.id, nome: operatore.nome },
         corsoDataId: corsoPosSel?.id || null,
+        // col si' la pagina di Stripe chiede indirizzo, codice fiscale e
+        // partita IVA; col no non chiede niente e l'incasso non finisce
+        // fra le fatture da emettere
+        richiedeFattura: vuoleFattura === true,
       },
     });
     setCreandoQr(false);
@@ -70354,9 +70371,35 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                       ? "Il carrello è vuoto: aggiungi i prodotti e il QR si accende."
                       : totaleDaIncassare <= 0
                         ? "Il totale da incassare è zero: non c'è niente da far pagare."
-                        : "La cliente inquadra il QR — o riceve il link su WhatsApp — paga e scrive lei i dati per la fattura."}
+                        : "La cliente inquadra il QR — o riceve il link su WhatsApp — e paga. I dati per la fattura glieli chiede solo se rispondi che le serve."}
                   </span>
-                  {(() => {
+                  {chiedoFattura ? (
+                    <div style={{ flex: "1 1 100%", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "10px 12px", borderRadius: 14, background: "#fff", border: `1px solid ${NAVY}` }}>
+                      <span style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, flex: "1 1 200px" }}>
+                        Il cliente ha bisogno di fattura?
+                      </span>
+                      <button
+                        type="button" data-niente-ombra onClick={() => chiediPagamentoQr(chiedoFattura.perIlLink, true)}
+                        title="La pagina di pagamento le chiederà indirizzo, codice fiscale e partita IVA"
+                        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: "pointer", whiteSpace: "nowrap" }}
+                      >
+                        Sì, serve fattura
+                      </button>
+                      <button
+                        type="button" data-niente-ombra onClick={() => chiediPagamentoQr(chiedoFattura.perIlLink, false)}
+                        title="Paga e basta: nessun dato da scrivere, sulla transazione resta «Acquisto da shop online»"
+                        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 15px", cursor: "pointer", whiteSpace: "nowrap" }}
+                      >
+                        No, paga e basta
+                      </button>
+                      <button
+                        type="button" data-niente-ombra onClick={() => setChiedoFattura(null)}
+                        style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer" }}
+                      >
+                        annulla
+                      </button>
+                    </div>
+                  ) : (() => {
                     const spento = creandoQr || carrello.length === 0 || totaleDaIncassare <= 0;
                     const perche = carrello.length === 0 ? "Carrello vuoto" : totaleDaIncassare <= 0 ? "Totale a zero" : null;
                     return (
@@ -70367,7 +70410,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                             indirizzo, chiesto allo stesso modo: cambia solo
                             come le arriva. */}
                         <button
-                          type="button" onClick={() => chiediPagamentoQr(true)} data-niente-ombra
+                          type="button" onClick={() => setChiedoFattura({ perIlLink: true })} data-niente-ombra
                           title={perche || "Prepara il link da mandare su WhatsApp"}
                           disabled={spento}
                           style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: linkCopiato ? "#2E7D32" : NAVY, background: "#fff", border: `1px solid ${linkCopiato ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
@@ -70375,7 +70418,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                           {linkCopiato ? "Link copiato ✓" : "Copia il link"}
                         </button>
                         <button
-                          type="button" onClick={() => chiediPagamentoQr(false)} data-niente-ombra
+                          type="button" onClick={() => setChiedoFattura({ perIlLink: false })} data-niente-ombra
                           title={perche || "Prepara il QR da far inquadrare"}
                           disabled={spento}
                           style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
