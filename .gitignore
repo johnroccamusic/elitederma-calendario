@@ -7,3 +7,6 @@ supabase/.temp
 .env*
 .DS_Store
 .claude/worktrees/
+
+# il lucchetto delle dipendenze di Deno: lo rigenera `deno check` da solo
+deno.lock
