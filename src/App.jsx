@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase, leggiTutte } from "./supabase.js";
 import { regioneDaCitta, REGIONI } from "./comuni-regioni";
 // I mattoni condivisi vivono fuori di qui: li usa anche il modulo
@@ -16,26 +16,42 @@ import {
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { qrSvg } from "./ui/qr.js";
 import { caricaKitInAula } from "./rientri/pos";
-import QuadroSostituzioni from "./rientri/QuadroSostituzioni.jsx";
-import StampePackaging from "./stampe/StampePackaging.jsx";
-import SchedaRientro from "./rientri/SchedaRientro.jsx";
+// LE PAGINE CHE SI APRONO A RICHIESTA.
+//
+// Erano importate normalmente, quindi finivano nel file che il telefono
+// scarica all'apertura: chi entrava per battere una vendita si portava
+// dietro anche Gestione eventi, le schede di rientro, il listino e i
+// modelli email — roba che quel giorno non aprira' mai.
+//
+// Con `lazy` ognuna diventa un pacchetto suo, chiesto la prima volta che
+// si apre quella pagina. Il peso lo decide chi usa l'app, non chi la
+// scrive. La rete che le raccoglie e' l'unica `Suspense`, in fondo a
+// `Gestionale`: finche' il pezzo arriva si vede "Un momento...".
+//
+// Non sono qui le pagine pubbliche (modulo, consenso, ricevuta, recesso):
+// quelle le monta `App` prima di tutto, e staccarle non servirebbe a
+// niente finche' il file d'avvio e' uno solo — e' il capitolo dello
+// smontaggio di App.jsx.
+const QuadroSostituzioni = lazy(() => import("./rientri/QuadroSostituzioni.jsx"));
+const StampePackaging = lazy(() => import("./stampe/StampePackaging.jsx"));
+const SchedaRientro = lazy(() => import("./rientri/SchedaRientro.jsx"));
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
-import MagazzinoGuasti from "./rientri/MagazzinoGuasti.jsx";
-import AnalisiConsumi from "./rientri/AnalisiConsumi.jsx";
+const MagazzinoGuasti = lazy(() => import("./rientri/MagazzinoGuasti.jsx"));
+const AnalisiConsumi = lazy(() => import("./rientri/AnalisiConsumi.jsx"));
 import { analizzaConsumi, consumoRealePerAllievo } from "./rientri/consumi";
-import AnomalieRientri from "./rientri/AnomalieRientri.jsx";
+const AnomalieRientri = lazy(() => import("./rientri/AnomalieRientri.jsx"));
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
 import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
-import ArchivioConsensi from "./consensi/ArchivioConsensi.jsx";
-import ConsensiDelCorso from "./consensi/ConsensiDelCorso.jsx";
-import QrConsensi from "./consensi/QrConsensi.jsx";
+const ArchivioConsensi = lazy(() => import("./consensi/ArchivioConsensi.jsx"));
+const ConsensiDelCorso = lazy(() => import("./consensi/ConsensiDelCorso.jsx"));
+const QrConsensi = lazy(() => import("./consensi/QrConsensi.jsx"));
 import Ricevuta from "./pos/Ricevuta.jsx";
-import GestioneEventi from "./eventi/GestioneEventi.jsx";
+const GestioneEventi = lazy(() => import("./eventi/GestioneEventi.jsx"));
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
-import PrezziListini from "./prezzi/PrezziListini.jsx";
+const PrezziListini = lazy(() => import("./prezzi/PrezziListini.jsx"));
 // il listino delle master: la quota e il conto del prezzo stanno li', in
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
@@ -47,10 +63,10 @@ import { usePuntiMaster, useCarrelliPuntiMaster } from "./punti/RiquadriPuntiMas
 // punti_master_scarichi.stagione. Due nomi uguali, due cose diverse.
 import PaginaPuntiMaster, { stagioneCorrente as stagionePuntiCorrente } from "./punti/PaginaPuntiMaster.jsx";
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
-import PaginaNotifichePush from "./notifiche/PaginaNotifichePush.jsx";
+const PaginaNotifichePush = lazy(() => import("./notifiche/PaginaNotifichePush.jsx"));
 import { creaZip, siPuoCondividere } from "./file/zip.js";
-import ModelliEmail from "./email/ModelliEmail.jsx";
-import ModuloIscrizione from "./iscrizione/ModuloIscrizione.jsx";
+const ModelliEmail = lazy(() => import("./email/ModelliEmail.jsx"));
+const ModuloIscrizione = lazy(() => import("./iscrizione/ModuloIscrizione.jsx"));
 import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
@@ -80411,6 +80427,17 @@ export default function App() {
   return <Gestionale />;
 }
 
+// Quello che si vede nel mezzo secondo in cui una pagina sta arrivando.
+// Non una rotella che gira a vuoto: una riga sobria al centro, cosi' chi
+// ha premuto sa che ha premuto davvero.
+function SchermataInCaricamento() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+      <span style={{ ...fontBody, fontSize: 13.5, color: MUTED }}>Un momento…</span>
+    </div>
+  );
+}
+
 function Gestionale() {
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
@@ -82357,6 +82384,7 @@ function Gestionale() {
     // (dock, tastini, finestre) resta dentro il telefono invece di
     // finire agli angoli del monitor
     <CorniceTelefono attiva={vistaForzata === "mobile"}>
+    <Suspense fallback={<SchermataInCaricamento />}>
     <div style={{
       ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh",
       // da scrivania il dock sta in cima: lo spazio va lasciato li', o
@@ -83902,6 +83930,7 @@ function Gestionale() {
           modulo lasciato nello store */}
       <StrisciaSalvataggi onRiapri={() => apriGestioneShop()} />
     </div>
+    </Suspense>
     </CorniceTelefono>
   );
 }
