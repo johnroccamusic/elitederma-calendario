@@ -61937,7 +61937,14 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
       <div style={{ ...cardStyle, padding: 16, marginBottom: 24 }}>
         <TestataAdvisor Icona={IconaScudoSicurezza} titolo="Non posso esprimermi" />
         <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.6 }}>
-          {prodottiDaConfigurare.length === 0 && kitSenzaComposizione.length === 0 && nonRisoltiPerEtichetta.length === 0 && piano.nonCalcolabili.length === 0 && (
+          {/* `nonRisoltiPerEtichetta` non e' mai esistito: il nome giusto e'
+              quello usato poche righe piu' sotto. Non se n'era accorto nessuno
+              perche' JavaScript si ferma al primo `false` — finche' c'era
+              almeno un prodotto da configurare questa riga non veniva nemmeno
+              letta. Il giorno che il magazzino fosse stato in ordine, l'Advisor
+              sarebbe diventato una schermata bianca. Trovato da ESLint il
+              18/10/2026, non da un utente. */}
+          {prodottiDaConfigurare.length === 0 && kitSenzaComposizione.length === 0 && risultato.nonRisolti.length === 0 && piano.nonCalcolabili.length === 0 && (
             <span style={{ color: MUTED }}>Niente: tutti i dati necessari sono compilati.</span>
           )}
           {prodottiDaConfigurare.length > 0 && (

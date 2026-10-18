@@ -163,13 +163,17 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                       width: palla, height: palla, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       background: tinta,
-                      opacity: fatto ? 1 : 0.45,
+                      // `opacity` era scritta due volte: questa e quella
+                      // dell'invio in corso, e nell'oggetto vince l'ultima.
+                      // Risultato: i gradini non ancora fatti non si
+                      // smorzavano, e la fascia li mostrava tutti uguali.
+                      // Le due condizioni ora stanno in una riga sola.
+                      opacity: (inviando && chiave === "modulo_inviato") ? 0.5 : (fatto ? 1 : 0.45),
                       boxShadow: acceso ? `0 0 0 ${compatto ? 3 : 5}px ${fatto ? VERDE_TENUE : ROSSO_TENUE}` : "none",
                       flex: "0 0 auto",
                       border: siPreme && !fatto ? `2px solid ${ROSSO}` : "none",
                       padding: 0,
                       cursor: siPreme ? "pointer" : "default",
-                      opacity: inviando && chiave === "modulo_inviato" ? 0.5 : 1,
                     }}
                   >
                     <Icona size={icona} color="#fff" />
