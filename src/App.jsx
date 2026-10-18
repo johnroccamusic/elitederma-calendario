@@ -56919,13 +56919,25 @@ function RigaProdottoMagazzino({ prodotto: p, fotoUrl = null, onApriModifica, ri
           </span>
         </td>
     ),
-    "Costo acquisto": (
-        <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
-          <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 14, color: p.isBundle ? MUTED : NAVY }}>
-            {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
+    "Costo acquisto": (() => {
+      // Un kit senza costo non e' un campo vuoto: e' una distinta rotta,
+      // e finche' resta cosi' quel kit al banco non prende sconto. Il
+      // trattino da solo non lo diceva — diceva soltanto che non c'era un
+      // numero, come per un prodotto a cui nessuno l'ha ancora scritto.
+      const kitRotto = p.isBundle && p.costo_acquisto == null;
+      const perche = p.distintaVuota
+        ? "Questo kit non ha nessuna distinta: finche' resta cosi' non ha costo, non ha margine e al POS non prende sconto."
+        : (p.componentiSenzaCosto || []).length > 0
+          ? `Senza costo perche' manca il costo d'acquisto di: ${p.componentiSenzaCosto.join(", ")}. Finche' manca, questo kit al POS non prende sconto.`
+          : "Senza costo: la distinta non si riesce a sommare.";
+      return (
+        <td style={tdStyle} title={kitRotto ? perche : (p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)")}>
+          <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 14, fontWeight: kitRotto ? 700 : 400, color: kitRotto ? "#B8860B" : (p.isBundle ? MUTED : NAVY) }}>
+            {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : (kitRotto ? "distinta!" : "—")}
           </span>
         </td>
-    ),
+      );
+    })(),
     "Margine operativo": (
         <td style={tdStyle} title={p.prezzo_vendita != null ? `Il ${margineOperativoPct}% del prezzo netto di vendita (${fmtEuroErp2(p.prezzo_vendita)})` : "Senza prezzo di vendita non c'e' margine operativo"}>
           <span style={{ ...fontBody, fontSize: 14, color: NAVY }}>
@@ -57713,10 +57725,33 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       return { componenteId: bc.componente_id, nome: comp?.nome || "(componente eliminato)", quantitaPerBundle: bc.quantita_per_bundle, giacenzaComponente, bundleComponibili };
     });
     const disponibilitaBundle = dettagliComponenti.length ? Math.min(...dettagliComponenti.map((d) => d.bundleComponibili)) : null;
-    const costoBundleCalcolato = righeBundle.length
-      ? righeBundle.reduce((s, bc) => { const comp = prodottiPerId[bc.componente_id]; return comp?.costo_acquisto != null ? s + comp.costo_acquisto * bc.quantita_per_bundle : s; }, 0)
-      : null;
-    const costoEffettivo = isBundle ? costoBundleCalcolato : p.costo_acquisto;
+    // IL COSTO DI UN KIT LO DICE UNA FUNZIONE SOLA.
+    //
+    // Qui c'era una seconda somma, scritta a mano: sommava i componenti
+    // che il costo ce l'avevano e SALTAVA quelli che non ce l'avevano.
+    // Per il POS invece un kit a cui manca il costo di un pezzo e' un kit
+    // senza costo — "non lo so" — e non lo sconta. Due regole sullo
+    // stesso kit: questa pagina mostrava un costo piu' basso del vero,
+    // quindi un margine piu' grasso del vero, proprio mentre al banco
+    // quel kit non prendeva un centesimo di sconto. E nessuno dei due
+    // numeri diceva di essere in disaccordo con l'altro.
+    // `costoAcquistoDi` risponde per tutti e due: i prodotti arrivano qui
+    // gia' passati da `conCostoDeiBundle`, che la distinta l'ha gia'
+    // risolta una volta per tutta l'app.
+    const costoEffettivo = costoAcquistoDi(p) ?? null;
+    // PERCHE' un kit resta senza costo. Contarlo non basta: chi guarda
+    // deve sapere su quale componente mettere le mani. Tre modi di
+    // rompersi, e si guardano tutti e tre — distinta vuota, componente
+    // sparito dall'anagrafica, componente senza costo d'acquisto.
+    const distintaVuota = isBundle && righeBundle.length === 0;
+    const componentiSenzaCosto = isBundle
+      ? righeBundle
+          .filter((bc) => {
+            const c = prodottiPerId[bc.componente_id];
+            return c == null || c.costo_acquisto == null || c.costo_acquisto === "";
+          })
+          .map((bc) => prodottiPerId[bc.componente_id]?.nome || "(componente eliminato)")
+      : [];
     const margine = costoEffettivo != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - costoEffettivo) / p.prezzo_vendita) * 100) : null;
     // Quanto pesa il costo sul prezzo netto (21/09/2026): e' quello che
     // mostra la colonna "Margine %". E' il complemento di `margine` — se
@@ -57804,6 +57839,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     return {
       ...p,
       costo_acquisto: costoEffettivo,
+      distintaVuota,
+      componentiSenzaCosto,
       quantitaVenduta: venduto.quantita,
       fatturato: round2(venduto.fatturato),
       margine,
@@ -57866,6 +57903,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
 
   const sottoScorta = prodottiConStato.filter((p) => p.sottoScorta);
   const senzaCosto = prodottiConStato.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
+  // I KIT rimasti senza costo sono un'altra cosa da un prodotto a cui
+  // nessuno ha ancora scritto il costo: li' si scrive un numero, qui c'e'
+  // una distinta da riparare — e intanto quel kit al banco non si sconta.
+  // Per questo hanno un avviso loro, col nome del componente da sistemare.
+  const kitSenzaCosto = prodottiConStato.filter((p) => p.isBundle && p.costo_acquisto == null);
   const fermi = prodottiConStato.filter((p) => p.inVendita && p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
   const giaOrdinatiMag = useMemo(
@@ -58112,6 +58154,28 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             {/* da scrivania la griglia occupa meta' pagina, al centro: quattro
                 quadrati larghi un quarto dello schermo erano enormi, e i
                 testi dentro restano della loro misura */}
+            {kitSenzaCosto.length > 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: "#7A5C00", background: "#FDF6E3", border: "1px solid #EBD9AE", borderRadius: 12, padding: isMobile ? "9px 11px" : "10px 13px", marginBottom: isMobile ? 10 : 14, lineHeight: 1.55 }}>
+                <b style={{ color: NAVY }}>
+                  {kitSenzaCosto.length === 1 ? "Un kit è rimasto senza costo d'acquisto." : `${kitSenzaCosto.length} kit sono rimasti senza costo d'acquisto.`}
+                </b>{" "}
+                Il costo di un kit si ricava dalla sua distinta: se manca quello di un solo componente, il kit resta
+                senza. Qui non ha margine, e <b style={{ color: NAVY }}>al banco non prende sconto</b>.
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
+                  {kitSenzaCosto.slice(0, 6).map((k) => (
+                    <div key={k.id}>
+                      <b style={{ color: NAVY }}>{k.nome}</b>{" "}
+                      {k.distintaVuota
+                        ? "— non ha nessuna distinta"
+                        : (k.componentiSenzaCosto || []).length > 0
+                          ? `— manca il costo di: ${k.componentiSenzaCosto.join(", ")}`
+                          : "— la distinta non si riesce a sommare"}
+                    </div>
+                  ))}
+                  {kitSenzaCosto.length > 6 && <div>…e altri {kitSenzaCosto.length - 6}.</div>}
+                </div>
+              </div>
+            )}
             <div style={stileRigaSegnalatori(isMobile)}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
