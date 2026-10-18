@@ -200,6 +200,22 @@ Deno.serve(async (req) => {
         conti,
       }, 409);
     }
+    // LA DATA DEL DOCUMENTO e' quella dell'incasso, non quella di oggi:
+    // una fattura datata al giorno in cui qualcuno si e' ricordato di
+    // emetterla racconta una cosa che non e' successa.
+    const dataIso = new Date(pag.pagato_il || Date.now()).toISOString().slice(0, 10);
+
+    // Il metodo si manda per id se quel metodo e' gia' censito
+    // sull'azienda; se non c'e', il campo resta fuori — vedi il commento
+    // in _shared/fic.ts: meglio una fattura senza quella riga che una
+    // fattura rifiutata.
+    const metodi = await metodiPagamento(token, conn.company_id);
+    const metodoFic = metodi.find((m) => m.nome.toLowerCase() === nomeMetodo.toLowerCase())
+      || (daQr ? metodi.find((m) => /stripe|carta/i.test(m.nome)) : null)
+      || (metodoVendita === "contanti" ? metodi.find((m) => /contant/i.test(m.nome)) : null)
+      || (!daQr && metodoVendita === "pos" ? metodi.find((m) => /pos|bancomat/i.test(m.nome)) : null)
+      || null;
+
     const fattura = await emettiFattura(token, conn.company_id, {
       cliente, righe, aliquotaId, dataIso,
       importoPagato: Number(pag.importo) || 0,
