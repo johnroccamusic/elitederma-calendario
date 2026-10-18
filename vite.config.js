@@ -3,6 +3,26 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // REACT E SUPABASE IN UN PACCHETTO LORO.
+        //
+        // All'avvio si scarica un file solo, e dentro c'e' tutto: il nostro
+        // codice e le librerie. Ogni volta che pubblichiamo — e qui si
+        // pubblica piu' volte al giorno — il telefono al banco riscarica
+        // anche React e Supabase, che non sono cambiati di una virgola.
+        //
+        // Staccandoli, quella parte resta nella cache del browser fra un
+        // aggiornamento e l'altro. Non riduce la PRIMA apertura: riduce
+        // tutte quelle dopo, che su una rete di fiera e' quello che si
+        // sente.
+        manualChunks: {
+          libreria: ["react", "react-dom", "react-dom/client", "@supabase/supabase-js"],
+        },
+      },
+    },
+  },
   // LE PROVE.
   //
   // Stanno in `prove/` e si lanciano con `npm test`. Montano i componenti
