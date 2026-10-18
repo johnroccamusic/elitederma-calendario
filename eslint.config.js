@@ -31,7 +31,10 @@ export default [
     // configurazioni di prima: quella regola qui non e' accesa, e non
     // voglio quarantotto avvisi su commenti innocui
     linterOptions: { reportUnusedDisableDirectives: "off" },
-    ignores: ["dist/**", "node_modules/**", "supabase/functions/**", "public/**"],
+    // `supabase/functions/**` non c'e' piu' in blocco: i `.ts` li
+    // controlla `deno check`, ma i `.js` di `_shared/` non li guardava
+    // NESSUNO — vedi il blocco in fondo.
+    ignores: ["dist/**", "node_modules/**", "public/**"],
   },
   {
     files: ["src/**/*.{js,jsx}", "*.js"],
@@ -84,6 +87,42 @@ export default [
       // e' spostare la scelta della rotta in un componente che sta SOPRA
       // ad App: e' un lavoro suo, da fare a mente fresca.
       "react-hooks/rules-of-hooks": "warn",
+    },
+  },
+  // I FILE CONDIVISI DELLE EDGE FUNCTION, che prima non guardava nessuno.
+  //
+  // `supabase/functions/**` era ignorato in blocco, e per i `.ts` va
+  // benissimo: li controlla `deno check`, che sui tipi e' piu' severo di
+  // quanto ESLint possa essere senza il parser di TypeScript (una
+  // dipendenza in piu', che qui non serve).
+  //
+  // Ma in `_shared/` ci sono dei `.js`, e quelli restavano scoperti da
+  // tutti e due: `deno check` non segnala una funzione che non esiste in
+  // un file JavaScript — non e' un errore di tipo, e' un errore che si
+  // vede solo quando quella riga viene eseguita.
+  //
+  // E' successo il 19/10/2026: togliendo da `email.js` il blocco del
+  // tasto di presa visione se n'e' andato anche `bloccoRecesso`, che gli
+  // stava attaccato. `deno check` ha detto ok, la funzione e' stata
+  // pubblicata, e la conferma di ricezione ha smesso di partire con un
+  // 500. `no-undef` l'avrebbe preso prima del deploy.
+  {
+    files: ["supabase/functions/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      // questi file li importano DUE mondi — Deno e il browser — quindi
+      // valgono i globali di tutti e due
+      globals: { ...globals.browser, ...globals.es2021, ...globals.denoBuiltin, Deno: "readonly" },
+    },
+    rules: {
+      "no-undef": "error",
+      "no-unused-vars": ["warn", { args: "none", varsIgnorePattern: "^_", ignoreRestSiblings: true }],
+      "no-dupe-keys": "error",
+      "no-dupe-args": "error",
+      "no-unreachable": "error",
+      "use-isnan": "error",
+      "valid-typeof": "error",
     },
   },
 ];

@@ -48,8 +48,8 @@ describe("il fascicolo di un'iscrizione", () => {
     // la mail risulta partita...
     expect(t).toContain("Partita senza errori");
     // ...ma nessuno ha ancora confermato niente
-    expect(t).toContain("Non ancora confermata");
-    expect(t).not.toContain("Confermata il");
+    expect(t).toContain("Chiesta insieme alla mail");
+    expect(t).not.toContain("Confermata dall");
     await p.smonta();
   });
 
@@ -58,16 +58,19 @@ describe("il fascicolo di un'iscrizione", () => {
     const p = await monta(<Fascicolo iscritto={ISCRITTA} />);
     const t = p.testo();
     expect(t).toContain("Consegnata il");
-    // la consegna NON deve far risultare confermata la presa visione
-    expect(t).toContain("Non ancora confermata");
+    // la consegna NON deve far risultare letta la mail
+    expect(t).toContain("Chiesta insieme alla mail");
+    expect(t).not.toContain("Confermata dall");
     await p.smonta();
   });
 
-  it("quando l'allieva conferma, lo dice", async () => {
+  // le righe vecchie, di quando il tasto c'era, devono continuare a
+  // mostrare la loro conferma: e' una prova raccolta, non si butta
+  it("una conferma gia' raccolta col vecchio tasto resta visibile", async () => {
     banco({ ...MAIL, consegnata_il: "2026-10-18T09:02:00.000Z", confermata_il: "2026-10-18T10:30:00.000Z" });
     const p = await monta(<Fascicolo iscritto={ISCRITTA} />);
-    expect(p.testo()).toContain("Confermata il");
-    expect(p.testo()).not.toContain("Non ancora confermata");
+    expect(p.testo()).toContain("Confermata dall");
+    expect(p.testo()).not.toContain("Chiesta insieme alla mail");
     await p.smonta();
   });
 

@@ -23,7 +23,10 @@
 //
 // Corpo della richiesta:
 //   { a: "x@y.it" | ["x@y.it", …], oggetto, html?, testo?, rispondiA?,
-//     allegati?: [{ nome, contenuto }] — contenuto in base64 }
+//     allegati?: [{ nome, contenuto, tipo? }] — contenuto in base64
+//     ricevuta?: true — chiede al programma di posta la conferma di
+//       lettura (vedi il blocco piu' sotto: non la mostrano tutti)
+//     indirizzoRicevuta?: dove deve tornare, se non la risposta }
 // Almeno uno fra html e testo.
 //
 // Variabili d'ambiente (Supabase → Edge Functions → Secrets):
@@ -120,6 +123,34 @@ Deno.serve(async (req) => {
   const nome = Deno.env.get("EMAIL_MITTENTE_NOME") || "Elitederma Academy";
   const rispondiA = String(corpo.rispondiA || Deno.env.get("EMAIL_RISPONDI_A") || "notifiche@elitederma.it");
 
+  // LA CONFERMA DI LETTURA CHIESTA AL PROGRAMMA DI POSTA.
+  //
+  // Sono le intestazioni che fanno comparire, in certi programmi, la
+  // riga "il mittente ha chiesto conferma di ricezione" con il tasto per
+  // accettare. Tre e non una perche' ogni famiglia di programmi guarda
+  // la sua: `Disposition-Notification-To` e' quella dello standard
+  // (RFC 3798) e la leggono Outlook e Thunderbird; `Return-Receipt-To`
+  // la guardano alcuni server di posta; `X-Confirm-Reading-To` e' la
+  // vecchia variante di Outlook Express e Pegasus.
+  //
+  // DA SAPERE, perche' non dipende da noi: Mail di iPhone e di Mac non
+  // le implementa affatto e non chiede niente; Gmail le ignora sugli
+  // account normali e le mostra solo su Workspace, se l'amministratore
+  // l'ha acceso. Dove compare, il destinatario puo' comunque rifiutare.
+  // E la ricevuta torna indietro come una mail all'indirizzo qui sotto:
+  // non entra nel registro, la legge una persona.
+  //
+  // Si chiede solo quando chi manda lo domanda: una conferma di lettura
+  // su ogni promemoria sarebbe moleste e farebbe sembrare le nostre mail
+  // quello che non sono.
+  const vuoleRicevuta = corpo.ricevuta === true;
+  const indirizzoRicevuta = String(corpo.indirizzoRicevuta || rispondiA);
+  const intestazioni = vuoleRicevuta ? {
+    "Disposition-Notification-To": indirizzoRicevuta,
+    "Return-Receipt-To": indirizzoRicevuta,
+    "X-Confirm-Reading-To": indirizzoRicevuta,
+  } : null;
+
   const risposta = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${chiave}`, "Content-Type": "application/json" },
@@ -131,6 +162,7 @@ Deno.serve(async (req) => {
       html,
       text: testo,
       ...(allegati.length ? { attachments: allegati } : {}),
+      ...(intestazioni ? { headers: intestazioni } : {}),
     }),
   });
   const esito = await risposta.json().catch(() => ({}));

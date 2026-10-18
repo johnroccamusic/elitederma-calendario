@@ -232,15 +232,31 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   `scartate` e si vede: per un allegato scartato in silenzio nessuno si
   accorgerebbe di una mail partita senza il documento.
 
-  **La ricevuta è doppia, e le due metà non sono la stessa cosa.** Resend
+  **La ricevuta: com'è adesso, e cosa si è perso per strada.** Resend
   richiama `email-eventi` (firma Svix verificata, `RESEND_WEBHOOK_SECRET`)
-  e scrive consegna, apertura e rimbalzo su `email_inviate`: è quello che
-  dice il postino. L'allieva invece preme il tasto in fondo alla mail
-  (`email-presa-visione`) e dichiara di aver ricevuto la copia: è
-  `confermata_il`, ed è l'unica che vale in una discussione. Quella
-  pagina **registra solo sul POST**, mai sull'apertura del link: gli
-  antispam aprono i link da soli, e una ricevuta che si firma da sé non
-  serve a niente.
+  e scrive consegna, apertura e rimbalzo su `email_inviate`: quello resta,
+  ed è quello che dice il postino.
+
+  La conferma dell'allieva invece è cambiata il **19/10/2026, su
+  richiesta esplicita**. C'era un tasto in fondo alla mail
+  (`email-presa-visione`, che registra solo sul POST perché gli antispam
+  aprono i link da soli); è stato **tolto** e sostituito dalle
+  intestazioni standard di conferma di lettura — `Disposition-Notification-To`,
+  `Return-Receipt-To`, `X-Confirm-Reading-To` — che `invia-email` aggiunge
+  quando chi chiama passa `ricevuta: true`.
+
+  Va scritto cosa comporta, perché non è un pareggio: il tasto funzionava
+  su **ogni** programma di posta e finiva in `confermata_il`, leggibile
+  dal fascicolo. Le intestazioni **Mail di iPhone e di Mac non le
+  implementa affatto**, Gmail le ignora sugli account normali (solo
+  Workspace, se l'amministratore l'accende), dove compaiono il
+  destinatario può rifiutare, e la ricevuta torna come una **mail a
+  `notifiche@elitederma.it`**: non entra nel registro e non compare nella
+  scheda. In pratica, per chi legge da iPhone, non arriva niente.
+
+  La funzione `email-presa-visione` e le colonne `token_conferma` /
+  `confermata_il` restano in piedi e funzionanti, non raggiunte da nessun
+  link: rimettere il tasto è una riga in `componiMailRicezione`.
 
   Tutto questo si guarda dalla tessera **Modulo ricevuto** della fascia
   di stato, che da oggi si preme (`src/iscrizioni/Fascicolo.jsx`) — ma
@@ -394,7 +410,21 @@ a zero. Prima di pubblicare una edge function, anche `sh controlla-funzioni.sh`.
 
 **ESLint (dal 18/10/2026).** Configurato stretto in `eslint.config.js`: nessuna
 regola di stile — quelle le decide chi scrive — solo le poche che prendono i
-guasti veri di questo progetto. Al primo giro ha trovato un
+guasti veri di questo progetto.
+
+**Dal 19/10/2026 guarda anche `supabase/functions/**/*.js`.** Prima
+`supabase/functions/**` era ignorato in blocco: per i `.ts` va bene, li
+controlla `deno check`, ma i `.js` di `_shared/` non li guardava **nessuno dei
+due**, perché `deno check` non segnala una funzione inesistente in un file
+JavaScript. È costato un 500 in produzione: togliendo da `email.js` un blocco
+se n'è andata anche `bloccoRecesso`, che gli stava attaccato, e la conferma di
+ricezione ha smesso di partire. `no-undef` lo prende in un secondo.
+
+**Quattro edge function non passano `deno check`** e non è una novità di oggi:
+`crea-accesso`, `fic-sync`, `invia-notifica-push`, `venditori-login`. Sono
+errori di tipo (un `.message` su `{}`, un `Uint8Array` che non combacia con
+`BufferSource`), non necessariamente guasti a runtime — ma finché restano, il
+comando risponde «4 da sistemare» e chi lo lancia smette di leggerlo. Al primo giro ha trovato un
 `nonRisoltiPerEtichetta` che non è mai esistito (schermata bianca in attesa del
 giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si

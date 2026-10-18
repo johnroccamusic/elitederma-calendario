@@ -6,20 +6,20 @@
 // in un secchio privato, e della mail di conferma non restava niente
 // sotto gli occhi di nessuno.
 //
-// Qui dentro ci sono le tre cose che servono in una discussione, e sono
-// tre cose diverse:
+// Qui dentro:
 //
 //   LA COPIA FIRMATA   il PDF con dati, regolamento di quel giorno,
 //                      dichiarazioni con la loro ora, firma e documento
 //   L'INVIO            che la mail e' partita, a chi, quando, e se il
 //                      server di posta di lei l'ha accettata
-//   LA PRESA VISIONE   che lei ha premuto il tasto e ha dichiarato di
-//                      averla ricevuta
 //
-// Le ultime due si somigliano e non sono la stessa cosa. "Consegnata" lo
-// dice il postino; "presa visione" lo dice la persona. Davanti a una
-// contestazione vale la seconda — per questo sta in fondo, scritta
-// grande, e non e' un dettaglio in una riga di registro.
+// "Consegnata" e "letta" non sono la stessa cosa, e dal 19/10/2026 la
+// seconda non passa piu' di qui: c'era un tasto dentro la mail che
+// l'allieva premeva, ed e' stato tolto su richiesta in favore della
+// conferma di lettura chiesta al programma di posta. Quella torna come
+// una mail a notifiche@elitederma.it, non nel registro — e Mail di
+// iPhone non la chiede affatto. Il riquadro lo dice, invece di restare
+// in attesa di qualcosa che non arrivera'.
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button } from "../ui/base.jsx";
@@ -151,16 +151,25 @@ export default function Fascicolo({ iscritto, onAggiornato = () => {} }) {
       </Riquadro>
 
       <Riquadro
-        titolo="La presa visione"
-        nota={'È la dichiarazione dell\'allieva, non un dato tecnico: preme il tasto in fondo alla mail e da quel momento risulta che ha ricevuto la sua copia. "Consegnata" lo dice il server di posta, questa la dice lei.'}
+        titolo="La conferma di lettura"
+        nota={"Dal 19/10/2026 la conferma si chiede al programma di posta dell'allieva. Se il suo la manda, arriva come email a notifiche@elitederma.it: non passa da qui e non compare in questa pagina. Mail di iPhone non la chiede mai, Gmail la ignora sugli account normali, e dove compare si può rifiutare."}
       >
+        {/* QUESTO RIQUADRO NON PUO' PIU' DIRE DI SI'.
+            Finche' c'era il tasto nella mail, la presa visione finiva
+            scritta qui ed era la cosa che reggeva in una discussione. Il
+            tasto e' stato tolto su richiesta, e le intestazioni standard
+            non tornano nel registro: lo dice, invece di lasciare un
+            "non ancora confermata" che aspetterebbe per sempre. */}
         {conferma?.confermata_il ? (
           <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: VERDE, lineHeight: 1.45 }}>
-            Confermata il {quando(conferma.confermata_il)}
+            Confermata dall&apos;allieva il {quando(conferma.confermata_il)}
           </div>
         ) : conferma ? (
-          <div style={{ ...fontBody, fontSize: 13.5, color: AMBRA, lineHeight: 1.5 }}>
-            Non ancora confermata. La mail è partita: il tasto è in fondo al messaggio, e finché non lo preme qui non cambia niente.
+          <div style={{ ...fontBody, fontSize: 13.5, color: GRAFITE, lineHeight: 1.55 }}>
+            Chiesta insieme alla mail. Se è arrivata, è in casella a notifiche@elitederma.it.
+            <div style={{ color: AMBRA, marginTop: 6 }}>
+              Qui resta registrata solo la consegna, che è un&apos;altra cosa: dice che la casella l&apos;ha accettata, non che qualcuno l&apos;abbia letta.
+            </div>
           </div>
         ) : (
           <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.5 }}>

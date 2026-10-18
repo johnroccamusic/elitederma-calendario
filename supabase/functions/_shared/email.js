@@ -187,34 +187,13 @@ export function diSerieRicezione({ valori }) {
 // collegamento che per legge ci deve essere. Per lo stesso motivo viene
 // attaccato DOPO, sempre, qualunque cosa dica il modello.
 export const TASTO_RECEDI = "recedi dal contratto qui";
-export const TASTO_PRESA_VISIONE = "Confermo di aver ricevuto il modulo firmato";
-
-// LA PRESA VISIONE, CHIESTA A LEI.
-//
-// Resend sa dire se la mail e' stata consegnata e perfino se e' stata
-// aperta, ma sono fatti del postino: l'apertura si misura con
-// un'immagine invisibile che mezzo mondo blocca, e "non aperta" non
-// vuol dire "non letta". Questo tasto invece lo preme una persona, e da
-// quel momento c'e' scritto che ha dichiarato di avere in mano la sua
-// copia firmata. E' l'unica delle due che vale in una discussione, ed e'
-// per questo che ci sono tutte e due.
-//
-// Il blocco va in fondo e non chiede niente in cambio: nessun codice da
-// riscrivere, nessun accesso. Un tasto, e una riga che dice perche'.
-function bloccoPresaVisione(link) {
-  return {
-    testo: `\n\nIn allegato trovi la copia firmata del tuo modulo di iscrizione.`
-      + `\nQuando l'hai ricevuta, confermacelo con un clic — serve a tutti e due per avere una data certa:`
-      + `\n${TASTO_PRESA_VISIONE}\n${link}`,
-    html: `<hr style="border:none;border-top:1px solid #e6dfce;margin:24px 0 16px">`
-      + `<p style="margin:0 0 6px;font-size:14px"><strong>In allegato trovi la copia firmata del tuo modulo di iscrizione.</strong></p>`
-      + `<p style="margin:0 0 12px;font-size:14px">Quando l'hai ricevuta, confermacelo con un clic: serve a tutti e due per avere una data certa.</p>`
-      + `<p style="margin:0 0 10px">`
-      + `<a href="${link}" style="display:inline-block;background:#8C7A63;color:#ffffff;`
-      + `text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold">${TASTO_PRESA_VISIONE}</a></p>`
-      + `<p style="margin:0;font-size:12px;color:#7a7f8c;word-break:break-all">${proteggi(link)}</p>`,
-  };
-}
+// IL TASTO DI PRESA VISIONE E' STATO TOLTO il 19/10/2026, su richiesta.
+// La conferma adesso si chiede al programma di posta con le intestazioni
+// standard — vedi `invia-email`. Resta scritto qui perche' il patto e'
+// cambiato, non per nostalgia: il tasto funzionava su ogni telefono e
+// finiva registrato in `email_inviate`; le intestazioni non le mostra
+// Mail di iPhone, Gmail le ignora sugli account normali, e dove compaiono
+// la ricevuta torna come una mail a una persona, non nel registro.
 
 function bloccoRecesso(link) {
   return {
@@ -228,17 +207,23 @@ function bloccoRecesso(link) {
   };
 }
 
-/** @param {{ valori: Record<string, any>, righe?: RigheDettaglio, modello?: any, societa?: any, linkRecesso?: string, linkConferma?: string }} dati */
-export function componiMailRicezione({ valori, righe = [], modello = null, societa = null, linkRecesso = "", linkConferma = "" }) {
+/** @param {{ valori: Record<string, any>, righe?: RigheDettaglio, modello?: any, societa?: any, linkRecesso?: string }} dati */
+export function componiMailRicezione({ valori, righe = [], modello = null, societa = null, linkRecesso = "" }) {
   const p = piede({ societa, valori });
   const r = linkRecesso ? bloccoRecesso(linkRecesso) : { testo: "", html: "" };
-  // la presa visione prima del recesso: la prima cosa e' avere la copia,
-  // la seconda e' sapere che si puo' cambiare idea
-  const v = linkConferma ? bloccoPresaVisione(linkConferma) : { testo: "", html: "" };
+  // UNA RIGA SULL'ALLEGATO RESTA. Non chiede niente e non e' un tasto:
+  // dice solo che in fondo alla mail c'e' la copia del contratto, perche'
+  // un allegato senza una frase che lo nomini passa inosservato.
+  const a = {
+    testo: "\n\nIn allegato trovi la copia firmata del tuo modulo di iscrizione: conservala, è la tua copia del contratto.",
+    html: '<hr style="border:none;border-top:1px solid #e6dfce;margin:24px 0 16px">'
+      + '<p style="margin:0;font-size:14px"><strong>In allegato trovi la copia firmata del tuo modulo di iscrizione.</strong>'
+      + ' Conservala: è la tua copia del contratto.</p>',
+  };
   const attacca = (mail) => ({
     ...mail,
-    testo: mail.testo + v.testo + r.testo + p.testo,
-    html: mail.html.replace("\n</div>", `${v.html}${r.html}${p.html}\n</div>`),
+    testo: mail.testo + a.testo + r.testo + p.testo,
+    html: mail.html.replace("\n</div>", `${a.html}${r.html}${p.html}\n</div>`),
   });
 
   if (modelloUsabile(modello)) return attacca(componiDaModello(modello, { valori, righe }));
