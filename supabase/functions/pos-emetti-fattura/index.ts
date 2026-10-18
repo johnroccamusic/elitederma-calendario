@@ -13,7 +13,7 @@
 // Variabili d'ambiente: FIC_CLIENT_ID, FIC_CLIENT_SECRET.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { leggiConnessione, tokenValido, idAliquota, emettiFattura, contiSaldo } from "../_shared/fic.ts";
+import { leggiConnessione, tokenValido, idAliquota, emettiFattura, contiSaldo, metodiPagamento } from "../_shared/fic.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -62,6 +62,30 @@ Deno.serve(async (req) => {
   });
   if (righe.length === 0) return risposta({ errore: "Il pagamento non ha righe da fatturare." }, 400);
 
+  // COME E' STATA INCASSATA, presa dai dati e non scritta a mano.
+  //
+  // Al banco "Carta" si incassa in due modi: il terminale fisico, o il
+  // QR che la cliente inquadra col telefono e paga con Stripe. Per la
+  // vendita e per l'IVA restano la stessa cosa, ma sulla fattura no: chi
+  // la legge deve sapere da dove sono arrivati i soldi, e a fine mese
+  // chi riconcilia Stripe cerca proprio quelle.
+  //
+  // Lo sa solo il sistema: il venditore preme un tasto e non trascrive
+  // niente. Il segno e' `pagamento_codice` sulla vendita, valorizzato
+  // solo quando il pagamento nasce da un QR.
+  const { data: vendita } = pag.vendita_id
+    ? await sb.from("vendite_shop").select("metodo_pagamento, pagamento_codice").eq("id", pag.vendita_id).maybeSingle()
+    : { data: null };
+  const daQr = !!(pag.stripe_payment_intent || pag.stripe_session_id || vendita?.pagamento_codice);
+  const metodoVendita = String(vendita?.metodo_pagamento || "").toLowerCase();
+  const nomeMetodo = daQr
+    ? "Carta di credito (Stripe)"
+    : metodoVendita === "contanti"
+      ? "Contanti"
+      : metodoVendita === "buono_amazon"
+        ? "Buono Amazon"
+        : "POS / Bancomat";
+
   try {
     const conn = await leggiConnessione(sb);
     const token = await tokenValido(sb, conn);
@@ -78,6 +102,15 @@ Deno.serve(async (req) => {
     // fra le impostazioni; se non c'e' scelta e di conti ce n'e' uno
     // solo, quello; altrimenti ci si ferma e si chiede, elencandoli.
     const conti = await contiSaldo(token, conn.company_id);
+    // se quel metodo e' gia' censito sull'azienda si manda il suo id:
+    // mandare un nome che di la' non esiste crea una voce nuova in
+    // anagrafica a ogni fattura, o fa rifiutare il documento
+    const metodi = await metodiPagamento(token, conn.company_id);
+    const metodoFic = metodi.find((m) => m.nome.toLowerCase() === nomeMetodo.toLowerCase())
+      || (daQr ? metodi.find((m) => /stripe|carta/i.test(m.nome)) : null)
+      || (metodoVendita === "contanti" ? metodi.find((m) => /contant/i.test(m.nome)) : null)
+      || (!daQr && metodoVendita === "pos" ? metodi.find((m) => /pos|bancomat/i.test(m.nome)) : null)
+      || null;
     const { data: scelta } = await sb.from("impostazioni_layout_tabelle")
       .select("valore").eq("chiave", "fic_conto_saldo").maybeSingle();
     const idScelto = Number(scelta?.valore?.id ?? scelta?.valore ?? 0) || null;
@@ -95,7 +128,8 @@ Deno.serve(async (req) => {
     const fattura = await emettiFattura(token, conn.company_id, {
       cliente, righe, aliquotaId, dataIso,
       importoPagato: Number(pag.importo) || 0,
-      metodo: "Carta di credito (Stripe)",
+      metodo: nomeMetodo,
+      metodoId: metodoFic?.id || null,
       contoSaldoId: conto.id,
     });
 

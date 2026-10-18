@@ -98,16 +98,30 @@ export async function contiSaldo(token: string, companyId: number): Promise<{ id
   return dati.map((c: any) => ({ id: Number(c.id), nome: String(c.name ?? "") }));
 }
 
+// I METODI DI PAGAMENTO censiti sull'azienda ("Contanti", "Bonifico",
+// "POS"...). Sulla fattura il metodo si manda per ID, non per nome
+// inventato: un nome che di la' non esiste o viene rifiutato o crea una
+// voce nuova in anagrafica a ogni fattura.
+export async function metodiPagamento(token: string, companyId: number): Promise<{ id: number; nome: string }[]> {
+  const r = await fetch(`${FIC}/c/${companyId}/settings/payment_methods?per_page=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) return [];
+  const dati = (await r.json())?.data || [];
+  return dati.map((m: any) => ({ id: Number(m.id), nome: String(m.name ?? "") }));
+}
+
 export async function emettiFattura(
   token: string,
   companyId: number,
-  { cliente, righe, aliquotaId, dataIso, importoPagato, metodo, contoSaldoId }: {
+  { cliente, righe, aliquotaId, dataIso, importoPagato, metodo, metodoId, contoSaldoId }: {
     cliente: Record<string, any>;
     righe: { nome: string; quantita: number; prezzoNetto: number }[];
     aliquotaId: number;
     dataIso: string;
     importoPagato: number;
     metodo: string;
+    metodoId?: number | null;
     contoSaldoId?: number | null;
   },
 ): Promise<{ id: number; numero: string }> {
@@ -175,7 +189,9 @@ export async function emettiFattura(
         // un pagamento gia' incassato.
         ...(contoSaldoId ? { payment_account: { id: contoSaldoId } } : {}),
       }],
-      payment_method: { name: metodo },
+      // per ID se quel metodo esiste gia' sull'azienda, altrimenti per
+      // nome: cosi' la fattura dice sempre come e' stata incassata
+      payment_method: metodoId ? { id: metodoId } : { name: metodo },
     },
   };
 
