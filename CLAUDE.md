@@ -37,8 +37,11 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-supabase/functions/      40 edge function + _shared
-supabase/migrations/     324 migrazioni versionate
+prove/                   32 prove (Vitest + jsdom), con preparazione e aiuto
+eslint.config.js         le regole del controllo
+controlla-funzioni.sh    deno check sulle edge function
+supabase/functions/      41 edge function + _shared
+supabase/migrations/     329 migrazioni versionate
 supabase-*.sql           130 script di setup storici, cumulativi e idempotenti
 ```
 
@@ -299,11 +302,33 @@ GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del me
 npm run dev                  # sviluppo locale
 npm run build                # build di produzione
 npm run preview              # anteprima della build
+npm run lint                 # ESLint: solo errori veri, zero regole di stile
+npm test                     # le prove in prove/ (Vitest + jsdom)
 sh controlla-funzioni.sh     # tipi delle edge function (Deno), prima di pubblicarle
 ```
 
-Non esistono lint né test sull'app. Non aggiungerli di iniziativa: prima
-concordare se servono e su cosa.
+**Prima di ogni push: `npm run lint`, `npm test`, `npm run build`.** Tutti e tre
+a zero. Prima di pubblicare una edge function, anche `sh controlla-funzioni.sh`.
+
+**ESLint (dal 18/10/2026).** Configurato stretto in `eslint.config.js`: nessuna
+regola di stile — quelle le decide chi scrive — solo le poche che prendono i
+guasti veri di questo progetto. Al primo giro ha trovato un
+`nonRisoltiPerEtichetta` che non è mai esistito (schermata bianca in attesa del
+giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
+stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
+guardano, non fermano niente.
+
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 32 controlli. Montano i
+componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
+scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
+parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
+clic. Nessuna prova parla col database: `prove/preparazione.js` sostituisce
+`fetch` prima di ognuna.
+
+Non aggiungere altri strumenti di iniziativa (formattatori, librerie di
+componenti, framework di stili): su un file da 84.000 righe un riformattone
+cancella la storia di `git blame`, che è l'unico modo per capire perché un
+calcolo è scritto così.
 
 **Le edge function invece un controllo ce l'hanno, dal 18/10/2026.**
 `supabase functions deploy` impacchetta e basta: non guarda i tipi e non si
