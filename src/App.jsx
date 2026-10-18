@@ -40846,6 +40846,18 @@ function SchedaFasceCodiceAula({
               </button>
             )}
           </div>
+          {/* Dal 18/10/2026 queste tabelle non valgono piu' solo in aula:
+              le pesca anche il banco di una fiera. Chi viene qui a
+              cambiare un numero deve saperlo prima di cambiarlo, non
+              dopo. */}
+          {serie === "corsi" && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, background: "#EDF2F8", border: "1px solid #D3DCE8", borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+              <b style={{ color: NAVY }}>Valgono anche agli eventi.</b> Al POS, con un evento selezionato, chi vende
+              può accendere <b>Sconto fiera</b>: quel carrello prende queste stesse fasce — carta o contanti secondo
+              come si paga — senza bisogno di nessun codice. Cambiare un numero qui cambia anche quello che si sconta
+              in fiera.
+            </div>
+          )}
           <FasceDiSpesa valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
             <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
@@ -67110,6 +67122,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // quanto deve tornare indietro.
   const [eventoPosId, setEventoPosId] = useState("");
   const [eventiAperti, setEventiAperti] = useState([]);
+  // Lo sconto della fiera, carrello per carrello: lo accende chi vende.
+  // Il perche' sta nel blocco "LO SCONTO DELLA FIERA", piu' sotto.
+  const [scontoFiera, setScontoFiera] = useState(false);
   useEffect(() => {
     let vivo = true;
     const da = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -67676,7 +67691,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // corso, sconti e i dati di spedizione e fattura gia' scritti
   function fotografaCarrello() {
     return {
-      carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo,
+      carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo, scontoFiera,
       spedizioneAttiva, sped: { spedIscrittoId, spedNome, spedCognome, spedIndirizzo, spedCivico, spedCitta, spedCap, spedProvincia, spedCitofono, spedInterno, spedCellulare },
       fattAttiva, ritiroAttivo, fattComeSpedizione, fatt: { fattClienteId, fattDitta, fattNome, fattCognome, fattPiva, fattCf, fattCodDest, fattPec, fattIndirizzo, fattCivico, fattCap, fattCitta, fattProv },
     };
@@ -67687,6 +67702,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setMetodoPagamento(c.metodoPagamento || "pos");
     setCorsoPosId(c.corsoPosId || "");
     setScontoTipo(c.scontoTipo || "percentuale"); setScontoValore(c.scontoValore || "");
+    setScontoFiera(!!c.scontoFiera);
     setScontoCorsoAttivo(c.scontoCorsoAttivo !== false);
     setOmaggioAttivo(!!c.omaggioAttivo);
     setSpedizioneAttiva(!!c.spedizioneAttiva);
@@ -67949,7 +67965,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metodoPagamento, couponAttivo?.id, pctContantiCorsiPos]);
   function nuovaVendita() {
-    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg("");
+    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg(""); setScontoFiera(false);
     // l'acquisto personale vale per quel carrello, non resta acceso: i
     // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
     setAcquistoPersonale(false); setRitiroAttivo(false);
@@ -68075,11 +68091,56 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // che il sito applicava lo stesso.
   const eccezioneNeedlingPos = couponNeedlingAttivo && couponAFasce
     ? eccezioneNeedlingDa(scontoNeedlingPos, idProdottiNeedling) : null;
-  // "sta valendo la serie dei contanti": vale per tutti e due i codici,
-  // ognuno con la sua serie
-  const fasceContantiInUso = couponAFasce && pagamentoContaComeContanti(metodoPagamento) && (couponPersonaleAttivo
-    ? serieScontoScritta(fasceReferralContantiPos)
-    : serieScontoScritta(contantiDiClasse));
+  // LO SCONTO DELLA FIERA.
+  //
+  // In aula lo sconto a fasce lo porta il codice: senza codice il
+  // carrello paga pieno. A una fiera i codici d'aula non ci sono, ma lo
+  // sconto che si fa al banco e' lo stesso, e deve pescare dalle STESSE
+  // tabelle — Sconti → "Sconto ai corsi, con il codice d'aula" — carta o
+  // contanti secondo come si paga. Non una copia: una copia nasce uguale
+  // e in un mese e' diversa senza che nessuno sappia dire perche'.
+  //
+  // Due regole, volute, e sono quelle che lo rendono sicuro:
+  //
+  //   NON SI ACCENDE DA SOLO. Lo decide chi sta al banco, un carrello
+  //   alla volta. In fiera passa chi compra un pezzo a prezzo pieno e chi
+  //   si contratta il prezzo: un listino che si sconta da se' toglie
+  //   quella scelta a chi vende e regala dal 3 al 12,5% a chiunque.
+  //
+  //   NON SI SOMMA A UN CODICE. Se sul carrello c'e' gia' un coupon vale
+  //   quello: due regole sullo stesso carrello, e quale vinca finirebbe
+  //   per dipendere dall'ordine in cui sono state battute.
+  //
+  // Chi puo' accenderlo: chiunque stia vendendo all'evento. Non passa da
+  // `puoScontare`, che e' il permesso dello sconto a mano — la cifra
+  // inventata al momento. Questa e' una tabella decisa dall'ufficio,
+  // esattamente come il codice d'aula, che infatti lo usano tutti.
+  const tabellaFieraCarta = serieScontoScritta(fasceCorsiCartaPos) ? fasceCorsiCartaPos : null;
+  // `couponNum` e' la percentuale battuta a mano nel campo Coupon, che
+  // esiste anche senza un codice vero: lasciarla convivere con la fiera
+  // voleva dire totale calcolato con una regola e righe con l'altra —
+  // il totale si sarebbe salvato giusto e le righe sbagliate, che e' il
+  // modo peggiore di sbagliare.
+  const scontoFieraDisponibile = !!eventoPosSel && !!tabellaFieraCarta && !couponAttivo && !(couponNum > 0) && !omaggioAttivo;
+  const scontoFieraAttivo = scontoFieraDisponibile && scontoFiera;
+  const fasceFieraAttive = scontoFieraAttivo
+    ? fasceCorsiPerPagamento(tabellaFieraCarta, fasceContantiCorsiPos, pagamentoContaComeContanti(metodoPagamento))
+    : null;
+  // Le fasce che stanno valendo su QUESTO carrello, da qualunque parte
+  // arrivino: il codice o la fiera. Da qui in giu' si guarda questa, cosi'
+  // il totale, lo sconto di riga, le righe senza margine e "manca alla
+  // fascia" non possono raccontare tre cose diverse.
+  const fasceInUsoSulCarrello = couponAFasce ? fasceCouponAttive : fasceFieraAttive;
+  // L'eccezione del reparto needling vale solo col codice di quel corso:
+  // in fiera non c'entra niente.
+  const eccezioneFasceInUso = couponAFasce ? eccezioneNeedlingPos : null;
+  // "sta valendo la serie dei contanti": vale per i codici e per la fiera
+  const fasceContantiInUso = pagamentoContaComeContanti(metodoPagamento) && (couponAFasce
+    ? (couponPersonaleAttivo ? serieScontoScritta(fasceReferralContantiPos) : serieScontoScritta(contantiDiClasse))
+    : scontoFieraAttivo && serieScontoScritta(fasceContantiCorsiPos));
+  const scontoDellaFiera = scontoFieraAttivo
+    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceFieraAttive, pagamentoContaComeContanti(metodoPagamento), null)
+    : 0;
   const scontoCoupon = couponAcquistoMaster
     ? scontoAcquistoMasterCarrello(carrello, prodottiPerId, cedibilePerProdotto, quotaMasterPos)
     : couponAFasce
@@ -68088,12 +68149,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
-  const righeSenzaMargine = couponAFasce
-    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos) <= 0)
+  const righeSenzaMargine = fasceInUsoSulCarrello
+    ? carrello.filter((r) => percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceInUsoSulCarrello, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneFasceInUso) <= 0)
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
-  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, (couponNum > 0 || couponAFasce || couponAcquistoMaster) ? scontoCoupon : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
+  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale,
+    (couponNum > 0 || couponAFasce || couponAcquistoMaster) ? scontoCoupon
+      // la fiera viene prima dello sconto a mano: quando e' accesa i due
+      // campi qui sotto sono spenti, e sommarli sarebbe scontare due volte
+      : scontoFieraAttivo ? scontoDellaFiera
+        : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   // La percentuale che si mostra e' quella DAVVERO erogata su questo
   // carrello: sconto diviso subtotale. Il numero scritto sul coupon non
   // dice la verita' quando lo sconto va a fasce — ogni prodotto ha la sua
@@ -68108,8 +68174,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // costo d'acquisto la supera e non prende nulla. Promettere un numero
   // sarebbe promettere una cosa falsa.
   const mancaAllaFascia = (() => {
-    if (!couponAFasce || subtotale <= 0) return null;
-    const g = gruppiFasceValidi(fasceCouponAttive);
+    if (!fasceInUsoSulCarrello || subtotale <= 0) return null;
+    const g = gruppiFasceValidi(fasceInUsoSulCarrello);
     const i = indiceFasciaSpesa(subtotale, g.soglie);
     if (i >= 3) return null;
     const soglia = g.soglie[i];
@@ -68129,8 +68195,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function scontoDiRiga(r) {
     const lordoRiga = round2(r.prezzo * r.quantita);
     if (omaggioAttivo || lordoRiga <= 0) return 0;
-    if (couponAFasce) {
-      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)) / 100);
+    if (fasceInUsoSulCarrello) {
+      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceInUsoSulCarrello, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneFasceInUso)) / 100);
     }
     if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
     if (scontoNum > 0) {
@@ -68428,7 +68494,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     let scontiRiga = carrello.map((r, i) => {
       const lordoRiga = lordiRiga[i];
       if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (couponAFasce) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceCouponAttive, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)) / 100);
+      if (fasceInUsoSulCarrello) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceInUsoSulCarrello, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneFasceInUso)) / 100);
       if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
       if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
       return 0;
@@ -68511,6 +68577,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       registrata_da_nome: (venditaVaAllaMaster || perContoDiAltri) ? operatoreReale.nome : null,
       corso_data_id: corsoPosSel?.id || null,
       evento_id: eventoPosSel?.id || null,
+      // `evento_id` dice che la vendita e' di quella fiera; questo dice se
+      // a QUESTO carrello e' stato fatto lo sconto, visto che al banco lo
+      // si accende uno per uno. Senza, "quanto ci e' costata la fiera in
+      // sconti" si potrebbe solo stimare riga per riga.
+      sconto_fiera: scontoFieraAttivo,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
@@ -68964,13 +69035,48 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {eventiPerLaTendina.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
           <Field label="Sei a un evento?">
-            <select style={inputStyle} value={eventoPosId} onChange={(e) => setEventoPosId(e.target.value)}>
+            <select style={inputStyle} value={eventoPosId} onChange={(e) => { setEventoPosId(e.target.value); if (!e.target.value) setScontoFiera(false); }}>
               <option value="">— vendita non legata a un evento —</option>
               {eventiPerLaTendina.map((ev) => (
                 <option key={ev.id} value={ev.id}>{ev.nome}{ev.citta ? ` · ${ev.citta}` : ""}</option>
               ))}
             </select>
           </Field>
+          {/* La spunta compare solo con un evento scelto, e sta QUI e non
+              nel riquadro dello sconto a mano: quello e' chiuso a chi non
+              amministra, e in fiera a vendere ci sono i venditori. */}
+          {eventoPosSel && (
+            <label style={{
+              display: "flex", gap: 10, alignItems: "flex-start", marginTop: 8,
+              border: `1px solid ${scontoFieraAttivo ? NAVY : CREAM_BORDER}`,
+              background: scontoFieraAttivo ? "#F2F6FC" : BG, borderRadius: 12,
+              padding: isMobile ? "8px 10px" : "10px 12px",
+              cursor: scontoFieraDisponibile ? "pointer" : "default",
+              opacity: scontoFieraDisponibile ? 1 : 0.6,
+            }}>
+              <input
+                type="checkbox" checked={scontoFieraAttivo} disabled={!scontoFieraDisponibile}
+                onChange={(e) => setScontoFiera(e.target.checked)}
+                style={{ width: 18, height: 18, flex: "0 0 auto", marginTop: 1, accentColor: NAVY }}
+              />
+              <span style={{ minWidth: 0 }}>
+                <span style={{ ...fontDisplay, display: "block", fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>
+                  Sconto fiera
+                </span>
+                <span style={{ ...fontBody, display: "block", fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
+                  {omaggioAttivo
+                    ? "Questo carrello è un omaggio: non c'è niente da scontare."
+                    : (couponAttivo || couponNum > 0)
+                      ? "Su questo carrello c'è già uno sconto a codice, e i due non si sommano."
+                      : !tabellaFieraCarta
+                        ? "Le fasce non sono ancora scritte: si riempiono in Sconti → Sconto ai corsi."
+                        : scontoFieraAttivo
+                          ? `Le fasce dei corsi, serie ${fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeErogata)} su questo carrello.`
+                          : "Applica a questo carrello le stesse fasce di sconto dei corsi."}
+                </span>
+              </span>
+            </label>
+          )}
         </div>
       )}
 
@@ -69389,14 +69495,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <div style={etichettaSconto}>Sconto vendita</div>
-              <select style={{ ...campoSconto, background: BG, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
+              <select style={{ ...campoSconto, background: BG, opacity: (couponNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoTipo(e.target.value)}>
                 <option value="percentuale">Percentuale</option>
                 <option value="importo">Importo fisso</option>
               </select>
             </div>
             <div style={{ flex: "0 0 58px", minWidth: 0 }}>
               <div style={etichettaSconto}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
-              <input style={{ ...campoSconto, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
+              <input style={{ ...campoSconto, opacity: (couponNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
             </div>
             <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
           </>
@@ -69404,7 +69510,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         {puoScontare ? (
           <div style={{ flex: "1 1 0", minWidth: 0 }}>
             <div style={etichettaSconto}>Coupon (%)</div>
-            <input style={{ ...campoSconto, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
+            <input style={{ ...campoSconto, opacity: (scontoNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0 || scontoFieraAttivo} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
           </div>
         ) : (
           // Due sole strade, e si escludono: o lo sconto della classe —
@@ -69492,9 +69598,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             )}
           </div>
         )}
-        {(couponNum > 0 || scontoNum > 0) && (
+        {(couponNum > 0 || scontoNum > 0 || scontoFieraAttivo) && (
           <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: grigioCarrello }}>
-            {couponNum > 0 ? "Svuota il campo Coupon per inserire uno sconto manuale." : "Svuota lo sconto vendita per usare un coupon."}
+            {scontoFieraAttivo
+              ? "Sta valendo lo sconto fiera: spegnilo qui sopra per scontare a mano o usare un codice."
+              : couponNum > 0 ? "Svuota il campo Coupon per inserire uno sconto manuale." : "Svuota lo sconto vendita per usare un coupon."}
           </div>
         )}
       </div>
