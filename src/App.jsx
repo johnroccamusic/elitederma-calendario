@@ -65379,6 +65379,18 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
   }
   useEffect(() => { carica(); }, []);
 
+  // QUI DENTRO NON ENTRANO I CONTANTI. Mai.
+  //
+  // Deciso dal titolare il 18/10/2026, mentre si ragionava se portare in
+  // questa lista anche le vendite al banco che non passano dal QR. La
+  // risposta e' stata: le vendite a carta si', quelle in contanti no.
+  //
+  // Oggi la cosa viene da se', perche' qui si leggono i `pagamenti_pos`,
+  // che nascono solo dal QR di Stripe. Diventera' una regola da scrivere
+  // davvero il giorno in cui si aggiungeranno le vendite di
+  // `vendite_shop` (il terminale fisico): li' il filtro dovra' tenere
+  // fuori `metodo_pagamento` "contanti" e "buono_amazon", e questo
+  // commento e' il motivo per cui non va "sistemato" allargandolo.
   const tutti = pagamenti || [];
   const daEmettere = tutti.filter((p) => p.stato === "da_verificare");
   const fatte = tutti.filter((p) => p.stato === "fatturato");
