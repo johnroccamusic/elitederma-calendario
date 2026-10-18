@@ -71,36 +71,55 @@ locale. Non usare `supabase db push` — rieseguirebbe migrazioni già applicate
 Per una migrazione nuova: file in `supabase/migrations/` come traccia, ed
 esecuzione mirata (MCP o editor SQL) sul database.
 
-## 4. Sicurezza — stato al 05/09/2026
+## 4. Sicurezza — stato al 18/10/2026
 
 Verificato interrogando il database e Vercel, non leggendo i file:
 
-- **Le policy sono ancora aperte all'utente anonimo.** Delle 98 policy di
-  `public`: 83 sono `for all to anon using (true) with check (true)`, 11 valgono
-  per `anon` e `authenticated` insieme, 1 è un `select` per `anon`, e solo 3 sono
-  riservate a `authenticated`. In pratica **95 su 98 permettono a un anonimo di
-  leggere e scrivere**.
+- **Le policy sono chiuse. 18/10/2026.** Delle 149 policy di `public`, 133
+  erano `for all to anon using (true) with check (true)`: con la chiave
+  pubblicabile — che sta nel bundle — si leggevano **e si riscrivevano**
+  anagrafiche degli allievi, pagamenti, movimenti di banca, le password in
+  chiaro di `venditori` e `utenti_app`. Adesso valgono tutte `to authenticated`.
 
-  La migrazione `20260815120000_rls_solo_staff_autenticato.sql` esiste e portava
-  tutto a `to authenticated`, ma è stata annullata da
-  `20260815120001_rollback_rls_anon.sql`, che le sta accanto. La versione
-  precedente di questo file dava per fatto il lockdown: non lo era.
+  **Resta aperta una cosa sola, voluta:** `consensi_modelle` ha un `INSERT`
+  per `anon` — la modella che firma col QR scrive il suo consenso e basta.
+  Non può rileggere né il proprio né quelli delle altre. Stesso patto dei
+  moduli di iscrizione: si carica, non si rilegge.
 
-  La chiave anon sta nel bundle. Finché queste policy restano così, l'unica cosa
-  che impedisce a chiunque di scrivere sul database è che il bundle non sia
-  scaricabile — cioè l'SSO di Vercel. Vedi l'ultimo punto.
-- **Le pagine pubbliche non passano più dalle tabelle.** Il link per la master
-  (`?master=<token>`) nomina la classe con un token di 64 caratteri su
-  `corsi_date.token_master`, e legge tramite due funzioni `security definer`:
-  `master_vista` (solo i campi che la pagina disegna, solo quella classe) e
-  `master_segna_incassato` (unica scrittura, vincolata a `corso_data_id`).
-  Su entrambe l'esecuzione è revocata a `public`.
-  Dal 17/09/2026 anche `?modelle=` e `?biglietti=` hanno le loro funzioni
-  (`modelle_vista`, `modelle_salva_trattamenti`, `modelle_leggi_trattamenti`,
-  `biglietti_vista`, più `slug_link`/`classe_da_link`): create e verificate,
-  **ma l'app non è ancora stata collegata** — le due pagine leggono ancora le
-  tabelle. Lo slug SQL è stato confrontato con `slugify` di App.jsx su tutti
-  i 44 nomi di corsi e città: identico.
+  **Prima di chiudere è stata spenta la registrazione pubblica** su Supabase
+  Auth (`disable_signup: true`, verificato dall'esterno con la sola chiave
+  pubblicabile). Senza quel passaggio la chiusura sarebbe stata teatro:
+  chiunque si sarebbe creato un account e sarebbe rientrato da
+  `authenticated`.
+
+  **Perché stavolta non ha spento l'app**, e il 15/08 sì: allora il cancello
+  di `Accesso.jsx` era spento e nessuno aveva una sessione. Dall'08/10 il
+  cancello è acceso.
+
+  Verificato dall'esterno subito dopo: `iscritti`, `venditori`, `utenti_app`,
+  `movimenti_banca`, `vendite_shop`, `consensi_modelle`, `password_menu` →
+  **zero righe**; un `insert` su `iscritti` → **401, violates row-level
+  security**. La fotografia delle policy di prima è in
+  `_policy_snapshot_20261018`, e il rollback è già scritto in
+  `20261018230001_rls_rollback_anon.sql`: rimette tutto com'era leggendo da
+  quella fotografia, non a memoria.
+- **Le sette rotte pubbliche, e come sopravvivono alla chiusura.** Sei non
+  toccano più le tabelle: passano da funzioni `security definer`, che girano
+  coi permessi del proprietario e ignorano le policy. Tutte hanno `execute`
+  concesso ad `anon` e revocato a `public`.
+
+  | Rotta | Come parla col database |
+  |---|---|
+  | `?master=` | `master_vista`, `master_segna_incassato` |
+  | `?modelle=` | `modelle_vista`, `modelle_leggi_trattamenti`, `modelle_salva_trattamenti` |
+  | `?biglietti=` | `biglietti_vista` |
+  | `?ricevuta=` | `ricevuta_pos` |
+  | `?modulo=` | `modulo_vista`, `modulo_salva` + caricamento su `moduli-iscrizione` |
+  | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
+  | `?consenso=` | **scrive dritto in `consensi_modelle`** (INSERT per `anon`) + caricamento su `consensi-documenti` |
+
+  La versione precedente di questo file diceva che modelle e biglietti
+  «non sono ancora collegati»: non è più vero dal 18/10/2026.
 - **`Accesso.jsx` ORA è collegato. Verificato il 08/10/2026.** In
   `main.jsx` la costante `CANCELLO_ACCESO` è `true`, e l'app rende
   `<Accesso />` con `<App />` dentro: chi entra fa un vero accesso
@@ -123,12 +142,27 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   Vite tutto ciò che inizia con `VITE_` è visibile. `ADMIN_CODE` ha anche un
   fallback in chiaro nel sorgente (`"ED26"`). Da eliminare quando i ruoli
   passeranno al JWT.
-- **Password in chiaro** nelle colonne `venditori.password` e `utenti_app.password`,
-  leggibili da chiunque abbia una sessione. Esisteva PBKDF2 via edge function
+- **Password in chiaro** nelle colonne `venditori.password` e `utenti_app.password`.
+  Dal 18/10/2026 non sono più leggibili da chiunque abbia la chiave del bundle,
+  ma restano leggibili **da chiunque abbia una sessione**, cioè da tutto lo
+  staff. È il primo dei prossimi passi. Esisteva PBKDF2 via edge function
   `venditori-login`, poi abbandonato. Da ripristinare.
-- **10 bucket storage pubblici**, inclusi `allegati-iscritti` (213 file) e
-  `master-documenti`. L'app usa `getPublicUrl` in 14 punti e nessun URL firmato:
-  chiuderli richiede di sostituirli con `createSignedUrl`.
+- **Lo storage: 18 secchi pubblici, non 10.** `allegati-iscritti`,
+  `master-documenti`, `venditori-documenti`, `spese-allegati`,
+  `leve-assistenti-documenti` e altri. «Pubblico» è un'impostazione del secchio:
+  chi conosce l'indirizzo di un file lo scarica, policy o non policy.
+
+  **Dal 18/10/2026 però da fuori non si scrive più.** Diciassette policy
+  `for all to anon` sono passate a `authenticated`: si potevano sostituire
+  loghi, locandine, allegati delle spese e documenti dei venditori. Restano ad
+  `anon` due sole policy, tutte e due di solo INSERT, e sono le due pagine
+  pubbliche che caricano un file: `moduli-iscrizione` e `consensi-documenti`.
+  A `consensi-documenti` è stata tolta la lettura: i documenti d'identità delle
+  modelle non si rileggono da fuori.
+
+  **Resta da fare la lettura**: i secchi sono ancora pubblici, e chiuderli
+  richiede di sostituire `getPublicUrl` con `createSignedUrl` in 14 punti
+  dell'app. È il prossimo passo di questo capitolo.
 - **Fatto bene**: le credenziali WooCommerce stanno in variabili d'ambiente delle
   edge function (`WC_CONSUMER_KEY`, `WC_WEBHOOK_SECRET`…), e `woo-webhook` verifica
   la firma HMAC. È il pattern da estendere a Stripe, WhatsApp ed email.
