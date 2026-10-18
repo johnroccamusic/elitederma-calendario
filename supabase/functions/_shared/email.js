@@ -17,6 +17,15 @@ const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
 // Deliberatamente identica a `toTitleCase` di App.jsx, separatori
 // compresi: se un giorno divergono, la prova e la mail vera non diranno
 // piu' la stessa cosa. C'e' una prova nel banco che le confronta.
+/**
+ * Le righe del dettaglio: coppie [etichetta, valore], nell'ordine in cui
+ * vanno lette. Il tipo e' scritto qui perche' questo file e' JavaScript e
+ * chi lo chiama da un .ts, senza, si vede dedurre `never[]` dal valore
+ * predefinito — e `deno check` lo segnala come errore su una cosa che
+ * funziona benissimo.
+ * @typedef {Array<Array<any>>} RigheDettaglio
+ */
+
 export function titolo(testo) {
   return (testo || "")
     .toLowerCase()
@@ -99,6 +108,7 @@ export function modelloUsabile(modello) {
 // si protegge PRIMA quello che e' stato battuto a mano e si sostituisce
 // DOPO: al contrario, un valore con dentro una & verrebbe protetto due
 // volte e si leggerebbe "&amp;".
+/** @param {any} modello @param {{ valori: Record<string, any>, righe: RigheDettaglio }} dati */
 export function componiDaModello(modello, { valori, righe }) {
   const perTesto = { ...valori, dettagli: righe.map(([k, v]) => `${k}: ${v}`).join("\n") };
   const perHtml = {};
@@ -190,6 +200,7 @@ function bloccoRecesso(link) {
   };
 }
 
+/** @param {{ valori: Record<string, any>, righe?: RigheDettaglio, modello?: any, societa?: any, linkRecesso?: string }} dati */
 export function componiMailRicezione({ valori, righe = [], modello = null, societa = null, linkRecesso = "" }) {
   const p = piede({ societa, valori });
   const r = linkRecesso ? bloccoRecesso(linkRecesso) : { testo: "", html: "" };

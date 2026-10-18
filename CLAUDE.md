@@ -236,13 +236,22 @@ GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del me
 ## 5. Comandi
 
 ```bash
-npm run dev       # sviluppo locale
-npm run build     # build di produzione
-npm run preview   # anteprima della build
+npm run dev                  # sviluppo locale
+npm run build                # build di produzione
+npm run preview              # anteprima della build
+sh controlla-funzioni.sh     # tipi delle edge function (Deno), prima di pubblicarle
 ```
 
-Non esistono lint né test. Non aggiungerli di iniziativa: prima concordare se
-servono e su cosa.
+Non esistono lint né test sull'app. Non aggiungerli di iniziativa: prima
+concordare se servono e su cosa.
+
+**Le edge function invece un controllo ce l'hanno, dal 18/10/2026.**
+`supabase functions deploy` impacchetta e basta: non guarda i tipi e non si
+accorge di una variabile che non esiste. È così che è finita in produzione una
+funzione con dentro `dataIso is not defined`, scoperta dal titolare premendo il
+tasto per emettere una fattura vera. `sh controlla-funzioni.sh` passa
+`deno check` su tutte (o su una sola, se la si nomina) e va lanciato **prima**
+di `supabase functions deploy`. Deno sta in `~/.deno/bin/deno`.
 
 ## 6. Convenzioni
 

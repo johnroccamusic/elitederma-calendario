@@ -176,8 +176,14 @@ Deno.serve(async (req) => {
   }
 
   if (prova) {
+    // `saltati` c'era due volte: una come numero e una come elenco, e
+    // nell'oggetto vince l'ultima. Chi legge si aspettava il numero e si
+    // ritrovava l'elenco — "[Siero, Pinze] saltati" invece di "2
+    // saltati". Trovato da `deno check` il 18/10/2026, e c'era da mesi:
+    // il conteggio e il dettaglio ora hanno due nomi diversi, come nel
+    // resto della risposta.
     return json({ prova: true, da_nascondere: nascosti.length, giacenze_da_spingere: giacenze.length,
-      saltati: saltati.length, nascosti, saltati,
+      saltati: saltati.length, dettaglio_saltati: saltati, dettaglio_nascosti: nascosti,
       impegnati_in_sospesi: giacenze.filter((g) => g.promessi > 0) });
   }
 
