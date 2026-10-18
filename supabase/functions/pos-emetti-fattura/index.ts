@@ -180,10 +180,17 @@ Deno.serve(async (req) => {
       .select("valore").eq("chiave", "fic_conto_saldo").maybeSingle();
     const idScelto = Number(scelta?.valore?.id ?? scelta?.valore ?? 0) || null;
     const somiglia = (regola: RegExp) => conti.find((c) => regola.test(c.nome));
+    // "Il conto si chiama Conto BP Lazio": cercare "banca" o "popolare"
+    // non bastava, perche' nessuno scrive per esteso il nome della
+    // propria banca. Quindi si ragiona al contrario — si scartano i
+    // conti che una fattura incassata a carta non puo' avere, cioe' la
+    // cassa contanti — e se ne resta uno solo, e' quello.
+    const nonContanti = conti.filter((c) => !/contant|cassa|cash/i.test(c.nome));
     const conto = (idScelto && conti.find((c) => c.id === idScelto))
       || (conti.length === 1 ? conti[0] : null)
-      || (daQr ? somiglia(/stripe/i) : null)
-      || somiglia(/popolare|banca|bank|c\/c|conto corrente/i)
+      || (daQr ? somiglia(/stripe|paypal/i) : null)
+      || (nonContanti.length === 1 ? nonContanti[0] : null)
+      || somiglia(/banca|popolare|bank|bp |c\/c|conto corrente/i)
       || null;
     if (!conto) {
       const elenco = conti.map((c) => `${c.nome} (id ${c.id})`).join(", ") || "nessuno";
