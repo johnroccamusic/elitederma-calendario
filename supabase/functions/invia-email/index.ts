@@ -89,10 +89,28 @@ Deno.serve(async (req) => {
   // non legge file e non conosce secchi, spedisce e basta. Resend accetta
   // fino a 40 MB per messaggio, ma una casella qualunque molto meno: chi
   // allega si preoccupa del peso prima di arrivare qui.
+  //
+  // IL TIPO SI DICHIARA. Senza, Resend spedisce tutto come
+  // `application/octet-stream`, cioe' "roba binaria": il PDF arriva, ma
+  // alcuni programmi di posta non lo riconoscono, non ne fanno
+  // l'anteprima e lo mostrano come un file qualunque da scaricare. Per
+  // un allegato che e' la copia di un contratto, farsi aprire al primo
+  // colpo conta. Se chi chiama non lo dice, si deduce dall'estensione.
+  const tipoDaNome = (nome: string) => {
+    const est = nome.toLowerCase().split(".").pop() || "";
+    return ({
+      pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+      csv: "text/csv", txt: "text/plain",
+    } as Record<string, string>)[est] || "application/octet-stream";
+  };
   const allegati = Array.isArray(corpo.allegati)
     ? corpo.allegati
         .filter((a: any) => a && a.nome && a.contenuto)
-        .map((a: any) => ({ filename: String(a.nome), content: String(a.contenuto) }))
+        .map((a: any) => ({
+          filename: String(a.nome),
+          content: String(a.contenuto),
+          content_type: String(a.tipo || tipoDaNome(String(a.nome))),
+        }))
     : [];
   const html = corpo.html ? String(corpo.html) : undefined;
   const testo = corpo.testo ? String(corpo.testo) : undefined;
