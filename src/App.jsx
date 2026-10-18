@@ -65295,6 +65295,28 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
   const isMobile = useIsMobile();
   const [pagamenti, setPagamenti] = useState(null);
   const [vista, setVista] = useState("daemettere");
+  const [preparandoLink, setPreparandoLink] = useState(false);
+
+  // RIFARE IL COLLEGAMENTO A FATTURE IN CLOUD.
+  //
+  // I permessi di un token OAuth non si allargano: il collegamento di
+  // agosto era nato per LEGGERE le fatture ricevute, e con quello
+  // un'emissione si ferma con un 403. Si rifa' l'autorizzazione
+  // chiedendo anche la scrittura, e Fatture in Cloud chiede di
+  // riapprovare.
+  //
+  // Il link lo compone la edge function `fic-autorizza`, perche' dentro
+  // c'e' il FIC_CLIENT_ID: sta nei secret di Supabase e non deve finire
+  // nel bundle, che e' pubblico.
+  async function rifaiCollegamentoFic() {
+    setPreparandoLink(true); setMsg("");
+    const { data, error } = await supabase.functions.invoke("fic-autorizza", { body: {} });
+    setPreparandoLink(false);
+    if (error) { setMsg("Non riesco a preparare il collegamento: " + await testoErroreFunzione(error)); return; }
+    if (data?.errore) { setMsg(data.errore); return; }
+    if (!data?.url) { setMsg("Il collegamento non è tornato indietro: riprova fra poco."); return; }
+    window.open(data.url, "_blank", "noopener");
+  }
   const [msg, setMsg] = useState("");
 
   async function carica() {
@@ -65349,6 +65371,24 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
               />
             )
         ))}
+
+        {/* Sta in fondo e non in cima: serve una volta sola, o quando
+            qualcosa si rompe. Chi apre questa pagina ogni giorno deve
+            vedere le fatture, non i bottoni dell'impianto. */}
+        <div style={{ marginTop: 28, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.6 }}>
+          <b style={{ color: NAVY }}>Permessi di Fatture in Cloud.</b> Se premendo «Emetti la fattura» compare un errore che
+          parla di <i>permessi di scrittura</i>, il collegamento va rifatto: quello di agosto era nato per leggere le
+          fatture ricevute, e i permessi di un collegamento non si allargano da soli.
+          <div style={{ marginTop: 8 }}>
+            <Button variant="ghost" onClick={rifaiCollegamentoFic} disabled={preparandoLink}>
+              {preparandoLink ? "Preparo il collegamento…" : "Rifai il collegamento a Fatture in Cloud"}
+            </Button>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            Si apre Fatture in Cloud, si entra con l'account dell'azienda e si approva. Da fare una volta: il token poi si
+            rinnova da solo ogni notte.
+          </div>
+        </div>
       </div>
     </div>
   );

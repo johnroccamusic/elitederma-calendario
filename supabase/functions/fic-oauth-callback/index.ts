@@ -111,6 +111,35 @@ Deno.serve(async (req) => {
     return new Response(paginaEsito("Autorizzazione ottenuta ma salvataggio fallito", error.message), { status: 500, headers: htmlHeaders });
   }
 
+  // E ANCHE SU `fic_connessioni`, che e' la tabella che conta.
+  //
+  // Chi usa il token — leggiConnessione in _shared/fic.ts — guarda
+  // PRIMA `fic_connessioni` e solo se la trova vuota ripiega su
+  // `fatture_in_cloud_config`. Questo callback scriveva solo la seconda:
+  // una riautorizzazione nuova di zecca finiva in un cassetto che
+  // nessuno apre piu', e le funzioni continuavano a usare il token
+  // vecchio. Col collegamento in sola lettura voleva dire un 403
+  // sull'emissione subito dopo aver "rifatto i permessi", e nessun modo
+  // di capire perche'.
+  //
+  // Si scrive in tutte e due: la prima per chi legge oggi, la seconda
+  // perche' qualcosa potrebbe ancora guardarla.
+  const { error: erroreConnessione } = await supabase.from("fic_connessioni").upsert({
+    company_id: companyId,
+    nome: companyNome,
+    access_token: token.access_token,
+    refresh_token: token.refresh_token,
+    scade_il: scadeIl,
+    attiva: true,
+    aggiornata_il: new Date().toISOString(),
+  }, { onConflict: "company_id" });
+  if (erroreConnessione) {
+    return new Response(
+      paginaEsito("Autorizzazione ottenuta, ma il collegamento non si e' aggiornato", erroreConnessione.message),
+      { status: 500, headers: htmlHeaders },
+    );
+  }
+
   const notaMultiAzienda = elencoAziende.length > 1
     ? ` Attenzione: sono state trovate ${elencoAziende.length} aziende sul tuo account, è stata collegata automaticamente "${companyNome}" — se non è quella giusta, va corretto a mano nella tabella fatture_in_cloud_config.`
     : "";
