@@ -77,6 +77,14 @@ Deno.serve(async (req) => {
   try { corpo = await req.json(); } catch { return json({ ok: false, errore: "JSON non valido" }, 400); }
   const token = String(corpo.token || "").trim();
   const prova = corpo.prova === true;
+  // RIGENERA SOLO IL PDF, SENZA MANDARE NIENTE.
+  //
+  // Serve alle iscrizioni arrivate prima che questa copia esistesse, e a
+  // quelle in cui la generazione era fallita: dalla scheda si rifa' il
+  // documento senza far ripartire una mail che l'allieva ha gia'
+  // ricevuto. Scrive, quindi non e' una prova; ma non spedisce, quindi
+  // non tocca il registro degli invii.
+  const soloPdf = corpo.soloPdf === true;
   if (token.length < 12) return json({ ok: false, errore: "Link non valido." }, 400);
 
   const { data: isc, error: erroreIscritto } = await admin
@@ -131,7 +139,20 @@ Deno.serve(async (req) => {
   // puo' cambiare da un secret senza ripubblicare la funzione.
   const indirizzoApp = (Deno.env.get("APP_URL") || "https://app.elitederma.net").replace(/\/+$/, "");
   const linkRecesso = isc.token_recesso ? `${indirizzoApp}/?recesso=${isc.token_recesso}` : "";
-  const mail = componiMailRicezione({ valori, righe, modello, societa, linkRecesso });
+
+  // IL GETTONE DELLA PRESA VISIONE NASCE PRIMA DELLA MAIL, perche' il
+  // suo link deve starci dentro. Uno per invio e non per iscritto: se la
+  // conferma si rimanda, la seconda copia ha il suo gettone e si vede
+  // quale delle due e' stata presa in carico.
+  //
+  // Il link punta alla funzione, non all'app: una ricevuta deve
+  // funzionare anche il giorno in cui il gestionale e' fermo, e cosi' non
+  // dipende da niente che si possa rompere altrove.
+  const tokenConferma = [...crypto.getRandomValues(new Uint8Array(24))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  const linkConferma = `${Deno.env.get("SUPABASE_URL")}/functions/v1/email-presa-visione?t=${tokenConferma}`;
+
+  const mail = componiMailRicezione({ valori, righe, modello, societa, linkRecesso, linkConferma });
 
   // IL MODULO FIRMATO, IN PDF, ALLEGATO ALLA CONFERMA.
   //
@@ -187,7 +208,7 @@ Deno.serve(async (req) => {
     return json({
       ok: true, prova: true, ricevuto, a: destinatario, mail,
       pdf: pdf ? { nome: nomeAllegato, byte: pdf.length, pagine, scartate } : null,
-      pesoSorgenti, guastoPdf,
+      pesoSorgenti, guastoPdf, linkConferma,
     });
   }
 
@@ -204,6 +225,10 @@ Deno.serve(async (req) => {
         modulo_pdf_path: percorsoPdf, modulo_pdf_generato_il: new Date().toISOString(),
       }).eq("id", isc.id);
     }
+  }
+
+  if (soloPdf) {
+    return json({ ok: !!percorsoPdf, soloPdf: true, percorso: percorsoPdf, pagine, scartate, guastoPdf });
   }
 
   if (!emailValida(destinatario)) {
@@ -229,6 +254,7 @@ Deno.serve(async (req) => {
       chiave_modello: CHIAVE, destinatario, iscritto_id: isc.id,
       corso_data_id: isc.corso_data_id || null, oggetto: mail.oggetto,
       esito: "ok", automatica: true, inviata_da: "modulo",
+      token_conferma: tokenConferma,
     }).select("id").single();
   if (erroreRegistro) return json({ ok: true, gia: true, messaggio: "La conferma era già partita." });
 

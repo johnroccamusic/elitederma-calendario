@@ -214,6 +214,41 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   acceso — se un giorno lo si spegnesse, questa tabella diventerebbe illeggibile
   e le mail tornerebbero al testo del codice senza dire niente a nessuno.
 
+  **La copia firmata, allegata alla conferma (18/10/2026).** Quando
+  l'allieva manda il modulo, la conferma di ricezione le arriva con
+  allegato il **PDF di quello che ha sottoscritto**: dati, il testo del
+  regolamento *com'era quel giorno* (da `iscritti.contratto_firmato`,
+  congelato alla firma e mai riscritto — `coalesce` in `modulo_salva`),
+  le dichiarazioni con la loro ora e l'elenco delle clausole degli
+  artt. 1341-1342 c.c., la firma e il documento d'identità. Lo costruisce
+  `_shared/modulo-pdf.ts` e lo archivia in `moduli-iscrizione` accanto
+  agli originali (`iscritti.modulo_pdf_path`).
+
+  Il formato di ciò che l'allieva carica **si legge dai primi byte**, non
+  dal nome: chi compila da PC allega una scansione **in PDF**, che viene
+  trapiantata pagina per pagina; una foto da telefono viene ridotta a
+  1100 px e riscritta in JPEG — due foto da 11 MB diventano un PDF di
+  118 KB. Quello che non si apre non ferma la conferma, ma finisce in
+  `scartate` e si vede: per un allegato scartato in silenzio nessuno si
+  accorgerebbe di una mail partita senza il documento.
+
+  **La ricevuta è doppia, e le due metà non sono la stessa cosa.** Resend
+  richiama `email-eventi` (firma Svix verificata, `RESEND_WEBHOOK_SECRET`)
+  e scrive consegna, apertura e rimbalzo su `email_inviate`: è quello che
+  dice il postino. L'allieva invece preme il tasto in fondo alla mail
+  (`email-presa-visione`) e dichiara di aver ricevuto la copia: è
+  `confermata_il`, ed è l'unica che vale in una discussione. Quella
+  pagina **registra solo sul POST**, mai sull'apertura del link: gli
+  antispam aprono i link da soli, e una ricevuta che si firma da sé non
+  serve a niente.
+
+  Tutto questo si guarda dalla tessera **Modulo ricevuto** della fascia
+  di stato, che da oggi si preme (`src/iscrizioni/Fascicolo.jsx`) — ma
+  solo da quella tappa in poi, perché prima la cartella è vuota. Da lì
+  si rigenera anche la copia per le iscrizioni più vecchie, con
+  `{ soloPdf: true }`, che scrive il documento senza far ripartire
+  nessuna mail.
+
   **Registro e invii automatici (15/10/2026).** Ogni invio lascia una riga in
   `email_inviate`, anche quando fallisce. Un indice unico *parziale*
   (`chiave_modello + iscritto_id`, solo `automatica and esito = 'ok'`) impedisce
@@ -354,6 +389,11 @@ di `supabase functions deploy`. Deno sta in `~/.deno/bin/deno`.
   prima il diff e l'impatto sui dati storici.
 - Mettere segreti in variabili `VITE_*`: finiscono nel bundle pubblico.
 - Spostare la generazione dei PDF lato server: è client-side per scelta.
+  **Un'eccezione, dichiarata:** il modulo di iscrizione firmato
+  (`supabase/functions/_shared/modulo-pdf.ts`). Quel PDF deve partire
+  *allegato* a una mail che manda il server; se lo facesse il telefono
+  basterebbe che la pagina si chiuda un istante prima e la conferma
+  uscirebbe senza allegato, cioè senza la cosa per cui esiste.
 - Riformattare o "sistemare" file non toccati dal task in corso.
 - Aggiungere dipendenze per problemi che il codice esistente già risolve.
 

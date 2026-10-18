@@ -70,15 +70,21 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 //
 // Senza `onInvia` la fascia e' quella di prima e non si tocca: nelle
 // liste serve a leggere, non a spedire.
-// DUE TAPPE SI PREMONO, e fanno la cosa che dicono.
+// TRE TAPPE SI PREMONO, e fanno la cosa che dicono.
 //
-//   Dati inseriti   riapre la scheda per correggerla
-//   Invia modulo    lo manda (o lo rimanda, chiedendo prima)
+//   Dati inseriti    riapre la scheda per correggerla
+//   Invia modulo     lo manda (o lo rimanda, chiedendo prima)
+//   Modulo ricevuto  apre il fascicolo: la copia firmata, l'invio della
+//                    conferma, e la presa visione dell'allieva
 //
 // Senza i rispettivi gestori la fascia e' solo da leggere e non si
 // tocca: e' il caso delle liste di sola lettura. Un pallino che sembra
 // un tasto e non fa niente e' il guasto peggiore, ed e' gia' successo.
-export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false, onModifica = null }) {
+//
+// Per questo il fascicolo si preme SOLO da quella tappa in poi: prima
+// che il modulo arrivi non c'e' niente dentro, e aprire una cartella
+// vuota e' lo stesso guasto detto in un altro modo.
+export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false, onModifica = null, onFascicolo = null }) {
   const attuale = STATI[stato] ? stato : "dati_inseriti";
 
   // IL RECESSO NON E' UNA TAPPA DELLA SCALA, ed e' per questo che qui
@@ -147,18 +153,22 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
               {(() => {
                 const eInvio = !!onInvia && chiave === "modulo_inviato" && !inviando;
                 const eModifica = !!onModifica && chiave === "dati_inseriti";
-                const siPreme = eInvio || eModifica;
+                const eFascicolo = !!onFascicolo && chiave === "modulo_ricevuto"
+                  && indice >= ORDINE.indexOf("modulo_ricevuto");
+                const siPreme = eInvio || eModifica || eFascicolo;
                 const giaPartito = indice >= ORDINE.indexOf("modulo_inviato");
                 const Palla = siPreme ? "button" : "div";
                 return (
                   <Palla
                     type={siPreme ? "button" : undefined}
-                    onClick={eModifica ? onModifica : eInvio ? () => onInvia(giaPartito) : undefined}
+                    onClick={eModifica ? onModifica : eFascicolo ? onFascicolo : eInvio ? () => onInvia(giaPartito) : undefined}
                     title={eModifica
                       ? "Riapri la scheda per correggere i dati"
-                      : eInvio
-                        ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
-                        : STATI[chiave].etichetta}
+                      : eFascicolo
+                        ? "Apri il fascicolo: copia firmata, invio della conferma, presa visione"
+                        : eInvio
+                          ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
+                          : STATI[chiave].etichetta}
                     style={{
                       width: palla, height: palla, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",

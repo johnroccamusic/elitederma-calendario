@@ -77,6 +77,7 @@ import { statoDi, aggiornaStatoDopoAcconto, iscrittiAttiviDi } from "./iscrizion
 import { inviaModulo, linkModulo, segnaInviatoAMano } from "./iscrizioni/invio.js";
 import { INDIRIZZO_APP } from "./indirizzo.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
+import Fascicolo from "./iscrizioni/Fascicolo.jsx";
 import { leggiModello as leggiModelloEmail } from "./email/modelli.js";
 import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaModelloEmail, valoriCorso as valoriCorsoEmail } from "../supabase/functions/_shared/email.js";
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
@@ -30439,6 +30440,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   const [linkCopiatoModulo, setLinkCopiatoModulo] = useState(false);
   const [inviandoId, setInviandoId] = useState(null);
   const [esitoModulo, setEsitoModulo] = useState(null);   // { id, ok, testo, link }
+  // il fascicolo aperto dalla tessera "Modulo ricevuto": quale iscritta.
+  // Uno solo per tutta la scheda, perche' la tessera si preme sia qui
+  // dentro sia dall'elenco, e due pannelli aperti insieme non servono.
+  const [fascicoloDi, setFascicoloDi] = useState(null);
   const [daCompletare, setDaCompletare] = useState([]);
   const [avvisoQuote, setAvvisoQuote] = useState("");
 
@@ -32942,6 +32947,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 stato={statoDi(rec)} compatto={isMobile} larghezzaMax={isMobile ? 280 : 350}
                 onInvia={(gia) => mandaModulo(rec, gia, { salvaPrima: true })}
                 inviando={inviandoId === rec.id}
+                onFascicolo={() => setFascicoloDi(rec)}
               />
               {esitoModulo?.id === rec.id && (
                 <div style={{
@@ -34375,6 +34381,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       onInvia={soloLettura ? null : (gia) => mandaModulo(i, gia)}
                       inviando={inviandoId === i.id}
                       onModifica={() => apriModificaCompleta(i)}
+                      onFascicolo={() => setFascicoloDi(i)}
                     />
                     {esitoModulo?.id === i.id && (
                       <div style={{ ...fontBody, fontSize: 11.5, marginTop: 6, lineHeight: 1.5, color: esitoModulo.ok ? "#2E7D32" : "#C0392B" }}>
@@ -34771,6 +34778,22 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             </div>
           )}
         </>
+      )}
+
+      {/* IL FASCICOLO. Sta qui in fondo e non accanto alla fascia
+          perche' la tessera si preme da due posti — dalla scheda
+          aperta e dalla riga dell'elenco — e il pannello deve essere
+          lo stesso. `ricarica` dopo una rigenerazione, cosi' la riga
+          dell'iscritta torna con il percorso del documento nuovo. */}
+      {fascicoloDi && (
+        <Modal
+          title={`Fascicolo — ${[fascicoloDi.nome, fascicoloDi.cognome].filter(Boolean).join(" ")}`}
+          onClose={() => setFascicoloDi(null)}
+          maxWidth={640}
+          scorrevole
+        >
+          <Fascicolo iscritto={fascicoloDi} onAggiornato={ricarica} />
+        </Modal>
       )}
     </div>
   );
