@@ -142,6 +142,32 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   Vite tutto ciò che inizia con `VITE_` è visibile. `ADMIN_CODE` ha anche un
   fallback in chiaro nel sorgente (`"ED26"`). Da eliminare quando i ruoli
   passeranno al JWT.
+- **UN SOLO ACCOUNT SUPABASE PER TUTTI. È il prossimo passo di sicurezza.**
+  Scoperto il 18/10/2026 guardando `auth.users`: le utenze sono tre, e una
+  sola è in uso — `commerciale.elitederma@gmail.com`, con **58 sessioni
+  aperte da 26 dispositivi diversi** e 2.507 rinnovi di accesso. Le colonne
+  `email_accesso` su `utenti_app`, `venditori`, `master` e `assistente`
+  esistono ma sono **vuote: zero su 52 persone**.
+
+  Cosa comporta, e perché viene prima di tutto il resto:
+
+  - la chiusura delle policy è **un cancello, non un'identità**:
+    «authenticated» vuol dire «uno dei 26 dispositivi che hanno quella
+    password», non «questa persona»;
+  - **i permessi per ruolo sono impossibili** finché è così, perché nel JWT
+    non c'è niente da cui dedurre se chi scrive è un venditore, una master o
+    l'amministratore;
+  - **non si revoca una persona sola**: cambiare quella password lascia
+    fuori tutti e 26 insieme;
+  - **niente è attribuibile**: chi ha modificato quell'iscrizione o
+    cancellato quella spesa è sempre «commerciale.elitederma».
+
+  L'impianto per rimediare c'è già e non è mai stato usato: le colonne
+  `email_accesso`, la edge function `crea-accesso`, il tasto «Crea accesso».
+  L'ordine obbligato è: un'utenza a testa → verificare che nessuno resti
+  fuori → ruolo e identità dal JWT invece che dal Gate interno di App.jsx →
+  solo allora le policy per ruolo.
+
 - **Password in chiaro** nelle colonne `venditori.password` e `utenti_app.password`.
   Dal 18/10/2026 non sono più leggibili da chiunque abbia la chiave del bundle,
   ma restano leggibili **da chiunque abbia una sessione**, cioè da tutto lo

@@ -80389,6 +80389,30 @@ export default function App() {
   const paramRecesso = new URLSearchParams(window.location.search).get("recesso");
   if (paramRecesso) return <PaginaRecesso token={paramRecesso} />;
 
+  // DA QUI IN GIU' NON C'E' PIU' NIENTE, ED E' IL PUNTO.
+  //
+  // Sopra ci sono solo le rotte pubbliche, che escono con un `return`;
+  // tutto il gestionale — e i suoi 185 hook — sta in `Gestionale`, un
+  // componente a se'.
+  //
+  // PERCHE'. React pretende che gli hook di un componente siano sempre gli
+  // stessi, nello stesso ordine, a ogni disegno. Finche' le rotte uscivano
+  // di qui e gli hook stavano SOTTO, aprire `?modulo=` voleva dire montare
+  // App con zero hook e aprire il gestionale montarla con centottantacinque:
+  // due componenti diversi con lo stesso nome. Reggeva per un caso — la
+  // strada la decide l'indirizzo, che non cambia finche' non si ricarica la
+  // pagina — e si sarebbe rotto il giorno in cui qualcuno avesse aggiunto
+  // una navigazione interna, con una schermata bianca impossibile da
+  // ricondurre alla causa.
+  //
+  // In piu' c'e' un guadagno che si vede: prima, aprendo una pagina
+  // pubblica, App montava comunque tutto il suo stato. Adesso no — chi apre
+  // il modulo di iscrizione carica il modulo, e basta.
+  return <Gestionale />;
+}
+
+function Gestionale() {
+
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
   // chi ha fatto accesso: "user" (password generica, tutti), "amministratore"
   // o "programmatore" (entra ovunque senza dover reinserire nessun'altra
