@@ -716,6 +716,15 @@ const PUNTI_NEEDLING_DEFAULT = { soglie: [60, 120], quote: [100, 100, 100] };
 // needling vendono un altro carrello e possono scontare diversamente.
 const CHIAVE_FASCE_NEEDLING_CARTA = "fasceSconto_corsiNeedling_carta";
 const CHIAVE_FASCE_NEEDLING_CONTANTI = "fasceSconto_corsiNeedling_contanti";
+// Le fasce delle FIERE. Sono una serie a se' — non le tabelle dei corsi
+// riusate — e il motivo e' tutto qui: in fiera si tratta sul prezzo, in
+// aula no. Una percentuale alzata per una fiera non deve arrivare agli
+// allievi di un corso, e viceversa. Nascono ricopiando quelle dei corsi,
+// che e' il punto di partenza, e da li' in poi vivono per conto proprio.
+// Chi le applica: il POS, quando al banco c'e' un evento selezionato e
+// chi vende accende "Sconto fiera". Nessun codice di mezzo.
+const CHIAVE_FASCE_EVENTI_CARTA = "fasceSconto_eventi_carta";
+const CHIAVE_FASCE_EVENTI_CONTANTI = "fasceSconto_eventi_contanti";
 // L'eccezione della serie: sui prodotti del reparto Needling non valgono
 // le fasce, vale questa tabella a scaglioni di spesa. Le percentuali sono
 // SUL NETTO, non sul lordo come le fasce, e le due non si sommano mai.
@@ -40682,6 +40691,11 @@ function SchedaFasceCodiceAula({
   regoleReferralAutomatico, prodottiShop, coupon, corsiDate, corsi, ricarica, isMobile,
   serie = "corsi", chiaveCarta = CHIAVE_FASCE_CORSI_CARTA, chiaveContanti = CHIAVE_FASCE_CORSI_CONTANTI,
   titolo = "Sconto ai corsi, con il codice d'aula",
+  // Una serie SENZA CODICI: gli eventi. Niente coupon da riscrivere,
+  // niente colonna del sito — una fiera non ha un codice d'aula e non ha
+  // una vetrina online — e una descrizione sua, perche' quella dei corsi
+  // parla di allievi e di edizioni.
+  senzaCodici = false, descrizione = null, etichettaSalva = "Salva le fasce dei corsi",
   // Da dove si puo' ricopiare una tabella gia' fatta. Una serie nuova
   // nasce vuota, e riscrivere a mano ventiquattro numeri per poi
   // cambiarne due e' il modo migliore per sbagliarne uno.
@@ -40800,8 +40814,10 @@ function SchedaFasceCodiceAula({
     <div style={{ ...cardStyle, marginBottom: 22 }}>
       <div style={{ ...fontDisplay, fontSize: 16.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 10 }}>{titolo}</div>
       <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
-        Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine del prodotto: piu' alto il margine, piu' alto lo sconto. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app.
-        {serie === "needling" && <> Valgono sui corsi di <b style={{ color: NAVY }}>needling</b>, e su quelli soltanto.</>}
+        {descrizione || (<>
+          Le percentuali che il codice di ogni edizione applica agli allievi, per fascia di margine del prodotto: piu' alto il margine, piu' alto lo sconto. Due serie: una per chi paga con carta o compra dallo shop online, una per chi paga in contanti o con buono Amazon al POS dell'app.
+          {serie === "needling" && <> Valgono sui corsi di <b style={{ color: NAVY }}>needling</b>, e su quelli soltanto.</>}
+        </>)}
       </div>
       {/* Dal 22/09/2026 i codici d'aula possono stare a percentuale
           fissa invece che a fasce. Questa tabella resta scritta e
@@ -40846,26 +40862,17 @@ function SchedaFasceCodiceAula({
               </button>
             )}
           </div>
-          {/* Dal 18/10/2026 queste tabelle non valgono piu' solo in aula:
-              le pesca anche il banco di una fiera. Chi viene qui a
-              cambiare un numero deve saperlo prima di cambiarlo, non
-              dopo. */}
-          {serie === "corsi" && (
-            <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, lineHeight: 1.6, background: "#EDF2F8", border: "1px solid #D3DCE8", borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
-              <b style={{ color: NAVY }}>Valgono anche agli eventi.</b> Al POS, con un evento selezionato, chi vende
-              può accendere <b>Sconto fiera</b>: quel carrello prende queste stesse fasce — carta o contanti secondo
-              come si paga — senza bisogno di nessun codice. Cambiare un numero qui cambia anche quello che si sconta
-              in fiera.
-            </div>
-          )}
-          <FasceDiSpesa valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
+          <FasceDiSpesa senzaWoo={senzaCodici} valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
-            <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : "Salva le fasce dei corsi"}</Button>
+            <Button onClick={salvaFasceCorso} disabled={salvandoFasceCorso}>{salvandoFasceCorso ? "Salvo…" : etichettaSalva}</Button>
             {msgFasceCorso && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgFasceCorso.startsWith("Errore") ? "#C0392B" : "#2E7D32" }}>{msgFasceCorso}</span>}
           </div>
           {/* salvare le fasce vale dai prossimi codici: questi sono
               quelli gia' in giro, che portano ancora la regola con cui
-              sono nati */}
+              sono nati. Agli eventi tutto questo non si applica: non c'e'
+              nessun codice da riscrivere, le tabelle valgono dal momento
+              in cui si salvano. */}
+          {!senzaCodici && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
             <Button variant="ghost" onClick={applicaFasceAiCodiciAula} disabled={applicandoAiCorsi || codiciAulaDaAggiornare.length === 0}>
               {applicandoAiCorsi ? "Riscrivo…" : `Applica ai codici ${serie === "needling" ? "needling" : "d'aula"} esistenti${codiciAulaDaAggiornare.length ? ` (${codiciAulaDaAggiornare.length})` : ""}`}
@@ -40879,6 +40886,7 @@ function SchedaFasceCodiceAula({
             </span>
             {msgCodiciCorsi && <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: msgCodiciCorsi.startsWith("Errore") ? "#C0392B" : "#2E7D32", flexBasis: "100%" }}>{msgCodiciCorsi}</span>}
           </div>
+          )}
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6 }}>Contanti o buono Amazon dal POS dell'app</div>
             {onCopiaContanti && (
@@ -41512,6 +41520,70 @@ function PannelloCodiciAcquistoMaster({ master, coupon, couponAcquistoPerMasterI
   );
 }
 
+// GLI SCONTI DELLE FIERE.
+//
+// Una serie tutta loro, non le tabelle dei corsi riusate. In fiera si
+// tratta sul prezzo e si vende a chi passa; in aula lo sconto e' quello
+// che la scuola fa ai suoi allievi. Tenerle insieme voleva dire che
+// alzare di un punto per una fiera lo alzava anche a tutte le classi, e
+// nessuno se ne sarebbe accorto prima di leggere un incasso.
+//
+// Il punto di partenza pero' sono proprio quelle dei corsi: il tasto
+// "Copia da corsi" le ricopia qui dentro, soglie comprese, e da li' si
+// cambia solo dove serve. Una serie che nasce vuota si riempie a mano,
+// ventiquattro numeri, ed e' il modo migliore per sbagliarne uno.
+//
+// Qui non c'e' niente che riguardi i codici: una fiera non ha un codice
+// d'aula da riscrivere e non ha una vetrina sul sito. Al banco le pesca
+// la spunta "Sconto fiera", con un evento selezionato.
+function PannelloScontiEventi({ prodottiShop, coupon, corsi, corsiDate, ricarica, isMobile }) {
+  const [, salvaEventiCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CARTA, null);
+  const [, salvaEventiContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CONTANTI, []);
+  const [fasceCorsiCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
+  const [fasceCorsiContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  const sePuoCopiare = serieScontoScritta(fasceCorsiCarta);
+  // Copiare qui non tocca niente di la': si scrive solo l'impostazione
+  // degli eventi. Nessun coupon da riallineare, nessuna riga di base da
+  // riscrivere — quelle servono ai codici, e qui codici non ce ne sono.
+  const copiaCartaDaiCorsi = () => { if (sePuoCopiare) salvaEventiCarta(gruppiFasceValidi(fasceCorsiCarta)); };
+  const copiaContantiDaiCorsi = () => {
+    salvaEventiContanti(serieScontoScritta(fasceCorsiContanti) ? gruppiFasceValidi(fasceCorsiContanti) : []);
+  };
+  return (
+    <div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.55 }}>
+        Le percentuali che si applicano al <b style={{ color: NAVY }}>banco di una fiera</b>. Valgono per tutti gli
+        eventi, e <b style={{ color: NAVY }}>non si accendono da sole</b>: al POS si sceglie l'evento e chi vende
+        spunta <b style={{ color: NAVY }}>Sconto fiera</b> sul carrello, uno per uno — a una fiera c'è chi paga pieno
+        e chi si contratta il prezzo, e quella scelta resta a chi sta al banco.
+        <br />
+        Sono separate da quelle dei corsi apposta: qui si può alzare o abbassare senza toccare quello che la scuola
+        sconta ai suoi allievi. Il tasto <b style={{ color: NAVY }}>Copia da corsi</b> serve a partire da lì la prima
+        volta.
+      </div>
+
+      <SchedaFasceCodiceAula
+        senzaCodici
+        serie="eventi"
+        copiaDa="corsi"
+        onCopiaCarta={sePuoCopiare ? copiaCartaDaiCorsi : null}
+        onCopiaContanti={copiaContantiDaiCorsi}
+        chiaveCarta={CHIAVE_FASCE_EVENTI_CARTA}
+        chiaveContanti={CHIAVE_FASCE_EVENTI_CONTANTI}
+        titolo="Sconto agli eventi, al banco della fiera"
+        etichettaSalva="Salva le fasce degli eventi"
+        descrizione={<>
+          Per fascia di margine del prodotto: più alto il margine, più alto lo sconto. Due serie, come per i corsi:
+          una per chi paga con carta, una — più generosa — per chi paga in contanti o con buono Amazon, dove
+          l'incasso costa meno di commissioni.
+        </>}
+        regoleReferralAutomatico={null} prodottiShop={prodottiShop}
+        coupon={coupon} corsiDate={corsiDate} corsi={corsi} ricarica={ricarica} isMobile={isMobile}
+      />
+    </div>
+  );
+}
+
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ruoloUtente, ricarica, onBack, titolo = "Genera Coupon" }) {
   // i nomi delle cinque tessere si riscrivono col tasto destro, come
   // quelli della home: stessa tabella, pagina "generacoupon"
@@ -41923,6 +41995,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             { v: "manuale", l: "Generazione manuale", Icona: IconaMatitaNota },
             { v: "automatica", l: "Generazione automatica", Icona: IconaOrologioCard },
             { v: "needling", l: "Automatica codici needling", Icona: IconaCatEtichetta },
+            { v: "eventi", l: "Sconti eventi", Icona: IconaCalendarioCard },
             { v: "referral", l: "Genera referral code", Icona: IconaPersonaAggiungi },
             { v: "acquistomaster", l: "Genera codice sconto master", Icona: IconaTileMaster },
           ].map((t) => (
@@ -42059,6 +42132,13 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             regoleNeedling={regoleReferralNeedling} prodottiShop={prodottiShop}
             coupon={coupon} corsi={corsi} corsiDate={corsiDate} location={location} master={master}
             codiciGenerati={couponAutomaticiNeedling} onElimina={eliminaCoupon} eliminandoId={eliminandoId}
+            ricarica={ricarica} isMobile={isMobile}
+          />
+        )}
+
+        {tab === "eventi" && (
+          <PannelloScontiEventi
+            prodottiShop={prodottiShop} coupon={coupon} corsi={corsi} corsiDate={corsiDate}
             ricarica={ricarica} isMobile={isMobile}
           />
         )}
@@ -67460,6 +67540,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   // la seconda serie di fasce dei codici d'aula, per chi paga in contanti
   const [fasceContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  // le fasce delle fiere: una serie a se', scritta in Genera Coupon →
+  // Sconti eventi. Non sono quelle dei corsi: in fiera si tratta, in
+  // aula no
+  const [fasceEventiCartaPos] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CARTA, null);
+  const [fasceEventiContantiPos] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CONTANTI, []);
   const [pctContantiCorsiPos] = useImpostazioneCondivisa(CHIAVE_SCONTO_CORSI_CONTANTI_PCT, null);
   // e la tabella della carta: sul coupon e' congelata la sola riga di
   // base, le quattro righe di spesa stanno qui
@@ -68095,10 +68180,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   //
   // In aula lo sconto a fasce lo porta il codice: senza codice il
   // carrello paga pieno. A una fiera i codici d'aula non ci sono, ma lo
-  // sconto che si fa al banco e' lo stesso, e deve pescare dalle STESSE
-  // tabelle — Sconti → "Sconto ai corsi, con il codice d'aula" — carta o
-  // contanti secondo come si paga. Non una copia: una copia nasce uguale
-  // e in un mese e' diversa senza che nessuno sappia dire perche'.
+  // sconto che si fa al banco funziona uguale, e pesca dalle tabelle
+  // DEGLI EVENTI — Genera Coupon → Sconti eventi — carta o contanti
+  // secondo come si paga. Non quelle dei corsi: in fiera si tratta sul
+  // prezzo, in aula lo sconto e' quello che la scuola fa ai suoi
+  // allievi, e alzarne uno non deve alzare l'altro.
   //
   // Due regole, volute, e sono quelle che lo rendono sicuro:
   //
@@ -68115,7 +68201,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // `puoScontare`, che e' il permesso dello sconto a mano — la cifra
   // inventata al momento. Questa e' una tabella decisa dall'ufficio,
   // esattamente come il codice d'aula, che infatti lo usano tutti.
-  const tabellaFieraCarta = serieScontoScritta(fasceCorsiCartaPos) ? fasceCorsiCartaPos : null;
+  const tabellaFieraCarta = serieScontoScritta(fasceEventiCartaPos) ? fasceEventiCartaPos : null;
   // `couponNum` e' la percentuale battuta a mano nel campo Coupon, che
   // esiste anche senza un codice vero: lasciarla convivere con la fiera
   // voleva dire totale calcolato con una regola e righe con l'altra —
@@ -68124,7 +68210,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const scontoFieraDisponibile = !!eventoPosSel && !!tabellaFieraCarta && !couponAttivo && !(couponNum > 0) && !omaggioAttivo;
   const scontoFieraAttivo = scontoFieraDisponibile && scontoFiera;
   const fasceFieraAttive = scontoFieraAttivo
-    ? fasceCorsiPerPagamento(tabellaFieraCarta, fasceContantiCorsiPos, pagamentoContaComeContanti(metodoPagamento))
+    ? fasceCorsiPerPagamento(tabellaFieraCarta, fasceEventiContantiPos, pagamentoContaComeContanti(metodoPagamento))
     : null;
   // Le fasce che stanno valendo su QUESTO carrello, da qualunque parte
   // arrivino: il codice o la fiera. Da qui in giu' si guarda questa, cosi'
@@ -68137,7 +68223,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // "sta valendo la serie dei contanti": vale per i codici e per la fiera
   const fasceContantiInUso = pagamentoContaComeContanti(metodoPagamento) && (couponAFasce
     ? (couponPersonaleAttivo ? serieScontoScritta(fasceReferralContantiPos) : serieScontoScritta(contantiDiClasse))
-    : scontoFieraAttivo && serieScontoScritta(fasceContantiCorsiPos));
+    : scontoFieraAttivo && serieScontoScritta(fasceEventiContantiPos));
   const scontoDellaFiera = scontoFieraAttivo
     ? scontoAFasceCarrello(carrello, prodottiPerId, fasceFieraAttive, pagamentoContaComeContanti(metodoPagamento), null)
     : 0;
@@ -69069,10 +69155,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     : (couponAttivo || couponNum > 0)
                       ? "Su questo carrello c'è già uno sconto a codice, e i due non si sommano."
                       : !tabellaFieraCarta
-                        ? "Le fasce non sono ancora scritte: si riempiono in Sconti → Sconto ai corsi."
+                        ? "Le fasce degli eventi non sono ancora scritte: Genera Coupon → Sconti eventi."
                         : scontoFieraAttivo
-                          ? `Le fasce dei corsi, serie ${fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeErogata)} su questo carrello.`
-                          : "Applica a questo carrello le stesse fasce di sconto dei corsi."}
+                          ? `Fasce degli eventi, serie ${fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeErogata)} su questo carrello.`
+                          : "Applica a questo carrello le fasce di sconto degli eventi."}
                 </span>
               </span>
             </label>
