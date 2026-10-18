@@ -189,9 +189,16 @@ export async function emettiFattura(
         // un pagamento gia' incassato.
         ...(contoSaldoId ? { payment_account: { id: contoSaldoId } } : {}),
       }],
-      // per ID se quel metodo esiste gia' sull'azienda, altrimenti per
-      // nome: cosi' la fattura dice sempre come e' stata incassata
-      payment_method: metodoId ? { id: metodoId } : { name: metodo },
+      // PER ID, O NIENTE.
+      //
+      // Se quel metodo e' gia' censito sull'azienda si manda il suo id e
+      // la fattura dice come e' stata incassata. Se non c'e', il campo si
+      // lascia proprio fuori: e' facoltativo, e mandare un nome che di
+      // la' non esiste e' il modo piu' rapido per farsi rifiutare il
+      // documento — o per ritrovarsi l'anagrafica dei metodi piena di
+      // voci nate una per fattura. Meglio una fattura senza quella riga
+      // che una fattura che non parte.
+      ...(metodoId ? { payment_method: { id: metodoId } } : {}),
     },
   };
 
