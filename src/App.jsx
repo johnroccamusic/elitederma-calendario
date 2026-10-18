@@ -83881,3 +83881,21 @@ export default function App() {
     </CorniceTelefono>
   );
 }
+
+// ---------------------------------------------------------------------------
+// QUELLO CHE LE PROVE DEVONO POTER CHIAMARE.
+//
+// App.jsx esporta solo `App`, e va benissimo: nessuno importa pezzi di qui.
+// Le prove pero' devono poter prendere in mano le funzioni che fanno i conti
+// — lo sconto a fasce, il costo di un kit dalla sua distinta — e montare da
+// sole le schede che si rompono piu' spesso.
+//
+// E' una riga sola e non cambia niente di quello che gira: aggiunge nomi
+// all'uscita del modulo, non comportamenti. L'alternativa era impacchettare
+// App.jsx a parte dentro ogni prova, cioe' provare una COPIA del codice
+// invece del codice.
+export {
+  scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
+  costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
+  SchedaFatturaDaEmettere, PannelloScontiEventi,
+};
