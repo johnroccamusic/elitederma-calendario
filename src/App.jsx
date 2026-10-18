@@ -65135,6 +65135,16 @@ const CAMPI_CLIENTE_FATTURA = [
 const FATTURA_COME_SCRITTO = new Set(["pec", "email"]);
 const inMaiuscoloSeServe = (chiave, valore) =>
   FATTURA_COME_SCRITTO.has(chiave) ? valore : String(valore ?? "").toUpperCase();
+// SOLO I CAMPI DELLA FATTURA, e niente altro.
+//
+// L'anagrafica letta da `clienti_fattura` si porta dietro `id`,
+// `creato_il`, `aggiornato_il`. Finiti dentro il cliente, due cose
+// succedono: il maiuscolo generale storpia l'id ("cf1" -> "CF1") e il
+// salvataggio prova a riscrivere la chiave primaria con quel valore
+// mangiato. Si tiene solo quello che una fattura usa davvero.
+const soloCampiFattura = (dati) => Object.fromEntries(
+  CAMPI_CLIENTE_FATTURA.map(([chiave]) => [chiave, dati?.[chiave] ?? ""]).filter(([, v]) => v !== "" && v != null),
+);
 const clienteInMaiuscolo = (cliente) => Object.fromEntries(
   Object.entries(cliente || {}).map(([k, v]) => [k, typeof v === "string" ? inMaiuscoloSeServe(k, v) : v]),
 );
@@ -65170,6 +65180,7 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
   const [copiato, setCopiato] = useState(false);
   const [msg, setMsg] = useState("");
 
+  const alBanco = pagamento.tipo === "banco";
   const nome = cliente.ditta || [cliente.nome, cliente.cognome].filter(Boolean).join(" ") || "Cliente senza nome";
   // quello che manca per una fattura elettronica: si dice prima, non
   // dopo aver provato a emetterla
@@ -65187,11 +65198,35 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
   }
   async function salvaDati() {
     setSalvando(true);
+    // Una vendita al banco i dati di fatturazione non li tiene addosso:
+    // stanno in anagrafica, ed e' li' che si correggono. Se l'anagrafica
+    // non c'e' ancora — il venditore ha spuntato "richiede fattura" e
+    // basta — si crea adesso e la vendita ci si aggancia.
+    if (alBanco) {
+      let idAnagrafica = pagamento.cliente_fattura_id;
+      if (idAnagrafica) {
+        const { error } = await supabase.from("clienti_fattura")
+          .update({ ...soloCampiFattura(cliente), aggiornato_il: new Date().toISOString() }).eq("id", idAnagrafica);
+        setSalvando(false);
+        if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      } else {
+        const { data: nata, error } = await supabase.from("clienti_fattura").insert(soloCampiFattura(cliente)).select("id").maybeSingle();
+        if (error) { setSalvando(false); setMsg("Errore: " + testoErrore(error)); return; }
+        idAnagrafica = nata?.id || null;
+        if (idAnagrafica) await supabase.from("vendite_shop").update({ cliente_fattura_id: idAnagrafica, richiede_fattura: true }).eq("id", pagamento.id);
+        setSalvando(false);
+      }
+      setMsg("Dati salvati.");
+      onSalvato?.();
+      return;
+    }
     const { error } = await supabase.from("pagamenti_pos")
       .update({ cliente, note_fattura: note || null, aggiornato_il: new Date().toISOString() })
       .eq("id", pagamento.id);
     if (!error && pagamento.cliente_fattura_id) {
-      await supabase.from("clienti_fattura").update({ ...cliente, aggiornato_il: new Date().toISOString() }).eq("id", pagamento.cliente_fattura_id);
+      await supabase.from("clienti_fattura")
+        .update({ ...soloCampiFattura(cliente), aggiornato_il: new Date().toISOString() })
+        .eq("id", pagamento.cliente_fattura_id);
     }
     setSalvando(false);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
@@ -65225,7 +65260,11 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
     )) return;
     setEmettendo(true); setMsg("");
     const { data, error } = await supabase.functions.invoke("pos-emetti-fattura", {
-      body: { codice: pagamento.codice, cliente, verificatoDa: chi || null },
+      // una vendita al banco si chiama per id, un pagamento col QR per
+      // codice: di la' la funzione sa gia' cosa fare con tutti e due
+      body: alBanco
+        ? { venditaId: pagamento.id, cliente, verificatoDa: chi || null }
+        : { codice: pagamento.codice, cliente, verificatoDa: chi || null },
     });
     if (error) {
       const dettaglio = await testoErroreFunzione(error);
@@ -65243,6 +65282,16 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
     if (!numero.trim()) { setMsg("Scrivi il numero della fattura che hai emesso."); return; }
     if (!window.confirm(`Segno questo incasso come fatturato con il numero ${numero.trim()}?\n\nLa riga esce da "Fatture da emettere".`)) return;
     setSalvando(true);
+    if (alBanco) {
+      const { error: erroreBanco } = await supabase.from("vendite_shop").update({
+        fattura_numero: numero.trim(), fattura_manuale: true,
+        fattura_emessa_il: new Date().toISOString(), richiede_fattura: true,
+      }).eq("id", pagamento.id);
+      setSalvando(false);
+      if (erroreBanco) { setMsg("Errore: " + testoErrore(erroreBanco)); return; }
+      onSalvato?.();
+      return;
+    }
     const { error } = await supabase.from("pagamenti_pos").update({
       stato: "fatturato", fattura_manuale: true, fattura_numero: numero.trim(),
       fattura_emessa_il: new Date().toISOString(), cliente, note_fattura: note || null,
@@ -65262,7 +65311,7 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
         <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(Number(pagamento.importo) || 0)}</span>
       </div>
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>
-        Pagato con carta il {fmtData(pagamento.pagato_il)} · codice {pagamento.codice}
+        {alBanco ? "Carta al banco (terminale)" : "Carta col QR (Stripe)"} il {fmtData(pagamento.pagato_il)} · {pagamento.codice}
         {pagamento.descrizione ? ` · ${pagamento.descrizione}` : ""}
       </div>
 
@@ -65318,10 +65367,23 @@ function SchedaFatturaDaEmettere({ pagamento, isMobile, onSalvato, chi = "" }) {
   );
 }
 
+// Al banco il nome della cliente e' una riga sola ("emanuela razzu"), e
+// una fattura vuole nome e cognome separati. Si taglia sull'ultimo
+// spazio: non e' una regola perfetta — i cognomi doppi la fregano — ma
+// e' un punto di partenza che chi emette vede e corregge, meglio di due
+// caselle vuote.
+function nomeSpezzato(intero) {
+  const pezzi = String(intero || "").trim().split(/\s+/).filter(Boolean);
+  if (pezzi.length === 0) return {};
+  if (pezzi.length === 1) return { nome: pezzi[0] };
+  return { nome: pezzi.slice(0, -1).join(" "), cognome: pezzi[pezzi.length - 1] };
+}
+
 function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emettere" }) {
   const isMobile = useIsMobile();
   const [pagamenti, setPagamenti] = useState(null);
   const [vista, setVista] = useState("daemettere");
+  const [vendite, setVendite] = useState([]);
   const [preparandoLink, setPreparandoLink] = useState(false);
   // IL CONTO DI SALDO.
   //
@@ -65375,7 +65437,48 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
       .select("*").in("stato", ["da_verificare", "fatturato"])
       .order("pagato_il", { ascending: false }).limit(400);
     if (error) { setMsg("Non riesco a leggere i pagamenti: " + testoErrore(error)); setPagamenti([]); return; }
-    setPagamenti(data || []);
+    const daStripe = data || [];
+    setPagamenti(daStripe);
+
+    // LE VENDITE COL TERMINALE FISICO.
+    //
+    // Non passano da `pagamenti_pos` — quella e' la tabella del QR — e
+    // fino al 18/10/2026 non arrivavano in nessuna lista: una fattura
+    // chiesta al banco restava a carico della memoria di chi vendeva.
+    //
+    // Chi entra: solo chi ha pagato a CARTA. Contanti e buono Amazon
+    // restano fuori per decisione del titolare, e il filtro e' scritto
+    // qui e ripetuto dentro la edge function, perche' una regola che
+    // vive in un `.filter()` del browser non e' una regola.
+    //
+    // E dentro "ha chiesto fattura" ci stanno DUE segni, non uno: la
+    // spunta del venditore, oppure i dati di fatturazione compilati. Al
+    // banco capita di scrivere l'anagrafica e dimenticare la spunta —
+    // oggi e' successo nove volte su quarantuno — e quella fattura la
+    // cliente l'aspetta lo stesso.
+    const { data: vend, error: erroreVendite } = await supabase.from("vendite_shop")
+      .select("id, numero_ordine, data_ordine, totale, prodotti, cliente_nome, cliente_email, cliente_fattura_id, richiede_fattura, fattura_numero, fattura_fic_id, fattura_emessa_il, fattura_manuale, pagamento_codice, note")
+      .eq("origine", "pos").eq("metodo_pagamento", "pos")
+      .is("pagamento_codice", null)
+      .not("tipo_movimento", "in", '("annullamento","omaggio")')
+      .order("data_ordine", { ascending: false }).limit(400);
+    if (erroreVendite) { setVendite([]); return; }
+    const collegate = new Set(daStripe.map((p) => p.vendita_id).filter(Boolean));
+    const nostre = (vend || []).filter((v) => !collegate.has(v.id) && (v.richiede_fattura || v.cliente_fattura_id));
+    // i dati di fatturazione stanno in anagrafica, non sulla vendita: si
+    // leggono qui una volta sola, non una query per riga
+    const idAnagrafiche = [...new Set(nostre.map((v) => v.cliente_fattura_id).filter(Boolean))];
+    let perId = {};
+    if (idAnagrafiche.length) {
+      const { data: anagrafiche } = await supabase.from("clienti_fattura").select("*").in("id", idAnagrafiche);
+      perId = Object.fromEntries((anagrafiche || []).map((a) => [a.id, a]));
+    }
+    setVendite(nostre.map((v) => ({
+      ...v,
+      cliente: v.cliente_fattura_id && perId[v.cliente_fattura_id]
+        ? soloCampiFattura(perId[v.cliente_fattura_id])
+        : nomeSpezzato(v.cliente_nome),
+    })));
   }
   useEffect(() => { carica(); }, []);
 
@@ -65391,7 +65494,23 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
   // `vendite_shop` (il terminale fisico): li' il filtro dovra' tenere
   // fuori `metodo_pagamento` "contanti" e "buono_amazon", e questo
   // commento e' il motivo per cui non va "sistemato" allargandolo.
-  const tutti = pagamenti || [];
+  // Le vendite al banco si presentano con la stessa forma di un
+  // pagamento Stripe: la scheda che le disegna e' una sola, e non deve
+  // sapere da dove arriva quello che ha in mano.
+  const daBanco = (vendite || []).map((v) => ({
+    ...v,
+    tipo: "banco",
+    codice: v.numero_ordine,
+    importo: v.totale,
+    pagato_il: v.data_ordine,
+    descrizione: "Carta al banco",
+    stato: v.fattura_numero ? "fatturato" : "da_verificare",
+    righe: (Array.isArray(v.prodotti) ? v.prodotti : []).map((r) => ({
+      nome: r.nome, quantita: r.quantita,
+      prezzo: Number(r.totale_riga ?? 0) / Math.max(1, Number(r.quantita) || 1),
+    })),
+  }));
+  const tutti = [...(pagamenti || []).map((p) => ({ ...p, tipo: "stripe" })), ...daBanco];
   const daEmettere = tutti.filter((p) => p.stato === "da_verificare");
   const fatte = tutti.filter((p) => p.stato === "fatturato");
   const elenco = vista === "daemettere" ? daEmettere : fatte;

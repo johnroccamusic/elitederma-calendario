@@ -31,16 +31,81 @@ Deno.serve(async (req) => {
 
   let corpo: any;
   try { corpo = await req.json(); } catch { return risposta({ errore: "Corpo non valido." }, 400); }
-  const codice = String(corpo?.codice || "").toUpperCase();
-  if (!codice) return risposta({ errore: "Manca il codice del pagamento." }, 400);
 
-  const { data: pag } = await sb.from("pagamenti_pos").select("*").eq("codice", codice).maybeSingle();
-  if (!pag) return risposta({ errore: "Pagamento non trovato." }, 404);
-  if (pag.stato === "fatturato") {
-    return risposta({ gia: true, fatturaId: pag.fattura_fic_id, numero: pag.fattura_numero });
-  }
-  if (pag.stato !== "da_verificare") {
-    return risposta({ errore: `Questo pagamento e' in stato "${pag.stato}": si fattura solo quello che e' stato incassato.` }, 409);
+  // DUE STRADE PER ARRIVARE QUI, e sono due incassi diversi.
+  //
+  //   `codice`    un pagamento col QR di Stripe: vive in `pagamenti_pos`
+  //   `venditaId` una vendita pagata col terminale al banco, che in
+  //               `pagamenti_pos` non c'e' mai stata
+  //
+  // Da qui in giu' il lavoro e' lo stesso — stessi controlli, stesso
+  // documento, stesso conto — e cambia solo dove si scrive l'esito.
+  // Scritte due funzioni separate, un giorno una delle due avrebbe
+  // smesso di chiedere il conto di saldo o di mandare il metodo giusto.
+  const codice = String(corpo?.codice || "").toUpperCase();
+  const venditaId = String(corpo?.venditaId || "").trim();
+  if (!codice && !venditaId) return risposta({ errore: "Manca il codice del pagamento o la vendita." }, 400);
+
+  const daBanco = !codice;
+  let pag: any = null;
+  let venditaAlBanco: any = null;
+
+  if (daBanco) {
+    const { data: v } = await sb.from("vendite_shop").select("*").eq("id", venditaId).maybeSingle();
+    if (!v) return risposta({ errore: "Vendita non trovata." }, 404);
+    if (v.fattura_numero) return risposta({ gia: true, fatturaId: v.fattura_fic_id, numero: v.fattura_numero });
+    // CONTANTI E BUONO AMAZON NON SI FATTURANO DA QUI. Deciso dal
+    // titolare il 18/10/2026: in quella lista entrano solo gli incassi a
+    // carta. Il controllo sta anche qui e non solo nel filtro della
+    // pagina, perche' una regola che vive in un `.filter()` del browser
+    // non e' una regola.
+    const metodo = String(v.metodo_pagamento || "").toLowerCase();
+    if (metodo !== "pos") {
+      return risposta({ errore: `Questa vendita e' stata incassata con "${v.metodo_pagamento || "metodo sconosciuto"}": da qui si fatturano solo gli incassi a carta.` }, 409);
+    }
+    if (String(v.tipo_movimento || "") === "annullamento" || String(v.tipo_movimento || "") === "omaggio") {
+      return risposta({ errore: "Un omaggio o un annullamento non si fattura." }, 409);
+    }
+    venditaAlBanco = v;
+    // la stessa forma che ha un pagamento Stripe, cosi' il resto della
+    // funzione non deve sapere da dove arriva
+    pag = {
+      id: v.id,
+      codice: v.numero_ordine,
+      importo: v.totale,
+      pagato_il: v.data_ordine,
+      cliente_fattura_id: v.cliente_fattura_id,
+      vendita_id: v.id,
+      righe: (Array.isArray(v.prodotti) ? v.prodotti : []).map((r: any) => ({
+        nome: r.nome,
+        quantita: r.quantita,
+        // sulla vendita al banco il prezzo gia' scontato della riga si
+        // chiama `totale_riga`: e' quello che la cliente ha pagato
+        prezzo: Number(r.totale_riga ?? 0) / Math.max(1, Number(r.quantita) || 1),
+      })),
+      cliente: {},
+    };
+    // i dati di fatturazione: l'anagrafica collegata alla vendita, e
+    // sopra quella quello che e' stato corretto adesso nella scheda
+    if (v.cliente_fattura_id) {
+      const { data: anagrafica } = await sb.from("clienti_fattura").select("*").eq("id", v.cliente_fattura_id).maybeSingle();
+      if (anagrafica) pag.cliente = { ...anagrafica };
+    }
+    if (!pag.cliente.ditta && !pag.cliente.nome && v.cliente_nome) {
+      const pezzi = String(v.cliente_nome).trim().split(/\s+/);
+      pag.cliente.nome = pezzi.slice(0, -1).join(" ") || pezzi[0];
+      pag.cliente.cognome = pezzi.length > 1 ? pezzi[pezzi.length - 1] : "";
+    }
+  } else {
+    const { data: p } = await sb.from("pagamenti_pos").select("*").eq("codice", codice).maybeSingle();
+    if (!p) return risposta({ errore: "Pagamento non trovato." }, 404);
+    if (p.stato === "fatturato") {
+      return risposta({ gia: true, fatturaId: p.fattura_fic_id, numero: p.fattura_numero });
+    }
+    if (p.stato !== "da_verificare") {
+      return risposta({ errore: `Questo pagamento e' in stato "${p.stato}": si fattura solo quello che e' stato incassato.` }, 409);
+    }
+    pag = p;
   }
 
   // i dati corretti a mano dall'app vincono su quelli arrivati da
@@ -73,10 +138,12 @@ Deno.serve(async (req) => {
   // Lo sa solo il sistema: il venditore preme un tasto e non trascrive
   // niente. Il segno e' `pagamento_codice` sulla vendita, valorizzato
   // solo quando il pagamento nasce da un QR.
-  const { data: vendita } = pag.vendita_id
-    ? await sb.from("vendite_shop").select("metodo_pagamento, pagamento_codice").eq("id", pag.vendita_id).maybeSingle()
-    : { data: null };
-  const daQr = !!(pag.stripe_payment_intent || pag.stripe_session_id || vendita?.pagamento_codice);
+  const { data: vendita } = venditaAlBanco
+    ? { data: venditaAlBanco }
+    : pag.vendita_id
+      ? await sb.from("vendite_shop").select("metodo_pagamento, pagamento_codice").eq("id", pag.vendita_id).maybeSingle()
+      : { data: null };
+  const daQr = !daBanco && !!(pag.stripe_payment_intent || pag.stripe_session_id || vendita?.pagamento_codice);
   const metodoVendita = String(vendita?.metodo_pagamento || "").toLowerCase();
   const nomeMetodo = daQr
     ? "Carta di credito (Stripe)"
@@ -133,17 +200,27 @@ Deno.serve(async (req) => {
       contoSaldoId: conto.id,
     });
 
-    await sb.from("pagamenti_pos").update({
-      stato: "fatturato",
-      cliente,
-      fattura_fic_id: fattura.id,
-      fattura_numero: fattura.numero,
-      fattura_emessa_il: new Date().toISOString(),
-      fattura_errore: null,
-      verificato_il: new Date().toISOString(),
-      verificato_da: corpo?.verificatoDa || null,
-      aggiornato_il: new Date().toISOString(),
-    }).eq("id", pag.id);
+    if (daBanco) {
+      await sb.from("vendite_shop").update({
+        fattura_fic_id: fattura.id,
+        fattura_numero: fattura.numero,
+        fattura_emessa_il: new Date().toISOString(),
+        fattura_errore: null,
+        richiede_fattura: true,
+      }).eq("id", pag.id);
+    } else {
+      await sb.from("pagamenti_pos").update({
+        stato: "fatturato",
+        cliente,
+        fattura_fic_id: fattura.id,
+        fattura_numero: fattura.numero,
+        fattura_emessa_il: new Date().toISOString(),
+        fattura_errore: null,
+        verificato_il: new Date().toISOString(),
+        verificato_da: corpo?.verificatoDa || null,
+        aggiornato_il: new Date().toISOString(),
+      }).eq("id", pag.id);
+    }
 
     if (pag.cliente_fattura_id) {
       await sb.from("clienti_fattura").update({ ...cliente, aggiornato_il: new Date().toISOString() }).eq("id", pag.cliente_fattura_id);
@@ -154,7 +231,8 @@ Deno.serve(async (req) => {
     const messaggio = e instanceof Error ? e.message : String(e);
     // l'errore resta scritto sulla richiesta: chi riprova domani deve
     // sapere cos'era andato storto, non ricominciare al buio
-    await sb.from("pagamenti_pos").update({ fattura_errore: messaggio, aggiornato_il: new Date().toISOString() }).eq("id", pag.id);
+    if (daBanco) await sb.from("vendite_shop").update({ fattura_errore: messaggio }).eq("id", pag.id);
+    else await sb.from("pagamenti_pos").update({ fattura_errore: messaggio, aggiornato_il: new Date().toISOString() }).eq("id", pag.id);
     return risposta({ errore: messaggio }, 502);
   }
 });
