@@ -39,16 +39,25 @@ export const consensoAreolaV1 = {
   sottotitolo:
     "DERMOPIGMENTAZIONE DELL'AREOLA DURANTE CORSO DI FORMAZIONE",
 
-  // UNA VOCE SOLA, E GIA' SCELTA.
+  // DUE VOCI, PERCHE' SONO DUE COSE DIVERSE.
   //
   // C'erano quattro varianti — ricostruzione cromatica, effetto 3D,
   // correzione del colore, copertura di cicatrici — e su un telefono
   // diventavano una tendina lunga quanto lo schermo, da leggere per
-  // scegliere una cosa che il corso ha gia' deciso. Il trattamento qui
-  // e' uno: come lo si esegue e' materia della lezione, non di una
-  // dichiarazione che firma la modella.
+  // scegliere fra modi di eseguire che il corso ha gia' deciso: come si
+  // lavora e' materia della lezione, non di una dichiarazione che firma
+  // la modella.
+  //
+  // Restano due voci perche' distinguono COSA si tratta, e non come.
+  // Dopo una mastoplastica additiva capita di non toccare l'areola e di
+  // lavorare solo sulla cicatrice che le gira intorno: e' un'altra zona,
+  // un altro risultato atteso, e sul consenso deve risultare quale delle
+  // due e' stata fatta — se un domani si discute del risultato, "ho
+  // pigmentato l'areola" e "ho attenuato una cicatrice" non sono la
+  // stessa frase.
   trattamenti: [
     "Dermopigmentazione del complesso areola capezzolo",
+    "Dermopigmentazione di cicatrici periareolari",
     "Altro",
   ],
   trattamentoPredefinito: "Dermopigmentazione del complesso areola capezzolo",
@@ -154,7 +163,9 @@ export const consensoAreolaV1 = {
 
 La dermopigmentazione dell'areola consiste nel depositare pigmento negli strati superficiali della cute per ricostruire il colore e il disegno dell'areola e del capezzolo, per correggerne il colore o le asimmetrie, per dare un effetto tridimensionale dove il rilievo non c'è più, o per attenuare il contrasto di una cicatrice.
 
-È un trattamento estetico: non è un intervento medico, non sostituisce alcuna terapia e non interviene sulla condizione clinica che ha reso necessario l'intervento chirurgico eventualmente subito.
+Lo stesso trattamento può riguardare le sole cicatrici periareolari — quelle che girano intorno all'areola dopo una mastoplastica additiva o un altro intervento — senza che l'areola venga pigmentata: in quel caso l'obiettivo è attenuare il contrasto fra la cicatrice e la cute intorno, non ricostruire un colore.
+
+È un trattamento estetico: non è un intervento medico, non sostituisce alcuna terapia e non interviene sulla condizione clinica che ha reso necessario l'intervento chirurgico eventualmente subito. Su una cicatrice il pigmento non la elimina e non la appiattisce: ne riduce il contrasto, e il risultato dipende da com'è fatta quella cicatrice.
 
 IL TRATTAMENTO SI SVOLGE DURANTE UN CORSO DI FORMAZIONE
 

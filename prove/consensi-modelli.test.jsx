@@ -314,10 +314,15 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
     // il consenso alle foto deve dire di che zona si tratta: senza, non
     // e' informato
     expect(c.caselle.find((x) => x.chiave === "immagini").testo).toContain("zona intima");
-    // una voce sola nella tendina, e gia' scelta: il trattamento lo
-    // decide il corso, non una scelta che firma la modella
-    expect(c.trattamenti.filter((t) => t !== "Altro")).toHaveLength(1);
+    // due voci, e distinguono COSA si tratta — non come. Dopo una
+    // mastoplastica additiva puo' toccare solo la cicatrice, e sul
+    // consenso deve risultare quale delle due e' stata fatta
+    expect(c.trattamenti).toContain("Dermopigmentazione del complesso areola capezzolo");
+    expect(c.trattamenti).toContain("Dermopigmentazione di cicatrici periareolari");
     expect(c.trattamentoPredefinito).toBe("Dermopigmentazione del complesso areola capezzolo");
+    // e il testo dice che su una cicatrice il risultato e' un altro
+    expect(c.testo).toContain("cicatrici periareolari");
+    expect(c.testo).toContain("non la elimina e non la appiattisce");
     // e il questionario deve chiedere quello che il PMU non chiedeva
     const chiavi = c.anamnesi.map((d) => d.chiave);
     for (const attesa of ["interventi_seno", "radio_chemio", "linfonodi_ascellari", "nulla_osta_medico"]) {
