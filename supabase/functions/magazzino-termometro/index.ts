@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   //    e metterlo in lista vorrebbe dire inventare uno scarto.
   const { data: nostri, error: erroreNostri } = await admin
     .from("prodotti_shop")
-    .select("id, nome, quantita, woo_product_id, stato, solo_offline")
+    .select("id, nome, quantita, woo_product_id, stato, solo_offline, tipo_prodotto, bundle_con_giacenza_fisica")
     .not("woo_product_id", "is", null)
     .eq("stato", "publish")
     .or("solo_offline.is.null,solo_offline.eq.false");
@@ -98,6 +98,48 @@ Deno.serve(async (req) => {
     if (lista.length < PER_PAGINA) break;
   }
 
+  // 2-bis. I BUNDLE NON HANNO UNA GIACENZA PROPRIA.
+  //
+  // La loro disponibilita' e' quanti se ne possono comporre coi
+  // componenti, ed e' QUELLA che l'app spinge sul sito
+  // (`sincronizzaDisponibilitaBundle`). Confrontare `quantita` — che su
+  // un bundle e' un numero che non vuol dire niente — faceva gridare
+  // proprio i prodotti che stavano benissimo: alla prima misura, 20 dei
+  // 33 scarti erano bundle, e fra loro tutti i peggiori. "Pelle
+  // sintetica Premium HQ - 3 pz" risultava sbagliata di 605 pezzi
+  // perche' confrontavo scatole con pezzi sfusi.
+  //
+  // La formula e' copiata da `sincronizzaDisponibilitaBundle` apposta:
+  // se misurassi con un conto diverso da quello che scrive il numero,
+  // misurerei la differenza fra i miei due conti e non uno scarto vero.
+  //
+  // Un bundle CON giacenza fisica (una scatola che si compra e si vende
+  // intera) e' un prodotto normale e resta fuori da qui.
+  const daComporre = new Map<string, number>();
+  const bundleVirtuali = (nostri || []).filter(
+    (p) => p.tipo_prodotto === "bundle" && !p.bundle_con_giacenza_fisica,
+  );
+  if (bundleVirtuali.length) {
+    const { data: componenti } = await admin
+      .from("bundle_componenti").select("bundle_id, componente_id, quantita_per_bundle")
+      .in("bundle_id", bundleVirtuali.map((p) => p.id));
+    const idComponenti = [...new Set((componenti || []).map((c) => c.componente_id))];
+    const { data: giacenzeComp } = idComponenti.length
+      ? await admin.from("prodotti_shop").select("id, quantita").in("id", idComponenti)
+      : { data: [] };
+    const giacenzaDi = new Map((giacenzeComp || []).map((c) => [c.id, Number(c.quantita ?? 0)]));
+    for (const b of bundleVirtuali) {
+      const suoi = (componenti || []).filter((c) => c.bundle_id === b.id);
+      if (!suoi.length) continue;   // senza distinta non si sa comporre niente: si lascia stare
+      let possibili = Infinity;
+      for (const c of suoi) {
+        const per = Number(c.quantita_per_bundle) || 0;
+        possibili = Math.min(possibili, per > 0 ? Math.floor((giacenzaDi.get(c.componente_id) ?? 0) / per) : 0);
+      }
+      if (Number.isFinite(possibili)) daComporre.set(b.id, possibili);
+    }
+  }
+
   // 3. il confronto
   const scarti: Record<string, unknown>[] = [];
   let confrontati = 0;
@@ -110,7 +152,8 @@ Deno.serve(async (req) => {
     // confrontare: non e' uno scarto, e' un'altra cosa
     if (!online.gestisce) { senzaGestione++; continue; }
     confrontati++;
-    const qui = Number(p.quantita ?? 0);
+    // per un bundle virtuale "qui" e' quanti se ne possono comporre
+    const qui = daComporre.has(p.id) ? (daComporre.get(p.id) as number) : Number(p.quantita ?? 0);
     const la = Number(online.quantita ?? 0);
     if (qui !== la) {
       scarti.push({
@@ -122,6 +165,7 @@ Deno.serve(async (req) => {
 
   const riepilogo = {
     confrontati, scarti: scarti.length,
+    bundle_calcolati: daComporre.size,
     senza_gestione_stock: senzaGestione, non_trovati_sul_sito: nonTrovati,
   };
   if (prova) return json({ ok: true, prova: true, ...riepilogo, elenco: scarti });

@@ -562,10 +562,23 @@ corregge: la direzione giusta non la sa un programma — due pezzi in meno sul
 sito possono essere un ordine non arrivato o un ammanco, e si rimedia in modi
 opposti.
 
-**Prima misura, 19/10/2026: su 161 prodotti confrontati, 33 non coincidono**
-— il peggiore è «Confezione Anellini Sterili 30 pz», 983 qui e 0 sul sito.
-Quindi alla domanda «oggi lo scarto è zero?» la risposta è no, ed è il motivo
-per cui spegnere la gestione dello stock su WooCommerce resta sospeso.
+**I bundle si misurano sulla disponibilità componibile**, non su `quantita` —
+che su un bundle non vuol dire niente. La formula (`min(floor(giacenza
+componente / quantità per bundle))`) è copiata da
+`sincronizzaDisponibilitaBundle`: misurare con un conto diverso da quello che
+*scrive* il numero vorrebbe dire misurare la differenza fra i propri due conti,
+non uno scarto vero. Un bundle **con** giacenza fisica è un prodotto normale e
+resta fuori.
+
+**Misura del 19/10/2026: su 161 prodotti confrontati, 25 non coincidono**, e
+quasi tutti di uno o due pezzi — deriva normale fra un ordine e la
+sincronizzazione. Il peggiore è «Micro pennello per sopracciglia 6pz», −33.
+
+La prima versione di quella misura ne diceva 33, col peggiore a −983: era
+sbagliata lei, perché confrontava le scatole del sito coi pezzi sfusi dell'app.
+Venti dei trentatré erano bundle, e fra loro tutti i peggiori. Resta comunque
+che lo scarto non è zero, ed è il motivo per cui spegnere la gestione dello
+stock su WooCommerce rimane sospeso.
 
 La funzione è chiusa dal gettone del cron (lo stesso delle email): senza,
 risponde 403. Il cron manda `timeout_milliseconds := 120000`, perché il
