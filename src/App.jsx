@@ -67466,6 +67466,34 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
   // escluso automaticamente
   const puoGestireResi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  // CHI DEVE LEGGERE I GUASTI TECNICI, e chi no.
+  //
+  // Una master che vende al banco non ha l'Advisor, non ha Gestione
+  // magazzino e non puo' sistemare una giacenza: dirle "vai a sistemare i
+  // quantitativi" la mette in difficolta' davanti a un cliente per una
+  // cosa che non la riguarda e che non puo' fare.
+  //
+  // Ma c'e' una riga che non si puo' nascondere a nessuno: "la vendita
+  // non e' stata registrata". Quella la deve sapere chi ha appena preso i
+  // soldi — altrimenti crede che sia andata, e non lo dice a nessuno.
+  // Quindi: a lei il fatto, in parole sue; a chi amministra il dettaglio
+  // tecnico; e in tutti e due i casi l'avviso resta scritto.
+  const chiAmministra = puoGestireResi;
+
+  // L'AVVISO SI SCRIVE, NON SI DICE E BASTA.
+  //
+  // Prima questi guasti vivevano dentro una finestra: premuto "ok", non
+  // restava niente da nessuna parte. Se chi vendeva non lo riferiva,
+  // l'amministrazione non lo sapeva mai — ed e' esattamente quello che e'
+  // successo con le vendite del 19/10. Adesso finiscono in
+  // `avvisi_magazzino` e si leggono da Shop e magazzino.
+  //
+  // Se anche questa scrittura fallisce non si fa altro rumore: si e' gia'
+  // nel mezzo di un guasto, e una seconda finestra non aiuta nessuno.
+  function registraAvvisoMagazzino(avviso) {
+    supabase.from("avvisi_magazzino").insert(avviso)
+      .then(({ error }) => { if (error) console.error("avviso magazzino non scritto:", error.message); });
+  }
   // lo sconto libero decide da solo quanto entra in cassa, quindi resta ad
   // amministratore e programmatore: una master che vende al banco applica
   // il prezzo di listino, oppure un coupon — che è uno sconto deciso a
@@ -69260,8 +69288,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           errore: erroreVendita.message || String(erroreVendita),
           operatore: nomeOperatore || null,
         });
-        window.alert("Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message
-          + "\n\nNon è andata persa: la trovi in Vendite al banco → Advisor, e da lì la registri con un clic.");
+        registraAvvisoMagazzino({
+          tipo: "vendita_non_registrata",
+          messaggio: `Vendita ${datiVendita.numero_ordine || ""} non registrata: ${erroreVendita.message}`,
+          numero_ordine: datiVendita.numero_ordine || null,
+          operatore: nomeOperatore || null,
+        });
+        window.alert(chiAmministra
+          ? "Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message
+            + "\n\nNon è andata persa: la trovi in Vendite al banco → Advisor, e da lì la registri con un clic."
+          : "Attenzione: l'incasso c'è ma la vendita non è stata registrata."
+            + "\n\nNon è andata persa e non devi rifarla: è stata messa da parte e la registra l'amministrazione."
+            + "\nSegnalalo in amministrazione citando l'ora, così la ritrovano subito.");
         ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos_non_riuscite"]);
         return;
       }
@@ -69269,7 +69307,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // La vendita c'e'. Se lo scarico era andato storto lo si dice adesso,
       // a cose scritte, e si dice quale prodotto andare a guardare.
       if (erroreScarico) {
-        window.alert(`Vendita ${esito?.numero_ordine || ""} registrata.\n\nIl magazzino però non si è scaricato del tutto: ${erroreScarico}\n\nControlla la giacenza di quel prodotto in Gestione magazzino.`);
+        registraAvvisoMagazzino({
+          tipo: "scarico_parziale",
+          messaggio: `Vendita ${esito?.numero_ordine || ""}: il magazzino non si è scaricato del tutto — ${erroreScarico}`,
+          vendita_id: esito?.vendita_id || null,
+          numero_ordine: esito?.numero_ordine || null,
+          operatore: nomeOperatore || null,
+          prodotti: pianiVendita.map((x) => ({ id: x.prodotto?.id, nome: x.prodotto?.nome })),
+        });
+        // alla master non si dice niente: la vendita c'e', l'incasso c'e',
+        // e la giacenza la sistema chi ha gli strumenti per farlo
+        if (chiAmministra) {
+          window.alert(`Vendita ${esito?.numero_ordine || ""} registrata.\n\nIl magazzino però non si è scaricato del tutto: ${erroreScarico}\n\nControlla la giacenza di quel prodotto in Gestione magazzino.`);
+        }
       }
 
       // Il pagamento col QR si lega alla sua vendita. Senza questo legame

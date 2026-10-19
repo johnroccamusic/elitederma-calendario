@@ -1,0 +1,23 @@
+-- LA VENDITA AL BANCO NON SI PUO' PERDERE PER UNA COLONNA NUOVA.
+--
+-- `registra_vendita_pos` costruisce la riga con
+-- `jsonb_populate_record(null::vendite_shop, ...)`. Quella funzione, a
+-- partire da un record NULL, mette NULL in ogni colonna che non trova
+-- nel json — NON il default della colonna. L'insert che segue scrive
+-- quindi NULL espliciti, e una colonna NOT NULL li rifiuta.
+--
+-- I default stavano scritti a mano dentro `base_v`. Finche' la tabella
+-- non cambiava funzionava; poi sono arrivate `da_preparare`,
+-- `sconto_fiera` e `fattura_manuale` — tutte NOT NULL con default false,
+-- tutte assenti da quella lista. Il 19/10/2026 sei vendite al banco
+-- hanno scaricato il magazzino e NON si sono registrate: incasso preso,
+-- nessuna riga, e la master non le trovava nello storico.
+--
+-- La cura non e' aggiungere tre righe a `base_v`: e' togliere la lista
+-- scritta a mano. `completa_not_null` legge dal catalogo le colonne NOT
+-- NULL della tabella e riempie quelle che mancano con il LORO default.
+-- Se una colonna NOT NULL non ha default si ferma dicendo quale: meglio
+-- un errore che nomina il problema che sei vendite sparite.
+--
+-- Applicata con MCP il 19/10/2026; questo file e' la traccia. Il corpo
+-- completo delle due funzioni si rilegge dal database.
