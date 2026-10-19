@@ -205,6 +205,76 @@ describe("la presa visione del testo, su tutti i consensi", () => {
   });
 });
 
+// LE CASELLE CHE RENDONO VALIDO IL CONSENSO.
+//
+// Prima ce n'era una sola e diceva tre cose insieme: "ho letto e
+// compreso, le informazioni sulla mia salute sono vere, e acconsento al
+// trattamento". Chi la spuntava aderiva a tre consensi distinti con un
+// gesto solo, e nessuno poteva piu' dire a quale. E mancava del tutto
+// l'art. 9 — il consenso esplicito ai dati sulla SALUTE, che e' poi
+// quello che il questionario raccoglie.
+describe("le dichiarazioni da spuntare", () => {
+  for (const m of CONSENSI) {
+    it(`${m.codice}: ha le caselle che servono, e nessuna ne tiene dentro due`, () => {
+      const caselle = m.contenuto.caselle;
+      expect(caselle, `${m.codice} non ha caselle`).toBeTruthy();
+      const chiavi = caselle.map((x) => x.chiave);
+      expect(new Set(chiavi).size).toBe(chiavi.length);
+      // le quattro obbligatorie che rendono il modulo regolare
+      for (const attesa of ["trattamento", "salute_veritiera", "dati_salute", "informativa_privacy"]) {
+        expect(chiavi, `${m.codice}: manca ${attesa}`).toContain(attesa);
+        expect(caselle.find((x) => x.chiave === attesa).tipo).toBe("obbligatoria");
+      }
+      // e quella sulle immagini, che resta facoltativa: un consenso al
+      // trattamento che si puo' avere solo cedendo anche le foto non
+      // sarebbe libero
+      expect(caselle.find((x) => x.chiave === "immagini").tipo).toBe("facoltativa");
+    });
+
+    it(`${m.codice}: senza le obbligatorie non si invia`, async () => {
+      rispondiCon({});
+      const p = await monta(<PaginaConsenso codice={m.codice} />);
+      await clicca(p.tasto("Leggi il testo completo"));
+      await clicca(p.tasto("Chiudi il testo"));
+      expect(p.testo()).toContain("Dati relativi alla salute");
+      expect(p.tasto("Invia")?.disabled).toBe(true);
+      await p.smonta();
+    });
+  }
+
+  it("spuntarne una non spunta le altre", async () => {
+    rispondiCon({});
+    const p = await monta(<PaginaConsenso codice="needling" />);
+    await clicca(p.tasto("Leggi il testo completo"));
+    await clicca(p.tasto("Chiudi il testo"));
+    const spunte = [...p.nodo.querySelectorAll('input[type="checkbox"]')];
+    await clicca(spunte[0]);
+    const dopo = [...p.nodo.querySelectorAll('input[type="checkbox"]')];
+    expect(dopo.filter((x) => x.checked)).toHaveLength(1);
+    await p.smonta();
+  });
+});
+
+describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
+  it("la v2 del PMU resta, intatta, accanto alla v3", () => {
+    const v2 = contenutoDaVersione("v2", "pmu-micro");
+    const v3 = contenutoDaVersione("v3", "pmu-micro");
+    expect(v2.versione).toBe("v2");
+    expect(v3.versione).toBe("v3");
+    // la v2 non ha le caselle nuove: diciannove persone hanno firmato
+    // quella, e deve continuare a dire cosa diceva
+    expect(v2.caselle).toBeUndefined();
+    expect(v3.caselle).toBeTruthy();
+    // ma il testo e l'anamnesi sono gli stessi: cambia solo cosa si spunta
+    expect(v3.testo).toBe(v2.testo);
+    expect(v3.anamnesi.map((d) => d.chiave)).toEqual(v2.anamnesi.map((d) => d.chiave));
+  });
+
+  it("oggi il PMU fa firmare la v3", () => {
+    expect(consensoDaCodice("pmu-micro").contenuto.versione).toBe("v3");
+  });
+});
+
 describe("chi esegue il trattamento", () => {
   it("il needling lo chiede, ed e' obbligatorio", () => {
     const c = consensoDaCodice("needling").contenuto;

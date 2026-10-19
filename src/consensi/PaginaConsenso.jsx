@@ -207,6 +207,45 @@ function FotoDocumento({ etichetta, blob, onCambia }) {
 }
 
 
+// Le due caselle di sempre, per i testi che non ne dichiarano di proprie.
+// Un modello non aggiornato deve continuare a funzionare, non presentarsi
+// senza niente da spuntare.
+const CASELLE_DI_RIPIEGO = [
+  {
+    chiave: "trattamento", tipo: "obbligatoria", etichetta: "Consenso al trattamento",
+    testo: "Ho letto e compreso, le informazioni che ho dato sul mio stato di salute sono vere, e acconsento al trattamento durante il corso.",
+  },
+  {
+    chiave: "immagini", tipo: "facoltativa", etichetta: "Foto e video",
+    testo: "Autorizzo l'uso di foto e video del trattamento.",
+  },
+];
+
+function CasellaConsenso({ casella, segnata, onCambia, spenta }) {
+  return (
+    <label
+      style={{
+        display: "flex", gap: 11, alignItems: "flex-start", marginTop: 10,
+        cursor: spenta ? "default" : "pointer", background: "#fff",
+        border: `1px solid ${segnata ? "#BFE3C6" : CREAM_BORDER}`,
+        borderRadius: 12, padding: 14, opacity: spenta ? 0.45 : 1,
+      }}
+    >
+      <input
+        type="checkbox" checked={segnata} disabled={spenta} onChange={onCambia}
+        style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }}
+      />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ ...fontDisplay, display: "block", fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 3 }}>
+          {casella.etichetta}
+          {casella.tipo !== "facoltativa" && <span style={{ color: "#B3261E" }}> *</span>}
+        </span>
+        <span style={{ fontSize: 13, color: NAVY, lineHeight: 1.55 }}>{casella.testo}</span>
+      </span>
+    </label>
+  );
+}
+
 export default function PaginaConsenso({ codice, edizione = null }) {
   const modello = consensoDaCodice(codice);
   const [v, setV] = useState({
@@ -219,8 +258,15 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   const [fronte, setFronte] = useState(null);
   const [retro, setRetro] = useState(null);
   const [firma, setFirma] = useState(null);
-  const [accetto, setAccetto] = useState(false);
-  const [fotoVideo, setFotoVideo] = useState(false);
+  // LE SPUNTE SONO QUELLE DEL MODELLO, non due fisse.
+  //
+  // C'erano `accetto` e `fotoVideo`, e la prima diceva tre cose insieme:
+  // "ho letto e compreso, le informazioni sulla mia salute sono vere, e
+  // acconsento al trattamento". Tre consensi distinti in un gesto solo,
+  // che e' esattamente quello che il GDPR non ammette — e mancava del
+  // tutto l'art. 9 sui dati di salute, che e' poi quello che il
+  // questionario qui sopra raccoglie.
+  const [spunte, setSpunte] = useState({});
   const [testoAperto, setTestoAperto] = useState(false);
   // APERTO E RICHIUSO ALMENO UNA VOLTA.
   //
@@ -276,7 +322,14 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   if (!fronte) mancanze.push("la foto del documento");
   if (!testoLetto) mancanze.push("aprire il testo del consenso e richiuderlo");
   if (!firma) mancanze.push("la firma");
-  if (!accetto) mancanze.push("la spunta del consenso");
+  const obbligatorie = (modello?.contenuto?.caselle || CASELLE_DI_RIPIEGO)
+    .filter((x) => x.tipo !== "facoltativa");
+  const nonSpuntate = obbligatorie.filter((x) => !spunte[x.chiave]);
+  if (nonSpuntate.length) {
+    mancanze.push(nonSpuntate.length === 1
+      ? `la spunta «${nonSpuntate[0].etichetta}»`
+      : `${nonSpuntate.length} spunte obbligatorie`);
+  }
 
   async function invia() {
     setErrore("");
@@ -293,7 +346,11 @@ export default function PaginaConsenso({ codice, edizione = null }) {
         esecutore: v.esecutore,
         noteSalute: v.noteSalute,
         anamnesi,
-        consensoTrattamento: true, consensoFotoVideo: fotoVideo,
+        consensoTrattamento: true,
+        // il booleano di sempre resta, e viene dalla casella delle
+        // immagini: l'archivio e i consensi vecchi parlano quella lingua
+        consensoFotoVideo: !!spunte.immagini?.r,
+        consensi: spunte,
       },
       { fronte, retro, firma },
       // da quale classe arriva: lo dice il QR stampato dalla scheda corso.
@@ -323,6 +380,16 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   }
 
   const c = modello.contenuto;
+  // I testi piu' vecchi non hanno `caselle`: per loro valgono le due di
+  // sempre, cosi' un modello non aggiornato continua a funzionare invece
+  // di presentarsi senza niente da spuntare.
+  const caselle = c.caselle || CASELLE_DI_RIPIEGO;
+  // OGNI SPUNTA SI PORTA DIETRO IL SUO ISTANTE. Su un consenso non conta
+  // solo che sia stata data, ma quando: e' la differenza fra "ha
+  // acconsentito" e "ha acconsentito prima che cominciassimo".
+  const segna = (chiave) => setSpunte((p) => (
+    p[chiave]?.r ? { ...p, [chiave]: { r: false } } : { ...p, [chiave]: { r: true, il: new Date().toISOString() } }
+  ));
 
   return (
     <div style={{ minHeight: "100vh", background: "#FAF8F3", ...fontBody }}>
@@ -440,23 +507,33 @@ export default function PaginaConsenso({ codice, edizione = null }) {
             </div>
           )}
 
-          <label style={{ display: "flex", gap: 11, alignItems: "flex-start", marginTop: 14, cursor: testoLetto ? "pointer" : "default", background: "#fff", border: `1px solid ${accetto ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 12, padding: 14, opacity: testoLetto ? 1 : 0.45 }}>
-            <input type="checkbox" checked={accetto} disabled={!testoLetto} onChange={(e) => setAccetto(e.target.checked)} style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }} />
-            <span style={{ fontSize: 13.5, color: NAVY, lineHeight: 1.5 }}>
-              Ho letto e compreso, le informazioni che ho dato sul mio stato di salute sono vere, e
-              acconsento al trattamento durante il corso.
-            </span>
-          </label>
+          {/* UNA CASELLA PER OGNI COSA CHE SI ACCONSENTE.
+              Le obbligatorie prima, la facoltativa in fondo e staccata:
+              una spunta che si puo' lasciare vuota in mezzo a quelle che
+              si devono dare si spunta per inerzia insieme alle altre, e
+              un consenso dato per inerzia non e' un consenso. */}
+          {caselle.filter((x) => x.tipo !== "facoltativa").map((x) => (
+            <CasellaConsenso
+              key={x.chiave} casella={x} spenta={!testoLetto}
+              segnata={!!spunte[x.chiave]?.r}
+              onCambia={() => segna(x.chiave)}
+            />
+          ))}
 
-          <label style={{ display: "flex", gap: 11, alignItems: "flex-start", marginTop: 10, cursor: testoLetto ? "pointer" : "default", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, opacity: testoLetto ? 1 : 0.45 }}>
-            <input type="checkbox" checked={fotoVideo} disabled={!testoLetto} onChange={(e) => setFotoVideo(e.target.checked)} style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }} />
-            <span style={{ fontSize: 13.5, color: NAVY, lineHeight: 1.5 }}>
-              Autorizzo l'uso di foto e video del trattamento.
-              <span style={{ display: "block", fontSize: 12, color: MUTED, marginTop: 3 }}>
+          {caselle.some((x) => x.tipo === "facoltativa") && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>
                 Facoltativo: puoi lasciarlo vuoto e il trattamento si fa lo stesso.
-              </span>
-            </span>
-          </label>
+              </div>
+              {caselle.filter((x) => x.tipo === "facoltativa").map((x) => (
+                <CasellaConsenso
+                  key={x.chiave} casella={x} spenta={!testoLetto}
+                  segnata={!!spunte[x.chiave]?.r}
+                  onCambia={() => segna(x.chiave)}
+                />
+              ))}
+            </div>
+          )}
         </Sezione>
 
         <Sezione titolo="La firma" nota="Tieni il telefono come ce l'hai adesso e firma col dito nello spazio qui sotto.">

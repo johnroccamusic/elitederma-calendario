@@ -12,6 +12,7 @@
 
 import { consensoV1 } from "./consenso-v1";
 import { consensoV2 } from "./consenso-v2";
+import { consensoV3 } from "./consenso-v3";
 import { consensoNeedlingV1 } from "./consenso-needling-v1";
 import { consensoLaminazioneV1 } from "./consenso-laminazione-v1";
 
@@ -20,7 +21,7 @@ export interface ModelloConsenso {
   codice: string;
   /** come lo chiamate voi, non come si intitola il documento */
   nome: string;
-  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1;
+  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1;
 }
 
 export const CONSENSI: ModelloConsenso[] = [
@@ -28,7 +29,10 @@ export const CONSENSI: ModelloConsenso[] = [
   // funzionare. Cambia il contenuto, che dal 14/10/2026 e' la v2 con
   // l'anamnesi. La v1 non si cancella: i consensi gia' firmati portano
   // scritto "v1" e devono poter dire sotto quale testo sono stati dati.
-  { codice: "pmu-micro", nome: "Consenso PMU e Micro", contenuto: consensoV2 },
+  // Dal 19/10/2026 la v3: stesso testo e stessa anamnesi della v2, ma le
+  // dichiarazioni da spuntare sono separate una per una. La v2 resta
+  // registrata qui sotto, in VERSIONI, per i diciannove gia' firmati.
+  { codice: "pmu-micro", nome: "Consenso PMU e Micro", contenuto: consensoV3 },
   // Microneedling, dal 19/10/2026. Codice suo, quindi QR suo: il foglio
   // che si fa inquadrare in aula a un corso di needling non e' lo stesso
   // di un PMU, e le domande sullo stato di salute nemmeno.
@@ -48,6 +52,7 @@ export const CONSENSI: ModelloConsenso[] = [
 const VERSIONI: Record<string, { codice: string; contenuto: ModelloConsenso["contenuto"] }> = {
   v1: { codice: "pmu-micro", contenuto: consensoV1 },
   v2: { codice: "pmu-micro", contenuto: consensoV2 },
+  v3: { codice: "pmu-micro", contenuto: consensoV3 },
   "needling-v1": { codice: "needling", contenuto: consensoNeedlingV1 },
   "laminazione-v1": { codice: "laminazione", contenuto: consensoLaminazioneV1 },
 };
@@ -78,7 +83,7 @@ export function contenutoDaVersione(
   if (trovata && (!codice || trovata.codice === codice)) return trovata.contenuto;
   const modello = CONSENSI.find((c) => c.codice === codice);
   if (modello) return modello.contenuto;
-  return trovata ? trovata.contenuto : consensoV2;
+  return trovata ? trovata.contenuto : consensoV3;
 }
 
 /** Ogni modello in giro deve avere la sua versione registrata qui

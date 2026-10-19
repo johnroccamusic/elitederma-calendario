@@ -59,6 +59,51 @@ export const consensoNeedlingV1 = {
     obbligatorio: true,
   },
 
+  // LE CASELLE CHE RENDONO VALIDO IL CONSENSO.
+  //
+  // Una spunta sola che diceva "ho letto e compreso, le informazioni
+  // sulla mia salute sono vere, e acconsento al trattamento" teneva
+  // insieme tre consensi distinti: non si poteva dire a quale la persona
+  // avesse davvero aderito. Qui sono separate, come vuole il GDPR, e ce
+  // n'e' una che prima mancava del tutto — l'art. 9 sui dati relativi
+  // alla SALUTE, che e' proprio quello che il questionario raccoglie.
+  //
+  // `chiave` finisce nel database e non si tocca piu'. Cambiare questi
+  // testi vuol dire cambiare cio' che si firma: versione nuova accanto
+  // alla vecchia, come per il resto del documento.
+  caselle: [
+    {
+      chiave: "trattamento",
+      tipo: "obbligatoria",
+      etichetta: "Consenso al trattamento",
+      testo: "Acconsento a sottopormi al trattamento di microneedling con dermografo descritto in questo modulo, eseguito durante un corso di formazione Elitederma Srl da un'allieva/o in formazione sotto la supervisione del docente. Dichiaro di aver compreso la natura didattica dell'attività, i possibili rischi e i limiti del risultato.",
+    },
+    {
+      chiave: "salute_veritiera",
+      tipo: "obbligatoria",
+      etichetta: "Maggiore età e stato di salute",
+      testo: "Dichiaro di essere maggiorenne e che le informazioni che ho fornito sul mio stato di salute sono complete e veritiere. Sono consapevole che un'informazione omessa o non veritiera può espormi a rischi che nessuno è in grado di prevenire.",
+    },
+    {
+      chiave: "dati_salute",
+      tipo: "obbligatoria",
+      etichetta: "Dati relativi alla salute (art. 9 GDPR)",
+      testo: "Acconsento espressamente al trattamento dei miei dati relativi alla salute, raccolti con il questionario di questo modulo, per la sola valutazione dell'idoneità al trattamento e per gli obblighi documentali connessi al corso.",
+    },
+    {
+      chiave: "informativa_privacy",
+      tipo: "obbligatoria",
+      etichetta: "Informativa privacy",
+      testo: "Dichiaro di aver letto l'informativa sul trattamento dei dati personali riportata in questo modulo e di essere stata informata dei miei diritti di accesso, rettifica, cancellazione, limitazione, opposizione e revoca del consenso.",
+    },
+    {
+      chiave: "immagini",
+      tipo: "facoltativa",
+      etichetta: "Foto e video",
+      testo: "Autorizzo Elitederma Srl all'acquisizione e all'utilizzo gratuito di fotografie e video che mi ritraggono, realizzati prima, durante e dopo il trattamento, per finalità didattiche, informative e promozionali.",
+    },
+  ],
+
   // Le diciannove condizioni del cartaceo, nello stesso ordine.
   // `chiave` e' quello che finisce nel database e non si tocca piu': se
   // un giorno la domanda si riscrive, cambia `domanda`, mai `chiave`.

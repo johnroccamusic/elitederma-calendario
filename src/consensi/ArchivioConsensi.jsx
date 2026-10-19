@@ -199,6 +199,27 @@ export function Riga({ c, isMobile, riepilogoSempre = false }) {
 
       {aperta && (
         <div style={{ marginTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
+          {/* COSA HA SPUNTATO, voce per voce. Prima c'era una pastiglia
+              "foto e video: sì" e basta: di tutto il resto — il consenso
+              al trattamento, i dati di salute, la presa visione della
+              privacy — non restava traccia leggibile, perche' stavano
+              tutti dentro un unico booleano sempre vero. */}
+          {c.consensi && (
+            <div style={{ marginTop: 4, marginBottom: 8 }}>
+              {(contenutoDaVersione(c.versioneTesto, c.modelloCodice).caselle || []).map((x) => {
+                const data = c.consensi[x.chiave];
+                return (
+                  <div key={x.chiave} style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 3, lineHeight: 1.45 }}>
+                    <span style={{ color: data?.r ? "#2E7D32" : MUTED, fontWeight: 700 }}>
+                      {data?.r ? "[X]" : "[ ]"}
+                    </span>{" "}
+                    {x.etichetta}
+                    {data?.il && <span style={{ color: MUTED }}> · {quando(data.il)}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {voce("Chi ha eseguito", c.esecutore)}
           {voce("Nata il", soloData(c.dataNascita))}
           {voce("A", c.luogoNascita)}

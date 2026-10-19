@@ -31,6 +31,8 @@ export interface DatiConsenso {
   anamnesi?: Record<string, { r: boolean; s?: string }> | null;
   consensoTrattamento: boolean;
   consensoFotoVideo: boolean;
+  /** le caselle spuntate, una per una: { chiave: { r: true, il: "..." } } */
+  consensi?: Record<string, { r: boolean; il?: string }> | null;
 }
 
 export interface FileConsenso {
@@ -148,6 +150,9 @@ export async function salvaConsenso(
     anamnesi: dati.anamnesi && Object.keys(dati.anamnesi).length > 0 ? dati.anamnesi : null,
     consenso_trattamento: true,
     consenso_foto_video: !!dati.consensoFotoVideo,
+    // i due booleani restano scritti come prima: li legge l'archivio, e
+    // i consensi raccolti fino a ieri non hanno altro
+    consensi: dati.consensi && Object.keys(dati.consensi).length > 0 ? dati.consensi : null,
     documento_fronte_path: percorsi.fronte,
     documento_retro_path: percorsi.retro,
     firma_path: percorsi.firma,
@@ -175,6 +180,7 @@ export interface ConsensoRaccolto {
   esecutore: string | null;
   noteSalute: string | null;
   anamnesi: Record<string, { r: boolean; s?: string }> | null;
+  consensi: Record<string, { r: boolean; il?: string }> | null;
   consensoFotoVideo: boolean;
   frontePath: string | null;
   retroPath: string | null;
@@ -202,6 +208,7 @@ function daRiga(r: any): ConsensoRaccolto {
     esecutore: r.esecutore || null,
     noteSalute: r.note_salute || null,
     anamnesi: r.anamnesi || null,
+    consensi: r.consensi || null,
     consensoFotoVideo: !!r.consenso_foto_video,
     frontePath: r.documento_fronte_path || null,
     retroPath: r.documento_retro_path || null,

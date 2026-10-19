@@ -147,6 +147,26 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   codici e versioni restino unici e che nessun modello resti senza la sua
   versione registrata.
 
+  **Le dichiarazioni da spuntare sono separate** (19/10/2026). Ce n'era una
+  sola e diceva tre cose insieme — «ho letto e compreso, le informazioni sul
+  mio stato di salute sono vere, e acconsento al trattamento» — quindi non si
+  poteva dire a quale dei tre consensi la persona avesse aderito; e mancava
+  del tutto l'**art. 9**, il consenso esplicito ai dati sulla **salute**, che
+  è poi quello che il questionario raccoglie. Ora ogni modello dichiara le sue
+  `caselle`: quattro obbligatorie (trattamento, maggiore età e veridicità,
+  dati di salute, informativa privacy) e una facoltativa (foto e video),
+  staccata dalle altre perché un consenso ottenuto per inerzia non è un
+  consenso. Ognuna si salva con il suo istante in `consensi_modelle.consensi`;
+  i due booleani di prima restano scritti, perché 26 consensi già raccolti
+  parlano solo quella lingua.
+
+  Cambiare quei testi **cambia ciò che si firma**: per questo il PMU è passato
+  alla **v3** — stesso testo e stessa anamnesi della v2, parola per parola,
+  solo le caselle separate — e la v2 resta viva accanto per le 19 firme già
+  raccolte. `consenso-v3.ts` è una copia e non uno spread di `consensoV2`:
+  un'istantanea che si muove quando qualcuno tocca l'originale non serve a
+  niente.
+
   **Il testo va aperto e richiuso prima di firmare** (19/10/2026), su tutti
   e tre i consensi e sul modulo di iscrizione. La tendina è chiusa di suo: si
   poteva scorrere fino in fondo, spuntare «ho letto e compreso» e firmare
