@@ -32,9 +32,33 @@ function CorsiDelConsenso({ modello, corsi, legami, onCambiato, isMobile }) {
       .sort((a, b) => String(a.corso.nome).localeCompare(String(b.corso.nome))),
     [legami, corsi, modello.codice],
   );
-  const giaPresi = new Set(miei.map((x) => x.corsoId));
-  const liberi = corsi.filter((c) => !giaPresi.has(c.id))
-    .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  // UN CORSO STA SU UN CONSENSO SOLO.
+  //
+  // Non si propongono nemmeno i corsi presi da un ALTRO consenso, non
+  // solo quelli gia' su questo. Il motivo non e' l'ordine: nella scheda
+  // di una classe compaiono i consensi del suo corso, e due consensi
+  // sullo stesso corso vorrebbero dire due QR accanto, inquadrati in
+  // aula a caso — una modella trattata a microneedling che firma il
+  // modulo del trucco permanente.
+  //
+  // Restano VISIBILI ma spenti, col nome di chi se li e' presi. Farli
+  // sparire sarebbe stato piu' breve da scrivere e peggio da usare: chi
+  // cerca NEEDLING in questa tendina e non lo trova non pensa "sara' su
+  // un altro consenso", pensa che l'elenco sia rotto, e lo cerca due
+  // volte prima di chiedere a qualcuno.
+  const presoDa = useMemo(() => {
+    const m = new Map();
+    for (const l of legami) m.set(l.corsoId, l.modelloCodice);
+    return m;
+  }, [legami]);
+
+  const ordinati = useMemo(
+    () => [...corsi].sort((a, b) => String(a.nome).localeCompare(String(b.nome))),
+    [corsi],
+  );
+  const liberi = ordinati.filter((c) => !presoDa.has(c.id));
+  const altrui = ordinati.filter((c) => presoDa.get(c.id) && presoDa.get(c.id) !== modello.codice);
+  const nomeConsenso = (codice) => CONSENSI.find((x) => x.codice === codice)?.nome || codice;
 
   async function aggiungi() {
     if (!scelto) return;
@@ -70,11 +94,24 @@ function CorsiDelConsenso({ modello, corsi, legami, onCambiato, isMobile }) {
       <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         <select
           value={scelto} onChange={(e) => setScelto(e.target.value)}
-          disabled={occupato || liberi.length === 0}
+          disabled={occupato || (liberi.length === 0 && altrui.length === 0)}
           style={{ ...campo, flex: "1 1 220px", minWidth: 0 }}
         >
-          <option value="">{liberi.length === 0 ? "— li hai aggiunti tutti —" : "— scegli un corso —"}</option>
+          <option value="">
+            {liberi.length === 0
+              ? (altrui.length ? "— nessun corso libero —" : "— li hai aggiunti tutti —")
+              : "— scegli un corso —"}
+          </option>
           {liberi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          {altrui.length > 0 && (
+            <optgroup label="Già su un altro consenso">
+              {altrui.map((c) => (
+                <option key={c.id} value={c.id} disabled>
+                  {c.nome} — {nomeConsenso(presoDa.get(c.id))}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         <button
           type="button" onClick={aggiungi} disabled={!scelto || occupato}

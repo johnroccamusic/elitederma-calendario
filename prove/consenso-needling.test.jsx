@@ -11,6 +11,8 @@ import React from "react";
 import { rispondiCon } from "./preparazione.js";
 import { monta } from "./aiuto.js";
 import PaginaConsenso from "../src/consensi/PaginaConsenso.jsx";
+import QrConsensi from "../src/consensi/QrConsensi.jsx";
+import { collegaConsensoACorso } from "../src/consensi/dati";
 import { CONSENSI, consensoDaCodice, contenutoDaVersione } from "../src/content/consensi";
 
 describe("l'elenco dei modelli di consenso", () => {
@@ -90,5 +92,73 @@ describe("la pagina che apre il QR del needling", () => {
     expect(p.testo()).not.toContain("MICRONEEDLING");
     expect(p.nodo.querySelector("canvas")).toBeFalsy();
     await p.smonta();
+  });
+});
+
+// UN CORSO STA SU UN CONSENSO SOLO.
+//
+// Nella scheda di una classe compaiono i consensi del suo corso: due
+// consensi sullo stesso corso vorrebbero dire due QR accanto, inquadrati
+// in aula a caso. Non e' disordine, e' il documento sbagliato sotto la
+// firma giusta.
+const CORSI = [
+  { id: "c-pmu", nome: "PMU BASE" },
+  { id: "c-need", nome: "NEEDLING" },
+  { id: "c-libero", nome: "TRICO BASE" },
+];
+const LEGAMI = [
+  { id: "l1", modello_codice: "pmu-micro", corso_id: "c-pmu" },
+  { id: "l2", modello_codice: "needling", corso_id: "c-need" },
+];
+
+describe("quali corsi la tendina propone", () => {
+  it("non propone un corso gia' preso da un altro consenso", async () => {
+    rispondiCon({ "/rest/v1/consensi_corsi": LEGAMI });
+    const p = await monta(<QrConsensi corsi={CORSI} />);
+
+    const sceglibili = [...p.nodo.querySelectorAll("option")]
+      .filter((o) => o.value && !o.disabled)
+      .map((o) => o.textContent.trim());
+
+    // NEEDLING e' sul consenso needling: nella tendina del PMU non deve
+    // essere scegliibile, e viceversa
+    expect(sceglibili.filter((t) => t.startsWith("NEEDLING"))).toHaveLength(0);
+    expect(sceglibili.filter((t) => t.startsWith("PMU BASE"))).toHaveLength(0);
+    // quello libero invece si', una volta per consenso
+    expect(sceglibili.filter((t) => t.startsWith("TRICO BASE")).length).toBe(CONSENSI.length);
+    await p.smonta();
+  });
+
+  it("li mostra spenti, dicendo di chi sono", async () => {
+    rispondiCon({ "/rest/v1/consensi_corsi": LEGAMI });
+    const p = await monta(<QrConsensi corsi={CORSI} />);
+    const spenti = [...p.nodo.querySelectorAll("option")].filter((o) => o.disabled);
+    const testi = spenti.map((o) => o.textContent.trim());
+    // chi cerca NEEDLING nella tendina sbagliata deve capire perche' non
+    // puo' prenderlo, non pensare che l'elenco sia rotto
+    expect(testi.some((t) => t.includes("NEEDLING") && t.includes("Consenso Needling"))).toBe(true);
+    expect(testi.some((t) => t.includes("PMU BASE") && t.includes("Consenso PMU e Micro"))).toBe(true);
+    await p.smonta();
+  });
+});
+
+describe("la serratura sta nella funzione che scrive", () => {
+  it("rifiuta un corso gia' su un altro consenso, anche se la tendina non lo proponeva", async () => {
+    rispondiCon({ "/rest/v1/consensi_corsi": [{ modello_codice: "pmu-micro" }] });
+    const errore = await collegaConsensoACorso("needling", "c-pmu");
+    expect(errore).toBeTruthy();
+    expect(errore).toContain("già sul consenso");
+  });
+
+  it("lascia passare un corso libero", async () => {
+    rispondiCon({ "/rest/v1/consensi_corsi": [] });
+    const errore = await collegaConsensoACorso("needling", "c-libero");
+    expect(errore).toBeNull();
+  });
+
+  it("rimettere lo stesso corso sullo stesso consenso non e' un errore", async () => {
+    rispondiCon({ "/rest/v1/consensi_corsi": [{ modello_codice: "needling" }] });
+    const errore = await collegaConsensoACorso("needling", "c-need");
+    expect(errore).toBeNull();
   });
 });

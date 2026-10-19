@@ -126,7 +126,15 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   anamnesi propri; `consensi_corsi` dice a quali corsi vale ognuno, e da lì
   il QR compare nella scheda della classe.
 
-  Due regole che il secondo modello ha reso necessarie: **la versione del
+  **Un corso sta su un consenso solo** (19/10/2026). Nella scheda di una
+  classe compaiono i consensi del suo corso: due consensi sullo stesso corso
+  vorrebbero dire due QR accanto, inquadrati in aula a caso — cioè una modella
+  trattata a microneedling che firma il modulo del trucco permanente. La
+  tendina mostra i corsi già presi *spenti, col nome di chi se li è presi*
+  (farli sparire manda a cercarli), e `collegaConsensoACorso` li rifiuta
+  comunque: la tendina è comodità, la funzione è la serratura.
+
+  Tre regole che il secondo modello ha reso necessarie: **la versione del
   testo porta dentro il nome del modello** (`needling-v1`, non `v1`), e
   `contenutoDaVersione` vuole anche il codice. Senza, un consenso needling
   salvato come `v1` avrebbe pescato il testo PMU, e l'archivio avrebbe

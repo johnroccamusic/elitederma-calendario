@@ -230,7 +230,34 @@ export async function leggiConsensiCorsi(): Promise<LegameConsensoCorso[]> {
   }));
 }
 
+/**
+ * UN CORSO STA SU UN CONSENSO SOLO.
+ *
+ * La tendina da cui si sceglie non propone i corsi gia' presi da un
+ * altro consenso, ma quella e' comodita': la regola vive qui, perche'
+ * questa funzione e' il punto da cui si scrive davvero, e perche' fra il
+ * momento in cui la tendina si e' riempita e il momento in cui si preme
+ * "Aggiungi" qualcun altro puo' aver collegato lo stesso corso altrove.
+ *
+ * Perche' la regola esiste: nella scheda di una classe compaiono i
+ * consensi del suo corso. Due consensi sullo stesso corso vorrebbero
+ * dire due QR accanto, e in aula si inquadra quello che capita — con il
+ * risultato che una modella trattata a microneedling firma il modulo del
+ * trucco permanente, o viceversa. Non e' un fastidio di ordine: e' il
+ * documento sbagliato sotto la firma giusta.
+ */
 export async function collegaConsensoACorso(modelloCodice: string, corsoId: string): Promise<string | null> {
+  const { data: esistenti, error: erroreLettura } = await supabase
+    .from("consensi_corsi").select("modello_codice").eq("corso_id", corsoId);
+  if (erroreLettura) return erroreLettura.message;
+
+  const altro = (esistenti || [])
+    .map((r: Record<string, string>) => r.modello_codice)
+    .find((c: string) => c !== modelloCodice);
+  if (altro) {
+    return `Questo corso è già sul consenso "${altro}". Un corso sta su un consenso solo: toglilo da lì, se va spostato.`;
+  }
+
   // `upsert` e non `insert`: il doppio clic sullo stesso corso non deve
   // diventare un errore rosso, deve semplicemente non fare niente
   const { error } = await supabase.from("consensi_corsi")
