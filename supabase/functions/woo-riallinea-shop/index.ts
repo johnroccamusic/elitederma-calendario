@@ -162,8 +162,22 @@ Deno.serve(async (req) => {
 
     // quello che il sito puo' davvero vendere: i pezzi in casa meno
     // quelli gia' promessi in un carrello sospeso. Mai sotto zero.
-    // Su un bundle i promessi sono gia' stati tolti ai componenti.
-    const impegnati = virtuale ? 0 : (promessi[p.id] || 0);
+    //
+    // VALE ANCHE PER I BUNDLE, e prima no. Qui c'era scritto che su un
+    // bundle i promessi erano "gia' stati tolti ai componenti": vero
+    // solo se nel carrello ci sono i COMPONENTI. Se invece c'e' il
+    // bundle — ed e' il caso normale: al banco si mette nel carrello
+    // l'espositore, non i dieci pezzi — il promesso e' segnato sull'id
+    // del bundle, e non veniva sottratto da nessuna parte: il sito
+    // continuava a offrire un pezzo gia' promesso a qualcuno.
+    //
+    // Non si contano due volte: se nel carrello c'e' il bundle il
+    // promesso sta sulla sua riga, se ci sono i componenti sta sulle
+    // loro. Sono chiavi diverse e non si sovrappongono mai.
+    //
+    // Trovato il 19/10/2026 dal termometro, su tre bundle che erano
+    // tutti e tre dentro un carrello sospeso.
+    const impegnati = promessi[p.id] || 0;
     const disponibile = Math.max(0, quantita - impegnati);
 
     // solo la quantita', esattamente come fa woo-aggiorna-prodotto a ogni

@@ -140,6 +140,33 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 2-ter. I PEZZI PROMESSI A UN CARRELLO SOSPESO NON SONO IN VENDITA.
+  //
+  // Quello che il sito puo' vendere non e' la giacenza: e' la giacenza
+  // MENO i pezzi gia' impegnati in un carrello messo da parte al banco.
+  // Lo fa `allineaShop` apposta, da quando il sito continuava a vendere
+  // pezzi che il banco aveva gia' promesso a qualcuno.
+  //
+  // Confrontando la giacenza nuda risultavano scarti che non esistono —
+  // e si riconoscevano dal fatto che tornavano a zero esatti sommando i
+  // carrelli: "Borsa da lavoro" -3 con tre carrelli che ne avevano uno
+  // ciascuno, "Pelle sintetica trico" -5 con un carrello da cinque.
+  //
+  // E' la terza volta in questa stessa funzione: la regola e' misurare
+  // il numero che scrive chi scrive, non quello che sembra giusto.
+  const promessi = new Map<string, number>();
+  const { data: righeSospesi } = await admin
+    .from("impostazioni_layout_tabelle").select("valore")
+    .eq("chiave", "pos_carrelliSospesi").maybeSingle();
+  for (const carrello of (righeSospesi?.valore as any[]) || []) {
+    for (const r of carrello?.carrello || []) {
+      const id = r?.prodottoId;
+      const q = Number(r?.quantita) || 0;
+      if (!id || !q) continue;
+      promessi.set(id, (promessi.get(id) || 0) + q);
+    }
+  }
+
   // 3. il confronto
   const scarti: Record<string, unknown>[] = [];
   let confrontati = 0;
@@ -152,8 +179,11 @@ Deno.serve(async (req) => {
     // confrontare: non e' uno scarto, e' un'altra cosa
     if (!online.gestisce) { senzaGestione++; continue; }
     confrontati++;
-    // per un bundle virtuale "qui" e' quanti se ne possono comporre
-    const qui = daComporre.has(p.id) ? (daComporre.get(p.id) as number) : Number(p.quantita ?? 0);
+    // per un bundle virtuale "qui" e' quanti se ne possono comporre;
+    // e in ogni caso si tolgono i pezzi promessi a un carrello sospeso,
+    // perche' quelli il sito non li deve vendere
+    const inCasa = daComporre.has(p.id) ? (daComporre.get(p.id) as number) : Number(p.quantita ?? 0);
+    const qui = Math.max(0, inCasa - (promessi.get(p.id) || 0));
     const la = Number(online.quantita ?? 0);
     if (qui !== la) {
       scarti.push({
@@ -166,6 +196,7 @@ Deno.serve(async (req) => {
   const riepilogo = {
     confrontati, scarti: scarti.length,
     bundle_calcolati: daComporre.size,
+    impegnati_in_carrelli: promessi.size,
     senza_gestione_stock: senzaGestione, non_trovati_sul_sito: nonTrovati,
   };
   if (prova) return json({ ok: true, prova: true, ...riepilogo, elenco: scarti });

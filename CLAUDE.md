@@ -570,15 +570,31 @@ componente / quantità per bundle))`) è copiata da
 non uno scarto vero. Un bundle **con** giacenza fisica è un prodotto normale e
 resta fuori.
 
-**Misura del 19/10/2026: su 161 prodotti confrontati, 25 non coincidono**, e
-quasi tutti di uno o due pezzi — deriva normale fra un ordine e la
-sincronizzazione. Il peggiore è «Micro pennello per sopracciglia 6pz», −33.
+**E i pezzi promessi a un carrello sospeso non sono in vendita**: quello che
+il sito può vendere è la giacenza *meno* quelli già impegnati al banco. Vale
+per i semplici e — dal 19/10/2026 — anche per i bundle.
 
-La prima versione di quella misura ne diceva 33, col peggiore a −983: era
-sbagliata lei, perché confrontava le scatole del sito coi pezzi sfusi dell'app.
-Venti dei trentatré erano bundle, e fra loro tutti i peggiori. Resta comunque
-che lo scarto non è zero, ed è il motivo per cui spegnere la gestione dello
-stock su WooCommerce rimane sospeso.
+**Il valore che fa fede è quello dell'app** (deciso il 19/10/2026). Quindi
+ogni notte, in quest'ordine: **05:15** controllo del saldo, **05:30**
+`woo-riallinea-shop` che spinge sul sito la situazione dell'app, **05:45** il
+termometro. L'ordine conta: ciò che resta negli scarti dopo un riallineamento
+è ciò che il riallineamento *non ha saputo* sistemare, e solo quello merita di
+essere guardato.
+
+**Misurare il numero che scrive chi scrive.** La prima versione del termometro
+diceva 33 scarti col peggiore a −983; dopo due correzioni sono **zero** su 161
+prodotti. Sbagliava due volte: confrontava `quantita` sui bundle (che su un
+bundle non vuol dire niente) e non toglieva i pezzi promessi ai carrelli
+sospesi. Ogni volta i numeri sembravano un allarme ed erano un errore di
+misura. La regola che ne resta: **non misurare il numero che sembra giusto,
+misurare quello che scrive la funzione che lo scrive** — e se non coincidono,
+il difetto è nella misura finché non si dimostra il contrario.
+
+Il termometro ha però trovato **un guasto vero**: `woo-riallinea-shop` non
+toglieva dalla disponibilità di un bundle i pezzi promessi, perché dava per
+scontato che nel carrello ci fossero i *componenti*. Al banco si mette nel
+carrello l'espositore, non i dieci pezzi — quindi il sito continuava a offrire
+bundle già promessi a qualcuno. Corretto.
 
 La funzione è chiusa dal gettone del cron (lo stesso delle email): senza,
 risponde 403. Il cron manda `timeout_milliseconds := 120000`, perché il
