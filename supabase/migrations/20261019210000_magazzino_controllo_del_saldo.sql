@@ -1,0 +1,38 @@
+-- IL CONTROLLO DEL SALDO: il numero deve essere ricostruibile.
+--
+-- Ogni punto che scrive una giacenza registra anche il movimento — sono
+-- tre: `muoviStock` dal lato app, e due dal webhook di WooCommerce (i
+-- prodotti semplici e i componenti dei kit). Verificato il 19/10/2026.
+--
+-- Ma nessuno verifica che i conti tornino. Se qualcuno tocca la tabella
+-- da fuori — un update dalla dashboard, uno script, una correzione a
+-- mano fatta in buona fede — il numero cambia e il registro non lo sa.
+-- Non se ne accorge nessuno, mai.
+--
+-- Da qui in poi, ogni notte alle 05:15: quantita attesa = saldo di
+-- partenza + somma dei movimenti da allora. Se non torna, e' una
+-- scrittura che ha scavalcato il registro, e finisce in
+-- `magazzino_scostamenti`, che la pagina Gestione magazzino mostra in
+-- cima — sopra i segnalatori, perche' non e' una categoria in piu': e'
+-- un dubbio su tutti i numeri che stanno sotto.
+--
+-- IL CONTROLLO NON CORREGGE NIENTE, segnala. Correggere da qui vorrebbe
+-- dire scrivere lo stock da un quarto punto, fuori da `muoviStock` —
+-- cioe' creare esattamente il problema che esiste per trovare.
+--
+-- IL SALDO DI PARTENZA E' UN'ASSUNZIONE, E VA DETTO. Nessuno ha contato
+-- il magazzino: si prendono per buone le giacenze del giorno in cui il
+-- controllo nasce. Da quel momento ogni scostamento e' vero; quello che
+-- era gia' sbagliato prima resta sbagliato finche' non si conta. Meglio
+-- partire con una bugia dichiarata che non partire.
+--
+-- Applicato con MCP il 19/10/2026 in tre pezzi: le due tabelle
+-- (magazzino_saldi_base, magazzino_scostamenti), la funzione
+-- `controlla_saldi_magazzino()` e il lavoro notturno
+-- `controllo-saldi-magazzino` (cron, '15 5 * * *'). Il corpo completo si
+-- rilegge dal database.
+--
+-- Provato prima di metterlo in giro, su un prodotto finto creato e
+-- cancellato: giacenza toccata scavalcando il registro -> scostamento
+-- -7 segnalato; movimento mancante registrato -> scostamento sparito da
+-- solo.

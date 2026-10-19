@@ -57267,7 +57267,63 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
+// I CONTI CHE NON TORNANO.
+//
+// Ogni notte il controllo ricostruisce la giacenza di ogni prodotto —
+// saldo di partenza piu' i movimenti registrati — e la confronta con
+// quella vera. Quando non coincidono vuol dire UNA cosa sola: qualcuno
+// ha scritto quel numero senza passare da `muoviStock`, cioe' da fuori
+// dall'app. Un update dalla dashboard, uno script, una correzione a mano
+// fatta in buona fede.
+//
+// Non e' un prodotto sotto scorta e non e' un esaurito: quelli si vedono
+// gia' e sono fatti normali. Questo e' il magazzino che dice una cosa e
+// la sua storia che ne dice un'altra, ed e' sempre valsa la pena
+// guardarlo subito — fin quando c'e', non ci si puo' fidare di nessuno
+// dei due numeri.
+//
+// La lista vuota non si disegna: un riquadro che dice "tutto a posto"
+// tutti i giorni diventa invisibile esattamente il giorno in cui
+// servirebbe.
+function PannelloScostamenti({ scostamenti = [], prodottiPerId = {}, isMobile }) {
+  if (!scostamenti.length) return null;
+  const quando = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "long" });
+  };
+  return (
+    <div style={{
+      background: "#FDF1F0", border: "1px solid #E8BDB8", borderLeft: "5px solid #B3261E",
+      borderRadius: 14, padding: isMobile ? "13px 14px" : "16px 18px", marginBottom: 14,
+    }}>
+      <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: "#8A2D2D", letterSpacing: 0.6 }}>
+        I CONTI NON TORNANO SU {scostamenti.length} {scostamenti.length === 1 ? "PRODOTTO" : "PRODOTTI"}
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5, margin: "5px 0 10px" }}>
+        La giacenza non coincide con la somma dei movimenti registrati: qualcuno l&apos;ha scritta
+        senza passare dall&apos;app. Finché è così, nessuno dei due numeri è affidabile.
+      </div>
+      {scostamenti.map((x) => {
+        const p = prodottiPerId[x.prodotto_id];
+        return (
+          <div key={x.prodotto_id} style={{
+            ...fontBody, fontSize: 13, color: NAVY, display: "flex", gap: 10,
+            flexWrap: "wrap", alignItems: "baseline", borderTop: "1px solid #F0D8D5", padding: "7px 0",
+          }}>
+            <span style={{ fontWeight: 700, flex: "1 1 180px", minWidth: 0 }}>{p?.nome || "(prodotto non trovato)"}</span>
+            <span style={{ color: MUTED }}>registro {x.atteso} · magazzino {x.trovato}</span>
+            <span style={{ fontWeight: 700, color: x.differenza > 0 ? "#2E7D32" : "#B3261E" }}>
+              {x.differenza > 0 ? "+" : ""}{x.differenza}
+            </span>
+            <span style={{ color: MUTED, fontSize: 12 }}>dal {quando(x.dal)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PaginaMagazzino({ ruoloUtente, scostamenti = [], categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
   // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato, salvaSchemaPunti] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
@@ -57339,7 +57395,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     setMostraRigaContanti((v) => { try { localStorage.setItem("magazzino_riga_contanti", v ? "0" : "1"); } catch {} return !v; });
   }
   useEffect(() => {
-    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "magazzino_scostamenti"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const isMobile = useIsMobile();
@@ -58236,6 +58292,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 </div>
               </div>
             )}
+            {/* I conti che non tornano stanno SOPRA i segnalatori, non
+                fra loro: sotto scorta ed esauriti sono fatti normali del
+                magazzino, questo e' il magazzino che contraddice la sua
+                storia. Non e' una categoria in piu', e' un dubbio su
+                tutto quello che c'e' sotto. */}
+            <PannelloScostamenti scostamenti={scostamenti} prodottiPerId={prodottiPerId} isMobile={isMobile} />
             <div style={stileRigaSegnalatori(isMobile)}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
@@ -72115,7 +72177,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // mappa delle viste: se un domani la pagina viene incorporata altrove
   // (è già successo), se li porta dietro invece di trovarsi liste vuote
   useEffect(() => {
-    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "magazzino_scostamenti"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // incorporata dentro Gestione magazzino: i pannelli non sono più alti
@@ -80762,6 +80824,9 @@ function Gestionale() {
   // catalogo prodotti WooCommerce (sincronizzato da woo-sync-catalogo)
   const [categorieProdotti, setCategorieProdotti] = useState([]);
   const [prodottiShopGrezzi, setProdottiShop] = useState([]);
+  // i prodotti la cui giacenza non torna col registro: li riempie il
+  // controllo notturno, e vuoto vuol dire che i conti tornano
+  const [scostamentiMagazzino, setScostamentiMagazzino] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   // I due registri che servono allo sconto needling: si riempiono qui una
   // volta sola e li leggono le funzioni pure che decidono la percentuale.
@@ -81016,6 +81081,11 @@ function Gestionale() {
     impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
     intestazione_societa: async () => setIntestazioneSocieta((await supabase.from("intestazione_societa").select("*").maybeSingle()).data || {}),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
+    // i prodotti la cui giacenza non torna col registro dei movimenti:
+    // la riempie il controllo notturno, e vuota vuol dire che i conti
+    // tornano. Se questa riga manca, la lista resta vuota per sempre
+    // senza che nessuno veda un errore — e' gia' successo con altre.
+    magazzino_scostamenti: async () => setScostamentiMagazzino((await supabase.from("magazzino_scostamenti").select("*").order("differenza")).data || []),
     // l'ordine conta: la categoria con ordine 0 e' la PRINCIPALE. Senza
     // `order` il database restituisce le righe come gli pare, e la
     // principale si scambiava con la secondaria a ogni ricaricamento
@@ -83325,7 +83395,7 @@ function Gestionale() {
 
       {view === "magazzino" && (
         <PaginaMagazzino
-          ruoloUtente={ruoloUtente}
+          ruoloUtente={ruoloUtente} scostamenti={scostamentiMagazzino}
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
@@ -84082,5 +84152,5 @@ function Gestionale() {
 export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
-  SchedaFatturaDaEmettere, PannelloScontiEventi,
+  SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti,
 };
