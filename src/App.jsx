@@ -53026,7 +53026,7 @@ function PannelloAdvisorIncassiStripe({ isMobile, ricarica, onCambiaConto }) {
       if (error) { setMsg("La vendita non e' stata registrata: " + testoErrore(error)); setInCorso(""); return; }
 
       if (!esito?.gia_presente) {
-        const erroreScarico = await applicaScarichi(piano, { origine: "vendita_pos", nota: `Recupero Stripe ${r.codice}`, utente: r.operatore_nome });
+        const erroreScarico = await applicaScarichi(piano, { origine: "vendita_pos", nota: `Recupero Stripe ${r.codice}`, riferimento: vendita.numero_ordine, utente: r.operatore_nome });
         if (erroreScarico) setMsg("Vendita registrata, ma il magazzino non si e' scaricato del tutto: " + erroreScarico);
       }
       // il legame col pagamento e' quello che impedisce al recupero di
@@ -69367,7 +69367,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       // ritrova piu'.
       let erroreScarico = null;
       if (pianiVendita.length > 0) {
-        erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
+        // IL NUMERO DELL'ORDINE VA SCRITTO NEL MOVIMENTO.
+        //
+        // Senza, il movimento dice solo "Vendita al banco": non si sa a
+        // quale vendita appartiene, e un pezzo uscito due volte non si
+        // distingue da due vendite diverse. Il 19/10/2026 su 437 scarichi
+        // di vendita 429 erano senza riferimento, e per quattro vendite
+        // sospette di settembre non si e' potuto stabilire se il magazzino
+        // fosse stato scalato una volta o nessuna. Il numero ce l'abbiamo
+        // gia' in mano: costa un campo.
+        erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", riferimento: datiVendita.numero_ordine, utente: nomeOperatore });
         // lo scarico ha gia' scritto la giacenza nuova sul sito, ma senza
         // togliere i pezzi promessi negli altri carrelli sospesi: qui si
         // rimette la disponibilita' vera
