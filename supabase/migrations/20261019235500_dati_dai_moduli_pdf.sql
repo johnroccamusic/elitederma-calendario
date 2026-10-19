@@ -1,0 +1,42 @@
+-- TRACCIA, NON RIESEGUIBILE. 19/10/2026.
+--
+-- Travaso una volta sola: i dati anagrafici letti dai moduli di
+-- iscrizione in PDF (secchio `allegati-iscritti`, colonna
+-- `iscritti.file_iscrizione`) sono finiti nelle schede dove erano
+-- vuote. Su 260 iscritti: 68 erano senza email, 71 senza indirizzo,
+-- 258 senza codice fiscale.
+--
+-- I 243 PDF sono quelli generati dal modulo del sito e hanno un livello
+-- di testo con i campi etichettati, quindi si leggono in modo
+-- deterministico: nessun OCR, nessuna lettura a indovinare. Due dei 243
+-- erano il MODELLO VUOTO caricato per sbaglio — restituivano il testo
+-- dei segnaposti («e cognome della firmataria») e sono stati scartati —
+-- e uno era la scansione di una carta d'identita', senza testo. Uno
+-- invece era la stampa della mail di conferma, che elenca gli stessi
+-- campi come «- Etichetta: valore»: quello si legge.
+--
+-- Risultato: 240 moduli, 50 email, 52 indirizzi completi, 239 codici
+-- fiscali, 240 documenti. Zero contrasti fra scheda e modulo.
+--
+-- PERCHE' NON SI RIESEGUE: i valori stavano in una tabella di appoggio
+-- (`_moduli_letti_20261019`) riempita leggendo i PDF da fuori del
+-- database, e qui non sono riportati — sono dati personali di allieve e
+-- questo repository e' pubblico. Il file resta come traccia di cosa e'
+-- stato fatto e con quale regola; per rifarlo si rileggono i PDF.
+--
+-- LA REGOLA, che e' la parte che conta:
+--
+--   coalesce(nullif(trim(colonna), ''), valore_dal_modulo)
+--
+-- riempie SOLO dove la scheda e' vuota. Quello che una persona ha
+-- scritto a mano non si tocca, nemmeno quando il modulo dice altro: il
+-- modulo e' piu' vecchio della correzione fatta da chi sta allo
+-- sportello. Il codice fiscale va in maiuscolo perche' e' un codice a
+-- formato fisso; tutto il resto resta parola per parola come l'ha
+-- scritto l'allieva, errori compresi — e' quello che ha firmato.
+--
+-- Com'erano gli otto campi prima: `_iscritti_prima_moduli_20261019`.
+--
+-- update iscritti i set
+--   email = coalesce(nullif(trim(i.email),''), m.email), ...
+-- from _moduli_letti_20261019 m where m.id = i.id;
