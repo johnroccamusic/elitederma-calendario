@@ -30490,6 +30490,28 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     const scrittore = SCRITTORI_ANAGRAFICI[chiave];
     if (scrittore) scrittore(valore);
   }
+  // I SUGGERIMENTI DELLA VIA.
+  //
+  // La ricerca sta in una edge function e non qui: Photon oggi non
+  // chiede chiavi, ma il giorno in cui servisse Google o Mapbox una
+  // chiave nel bundle sarebbe una chiave pubblica. Si cambia la
+  // funzione, e in questa riga non si tocca niente.
+  //
+  // Se la ricerca non risponde non si dice niente e non si ferma
+  // nessuno: la via si scrive a mano come prima. Un suggerimento che
+  // manca non e' un guasto da annunciare a chi sta compilando.
+  // useMemo e non useCallback: in questo file useCallback non e'
+  // importato (vedi la nota su venditeNel) e la build non lo segnala.
+  const cercaVie = useMemo(() => async (cerca, comune, cap) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("cerca-indirizzo", {
+        body: { cerca, comune, cap },
+      });
+      if (error) return [];
+      return Array.isArray(data?.vie) ? data.vie : [];
+    } catch { return []; }
+  }, []);
+
   // esito dell'ultimo invio della mail di conferma: { stato: "lavoro" | "ok" | "errore", testo }
   const [invioConferma, setInvioConferma] = useState(null);
   // l'esito appartiene a un iscritto: cambiando scheda non deve restare li'
@@ -33125,6 +33147,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 icona={IconaPersonaSemplice}
                 valori={valoriAnagrafici}
                 chiaveScheda={modificandoId || "nuova"}
+                cercaVie={cercaVie}
                 scrivi={scriviAnagrafico}
                 autosalva={autosalva}
                 normalizzaTelefono={normalizzaCellulare}

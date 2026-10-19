@@ -61,3 +61,14 @@ export async function scegli(tendina, valore) {
 export function voci(tendina) {
   return [...(tendina?.options || [])].slice(1).map((o) => o.value);
 }
+
+// Premere col dito/mouse SENZA rilasciare. Serve per le tendine dei
+// suggerimenti: ascoltano `mousedown` e non `click`, perche' il blur
+// della casella arriva prima del clic e chiuderebbe l'elenco mentre il
+// dito e' ancora a mezz'aria.
+export async function premi(elemento) {
+  await act(async () => {
+    elemento?.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true }));
+  });
+  await attendi();
+}

@@ -41,7 +41,12 @@ export const AREA_ALLIEVO = {
       { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
     ] },
     { campi: [
-      { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", maiuscolo: true, salvaUscendo: true },
+      // La via si scrive, ma mentre si scrive arrivano i suggerimenti
+      // (edge function `cerca-indirizzo`, su Photon/OpenStreetMap). Non
+      // e' un elenco chiuso come il comune: le vie di OSM coprono bene
+      // le citta' e male i paesi, e un elenco incompleto impedirebbe di
+      // registrare chi esiste.
+      { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", tipo: "via", maiuscolo: true, salvaUscendo: true },
       { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
       { chiave: "interno_residenza", etichetta: "Interno", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
     ] },

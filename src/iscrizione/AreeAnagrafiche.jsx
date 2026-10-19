@@ -75,13 +75,111 @@ function Tendina({ valore, opzioni, onCambia, spenta, stile, vuoto, campo }) {
   );
 }
 
-function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, cascata }) {
+// LA VIA SI SUGGERISCE, NON SI IMPONE.
+//
+// Comune e CAP si scelgono da un elenco chiuso perche' l'elenco e'
+// completo. Le vie no: quelle di OpenStreetMap coprono bene le citta' e
+// male i paesi — «Via Circondario» a Castelfranci, 1.900 abitanti, non
+// c'e', ed e' la residenza di un'allieva vera. Un elenco chiuso
+// incompleto impedirebbe di registrare chi esiste.
+//
+// Quindi: si scrive come prima, e se la ricerca ha qualcosa da dire lo
+// mette sotto. Nessun suggerimento non e' un errore e non si annuncia.
+function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVie, spenta }) {
+  const [proposte, setProposte] = useState([]);
+  const [aperto, setAperto] = useState(false);
+  const comune = cascata?.comuneScelto || "";
+  const cap = cascata?.cap || "";
+  const scritto = valore || "";
+
+  useEffect(() => {
+    // Senza comune non si cerca: una via senza il suo paese darebbe
+    // venti "Via Roma" di venti posti diversi, cioe' il contrario di un
+    // aiuto. Fuori Italia non si cerca affatto.
+    if (spenta || !cercaVie || !comune || cascata?.fuoriItalia || scritto.trim().length < 3) {
+      setProposte([]); return;
+    }
+    let vivo = true;
+    // Mezzo secondo di attesa: Photon e' un servizio gratuito e una
+    // richiesta a ogni lettera e' esattamente l'uso che fa chiudere i
+    // servizi gratuiti.
+    const t = setTimeout(async () => {
+      // La ricerca puo' rompersi, e questo componente non deve fidarsi
+      // che chi la passa l'abbia protetta: dentro un setTimeout un
+      // errore non lo prende nessuno e resta un rifiuto senza padrone.
+      // Qui vale la regola di sempre — un suggerimento che manca non
+      // ferma chi sta compilando.
+      let trovate = [];
+      try { trovate = await cercaVie(scritto, comune, cap); } catch { trovate = []; }
+      if (vivo) { setProposte(Array.isArray(trovate) ? trovate : []); setAperto(true); }
+    }, 500);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [scritto, comune, cap, spenta, cascata?.fuoriItalia, cercaVie]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        data-campo={campo.chiave}
+        value={scritto} disabled={spenta}
+        onChange={(e) => { scrivi(campo.chiave, e.target.value.toUpperCase()); setAperto(true); }}
+        // il clic su una proposta arriva DOPO il blur: senza il ritardo
+        // l'elenco si chiude prima che il clic lo raggiunga
+        onBlur={() => { setTimeout(() => setAperto(false), 150); esceDalCampo(campo); }}
+        style={stile}
+      />
+      {aperto && proposte.length > 0 && (
+        <div style={{
+          position: "absolute", zIndex: 30, left: 0, right: 0, top: "100%", marginTop: 2,
+          background: "#FFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
+          boxShadow: "0 6px 18px rgba(14,27,51,0.12)", overflow: "hidden",
+        }}>
+          {proposte.map((x, i) => (
+            <div
+              key={`${x.via}|${x.civico}|${i}`}
+              // marcata, come le tendine: cercare questa riga per il
+              // testo prende il contenitore, che comincia con le stesse
+              // parole, e il gesto finisce nel vuoto
+              data-proposta={i}
+              onMouseDown={() => {
+                scrivi("indirizzo_residenza", (x.via || "").toUpperCase());
+                // il civico arriva solo se la ricerca l'ha trovato: non
+                // si cancella quello che qualcuno ha gia' scritto
+                if (x.civico) scrivi("civico_residenza", x.civico.toUpperCase());
+                setAperto(false);
+              }}
+              style={{
+                ...fontBody, fontSize: 13.5, color: NAVY, padding: "9px 11px", cursor: "pointer",
+                borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`,
+              }}
+            >
+              {x.via}{x.civico ? ` ${x.civico}` : ""}
+              <span style={{ color: MUTED }}>
+                {" — "}{x.comune}{x.cap ? ` ${x.cap}` : ""}
+                {/* un CAP diverso da quello scelto si dice: non si
+                    riscrive la scheda, si fa vedere che non torna */}
+                {x.cap && cap && x.cap !== cap ? " ⚠︎" : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, cascata, cercaVie }) {
   const { chiave, tipo = "testo", maiuscolo, lunghezza, suggerimento } = campo;
   const stile = {
     ...campoAreaScheda,
     ...(maiuscolo ? { textTransform: "uppercase" } : {}),
     ...(spenta ? { background: "#F1EEE7" } : {}),
   };
+
+  if (tipo === "via") {
+    return <CampoVia
+      valore={spenta ? "" : valore} scrivi={scrivi} esceDalCampo={esceDalCampo}
+      campo={campo} stile={stile} cascata={cascata} cercaVie={cercaVie} spenta={spenta} />;
+  }
 
   // --- i gradini della residenza -------------------------------------
   if (tipo === "stato") {
@@ -223,6 +321,9 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
       spellCheck={false}
       data-lpignore="true"
       data-form-type="other"
+      // ogni casella porta la sua chiave: e' l'unico modo di ritrovarla
+      // in una prova senza dipendere da quante righe ci sono sopra
+      data-campo={chiave}
       onChange={(e) => {
         let t = e.target.value;
         if (maiuscolo) t = t.toUpperCase();
@@ -238,6 +339,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
 export function AreaAnagrafica({
   area, icona, valori = {}, scrivi = () => {}, autosalva = () => {},
   normalizzaTelefono = (x) => x, venditori = [],
+  // La ricerca della via arriva da fuori: cosi' questo componente non
+  // sa niente di Photon ne' del client Supabase, e la pagina delle
+  // impostazioni lo monta senza portarsi dietro una ricerca in rete.
+  cercaVie = null,
   // modalita' configurazione
   configurazione = false, acceso = () => true, obbligatorio = () => false,
   onCambiaIncluso = () => {}, onCambiaObbligo = () => {}, inAttesa = "",
@@ -289,6 +394,7 @@ export function AreaAnagrafica({
 
   const cascata = {
     regione, provincia, comuneScelto, capDisponibili, fuoriItalia,
+    cap: (valori.cap_residenza || "").trim(),
     scegliStato(v) {
       if (v === "ALTRO") {
         setAltroStato(true); setRegioneScelta("");
@@ -361,6 +467,7 @@ export function AreaAnagrafica({
                       venditori={venditori}
                       spenta={configurazione}
                       cascata={cascata}
+                      cercaVie={configurazione ? null : cercaVie}
                     />
                   </Field>
                   {/* in configurazione le caselle sono vuote per forza:
