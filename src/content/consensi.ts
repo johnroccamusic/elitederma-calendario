@@ -16,13 +16,14 @@ import { consensoV3 } from "./consenso-v3";
 import { consensoNeedlingV1 } from "./consenso-needling-v1";
 import { consensoLaminazioneV1 } from "./consenso-laminazione-v1";
 import { consensoTricoV1 } from "./consenso-trico-v1";
+import { consensoAreolaV1 } from "./consenso-areola-v1";
 
 export interface ModelloConsenso {
   /** quello che finisce nel link: ?consenso=<codice> */
   codice: string;
   /** come lo chiamate voi, non come si intitola il documento */
   nome: string;
-  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1 | typeof consensoTricoV1;
+  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1 | typeof consensoTricoV1 | typeof consensoAreolaV1;
 }
 
 export const CONSENSI: ModelloConsenso[] = [
@@ -44,6 +45,11 @@ export const CONSENSI: ModelloConsenso[] = [
   // dire una cosa che negli altri moduli non c'e' — che non fa ricrescere
   // i capelli.
   { codice: "trico", nome: "Consenso Tricopigmentazione", contenuto: consensoTricoV1 },
+  // L'areola si e' staccata dal PMU il 19/10/2026 per lo stesso motivo
+  // del trico, ma con una posta piu' alta: si pigmenta spesso dopo una
+  // mastectomia, su cute operata o irradiata, e il questionario del
+  // trucco permanente non chiedeva niente di tutto questo.
+  { codice: "areola", nome: "Consenso Areola", contenuto: consensoAreolaV1 },
 ];
 
 /**
@@ -62,6 +68,7 @@ const VERSIONI: Record<string, { codice: string; contenuto: ModelloConsenso["con
   "needling-v1": { codice: "needling", contenuto: consensoNeedlingV1 },
   "laminazione-v1": { codice: "laminazione", contenuto: consensoLaminazioneV1 },
   "trico-v1": { codice: "trico", contenuto: consensoTricoV1 },
+  "areola-v1": { codice: "areola", contenuto: consensoAreolaV1 },
 };
 
 /** Il testo con cui un consenso gia' raccolto e' stato firmato.

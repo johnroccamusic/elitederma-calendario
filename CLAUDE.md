@@ -121,17 +121,32 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
   | `?consenso=` | **scrive dritto in `consensi_modelle`** (INSERT per `anon`) + caricamento su `consensi-documenti` |
 
-  **I modelli di consenso sono quattro, dal 19/10/2026** (`src/content/consensi.ts`):
-  `pmu-micro`, `needling`, `laminazione` (ciglia; vale anche per IKE) e `trico`.
+  **I modelli di consenso sono cinque, dal 19/10/2026** (`src/content/consensi.ts`):
 
-  La tricopigmentazione si è staccata dal PMU perché quel modulo si intitolava
-  «trattamento di trucco permanente» e il capo non è un trucco; perché le sue
-  controindicazioni — dermatiti o psoriasi del cuoio capelluto, caduta in fase
-  attiva, trapianti recenti, terapie per la caduta — il questionario PMU non le
-  chiedeva; e soprattutto perché deve dire una cosa che negli altri moduli non
-  c'è: **che non fa ricrescere i capelli**. `consenso-trico-v1.ts` è l'unico
-  **non trascritto da un cartaceo**: l'ho scritto partendo dal corpo neutro del
-  PMU, ed è segnato in testa al file come **da far validare**.
+  | Codice | Copre | Corsi |
+  |---|---|---|
+  | `pmu-micro` | trucco permanente **del viso** | 13 |
+  | `needling` | microneedling | 1 |
+  | `laminazione` | laminazione ciglia (e IKE) | 5 |
+  | `trico` | tricopigmentazione | 2 |
+  | `areola` | dermopigmentazione dell'areola | 1 |
+
+  Trico e areola si sono staccati dal PMU perché quel modulo si intitolava
+  «trattamento di trucco permanente», e né il cuoio capelluto né un'areola
+  sono un trucco. Ma il motivo vero non era l'intestazione: era il
+  **questionario**. Il PMU non chiedeva le dermatiti del capo né la caduta in
+  fase attiva; e soprattutto non chiedeva **mastectomia, radioterapia,
+  linfonodi ascellari** — e l'areola si pigmenta spesso proprio dopo una
+  mastectomia, su cute operata o irradiata. Ogni modulo dice anche la cosa che
+  gli altri non direbbero: il trico che **non fa ricrescere i capelli**,
+  l'areola che serve il **nulla osta del medico** e che si tratta di una
+  **zona intima**, con il diritto di farsi accompagnare e di interrompere.
+
+  `consenso-trico-v1.ts` e `consenso-areola-v1.ts` sono gli unici **non
+  trascritti da un cartaceo**: li ho scritti partendo dal corpo neutro del PMU,
+  e sono segnati in testa al file come **da far validare** — quello dell'areola
+  con più insistenza, perché le soglie temporali che contiene (dodici mesi
+  dall'intervento) sono prassi corrente, non norma.
 
   Una stessa condizione deve chiamarsi allo stesso modo in tutti i moduli: la
   chiave `diabete` non può essere «Diabete» in un modello e «Diabete mellito»

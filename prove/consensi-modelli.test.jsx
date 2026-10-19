@@ -270,20 +270,41 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
     expect(v3.anamnesi.map((d) => d.chiave)).toEqual(v2.anamnesi.map((d) => d.chiave));
   });
 
-  it("il PMU non copre piu' la tricopigmentazione, che ha un modulo suo", () => {
+  it("il PMU e' tornato a essere il trucco del viso, e basta", () => {
     const c = consensoDaCodice("pmu-micro").contenuto;
-    // ne' nell'intestazione, ne' nella tendina: lasciarcela avrebbe
-    // permesso di scegliere il trico sul consenso sbagliato
+    // trico e areola hanno un modulo loro: fuori dall'intestazione e
+    // fuori dalla tendina, o si sceglierebbero sul consenso sbagliato
+    for (const fuori of ["Tricopigmentazione", "Areola"]) {
+      expect(c.trattamenti, `${fuori} e' ancora nella tendina del PMU`).not.toContain(fuori);
+    }
     expect(c.sottotitolo).not.toContain("TRICOPIGMENTAZIONE");
-    expect(c.trattamenti).not.toContain("Tricopigmentazione");
-    expect(c.caselle.find((x) => x.chiave === "trattamento").testo).not.toContain("tricopigmentazione");
-    // ma l'intestazione resta larga abbastanza per AREOLART, che pure
-    // non e' un trucco
-    expect(c.sottotitolo).toContain("DERMOPIGMENTAZIONE");
-    expect(c.trattamenti).toContain("Areola");
-    // e il corpo resta neutro: non nomina il viso, e non deve
+    expect(c.sottotitolo).toContain("VISO");
+    // quel che resta e' il viso
+    expect(c.trattamenti).toContain("Labbra");
+    expect(c.trattamenti).toContain("Eyeliner");
+    // e il CORPO resta neutro: non nomina il viso, e non deve — e' lo
+    // stesso testo firmato ventisei volte
     for (const parola of ["trucco permanente", "labbra", "sopraccigli", "viso"]) {
       expect(c.testo.toLowerCase(), `il corpo nomina "${parola}"`).not.toContain(parola);
+    }
+  });
+
+  it("il consenso areola dice quello che un modulo del viso non direbbe mai", () => {
+    const c = consensoDaCodice("areola").contenuto;
+    // l'areola si pigmenta spesso dopo una mastectomia: il modulo deve
+    // pretendere cicatrici guarite e il nulla osta di chi la ha in cura
+    expect(c.testo).toContain("nulla osta scritto del medico");
+    expect(c.testo).toContain("dodici mesi");
+    // e dire che e' una zona intima, con cosa ne consegue
+    expect(c.testo).toContain("può chiedere di essere accompagnata");
+    expect(c.testo).toContain("può interrompere il trattamento in qualsiasi momento");
+    // il consenso alle foto deve dire di che zona si tratta: senza, non
+    // e' informato
+    expect(c.caselle.find((x) => x.chiave === "immagini").testo).toContain("zona intima");
+    // e il questionario deve chiedere quello che il PMU non chiedeva
+    const chiavi = c.anamnesi.map((d) => d.chiave);
+    for (const attesa of ["interventi_seno", "radio_chemio", "linfonodi_ascellari", "nulla_osta_medico"]) {
+      expect(chiavi).toContain(attesa);
     }
   });
 

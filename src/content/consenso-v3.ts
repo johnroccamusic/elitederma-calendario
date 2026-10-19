@@ -27,21 +27,22 @@ export const consensoV3 = {
   // anche per AREOLART, e un'areola non e' un trucco: un documento
   // intestato cosi' si contraddiceva nel punto che si legge per primo.
   //
-  // La tricopigmentazione, che pure stava qui, dal 19/10/2026 ha un
-  // modulo suo (`consenso-trico-v1.ts`) ed e' uscita anche dalla tendina:
-  // lasciarcela avrebbe permesso di sceglierla sul consenso sbagliato.
+  // La tricopigmentazione e l'areola, che pure stavano qui, dal
+  // 19/10/2026 hanno un modulo loro (`consenso-trico-v1.ts`,
+  // `consenso-areola-v1.ts`) e sono uscite anche dalla tendina:
+  // lasciarcele avrebbe permesso di sceglierle sul consenso sbagliato.
+  // Quel che resta qui e' il viso: sopracciglia, labbra, eyeliner.
   //
   // Il CORPO del testo invece non e' stato toccato: non nomina mai il
   // viso, le labbra o il trucco — parla di cute, pigmento, simmetria,
   // crosticine e durata, che valgono uguali ovunque si pigmenti.
   sottotitolo:
-    "TRUCCO PERMANENTE E DERMOPIGMENTAZIONE DURANTE CORSO DI FORMAZIONE",
+    "TRUCCO PERMANENTE DEL VISO DURANTE CORSO DI FORMAZIONE",
   trattamenti: [
     "Sopracciglia – Microblading",
     "Sopracciglia – Dermopigmentazione",
     "Labbra",
     "Eyeliner",
-    "Areola",
     "Altro",
   ],
 
@@ -62,7 +63,7 @@ export const consensoV3 = {
       chiave: "trattamento",
       tipo: "obbligatoria",
       etichetta: "Consenso al trattamento",
-      testo: "Acconsento a sottopormi al trattamento indicato in questo modulo alla voce «Il trattamento» — trucco permanente o dermopigmentazione — eseguito durante un corso di formazione Elitederma Srl da un'allieva/o in formazione sotto la supervisione del docente. Dichiaro di aver compreso la natura didattica dell'attività, i possibili rischi e i limiti del risultato.",
+      testo: "Acconsento a sottopormi al trattamento di trucco permanente indicato in questo modulo alla voce «Il trattamento» — eseguito durante un corso di formazione Elitederma Srl da un'allieva/o in formazione sotto la supervisione del docente. Dichiaro di aver compreso la natura didattica dell'attività, i possibili rischi e i limiti del risultato.",
     },
     {
       chiave: "salute_veritiera",
