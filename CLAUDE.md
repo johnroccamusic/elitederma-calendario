@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 10 bucket Supabase, **tutti pubblici** |
-| Backend | 8 edge function Deno in `supabase/functions/` (login venditori + sincronizzazione WooCommerce) |
+| Backend | 44 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -40,7 +40,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
 prove/                   32 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
-supabase/functions/      41 edge function + _shared
+supabase/functions/      44 edge function + _shared
 supabase/migrations/     329 migrazioni versionate
 supabase-*.sql           130 script di setup storici, cumulativi e idempotenti
 ```
@@ -426,6 +426,14 @@ ma innocui a runtime (un `.message` su quello che un `catch` consegna, che non �
 per forza un `Error`; un `Uint8Array` che per i tipi potrebbe poggiare su
 memoria condivisa e che le funzioni di crittografia non accettano): corretti e
 ripubblicati, il comportamento non cambia di una virgola.
+
+**Il 19/10/2026 sono state cancellate le tre funzioni `temp-`** rimaste
+pubblicate da agosto (`temp-check-webhooks`, `temp-seed-codici-woo`,
+`temp-test-bundle-webhook`): erano già svuotate — rispondevano solo `410` — e
+non le nominava nessuno, né nel repo né altrove. Adesso **44 pubblicate = 44 nel
+repository**, nessuna orfana da nessuna delle due parti: è una cosa che vale la
+pena ricontrollare ogni tanto, perché una funzione dimenticata online è una
+porta aperta di cui nessuno ricorda il perché.
 
 `fic-sync` e `invia-notifica-push` invece **non avevano niente che non andasse**:
 importano pacchetti npm che su Supabase risolve la pubblicazione e che in locale
