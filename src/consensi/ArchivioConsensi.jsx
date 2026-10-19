@@ -220,6 +220,9 @@ export function Riga({ c, isMobile, riepilogoSempre = false }) {
               })}
             </div>
           )}
+          {/* i campi che il singolo consenso ha chiesto in piu' */}
+          {c.campiExtra && (contenutoDaVersione(c.versioneTesto, c.modelloCodice).campiExtra || [])
+            .map((x) => voce(x.etichetta, c.campiExtra[x.chiave]))}
           {voce("Chi ha eseguito", c.esecutore)}
           {voce("Nata il", soloData(c.dataNascita))}
           {voce("A", c.luogoNascita)}

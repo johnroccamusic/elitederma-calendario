@@ -325,9 +325,15 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
     expect(c.testo).toContain("non la elimina e non la appiattisce");
     // e il questionario deve chiedere quello che il PMU non chiedeva
     const chiavi = c.anamnesi.map((d) => d.chiave);
-    for (const attesa of ["interventi_seno", "radio_chemio", "linfonodi_ascellari", "nulla_osta_medico"]) {
+    for (const attesa of ["radio_chemio", "linfonodi_ascellari", "nulla_osta_medico"]) {
       expect(chiavi).toContain(attesa);
     }
+    // "si e' sottoposta a interventi al seno?" era una domanda la cui
+    // risposta si conosce prima di farla: e' diventata un campo, dove si
+    // scrive QUALE e QUANDO — che e' il dato da cui dipende tutto
+    expect(chiavi).not.toContain("interventi_seno");
+    const intervento = c.campiExtra.find((x) => x.chiave === "intervento");
+    expect(intervento.obbligatorio).toBe(true);
   });
 
   it("il consenso trico dice quello che negli altri non c'e'", () => {
@@ -364,6 +370,49 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
 
   it("oggi il PMU fa firmare la v3", () => {
     expect(consensoDaCodice("pmu-micro").contenuto.versione).toBe("v3");
+  });
+});
+
+// SE C'E' UNA DOMANDA, C'E' DOVE SCRIVERE.
+//
+// Il campo libero compariva solo su alcune domande e solo dopo il SÌ:
+// sotto "Si è sottoposta a interventi chirurgici al seno" si leggeva
+// "Quale intervento e in che mese e anno" e poi due bottoni, senza
+// nessuna casella — una richiesta senza posto in cui rispondere.
+describe("lo spazio per la nota", () => {
+  for (const m of CONSENSI) {
+    it(`${m.codice}: ogni domanda ha la sua casella, anche prima di rispondere`, async () => {
+      rispondiCon({});
+      const p = await monta(<PaginaConsenso codice={m.codice} />);
+      const domande = m.contenuto.anamnesi || [];
+      // una casella di testo per ogni domanda, senza aver premuto niente
+      const note = [...p.nodo.querySelectorAll("input")]
+        .filter((i) => (i.placeholder || "").startsWith("Nota, se")
+          || domande.some((d) => d.specifica && (d.aiuto || "Specifica") === i.placeholder));
+      expect(note.length, `${m.codice}: ${note.length} caselle per ${domande.length} domande`)
+        .toBe(domande.length);
+      await p.smonta();
+    });
+  }
+
+  it("la nota si puo' scrivere anche rispondendo NO", async () => {
+    rispondiCon({});
+    const p = await monta(<PaginaConsenso codice="laminazione" />);
+    const nota = [...p.nodo.querySelectorAll("input")]
+      .find((i) => (i.placeholder || "").startsWith("Nota, se"));
+    expect(nota).toBeTruthy();
+    expect(nota.disabled).toBe(false);
+    await p.smonta();
+  });
+
+  it("dove si chiede di scrivere, la richiesta sta DENTRO la casella", async () => {
+    rispondiCon({});
+    const p = await monta(<PaginaConsenso codice="areola" />);
+    // "Quali" e simili non devono stare sopra i bottoni a sembrare una
+    // domanda senza risposta possibile
+    const segnaposti = [...p.nodo.querySelectorAll("input")].map((i) => i.placeholder);
+    expect(segnaposti).toContain("Quali");
+    await p.smonta();
   });
 });
 

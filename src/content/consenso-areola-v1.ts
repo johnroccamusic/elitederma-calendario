@@ -62,6 +62,29 @@ export const consensoAreolaV1 = {
   ],
   trattamentoPredefinito: "Dermopigmentazione del complesso areola capezzolo",
 
+  // QUELLO CHE QUI NON E' UNA DOMANDA.
+  //
+  // «Si è sottoposta a interventi chirurgici al seno» era una domanda
+  // sì/no, e la risposta era sempre sì: si sta pigmentando un'areola, o
+  // c'e' stata una mastectomia o una mastoplastica. Una domanda la cui
+  // risposta si conosce prima di farla non raccoglie niente — e quel che
+  // serve davvero, QUALE intervento e QUANDO, restava appeso a un
+  // suggerimento sopra due bottoni, senza una casella in cui scriverlo.
+  //
+  // Adesso e' un campo, ed e' obbligatorio: la data dell'intervento e'
+  // la cosa da cui dipende se il trattamento si puo' fare, perche' le
+  // cicatrici devono essere guarite e di norma devono essere passati
+  // dodici mesi.
+  campiExtra: [
+    {
+      chiave: "intervento",
+      etichetta: "Quale intervento ha subito, e quando",
+      aiuto: "Per esempio: mastoplastica additiva, marzo 2024. Se non ha subito interventi, scriva «nessuno».",
+      obbligatorio: true,
+      multilinea: true,
+    },
+  ],
+
   // LE CASELLE CHE RENDONO VALIDO IL CONSENSO.
   //
   // Le stesse degli altri modelli. Cambiano due testi: quello del
@@ -124,12 +147,6 @@ export const consensoAreolaV1 = {
 
     // Da qui in giu' e' quello che riguarda una zona gia' operata, e che
     // nessuno degli altri moduli chiedeva.
-    {
-      chiave: "interventi_seno",
-      domanda: "Si è sottoposta a interventi chirurgici al seno",
-      specifica: true,
-      aiuto: "Quale intervento e in che mese e anno (mastectomia, ricostruzione, riduzione, aumento, mastopessi)",
-    },
     {
       chiave: "oncologiche_5_anni",
       domanda: "Cure oncologiche negli ultimi 5 anni",

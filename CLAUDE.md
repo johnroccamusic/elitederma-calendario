@@ -209,6 +209,22 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   firmare, un riquadro che dice perché. Sopra al tasto c'è un avviso
   **ATTENZIONE** in rosso, che resta anche dopo la lettura.
 
+  **Se c'è una domanda, c'è dove scrivere. Sempre.** Il campo libero del
+  questionario compariva solo su alcune domande e solo dopo aver premuto SÌ:
+  sotto «Si è sottoposta a interventi chirurgici al seno» si leggeva «Quale
+  intervento e in che mese e anno» e poi due bottoni, senza nessuna casella —
+  una richiesta senza posto in cui rispondere. Ora la nota c'è su **ogni**
+  domanda, da subito, e vale anche per chi risponde NO ma ha qualcosa da
+  aggiungere. Dove la risposta esatta serve (`specifica`), quella richiesta fa
+  da suggerimento **dentro** la casella invece di stare sopra i bottoni.
+
+  **Una domanda la cui risposta si conosce prima di farla non è una domanda.**
+  «Si è sottoposta a interventi al seno?» su un consenso per l'areola ha
+  sempre risposta sì. È diventata un campo obbligatorio — *quale intervento e
+  quando* — perché quella data è ciò da cui dipende se il trattamento si può
+  fare. Un modello può dichiarare `campiExtra`, salvati in
+  `consensi_modelle.campi_extra`.
+
   **Le righe da riempire a penna diventano campi.** Il cartaceo del
   microneedling ha tre righe vuote per il nome di chi opera («incarico
   ______ di eseguire su di me»): nella prima trasposizione erano diventate

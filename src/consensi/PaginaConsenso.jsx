@@ -95,13 +95,30 @@ const campo = { ...inputStyle, minHeight: 48, fontSize: 16 };
  *
  * I tasti sono alti 48 come i campi: sotto i 44 un dito adulto sbaglia.
  */
+// DOVE C'E' UNA DOMANDA, C'E' DOVE SCRIVERE. Sempre.
+//
+// Prima il campo libero compariva solo su alcune domande, e solo dopo
+// aver premuto SÌ. Il risultato lo si vedeva sulla domanda degli
+// interventi al seno: sotto c'era scritto «Quale intervento e in che
+// mese e anno», e sotto ancora due bottoni e basta — una richiesta di
+// dichiarare qualcosa senza nessun posto in cui dichiararlo. La casella
+// arrivava dopo il SÌ, ma chi guardava non poteva saperlo.
+//
+// E non e' solo un problema di quando compare: una persona che risponde
+// NO puo' avere lo stesso qualcosa da dire («l'herpes ce l'ho avuto, ma
+// dieci anni fa»), e se non ha dove scriverlo quella cosa si perde.
+//
+// Adesso la nota c'e' su ogni domanda, sempre. Dove la risposta esatta
+// serve davvero — «quali farmaci», «a cosa sei allergica» — e' quella
+// richiesta a fare da suggerimento dentro la casella, invece di stare
+// sopra i bottoni a sembrare una domanda senza risposta.
 function RigaAnamnesi({ domanda, aiuto, specifica, valore, onCambia }) {
   const risposta = valore?.r;
   const scelto = (quale) => risposta === quale;
   const tasto = (quale, etichetta, colore) => (
     <button
       type="button"
-      onClick={() => onCambia({ r: quale, s: quale ? (valore?.s || "") : "" })}
+      onClick={() => onCambia({ r: quale, s: valore?.s || "" })}
       style={{
         ...fontBody, flex: "1 1 0", minWidth: 0, minHeight: 48, borderRadius: 11, cursor: "pointer",
         fontSize: 15, fontWeight: 700, letterSpacing: 0.3,
@@ -120,20 +137,21 @@ function RigaAnamnesi({ domanda, aiuto, specifica, valore, onCambia }) {
       borderRadius: 12, padding: 12, marginBottom: 9,
     }}>
       <div style={{ ...fontBody, fontSize: 14, color: NAVY, lineHeight: 1.35, fontWeight: 600 }}>{domanda}</div>
-      {aiuto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{aiuto}</div>}
+      {/* l'aiuto resta sopra solo quando SPIEGA la domanda. Quando invece
+          chiede di scrivere qualcosa scende dentro la casella, dov'e'
+          l'unico posto in cui quella richiesta ha senso. */}
+      {aiuto && !specifica && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{aiuto}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         {tasto(true, "SÌ", { pieno: "#B8860B" })}
         {tasto(false, "NO", { pieno: "#6E7391" })}
       </div>
-      {/* il campo libero compare solo col sì, e solo dove serve davvero */}
-      {specifica && risposta === true && (
-        <input
-          style={{ ...campo, marginTop: 9 }}
-          value={valore?.s || ""}
-          onChange={(e) => onCambia({ r: true, s: e.target.value })}
-          placeholder={aiuto || "Specifica"}
-        />
-      )}
+      <input
+        style={{ ...campo, marginTop: 9, minHeight: 42, fontSize: 13.5 }}
+        value={valore?.s || ""}
+        onChange={(e) => onCambia({ r: risposta ?? null, s: e.target.value })}
+        placeholder={specifica && aiuto ? aiuto : (specifica ? "Specifica" : "Nota, se c'è qualcosa da aggiungere")}
+        className="suggerimento-chiaro"
+      />
     </div>
   );
 }
@@ -271,6 +289,8 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   // tutto l'art. 9 sui dati di salute, che e' poi quello che il
   // questionario qui sopra raccoglie.
   const [spunte, setSpunte] = useState({});
+  // le risposte ai campi che il singolo modello chiede in piu'
+  const [extra, setExtra] = useState({});
   const [testoAperto, setTestoAperto] = useState(false);
   // APERTO E RICHIUSO ALMENO UNA VOLTA.
   //
@@ -314,6 +334,11 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   if (modello?.contenuto?.esecutore?.obbligatorio && !v.esecutore.trim()) {
     mancanze.push("chi esegue il trattamento");
   }
+  for (const campoExtra of modello?.contenuto?.campiExtra || []) {
+    if (campoExtra.obbligatorio && !String(extra[campoExtra.chiave] || "").trim()) {
+      mancanze.push(campoExtra.etichetta.toLowerCase());
+    }
+  }
   // Tutte le domande, nessuna esclusa. E' il punto del questionario: una
   // saltata e' proprio quella su cui l'operatore si sarebbe fermato.
   const domande = modello.contenuto.anamnesi || [];
@@ -348,6 +373,7 @@ export default function PaginaConsenso({ codice, edizione = null }) {
         documentoTipo: v.documentoTipo, documentoNumero: v.documentoNumero,
         trattamento: v.trattamento, trattamentoAltro: v.trattamentoAltro,
         esecutore: v.esecutore,
+        campiExtra: extra,
         noteSalute: v.noteSalute,
         anamnesi,
         consensoTrattamento: true,
@@ -435,6 +461,31 @@ export default function PaginaConsenso({ codice, edizione = null }) {
               <input style={campo} value={v.trattamentoAltro} onChange={cambia("trattamentoAltro")} />
             </Campo>
           )}
+          {/* QUELLO CHE QUESTO CONSENSO CHIEDE IN PIU'. Sta qui e non nel
+              questionario perche' non e' una domanda a cui si risponde
+              sì o no: e' un dato che si scrive. */}
+          {(c.campiExtra || []).map((x) => (
+            <Campo key={x.chiave} etichetta={x.etichetta} obbligatorio={!!x.obbligatorio}>
+              {x.multilinea ? (
+                <textarea
+                  style={{ ...campo, minHeight: 72, resize: "vertical" }}
+                  value={extra[x.chiave] || ""}
+                  onChange={(e) => setExtra((p) => ({ ...p, [x.chiave]: e.target.value }))}
+                  placeholder={x.aiuto || ""}
+                  className="suggerimento-chiaro"
+                />
+              ) : (
+                <input
+                  style={campo}
+                  value={extra[x.chiave] || ""}
+                  onChange={(e) => setExtra((p) => ({ ...p, [x.chiave]: e.target.value }))}
+                  placeholder={x.aiuto || ""}
+                  className="suggerimento-chiaro"
+                />
+              )}
+            </Campo>
+          ))}
+
           {/* Le righe che sul cartaceo si riempiono a penna: «incarico
               ______ di eseguire su di me». Compare solo dove il modello
               lo prevede, perche' non tutti i moduli le hanno. */}

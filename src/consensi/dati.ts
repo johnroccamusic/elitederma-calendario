@@ -26,6 +26,8 @@ export interface DatiConsenso {
   trattamentoAltro?: string | null;
   /** chi esegue il trattamento: sul cartaceo erano le righe da riempire a mano */
   esecutore?: string | null;
+  /** le risposte ai campi che il singolo modello chiede in piu' */
+  campiExtra?: Record<string, string> | null;
   noteSalute?: string | null;
   /** risposte al questionario sanitario: { chiave: { r: si/no, s: specifica } } */
   anamnesi?: Record<string, { r: boolean; s?: string }> | null;
@@ -146,6 +148,7 @@ export async function salvaConsenso(
     trattamento: dati.trattamento || null,
     trattamento_altro: dati.trattamentoAltro?.trim() || null,
     esecutore: dati.esecutore?.trim() || null,
+    campi_extra: dati.campiExtra && Object.keys(dati.campiExtra).length > 0 ? dati.campiExtra : null,
     note_salute: dati.noteSalute?.trim() || null,
     anamnesi: dati.anamnesi && Object.keys(dati.anamnesi).length > 0 ? dati.anamnesi : null,
     consenso_trattamento: true,
@@ -178,6 +181,7 @@ export interface ConsensoRaccolto {
   trattamento: string | null;
   trattamentoAltro: string | null;
   esecutore: string | null;
+  campiExtra: Record<string, string> | null;
   noteSalute: string | null;
   anamnesi: Record<string, { r: boolean; s?: string }> | null;
   consensi: Record<string, { r: boolean; il?: string }> | null;
@@ -206,6 +210,7 @@ function daRiga(r: any): ConsensoRaccolto {
     trattamento: r.trattamento || null,
     trattamentoAltro: r.trattamento_altro || null,
     esecutore: r.esecutore || null,
+    campiExtra: r.campi_extra || null,
     noteSalute: r.note_salute || null,
     anamnesi: r.anamnesi || null,
     consensi: r.consensi || null,
