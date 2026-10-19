@@ -270,6 +270,55 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
     expect(v3.anamnesi.map((d) => d.chiave)).toEqual(v2.anamnesi.map((d) => d.chiave));
   });
 
+  it("il PMU non copre piu' la tricopigmentazione, che ha un modulo suo", () => {
+    const c = consensoDaCodice("pmu-micro").contenuto;
+    // ne' nell'intestazione, ne' nella tendina: lasciarcela avrebbe
+    // permesso di scegliere il trico sul consenso sbagliato
+    expect(c.sottotitolo).not.toContain("TRICOPIGMENTAZIONE");
+    expect(c.trattamenti).not.toContain("Tricopigmentazione");
+    expect(c.caselle.find((x) => x.chiave === "trattamento").testo).not.toContain("tricopigmentazione");
+    // ma l'intestazione resta larga abbastanza per AREOLART, che pure
+    // non e' un trucco
+    expect(c.sottotitolo).toContain("DERMOPIGMENTAZIONE");
+    expect(c.trattamenti).toContain("Areola");
+    // e il corpo resta neutro: non nomina il viso, e non deve
+    for (const parola of ["trucco permanente", "labbra", "sopraccigli", "viso"]) {
+      expect(c.testo.toLowerCase(), `il corpo nomina "${parola}"`).not.toContain(parola);
+    }
+  });
+
+  it("il consenso trico dice quello che negli altri non c'e'", () => {
+    const c = consensoDaCodice("trico").contenuto;
+    // la cosa per cui esiste un modulo a parte: chi si siede per una
+    // tricopigmentazione a volte spera nella ricrescita, e il consenso
+    // non puo' lasciare quella speranza senza risposta
+    expect(c.testo).toContain("non ne favorisce la ricrescita");
+    expect(c.caselle.find((x) => x.chiave === "trattamento").testo).toContain("non cura la caduta");
+    // e chiede le controindicazioni del cuoio capelluto
+    const chiavi = c.anamnesi.map((d) => d.chiave);
+    for (const attesa of ["dermatiti_cuoio", "alopecia_attiva", "trapianto_cuoio"]) {
+      expect(chiavi).toContain(attesa);
+    }
+  });
+
+  it("una stessa condizione si chiama allo stesso modo in tutti i moduli", () => {
+    // se "diabete" in un modulo e "diabete_mellito" in un altro, il
+    // giorno in cui si vorra' contare quante modelle l'hanno dichiarato
+    // bisognera' sapere quattro nomi per la stessa cosa
+    const perChiave = new Map();
+    for (const m of CONSENSI) {
+      for (const d of m.contenuto.anamnesi || []) {
+        const vista = perChiave.get(d.chiave);
+        if (vista) {
+          expect(d.domanda, `"${d.chiave}" chiede due cose diverse (${vista.codice} e ${m.codice})`)
+            .toBe(vista.domanda);
+        } else {
+          perChiave.set(d.chiave, { domanda: d.domanda, codice: m.codice });
+        }
+      }
+    }
+  });
+
   it("oggi il PMU fa firmare la v3", () => {
     expect(consensoDaCodice("pmu-micro").contenuto.versione).toBe("v3");
   });

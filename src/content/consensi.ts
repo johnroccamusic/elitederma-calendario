@@ -15,13 +15,14 @@ import { consensoV2 } from "./consenso-v2";
 import { consensoV3 } from "./consenso-v3";
 import { consensoNeedlingV1 } from "./consenso-needling-v1";
 import { consensoLaminazioneV1 } from "./consenso-laminazione-v1";
+import { consensoTricoV1 } from "./consenso-trico-v1";
 
 export interface ModelloConsenso {
   /** quello che finisce nel link: ?consenso=<codice> */
   codice: string;
   /** come lo chiamate voi, non come si intitola il documento */
   nome: string;
-  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1;
+  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1 | typeof consensoTricoV1;
 }
 
 export const CONSENSI: ModelloConsenso[] = [
@@ -38,6 +39,11 @@ export const CONSENSI: ModelloConsenso[] = [
   // di un PMU, e le domande sullo stato di salute nemmeno.
   { codice: "needling", nome: "Consenso Needling", contenuto: consensoNeedlingV1 },
   { codice: "laminazione", nome: "Consenso Laminazione ciglia", contenuto: consensoLaminazioneV1 },
+  // La tricopigmentazione si e' staccata dal PMU il 19/10/2026: non e' un
+  // trucco, si fa sul cuoio capelluto, ha controindicazioni sue, e deve
+  // dire una cosa che negli altri moduli non c'e' — che non fa ricrescere
+  // i capelli.
+  { codice: "trico", nome: "Consenso Tricopigmentazione", contenuto: consensoTricoV1 },
 ];
 
 /**
@@ -55,6 +61,7 @@ const VERSIONI: Record<string, { codice: string; contenuto: ModelloConsenso["con
   v3: { codice: "pmu-micro", contenuto: consensoV3 },
   "needling-v1": { codice: "needling", contenuto: consensoNeedlingV1 },
   "laminazione-v1": { codice: "laminazione", contenuto: consensoLaminazioneV1 },
+  "trico-v1": { codice: "trico", contenuto: consensoTricoV1 },
 };
 
 /** Il testo con cui un consenso gia' raccolto e' stato firmato.

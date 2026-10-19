@@ -121,8 +121,25 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
   | `?consenso=` | **scrive dritto in `consensi_modelle`** (INSERT per `anon`) + caricamento su `consensi-documenti` |
 
-  **I modelli di consenso sono tre, dal 19/10/2026** (`src/content/consensi.ts`):
-  `pmu-micro`, `needling` e `laminazione` (ciglia; vale anche per IKE). Ognuno ha codice — che *è* il QR —, testo e
+  **I modelli di consenso sono quattro, dal 19/10/2026** (`src/content/consensi.ts`):
+  `pmu-micro`, `needling`, `laminazione` (ciglia; vale anche per IKE) e `trico`.
+
+  La tricopigmentazione si è staccata dal PMU perché quel modulo si intitolava
+  «trattamento di trucco permanente» e il capo non è un trucco; perché le sue
+  controindicazioni — dermatiti o psoriasi del cuoio capelluto, caduta in fase
+  attiva, trapianti recenti, terapie per la caduta — il questionario PMU non le
+  chiedeva; e soprattutto perché deve dire una cosa che negli altri moduli non
+  c'è: **che non fa ricrescere i capelli**. `consenso-trico-v1.ts` è l'unico
+  **non trascritto da un cartaceo**: l'ho scritto partendo dal corpo neutro del
+  PMU, ed è segnato in testa al file come **da far validare**.
+
+  Una stessa condizione deve chiamarsi allo stesso modo in tutti i moduli: la
+  chiave `diabete` non può essere «Diabete» in un modello e «Diabete mellito»
+  in un altro, o contare quante modelle l'hanno dichiarato vorrà dire conoscere
+  quattro nomi per la stessa cosa. Dove la chiave è condivisa **comanda il
+  PMU**, che è quello congelato da 26 firme; una prova nel banco confronta
+  tutti i modelli a due a due e ha già trovato quattro derive il giorno in cui
+  è stata scritta. Ognuno ha codice — che *è* il QR —, testo e
   anamnesi propri; `consensi_corsi` dice a quali corsi vale ognuno, e da lì
   il QR compare nella scheda della classe.
 

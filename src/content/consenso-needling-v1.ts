@@ -105,6 +105,14 @@ export const consensoNeedlingV1 = {
   ],
 
   // Le diciannove condizioni del cartaceo, nello stesso ordine.
+  //
+  // Quattro domande hanno la formulazione del modulo PMU e non quella
+  // secca del foglio ("Diabete mellito" invece di "diabete"): quando due
+  // moduli chiedono LA STESSA cosa devono chiamarla allo stesso modo,
+  // o il giorno in cui si vorra' sapere quante modelle hanno dichiarato
+  // il diabete bisognera' conoscere quattro nomi per la stessa cosa. Il
+  // PMU e' quello congelato — ventisei firme — quindi comanda lui. C'e'
+  // una prova nel banco che controlla che non divergano.
   // `chiave` e' quello che finisce nel database e non si tocca piu': se
   // un giorno la domanda si riscrive, cambia `domanda`, mai `chiave`.
   // `specifica` accende il campo libero sul sì solo dove la risposta
@@ -112,14 +120,14 @@ export const consensoNeedlingV1 = {
   anamnesi: [
     { chiave: "infezioni", domanda: "Infezioni, sistemiche o localizzate", specifica: true, aiuto: "Quali e dove" },
     { chiave: "farmaci_quotidiani", domanda: "Assunzione quotidiana di farmaci", specifica: true, aiuto: "Quali" },
-    { chiave: "diabete", domanda: "Diabete" },
+    { chiave: "diabete", domanda: "Diabete mellito" },
     { chiave: "fumo", domanda: "Fumo" },
     { chiave: "alcool", domanda: "Alcool" },
     { chiave: "acne_attiva", domanda: "Acne in fase attiva" },
     { chiave: "eczema", domanda: "Eczema" },
     { chiave: "psoriasi", domanda: "Psoriasi" },
     { chiave: "dermatite", domanda: "Dermatite" },
-    { chiave: "herpes", domanda: "Herpes" },
+    { chiave: "herpes", domanda: "È o è stata predisposta all'herpes" },
     { chiave: "ictus_ischemia", domanda: "Ictus o ischemia" },
     { chiave: "emiparesi_facciale", domanda: "Emiparesi facciale" },
     {
@@ -130,7 +138,7 @@ export const consensoNeedlingV1 = {
     },
     { chiave: "vaccinazioni", domanda: "Vaccinazioni nei 20 giorni prima o dopo", specifica: true, aiuto: "Quale e quando" },
     { chiave: "cheloidi", domanda: "Cheloidi o problemi di cicatrizzazione", specifica: true },
-    { chiave: "gravidanza_allattamento", domanda: "Gravidanza o allattamento" },
+    { chiave: "gravidanza_allattamento", domanda: "È in gravidanza o allattamento" },
     {
       chiave: "immunitario",
       domanda: "Sistema immunitario fragile o compromesso da condizioni cliniche croniche",
