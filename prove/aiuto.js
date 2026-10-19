@@ -18,6 +18,10 @@ export async function monta(elemento) {
     tasto: (etichetta) => [...nodo.querySelectorAll("button")]
       .find((b) => (b.textContent || "").includes(etichetta)),
     campi: () => [...nodo.querySelectorAll("input")],
+    tendine: () => [...nodo.querySelectorAll("select")],
+    // la tendina di un campo, per la sua chiave: l'etichetta si traduce
+    // e la posizione si sposta, la chiave no
+    tendina: (chiave) => nodo.querySelector(`select[data-campo="${chiave}"]`),
     smonta: () => act(async () => { radice.unmount(); }),
   };
 }
@@ -42,4 +46,18 @@ export async function scrivi(campo, valore) {
     campo.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
   await attendi();
+}
+
+export async function scegli(tendina, valore) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+  await act(async () => {
+    setter.call(tendina, valore);
+    tendina.dispatchEvent(new window.Event("change", { bubbles: true }));
+  });
+  await attendi();
+}
+
+// Le voci di una tendina, senza la prima che e' il "— scegli —"
+export function voci(tendina) {
+  return [...(tendina?.options || [])].slice(1).map((o) => o.value);
 }

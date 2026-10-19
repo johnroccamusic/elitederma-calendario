@@ -45,11 +45,30 @@ export const AREA_ALLIEVO = {
       { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
       { chiave: "interno_residenza", etichetta: "Interno", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
     ] },
+    // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
+    //
+    // Quattro gradini, e ognuno apre il successivo: stato -> regione ->
+    // provincia -> comune -> CAP. Scritti a mano libera avevano prodotto
+    // «Vollw» per Volla, «Rome», il CAP «148» senza lo zero davanti e un
+    // indirizzo riscritto dentro il campo citta'. Da un elenco chiuso
+    // non esce nessuna di queste cose.
+    //
+    // `regione_residenza` NON e' una colonna: non sta in archivio e non
+    // ha un suo scrittore. La regione si ricava dalla provincia — due
+    // colonne per la stessa cosa prima o poi si contraddicono — e qui
+    // la chiave serve solo a dare un posto alla tendina.
+    //
+    // Lo stato viene PRIMA della regione perche' decide tutto il resto:
+    // «Altro stato» spegne la cascata italiana e apre la scrittura
+    // libera, che e' l'unico modo di registrare chi vive a Sion.
     { campi: [
-      { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 90px", salvaUscendo: true },
-      { chiave: "citta_residenza", etichetta: "Città", larghezza: "2 1 150px", maiuscolo: true, salvaUscendo: true },
-      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "0 1 90px", maiuscolo: true, lunghezza: 2, salvaUscendo: true },
-      { chiave: "stato_residenza", etichetta: "Stato", larghezza: "1 1 120px", maiuscolo: true, suggerimento: "ITALIA", salvaUscendo: true },
+      { chiave: "stato_residenza", etichetta: "Stato", larghezza: "1 1 130px", tipo: "stato", salvaUscendo: true },
+      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "2 1 160px", tipo: "regione" },
+      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "2 1 170px", tipo: "provincia", salvaUscendo: true },
+    ] },
+    { campi: [
+      { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
+      { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 120px", tipo: "cap", salvaUscendo: true },
     ] },
     { campi: [
       { chiave: "email", etichetta: "Email", larghezza: "2 1 200px", salvaUscendo: true },

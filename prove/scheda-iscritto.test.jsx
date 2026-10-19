@@ -10,11 +10,13 @@ import { monta } from "./aiuto.js";
 
 const conValori = (valori) => monta(<AreaAnagrafica area={AREA_ALLIEVO} valori={valori} />);
 describe("scheda dell'iscritto", () => {
-  it("i suggerimenti sono ITALIA e il telefono, e sono smorzati", async () => {
+  // Il suggerimento "ITALIA" non c'e' piu' e non doveva restare: dal
+  // 19/10/2026 lo stato si scegle da una tendina, e un suggerimento
+  // dentro una tendina non vuol dire niente. Vedi residenza-a-cascata.
+  it("il suggerimento del telefono c'e' ed e' smorzato", async () => {
     const p = await conValori({});
     const conSuggerimento = p.campi().filter((i) => (i.getAttribute("placeholder") || "").trim() !== "");
     const scritte = conSuggerimento.map((i) => i.getAttribute("placeholder"));
-    expect(scritte).toContain("ITALIA");
     expect(scritte.some((s) => s.startsWith("+39"))).toBe(true);
     for (const c of conSuggerimento) expect(c.className).toContain("suggerimento-chiaro");
   });
@@ -36,9 +38,18 @@ describe("scheda dell'iscritto", () => {
   });
 
   it("il valore gia' scritto si vede nella sua casella", async () => {
-    const p = await conValori({ citta_residenza: "SORSO", codice_fiscale: "RZZMNL90L42I452E" });
+    const p = await conValori({ indirizzo_residenza: "VIA ROMA 1", codice_fiscale: "RZZMNL90L42I452E" });
     const valori = p.campi().map((i) => i.value);
-    expect(valori).toContain("SORSO");
+    expect(valori).toContain("VIA ROMA 1");
     expect(valori).toContain("RZZMNL90L42I452E");
+  });
+
+  // La residenza non e' piu' una casella di testo: il comune arriva da
+  // una tendina, e che un valore vecchio si veda lo prova
+  // residenza-a-cascata. Qui basta sapere che la tendina c'e'.
+  it("il comune non si scrive a mano", async () => {
+    const p = await conValori({ citta_residenza: "SORSO" });
+    expect(p.tendina("citta_residenza")).not.toBe(null);
+    expect(p.campi().map((i) => i.value)).not.toContain("SORSO");
   });
 });

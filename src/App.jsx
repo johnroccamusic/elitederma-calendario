@@ -33124,6 +33124,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                 area={AREA_ALLIEVO}
                 icona={IconaPersonaSemplice}
                 valori={valoriAnagrafici}
+                chiaveScheda={modificandoId || "nuova"}
                 scrivi={scriviAnagrafico}
                 autosalva={autosalva}
                 normalizzaTelefono={normalizzaCellulare}
