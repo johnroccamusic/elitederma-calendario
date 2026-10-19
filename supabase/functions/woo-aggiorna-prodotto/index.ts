@@ -115,7 +115,19 @@ Deno.serve(async (req) => {
   // sincronizzazione deve poterlo cambiare — e infatti oggi nessuno
   // chiama questa funzione passando un prezzo.
   if (cambiaGiacenza) aggiornamentoLocale.quantita = quantita;
-  if (cambiaMagazzino) aggiornamentoLocale.giacenza_magazzino = giacenzaMagazzino;
+  // `giacenza_magazzino` NON si scrive piu' dal 19/10/2026: non la legge
+  // nessuno in tutta l'app, ed era diversa da zero su un prodotto su
+  // 296. Una colonna che nessuno legge ma che qualcuno continua a
+  // scrivere e' peggio di una colonna morta: sembra viva, e chi apre la
+  // tabella ci ragiona sopra. E' successo — per un pezzo ho creduto che
+  // il POS guardasse quella, quando guarda `quantita`.
+  //
+  // Non la cancello qui: prima si smette di scriverla, si guarda per
+  // qualche giorno che nessuno la cerchi, e poi la si toglie. Una
+  // colonna cancellata non torna indietro.
+  if (cambiaMagazzino) {
+    console.warn(`giacenza_magazzino ignorata per ${prodottoId}: colonna in dismissione, la giacenza e' "quantita"`);
+  }
 
   const { error: erroreAggiorna } = await supabase.from("prodotti_shop").update(aggiornamentoLocale).eq("id", prodottoId);
   if (erroreAggiorna) {

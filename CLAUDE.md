@@ -530,6 +530,37 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
 
+### Il magazzino si controlla da solo (19/10/2026)
+
+Ogni notte alle 05:15 `controlla_saldi_magazzino()` ricostruisce la giacenza di
+ogni prodotto — **saldo di partenza + somma dei movimenti** — e la confronta con
+quella vera. Chi non torna finisce in `magazzino_scostamenti` e compare in cima
+a Gestione magazzino, sopra i segnalatori: sotto scorta ed esaurito sono fatti
+normali, questo è il magazzino che contraddice la sua storia.
+
+Uno scostamento significa **una cosa sola**: qualcuno ha scritto quel numero
+senza passare da `muoviStock`. Il controllo **non corregge** — correggere da lì
+vorrebbe dire scrivere lo stock da un quarto punto, cioè creare il problema che
+esiste per trovare.
+
+`magazzino_saldi_base` è **un'assunzione dichiarata**, non un inventario:
+nessuno ha contato, si sono prese per buone le giacenze del 19/10. Da lì in poi
+ogni scostamento è vero; quello che era già sbagliato prima resta sbagliato
+finché non si conta.
+
+**I movimenti da ordine online non si applicano due volte.** Ognuno porta un
+riferimento (`woo:<ordine>:<scarico|ripristino>:<prodotto>`) e un indice unico
+*parziale* lo fa rispettare. Prima la protezione era il confronto fra stato
+vecchio e nuovo dentro `woo-webhook`: vera, ma dentro un `if`. Il vincolo vale
+**solo** per `ordine_online`, perché `kit_corso` ha 137 coppie ripetute su 1018
+e sono legittime.
+
+**`giacenza` e `giacenza_magazzino` sono in dismissione.** Non le legge nessuno
+in tutta l'app — la giacenza è `quantita` — ma venivano ancora scritte da due
+edge function, e questo è peggio di una colonna morta: sembra viva, e chi apre
+la tabella ci ragiona sopra. Dal 19/10 non si scrivono più. **Non sono ancora
+state cancellate**: prima si guarda per qualche giorno che nessuno le cerchi.
+
 ## 5. Comandi
 
 ```bash

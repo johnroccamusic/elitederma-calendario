@@ -75,7 +75,12 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({ woo_product_id: null, giacenza: 0 }).eq("id", prodottoId);
+  // si scollega dal sito e basta. `giacenza` non si tocca piu': non la
+  // legge nessuno (vedi la nota in woo-aggiorna-prodotto) e azzerarla
+  // dava l'impressione che scollegare un prodotto dallo shop ne buttasse
+  // via i pezzi — che non e' mai stato vero, perche' i pezzi stanno in
+  // `quantita`.
+  const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({ woo_product_id: null }).eq("id", prodottoId);
   if (erroreUpdate) {
     return new Response(JSON.stringify({ errore: "Cancellato da WooCommerce ma non scollegato in locale: " + erroreUpdate.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
