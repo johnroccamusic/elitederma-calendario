@@ -247,7 +247,7 @@ describe("le dichiarazioni da spuntare", () => {
     const p = await monta(<PaginaConsenso codice="areola" />);
     const tendina = [...p.nodo.querySelectorAll("select")]
       .find((s) => [...s.options].some((o) => o.value.includes("areola capezzolo")));
-    expect(tendina.value).toBe("Dermopigmentazione del comparto areola capezzolo");
+    expect(tendina.value).toBe("Dermopigmentazione del complesso areola capezzolo");
     // e non deve comparire fra le cose che mancano: guardo quella frase
     // e non tutta la pagina, dove "il trattamento" ricorre dappertutto
     const manca = p.testo().split("Manca ancora:")[1] || "";
@@ -317,7 +317,7 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
     // una voce sola nella tendina, e gia' scelta: il trattamento lo
     // decide il corso, non una scelta che firma la modella
     expect(c.trattamenti.filter((t) => t !== "Altro")).toHaveLength(1);
-    expect(c.trattamentoPredefinito).toBe("Dermopigmentazione del comparto areola capezzolo");
+    expect(c.trattamentoPredefinito).toBe("Dermopigmentazione del complesso areola capezzolo");
     // e il questionario deve chiedere quello che il PMU non chiedeva
     const chiavi = c.anamnesi.map((d) => d.chiave);
     for (const attesa of ["interventi_seno", "radio_chemio", "linfonodi_ascellari", "nulla_osta_medico"]) {

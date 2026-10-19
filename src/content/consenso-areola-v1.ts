@@ -48,10 +48,10 @@ export const consensoAreolaV1 = {
   // e' uno: come lo si esegue e' materia della lezione, non di una
   // dichiarazione che firma la modella.
   trattamenti: [
-    "Dermopigmentazione del comparto areola capezzolo",
+    "Dermopigmentazione del complesso areola capezzolo",
     "Altro",
   ],
-  trattamentoPredefinito: "Dermopigmentazione del comparto areola capezzolo",
+  trattamentoPredefinito: "Dermopigmentazione del complesso areola capezzolo",
 
   // LE CASELLE CHE RENDONO VALIDO IL CONSENSO.
   //
