@@ -57323,7 +57323,58 @@ function PannelloScostamenti({ scostamenti = [], prodottiPerId = {}, isMobile })
   );
 }
 
-function PaginaMagazzino({ ruoloUtente, scostamenti = [], categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
+// LO SCARTO COL SITO.
+//
+// Non e' lo stesso allarme di `PannelloScostamenti`, e tenerli separati
+// e' voluto. Li' il magazzino contraddice la propria storia: qualcuno ha
+// scritto un numero da fuori, ed e' un guasto. Qui invece sono due
+// database su due macchine che dicono cose diverse — succede, e la
+// domanda non e' "chi ha sbagliato" ma "di quanto, e da quando".
+//
+// La differenza e' `sul sito meno qui`. Positiva vuol dire che il sito
+// crede di averne PIU' di noi, ed e' il verso che fa male: continua a
+// vendere roba che non c'e'.
+function PannelloScartiShop({ scarti = [], prodottiPerId = {}, isMobile }) {
+  if (!scarti.length) return null;
+  const vendeDiPiu = scarti.filter((x) => x.differenza > 0);
+  return (
+    <div style={{
+      background: "#FFFBF0", border: "1px solid #F0E4C8", borderLeft: "5px solid #E0A800",
+      borderRadius: 14, padding: isMobile ? "13px 14px" : "16px 18px", marginBottom: 14,
+    }}>
+      <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: "#8A6A1B", letterSpacing: 0.6 }}>
+        IL SITO E L&apos;APP NON DICONO LO STESSO NUMERO SU {scarti.length} {scarti.length === 1 ? "PRODOTTO" : "PRODOTTI"}
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5, margin: "5px 0 10px" }}>
+        {vendeDiPiu.length > 0
+          ? `Di ${vendeDiPiu.length} il sito crede di averne di più: continua a venderli anche quando qui sono finiti.`
+          : "Il sito ne ha meno di quanti ne abbiamo: sta vendendo meno di quello che potrebbe."}
+      </div>
+      {scarti.slice(0, 12).map((x) => {
+        const p = prodottiPerId[x.prodotto_id];
+        return (
+          <div key={x.prodotto_id} style={{
+            ...fontBody, fontSize: 13, color: NAVY, display: "flex", gap: 10,
+            flexWrap: "wrap", alignItems: "baseline", borderTop: "1px solid #F0E4C8", padding: "7px 0",
+          }}>
+            <span style={{ fontWeight: 700, flex: "1 1 180px", minWidth: 0 }}>{p?.nome || "(prodotto non trovato)"}</span>
+            <span style={{ color: MUTED }}>qui {x.qui} · sito {x.sul_sito}</span>
+            <span style={{ fontWeight: 700, color: x.differenza > 0 ? "#B3261E" : GRAFITE }}>
+              {x.differenza > 0 ? "+" : ""}{x.differenza}
+            </span>
+          </div>
+        );
+      })}
+      {scarti.length > 12 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 8 }}>
+          …e altri {scarti.length - 12}.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
   // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato, salvaSchemaPunti] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
@@ -57395,7 +57446,7 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], categorieProdotti, pro
     setMostraRigaContanti((v) => { try { localStorage.setItem("magazzino_riga_contanti", v ? "0" : "1"); } catch {} return !v; });
   }
   useEffect(() => {
-    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "magazzino_scostamenti"]);
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "magazzino_scostamenti", "magazzino_scarti_shop"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const isMobile = useIsMobile();
@@ -58298,6 +58349,7 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], categorieProdotti, pro
                 storia. Non e' una categoria in piu', e' un dubbio su
                 tutto quello che c'e' sotto. */}
             <PannelloScostamenti scostamenti={scostamenti} prodottiPerId={prodottiPerId} isMobile={isMobile} />
+            <PannelloScartiShop scarti={scartiShop} prodottiPerId={prodottiPerId} isMobile={isMobile} />
             <div style={stileRigaSegnalatori(isMobile)}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
@@ -72177,7 +72229,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // mappa delle viste: se un domani la pagina viene incorporata altrove
   // (è già successo), se li porta dietro invece di trovarsi liste vuote
   useEffect(() => {
-    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "magazzino_scostamenti"]);
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "magazzino_scostamenti", "magazzino_scarti_shop"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // incorporata dentro Gestione magazzino: i pannelli non sono più alti
@@ -80827,6 +80879,8 @@ function Gestionale() {
   // i prodotti la cui giacenza non torna col registro: li riempie il
   // controllo notturno, e vuoto vuol dire che i conti tornano
   const [scostamentiMagazzino, setScostamentiMagazzino] = useState([]);
+  // lo scarto fra la nostra giacenza e quella del sito, misurato ogni notte
+  const [scartiShop, setScartiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   // I due registri che servono allo sconto needling: si riempiono qui una
   // volta sola e li leggono le funzioni pure che decidono la percentuale.
@@ -81086,6 +81140,7 @@ function Gestionale() {
     // tornano. Se questa riga manca, la lista resta vuota per sempre
     // senza che nessuno veda un errore — e' gia' successo con altre.
     magazzino_scostamenti: async () => setScostamentiMagazzino((await supabase.from("magazzino_scostamenti").select("*").order("differenza")).data || []),
+    magazzino_scarti_shop: async () => setScartiShop((await supabase.from("magazzino_scarti_shop").select("*").order("differenza", { ascending: false })).data || []),
     // l'ordine conta: la categoria con ordine 0 e' la PRINCIPALE. Senza
     // `order` il database restituisce le righe come gli pare, e la
     // principale si scambiava con la secondaria a ogni ricaricamento
@@ -83395,7 +83450,7 @@ function Gestionale() {
 
       {view === "magazzino" && (
         <PaginaMagazzino
-          ruoloUtente={ruoloUtente} scostamenti={scostamentiMagazzino}
+          ruoloUtente={ruoloUtente} scostamenti={scostamentiMagazzino} scartiShop={scartiShop}
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
@@ -84152,5 +84207,5 @@ function Gestionale() {
 export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
-  SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti,
+  SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
 };

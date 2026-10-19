@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import { rispondiCon } from "./preparazione.js";
 import { monta } from "./aiuto.js";
-import { PannelloScostamenti } from "../src/App.jsx";
+import { PannelloScostamenti, PannelloScartiShop } from "../src/App.jsx";
 
 const PRODOTTI = {
   "p-1": { id: "p-1", nome: "Telini politenati monouso 50 pz" },
@@ -72,5 +72,58 @@ describe("il pannello dei conti che non tornano", () => {
       ]} />);
     expect(due.testo()).toContain("SU 2 PRODOTTI");
     await due.smonta();
+  });
+});
+
+// LO SCARTO COL SITO: un allarme diverso, e va tenuto diverso.
+//
+// Nel pannello dei saldi il magazzino contraddice la propria storia:
+// qualcuno ha scritto un numero da fuori, ed e' un guasto. Qui sono due
+// database che dicono cose diverse — succede, e la domanda non e' chi ha
+// sbagliato ma di quanto, e da che parte.
+describe("il pannello dello scarto col sito", () => {
+  it("quando i due numeri coincidono non si disegna", async () => {
+    rispondiCon({});
+    const p = await monta(<PannelloScartiShop scarti={[]} prodottiPerId={PRODOTTI} />);
+    expect(p.testo().trim()).toBe("");
+    await p.smonta();
+  });
+
+  it("avverte quando e' il SITO ad averne di piu': e' il verso che fa male", async () => {
+    rispondiCon({});
+    const p = await monta(
+      <PannelloScartiShop
+        prodottiPerId={PRODOTTI}
+        scarti={[{ prodotto_id: "p-1", qui: 2, sul_sito: 40, differenza: 38 }]}
+      />,
+    );
+    // il sito continua a vendere roba che qui non c'e'
+    expect(p.testo()).toContain("il sito crede di averne di più");
+    expect(p.testo()).toContain("+38");
+    await p.smonta();
+  });
+
+  it("e lo dice in modo diverso quando il sito ne ha di meno", async () => {
+    rispondiCon({});
+    const p = await monta(
+      <PannelloScartiShop
+        prodottiPerId={PRODOTTI}
+        scarti={[{ prodotto_id: "p-1", qui: 40, sul_sito: 2, differenza: -38 }]}
+      />,
+    );
+    expect(p.testo()).toContain("sta vendendo meno");
+    expect(p.testo()).not.toContain("crede di averne di più");
+    await p.smonta();
+  });
+
+  it("con molti prodotti non srotola una lista infinita", async () => {
+    rispondiCon({});
+    const tanti = Array.from({ length: 20 }, (_, i) => ({
+      prodotto_id: `p-${i}`, qui: 1, sul_sito: 2, differenza: 1,
+    }));
+    const p = await monta(<PannelloScartiShop scarti={tanti} prodottiPerId={{}} />);
+    expect(p.testo()).toContain("SU 20 PRODOTTI");
+    expect(p.testo()).toContain("e altri 8");
+    await p.smonta();
   });
 });

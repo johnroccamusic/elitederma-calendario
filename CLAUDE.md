@@ -555,6 +555,23 @@ vecchio e nuovo dentro `woo-webhook`: vera, ma dentro un `if`. Il vincolo vale
 **solo** per `ordine_online`, perché `kit_corso` ha 137 coppie ripetute su 1018
 e sono legittime.
 
+**E ogni notte alle 05:30 si misura lo scarto col sito.**
+`magazzino-termometro` confronta la nostra giacenza con quella di
+WooCommerce prodotto per prodotto e scrive `magazzino_scarti_shop`. Non
+corregge: la direzione giusta non la sa un programma — due pezzi in meno sul
+sito possono essere un ordine non arrivato o un ammanco, e si rimedia in modi
+opposti.
+
+**Prima misura, 19/10/2026: su 161 prodotti confrontati, 33 non coincidono**
+— il peggiore è «Confezione Anellini Sterili 30 pz», 983 qui e 0 sul sito.
+Quindi alla domanda «oggi lo scarto è zero?» la risposta è no, ed è il motivo
+per cui spegnere la gestione dello stock su WooCommerce resta sospeso.
+
+La funzione è chiusa dal gettone del cron (lo stesso delle email): senza,
+risponde 403. Il cron manda `timeout_milliseconds := 120000`, perché il
+limite di 5 secondi di `pg_net` scadeva sempre e il lavoro risultava fallito
+anche quando era riuscito.
+
 **`giacenza` e `giacenza_magazzino` sono in dismissione.** Non le legge nessuno
 in tutta l'app — la giacenza è `quantita` — ma venivano ancora scritte da due
 edge function, e questo è peggio di una colonna morta: sembra viva, e chi apre
