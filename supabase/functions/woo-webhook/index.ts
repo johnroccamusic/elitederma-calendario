@@ -136,8 +136,11 @@ Deno.serve(async (req) => {
       bundleToccati = await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1, contesto);
       await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1, contesto);
     } else if (eraVivo && !oraVivo) {
-      bundleToccati = await applicaMovimentoBundle(supabase, (esistente?.prodotti as any[]) || [], 1);
-      await applicaMovimentoProdottiSemplici(supabase, (esistente?.prodotti as any[]) || [], 1);
+      // il contesto serve anche qui: senza, il movimento di ripristino
+      // resta senza nome e non si puo' proteggere da un webhook
+      // rimandato — ed era cosi' da sempre
+      bundleToccati = await applicaMovimentoBundle(supabase, (esistente?.prodotti as any[]) || [], 1, contesto);
+      await applicaMovimentoProdottiSemplici(supabase, (esistente?.prodotti as any[]) || [], 1, contesto);
     }
     if (bundleToccati.size) {
       const siteUrl = Deno.env.get("WC_SITE_URL");

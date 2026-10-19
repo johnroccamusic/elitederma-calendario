@@ -166,6 +166,43 @@ export const STATI_VIVI = ["processing", "completed"];
 // alla quantità venduta — un bundle non ha mai una giacenza propria.
 // Ritorna gli id dei bundle toccati, per poi rispingere su WooCommerce la
 // loro disponibilità ricalcolata (vedi sincronizzaDisponibilitaBundle)
+// IL NOME PROPRIO DI UN MOVIMENTO, cosi' lo stesso non si applica due
+// volte.
+//
+// WooCommerce rimanda i webhook: stesso ordine, stesso stato, due o tre
+// volte. Oggi a fermare il doppio scarico e' il confronto fra lo stato
+// di prima e quello di adesso — una protezione vera, ma che vive dentro
+// un `if`: basta toccare quella riga e sparisce senza che nessuno lo
+// noti. Con un riferimento univoco a fermarlo e' il database, che non si
+// distrae.
+//
+// Dentro ci va anche la DIREZIONE: lo stesso ordine, sullo stesso
+// prodotto, scarica quando diventa vivo e ripristina quando viene
+// annullato. Sono due movimenti legittimi, non un doppione.
+function riferimentoMovimento(contesto: any, direzione: 1 | -1, extra = "") {
+  const ordine = contesto?.woo_order_id ?? contesto?.numero_ordine;
+  if (!ordine) return null;
+  return `woo:${ordine}:${direzione < 0 ? "scarico" : "ripristino"}${extra ? ":" + extra : ""}`;
+}
+
+// Scrive il movimento, e se quello stesso movimento c'e' gia' non fa
+// niente invece di fallire. Un webhook rimandato non e' un errore: e'
+// una ripetizione, e la risposta giusta e' "l'ho gia' fatto".
+//
+// `ignoreDuplicates` funziona solo se c'e' il vincolo unico: senza
+// riferimento (gli ordini di prima del 19/10/2026, e quelli che per
+// qualche motivo non hanno un numero) si scrive come sempre, perche'
+// NULL non si scontra con niente.
+async function scriviMovimentoOnline(supabase: any, movimento: Record<string, unknown>) {
+  if (!movimento.riferimento) {
+    await supabase.from("movimenti_magazzino").insert(movimento);
+    return;
+  }
+  const { error } = await supabase.from("movimenti_magazzino")
+    .upsert(movimento, { onConflict: "prodotto_id,riferimento", ignoreDuplicates: true });
+  if (error) console.error("Movimento online non scritto:", error.message);
+}
+
 export async function applicaMovimentoBundle(supabase: any, prodotti: any[], direzione: 1 | -1, contesto: any = {}): Promise<Set<string>> {
   const bundleToccati = new Set<string>();
   for (const riga of prodotti || []) {
@@ -188,9 +225,10 @@ export async function applicaMovimentoBundle(supabase: any, prodotti: any[], dir
       if (nuova < 0 && direzione < 0) {
         await segnalaScaricoNonRiuscito(supabase, riga, `Un componente del kit sarebbe andato a ${nuova}: portato a 0, mancano ${-nuova} pezzi da contare.`, contesto);
       }
-      await supabase.from("movimenti_magazzino").insert({
+      await scriviMovimentoOnline(supabase, {
         prodotto_id: c.componente_id, delta, origine: "ordine_online",
         nota: `Componente di "${nome}" venduto online`, utente: "WooCommerce",
+        riferimento: riferimentoMovimento(contesto, direzione, `kit:${prodotto.id}:${c.componente_id}`),
       });
     }
     bundleToccati.add(prodotto.id);
@@ -290,9 +328,10 @@ export async function applicaMovimentoProdottiSemplici(supabase: any, prodotti: 
     if (nuova < 0 && direzione < 0) {
       await segnalaScaricoNonRiuscito(supabase, riga, `La giacenza sarebbe andata a ${nuova}: portata a 0, mancano ${-nuova} pezzi da contare.`, contesto);
     }
-    await supabase.from("movimenti_magazzino").insert({
+    await scriviMovimentoOnline(supabase, {
       prodotto_id: prodotto.id, delta, origine: "ordine_online",
       nota: direzione < 0 ? "Venduto sullo shop online" : "Ordine online annullato/rimborsato", utente: "WooCommerce",
+      riferimento: riferimentoMovimento(contesto, direzione, prodotto.id),
     });
     toccati.add(prodotto.id);
   }
