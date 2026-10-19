@@ -68072,17 +68072,44 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     }, 0);
   }
 
+  // QUANDO IL POS RIFIUTA, LO DEVE DIRE.
+  //
+  // Qui dentro c'erano tre uscite mute: si toccava il prodotto e non
+  // succedeva niente. Nessun messaggio, nessuna riga nel carrello,
+  // nessuna spiegazione — e chi sta al banco davanti a un cliente non ha
+  // modo di sapere se ha sbagliato a toccare, se l'app si e' impallata o
+  // se quel pezzo e' finito. E' il guasto peggiore che un tasto possa
+  // avere, ed e' gia' scritto in cima a FasciaStato che non si fa.
+  //
+  // I motivi per cui un pezzo non entra sono tre, e sono diversi fra
+  // loro: non ce n'e' piu', ce ne sono ma meno di quanti se ne stanno
+  // chiedendo, oppure quelli che restano sono promessi a un carrello
+  // sospeso di qualcun altro. L'ultimo e' quello che fa impazzire,
+  // perche' il magazzino dice che ci sono.
+  function perche(p, disponibili, giaNelCarrello) {
+    const riservati = riservatiAltrove(p.id);
+    const inCasa = disponibili + riservati;
+    if (riservati > 0 && inCasa > disponibili) {
+      return `«${p.nome}»: ne restano ${inCasa}, ma ${riservati} ${riservati === 1 ? "è promesso" : "sono promessi"} a un carrello sospeso di qualcun altro. Si liberano solo chiudendo quel carrello.`;
+    }
+    if (disponibili <= 0) return `«${p.nome}» è finito: non ce n'è più da vendere.`;
+    return `Di «${p.nome}» ne restano ${disponibili}, e ne hai già ${giaNelCarrello} nel carrello.`;
+  }
+
   function aggiungiAlCarrello(p) {
     const disponibili = disponibiliQui(p.id);
     // il tetto della disponibilita' non vale per chi e' in back order:
     // li' il numero di pezzi in casa non e' il limite di quanti se ne
     // possono vendere, e' solo quanti ne partono subito
     const senzaTetto = backorderAttivo(p);
-    if (disponibili <= 0 && !senzaTetto) return;
+    if (disponibili <= 0 && !senzaTetto) { setMsg(perche(p, disponibili, 0)); return; }
     setCarrello((prev) => {
       const esistente = prev.find((r) => r.prodottoId === p.id);
       if (esistente) {
-        if (!senzaTetto && esistente.quantita >= disponibili) return prev;
+        if (!senzaTetto && esistente.quantita >= disponibili) {
+          setMsg(perche(p, disponibili, esistente.quantita));
+          return prev;
+        }
         return prev.map((r) => (r.prodottoId === p.id ? { ...r, quantita: r.quantita + 1 } : r));
       }
       // il POS incassa il prezzo che paga il cliente: prezzo_vendita è il
@@ -68108,9 +68135,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setDalKitPerProdotto((prev) => ({ ...prev, [prodottoId]: true }));
   }
   function incrementaRiga(prodottoId) {
+    const p = trovaProdotto(prodottoId);
+    // NB: qui il tetto e' `disponibiliDi` (solo magazzino) mentre in
+    // `aggiungiAlCarrello` e' `disponibiliQui` (magazzino + kit in aula).
+    // E' come era prima e si lascia com'e': cambiarlo sposta quanta merce
+    // si puo' vendere, e non si tocca la logica di magazzino di sfuggita.
+    // Ma e' una differenza da guardare, perche' vuol dire che un pezzo
+    // preso da un kit si aggiunge una volta e poi il "+" si ferma.
     const disponibili = disponibiliDi(prodottoId);
-    const senzaTetto = backorderAttivo(trovaProdotto(prodottoId));
-    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId && (senzaTetto || r.quantita < disponibili) ? { ...r, quantita: r.quantita + 1 } : r)));
+    const senzaTetto = backorderAttivo(p);
+    setCarrello((prev) => {
+      const riga = prev.find((r) => r.prodottoId === prodottoId);
+      if (!riga) return prev;
+      // anche il "+" taceva: si premeva e il numero non saliva
+      if (!senzaTetto && riga.quantita >= disponibili) {
+        setMsg(perche(p || { nome: riga.nome, id: prodottoId }, disponibili, riga.quantita));
+        return prev;
+      }
+      return prev.map((r) => (r.prodottoId === prodottoId ? { ...r, quantita: r.quantita + 1 } : r));
+    });
   }
   function decrementaRiga(prodottoId) {
     setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId ? { ...r, quantita: Math.max(1, r.quantita - 1) } : r)));
