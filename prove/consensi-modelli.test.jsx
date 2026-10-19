@@ -13,7 +13,7 @@ import { monta } from "./aiuto.js";
 import PaginaConsenso from "../src/consensi/PaginaConsenso.jsx";
 import QrConsensi from "../src/consensi/QrConsensi.jsx";
 import { collegaConsensoACorso } from "../src/consensi/dati";
-import { CONSENSI, consensoDaCodice, contenutoDaVersione } from "../src/content/consensi";
+import { CONSENSI, consensoDaCodice, contenutoDaVersione, versioniRegistrate } from "../src/content/consensi";
 
 describe("l'elenco dei modelli di consenso", () => {
   it("il needling c'e', e ha un codice suo", () => {
@@ -30,6 +30,22 @@ describe("l'elenco dei modelli di consenso", () => {
   it("nessuna versione e' ripetuta fra modelli diversi", () => {
     const versioni = CONSENSI.map((c) => c.contenuto.versione);
     expect(new Set(versioni).size).toBe(versioni.length);
+  });
+
+  it("la laminazione c'e', col suo codice", () => {
+    const m = consensoDaCodice("laminazione");
+    expect(m).toBeTruthy();
+    expect(m.contenuto.sottotitolo).toContain("Laminazione Ciglia");
+  });
+
+  it("ogni modello ha la sua versione registrata", () => {
+    // senza, una firma di oggi domani non sa piu' dire cosa diceva il
+    // foglio: e' il controllo che serve il giorno in cui si aggiunge il
+    // quarto modello e ci si dimentica la riga in VERSIONI
+    const registrate = versioniRegistrate();
+    for (const m of CONSENSI) {
+      expect(registrate, `manca ${m.contenuto.versione}`).toContain(m.contenuto.versione);
+    }
   });
 
   it("dentro un modello, due domande non hanno la stessa chiave", () => {
@@ -54,6 +70,19 @@ describe("risalire al testo con cui una firma e' stata data", () => {
     const chiavi = c.anamnesi.map((d) => d.chiave);
     expect(chiavi).toContain("emofilia");
     expect(chiavi).not.toContain("acne_attiva");
+  });
+
+  it("una laminazione non prende le domande del needling", () => {
+    const c = contenutoDaVersione("laminazione-v1", "laminazione");
+    const chiavi = c.anamnesi.map((d) => d.chiave);
+    expect(chiavi).toContain("patologie_oculari");
+    expect(chiavi).not.toContain("acne_attiva");
+  });
+
+  it("se la versione non la conosciamo, vale il modello e non un testo a caso", () => {
+    // un consenso piu' vecchio dei testi che abbiamo in casa
+    const c = contenutoDaVersione("laminazione-v0", "laminazione");
+    expect(c.sottotitolo).toContain("Laminazione Ciglia");
   });
 
   it("i consensi vecchi, senza codice, restano come prima", () => {

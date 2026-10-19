@@ -121,8 +121,8 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
   | `?consenso=` | **scrive dritto in `consensi_modelle`** (INSERT per `anon`) + caricamento su `consensi-documenti` |
 
-  **I modelli di consenso sono due, dal 19/10/2026** (`src/content/consensi.ts`):
-  `pmu-micro` e `needling`. Ognuno ha codice — che *è* il QR —, testo e
+  **I modelli di consenso sono tre, dal 19/10/2026** (`src/content/consensi.ts`):
+  `pmu-micro`, `needling` e `laminazione` (ciglia; vale anche per IKE). Ognuno ha codice — che *è* il QR —, testo e
   anamnesi propri; `consensi_corsi` dice a quali corsi vale ognuno, e da lì
   il QR compare nella scheda della classe.
 
@@ -134,14 +134,25 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   (farli sparire manda a cercarli), e `collegaConsensoACorso` li rifiuta
   comunque: la tendina è comodità, la funzione è la serratura.
 
-  Tre regole che il secondo modello ha reso necessarie: **la versione del
-  testo porta dentro il nome del modello** (`needling-v1`, non `v1`), e
+  Due regole nate con il secondo modello: **la versione del testo porta
+  dentro il nome del modello** (`needling-v1`, non `v1`), e
   `contenutoDaVersione` vuole anche il codice. Senza, un consenso needling
   salvato come `v1` avrebbe pescato il testo PMU, e l'archivio avrebbe
   mostrato accanto a quella firma le domande del trucco permanente. Un
-  modello nuovo si aggiunge con una riga in `CONSENSI`, e le prove in
-  `prove/consenso-needling.test.jsx` controllano che codici e versioni
-  restino unici.
+  modello nuovo si aggiunge con **due** righe: una in `CONSENSI` e una in
+  `VERSIONI`, che tiene ogni versione mai uscita insieme al modello a cui
+  apparteneva — da lì una firma vecchia risale al foglio che le stava
+  davanti, e non si cancella una riga nemmeno quando il testo viene
+  sostituito. Le prove in `prove/consensi-modelli.test.jsx` controllano che
+  codici e versioni restino unici e che nessun modello resti senza la sua
+  versione registrata.
+
+  **Gli elenchi di condizioni dei cartacei diventano l'anamnesi**, anche
+  quando sul foglio sono dichiarazioni al negativo («di non soffrire di
+  patologie oculari» → «Soffre di patologie oculari?»). Una dichiarazione al
+  negativo si firma in blocco e una condizione presente passa sotto silenzio;
+  una domanda vuole una risposta sua, e un «sì» finisce nel riquadro che la
+  master legge prima di toccare la modella.
 
   La versione precedente di questo file diceva che modelle e biglietti
   «non sono ancora collegati»: non è più vero dal 18/10/2026.
