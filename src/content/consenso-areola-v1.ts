@@ -39,13 +39,19 @@ export const consensoAreolaV1 = {
   sottotitolo:
     "DERMOPIGMENTAZIONE DELL'AREOLA DURANTE CORSO DI FORMAZIONE",
 
+  // UNA VOCE SOLA, E GIA' SCELTA.
+  //
+  // C'erano quattro varianti — ricostruzione cromatica, effetto 3D,
+  // correzione del colore, copertura di cicatrici — e su un telefono
+  // diventavano una tendina lunga quanto lo schermo, da leggere per
+  // scegliere una cosa che il corso ha gia' deciso. Il trattamento qui
+  // e' uno: come lo si esegue e' materia della lezione, non di una
+  // dichiarazione che firma la modella.
   trattamenti: [
-    "Areola – ricostruzione cromatica dopo intervento",
-    "Areola – effetto tridimensionale",
-    "Areola – correzione del colore o di asimmetrie",
-    "Areola – copertura di cicatrici",
+    "Dermopigmentazione del comparto areola capezzolo",
     "Altro",
   ],
+  trattamentoPredefinito: "Dermopigmentazione del comparto areola capezzolo",
 
   // LE CASELLE CHE RENDONO VALIDO IL CONSENSO.
   //

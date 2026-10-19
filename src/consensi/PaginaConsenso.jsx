@@ -251,7 +251,11 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   const [v, setV] = useState({
     nome: "", cognome: "", dataNascita: "", luogoNascita: "", residenza: "",
     telefono: "", email: "", documentoTipo: TIPI_DOCUMENTO[0], documentoNumero: "",
-    trattamento: "", trattamentoAltro: "", esecutore: "", noteSalute: "",
+    // Alcuni modelli dichiarano gia' quale trattamento e': dove il corso
+    // ne prevede uno solo, far scegliere da una tendina di una voce e'
+    // un passaggio che non decide niente. Resta cambiabile.
+    trattamento: modello?.contenuto?.trattamentoPredefinito || "",
+    trattamentoAltro: "", esecutore: "", noteSalute: "",
   });
   // le risposte al questionario: { chiave: { r: true|false, s: "..." } }
   const [anamnesi, setAnamnesi] = useState({});
