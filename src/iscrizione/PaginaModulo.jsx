@@ -676,15 +676,22 @@ export default function PaginaModulo({ token }) {
           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
             {quantiPunti} {quantiPunti === 1 ? "punto" : "punti"} · lo accetti firmando qui sotto
           </div>
-          {!regolamentoLetto && (
-            <div style={{
-              ...fontBody, fontSize: 12.5, lineHeight: 1.55, color: "#8A6A1B",
-              background: "#FFFBF0", border: "1px solid #F0E4C8", borderRadius: 10,
-              padding: "10px 12px", marginBottom: 12,
-            }}>
-              Aprilo e richiudilo per proseguire: finché non lo fai, le dichiarazioni e la firma restano bloccate.
+          {/* L'AVVISO SI VEDE, e dice per prima cosa che si sta per
+              firmare. Una riga smorzata sotto il titolo della sezione
+              dice la cosa giusta nel modo in cui non si legge. */}
+          <div style={{
+            background: "#FDF1F0", border: "1px solid #E8BDB8", borderLeft: "5px solid #B3261E",
+            borderRadius: 10, padding: "12px 14px", marginBottom: 12,
+          }}>
+            <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: "#8A2D2D", letterSpacing: 0.6, marginBottom: 5 }}>
+              ATTENZIONE
             </div>
-          )}
+            <div style={{ ...fontBody, fontSize: 13, lineHeight: 1.55, color: NAVY }}>
+              <b>Leggi con attenzione il regolamento prima di firmare.</b> Firmando lo accetti in ogni
+              sua parte, comprese le clausole che approvi specificamente più sotto.
+              {!regolamentoLetto && <> Aprilo e richiudilo per proseguire: fino ad allora le dichiarazioni e la firma restano bloccate.</>}
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => setRegolamentoAperto((v) => {

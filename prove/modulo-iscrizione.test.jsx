@@ -78,7 +78,8 @@ describe("modulo di iscrizione", () => {
     const p = await apriIlModulo();
     // la lavagna della firma non c'e' ancora
     expect(p.nodo.querySelector("canvas")).toBeFalsy();
-    expect(p.testo()).toContain("Prima apri il regolamento");
+    expect(p.testo()).toContain("Leggi con attenzione il regolamento");
+    expect(p.testo()).toContain("ATTENZIONE");
     // e le caselle delle dichiarazioni sono spente
     const spunte = [...p.nodo.querySelectorAll('input[type="checkbox"]')];
     expect(spunte.length).toBeGreaterThan(0);

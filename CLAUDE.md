@@ -147,6 +147,16 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   codici e versioni restino unici e che nessun modello resti senza la sua
   versione registrata.
 
+  **Il testo va aperto e richiuso prima di firmare** (19/10/2026), su tutti
+  e tre i consensi e sul modulo di iscrizione. La tendina è chiusa di suo: si
+  poteva scorrere fino in fondo, spuntare «ho letto e compreso» e firmare
+  senza averla mai aperta — su un documento che esiste proprio per dire che
+  la persona ha capito a cosa si sottopone. Si segna alla **chiusura** e non
+  all'apertura: aperto e lasciato aperto vuol dire che ci si è scorsi
+  attraverso. Prima di allora spunte spente e, al posto della lavagna per
+  firmare, un riquadro che dice perché. Sopra al tasto c'è un avviso
+  **ATTENZIONE** in rosso, che resta anche dopo la lettura.
+
   **Le righe da riempire a penna diventano campi.** Il cartaceo del
   microneedling ha tre righe vuote per il nome di chi opera («incarico
   ______ di eseguire su di me»): nella prima trasposizione erano diventate

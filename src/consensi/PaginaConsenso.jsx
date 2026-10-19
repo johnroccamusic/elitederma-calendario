@@ -222,6 +222,18 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   const [accetto, setAccetto] = useState(false);
   const [fotoVideo, setFotoVideo] = useState(false);
   const [testoAperto, setTestoAperto] = useState(false);
+  // APERTO E RICHIUSO ALMENO UNA VOLTA.
+  //
+  // Finche' non succede, le spunte e la firma restano spente. Non
+  // dimostra che l'abbia letto — niente lo dimostra — ma toglie il caso
+  // in cui si firma un consenso informato senza aver visto che esiste un
+  // testo: la tendina e' chiusa di suo, e si poteva scorrere fino in
+  // fondo, spuntare "ho letto e compreso" e firmare senza aprirla mai.
+  //
+  // Si segna alla CHIUSURA e non all'apertura: aperto e lasciato aperto
+  // vuol dire che ci si e' scorsi attraverso per arrivare alla firma.
+  // E' la stessa regola del modulo di iscrizione, per lo stesso motivo.
+  const [testoLetto, setTestoLetto] = useState(false);
   const [inviando, setInviando] = useState(false);
   const [inviato, setInviato] = useState(false);
   const [errore, setErrore] = useState("");
@@ -262,6 +274,7 @@ export default function PaginaConsenso({ codice, edizione = null }) {
       : `${senzaRisposta.length} domande sulla salute`);
   }
   if (!fronte) mancanze.push("la foto del documento");
+  if (!testoLetto) mancanze.push("aprire il testo del consenso e richiuderlo");
   if (!firma) mancanze.push("la firma");
   if (!accetto) mancanze.push("la spunta del consenso");
 
@@ -390,8 +403,33 @@ export default function PaginaConsenso({ codice, edizione = null }) {
         )}
 
         <Sezione titolo="Cosa stai firmando">
+          {/* L'AVVISO STA SOPRA IL TASTO, E SI VEDE.
+              La riga smorzata che c'era prima diceva la cosa giusta nel
+              modo in cui non si legge: sotto un titolo di sezione, in
+              grigio, della stessa misura di tutto il resto. Qui e'
+              rosso, in grassetto, e dice per prima cosa che si sta per
+              firmare — perche' il gesto che segue e' una firma, non la
+              conferma di un ordine. */}
+          <div style={{
+            background: "#FDF1F0", border: "1px solid #E8BDB8", borderLeft: "5px solid #B3261E",
+            borderRadius: 12, padding: "13px 15px", marginBottom: 12,
+          }}>
+            <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: "#8A2D2D", letterSpacing: 0.6, marginBottom: 5 }}>
+              ATTENZIONE
+            </div>
+            <div style={{ fontSize: 13.5, lineHeight: 1.55, color: NAVY }}>
+              <b>Leggi con attenzione tutto il testo prima di firmare.</b> Firmando dichiari di averlo
+              letto e compreso, e acconsenti al trattamento.
+              {!testoLetto && <> Aprilo e richiudilo per proseguire: fino ad allora le spunte e la firma restano bloccate.</>}
+            </div>
+          </div>
           <button
-            type="button" onClick={() => setTestoAperto((x) => !x)}
+            type="button"
+            onClick={() => setTestoAperto((x) => {
+              // richiudendolo si segna come letto, e non si torna indietro
+              if (x) setTestoLetto(true);
+              return !x;
+            })}
             style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "13px 16px", width: "100%", textAlign: "left", cursor: "pointer", minHeight: 48 }}
           >
             {testoAperto ? "Chiudi il testo" : "Leggi il testo completo"}
@@ -402,16 +440,16 @@ export default function PaginaConsenso({ codice, edizione = null }) {
             </div>
           )}
 
-          <label style={{ display: "flex", gap: 11, alignItems: "flex-start", marginTop: 14, cursor: "pointer", background: "#fff", border: `1px solid ${accetto ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 12, padding: 14 }}>
-            <input type="checkbox" checked={accetto} onChange={(e) => setAccetto(e.target.checked)} style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }} />
+          <label style={{ display: "flex", gap: 11, alignItems: "flex-start", marginTop: 14, cursor: testoLetto ? "pointer" : "default", background: "#fff", border: `1px solid ${accetto ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 12, padding: 14, opacity: testoLetto ? 1 : 0.45 }}>
+            <input type="checkbox" checked={accetto} disabled={!testoLetto} onChange={(e) => setAccetto(e.target.checked)} style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }} />
             <span style={{ fontSize: 13.5, color: NAVY, lineHeight: 1.5 }}>
               Ho letto e compreso, le informazioni che ho dato sul mio stato di salute sono vere, e
               acconsento al trattamento durante il corso.
             </span>
           </label>
 
-          <label style={{ display: "flex", gap: 11, alignItems: "flex-start", marginTop: 10, cursor: "pointer", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14 }}>
-            <input type="checkbox" checked={fotoVideo} onChange={(e) => setFotoVideo(e.target.checked)} style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }} />
+          <label style={{ display: "flex", gap: 11, alignItems: "flex-start", marginTop: 10, cursor: testoLetto ? "pointer" : "default", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, opacity: testoLetto ? 1 : 0.45 }}>
+            <input type="checkbox" checked={fotoVideo} disabled={!testoLetto} onChange={(e) => setFotoVideo(e.target.checked)} style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0 }} />
             <span style={{ fontSize: 13.5, color: NAVY, lineHeight: 1.5 }}>
               Autorizzo l'uso di foto e video del trattamento.
               <span style={{ display: "block", fontSize: 12, color: MUTED, marginTop: 3 }}>
@@ -422,7 +460,19 @@ export default function PaginaConsenso({ codice, edizione = null }) {
         </Sezione>
 
         <Sezione titolo="La firma" nota="Tieni il telefono come ce l'hai adesso e firma col dito nello spazio qui sotto.">
-          <FirmaDito onCambia={setFirma} />
+          {/* La lavagna compare dopo il testo, non prima: uno spazio per
+              firmare messo sotto a un documento mai aperto e' un invito a
+              firmare senza leggere. */}
+          {testoLetto ? <FirmaDito onCambia={setFirma} /> : (
+            <div style={{
+              fontSize: 12.5, lineHeight: 1.6, color: "#8A6A1B",
+              background: "#FFFBF0", border: "1px dashed #E3D3AE", borderRadius: 12,
+              padding: "18px 14px", textAlign: "center",
+            }}>
+              Qui comparirà lo spazio per firmare.<br />
+              Prima apri «Leggi il testo completo» qui sopra e richiudilo.
+            </div>
+          )}
         </Sezione>
 
         {errore && (

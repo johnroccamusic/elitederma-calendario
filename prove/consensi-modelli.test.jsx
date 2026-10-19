@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { rispondiCon } from "./preparazione.js";
-import { monta } from "./aiuto.js";
+import { monta, clicca } from "./aiuto.js";
 import PaginaConsenso from "../src/consensi/PaginaConsenso.jsx";
 import QrConsensi from "../src/consensi/QrConsensi.jsx";
 import { collegaConsensoACorso } from "../src/consensi/dati";
@@ -147,6 +147,64 @@ const LEGAMI = [
 // eseguiva il trattamento spariva dal documento. Un consenso che non
 // dice chi ha fatto cosa su quella persona risponde a meta' della
 // domanda per cui esiste.
+// IL TESTO VA APERTO PRIMA DI FIRMARE.
+//
+// La tendina "Leggi il testo completo" e' chiusa di suo: si poteva
+// scorrere il modulo fino in fondo, spuntare "ho letto e compreso" e
+// firmare senza averla mai aperta. Su un consenso informato — un
+// documento che esiste proprio per dire che la persona ha capito a cosa
+// si sottopone — quello e' il difetto peggiore che potesse avere.
+describe("la presa visione del testo, su tutti i consensi", () => {
+  for (const m of CONSENSI) {
+    it(`${m.codice}: senza aprire il testo non si firma e non si spunta`, async () => {
+      rispondiCon({});
+      const p = await monta(<PaginaConsenso codice={m.codice} />);
+      expect(p.nodo.querySelector("canvas")).toBeFalsy();
+      const spunte = [...p.nodo.querySelectorAll('input[type="checkbox"]')];
+      expect(spunte.length).toBeGreaterThan(0);
+      expect(spunte.every((x) => x.disabled)).toBe(true);
+      expect(p.testo()).toContain("aprire il testo del consenso e richiuderlo");
+      await p.smonta();
+    });
+
+    it(`${m.codice}: aperto e richiuso, firma e spunte si sbloccano`, async () => {
+      rispondiCon({});
+      const p = await monta(<PaginaConsenso codice={m.codice} />);
+      await clicca(p.tasto("Leggi il testo completo"));
+      await clicca(p.tasto("Chiudi il testo"));
+      expect(p.nodo.querySelector("canvas")).toBeTruthy();
+      const spunte = [...p.nodo.querySelectorAll('input[type="checkbox"]')];
+      expect(spunte.every((x) => x.disabled)).toBe(false);
+      expect(p.testo()).not.toContain("aprire il testo del consenso e richiuderlo");
+      await p.smonta();
+    });
+  }
+
+  for (const m of CONSENSI) {
+    it(`${m.codice}: l'avviso in evidenza c'e', e resta anche dopo aver letto`, async () => {
+      rispondiCon({});
+      const p = await monta(<PaginaConsenso codice={m.codice} />);
+      expect(p.testo()).toContain("ATTENZIONE");
+      expect(p.testo()).toContain("Leggi con attenzione tutto il testo prima di firmare");
+      // dopo la lettura sparisce la parte sul "aprilo e richiudilo", ma
+      // l'avvertimento resta: si sta sempre per firmare
+      await clicca(p.tasto("Leggi il testo completo"));
+      await clicca(p.tasto("Chiudi il testo"));
+      expect(p.testo()).toContain("ATTENZIONE");
+      expect(p.testo()).not.toContain("Aprilo e richiudilo");
+      await p.smonta();
+    });
+  }
+
+  it("aprirlo e lasciarlo aperto non basta: conta la richiusura", async () => {
+    rispondiCon({});
+    const p = await monta(<PaginaConsenso codice="needling" />);
+    await clicca(p.tasto("Leggi il testo completo"));
+    expect(p.nodo.querySelector("canvas")).toBeFalsy();
+    await p.smonta();
+  });
+});
+
 describe("chi esegue il trattamento", () => {
   it("il needling lo chiede, ed e' obbligatorio", () => {
     const c = consensoDaCodice("needling").contenuto;
