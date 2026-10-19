@@ -29,8 +29,13 @@ const corsHeaders = {
 function bytesToHex(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
+// IL BUFFER SI ALLOCA A PARTE, e non e' pignoleria di tipi: `new
+// Uint8Array(n)` per TypeScript puo' poggiare su memoria condivisa
+// (`SharedArrayBuffer`), e le funzioni di crittografia non la accettano.
+// A tempo di esecuzione e' esattamente la stessa cosa.
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
+  const buffer = new ArrayBuffer(hex.length / 2);
+  const bytes = new Uint8Array(buffer);
   for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   return bytes;
 }

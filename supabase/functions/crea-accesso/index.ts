@@ -115,6 +115,9 @@ Deno.serve(async (req) => {
       passwordAggiornata: !creata && !!password,
     });
   } catch (e) {
-    return risposta({ errore: String(e?.message || e) }, 500);
+    // in un `catch` quello che arriva non e' per forza un Error: puo'
+    // essere una stringa, o qualunque cosa sia stata lanciata. `e.message`
+    // dato per scontato e' proprio cio' che TypeScript rifiuta.
+    return risposta({ errore: e instanceof Error ? e.message : String(e) }, 500);
   }
 });

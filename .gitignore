@@ -10,3 +10,7 @@ supabase/.temp
 
 # il lucchetto delle dipendenze di Deno: lo rigenera `deno check` da solo
 deno.lock
+
+# la cartella dove gira deno check: ci scarica i pacchetti npm delle
+# edge function, e non deve mescolarsi col node_modules di Vite
+.controllo-deno/

@@ -420,11 +420,23 @@ JavaScript. È costato un 500 in produzione: togliendo da `email.js` un blocco
 se n'è andata anche `bloccoRecesso`, che gli stava attaccato, e la conferma di
 ricezione ha smesso di partire. `no-undef` lo prende in un secondo.
 
-**Quattro edge function non passano `deno check`** e non è una novità di oggi:
-`crea-accesso`, `fic-sync`, `invia-notifica-push`, `venditori-login`. Sono
-errori di tipo (un `.message` su `{}`, un `Uint8Array` che non combacia con
-`BufferSource`), non necessariamente guasti a runtime — ma finché restano, il
-comando risponde «4 da sistemare» e chi lo lancia smette di leggerlo. Al primo giro ha trovato un
+**Dal 19/10/2026 passano tutte e 44.** Le quattro che restavano rosse erano
+due cose diverse. `crea-accesso` e `venditori-login` avevano errori di tipo veri
+ma innocui a runtime (un `.message` su quello che un `catch` consegna, che non è
+per forza un `Error`; un `Uint8Array` che per i tipi potrebbe poggiare su
+memoria condivisa e che le funzioni di crittografia non accettano): corretti e
+ripubblicati, il comportamento non cambia di una virgola.
+
+`fic-sync` e `invia-notifica-push` invece **non avevano niente che non andasse**:
+importano pacchetti npm che su Supabase risolve la pubblicazione e che in locale
+Deno non trovava. Ora `controlla-funzioni.sh` gira dentro `.controllo-deno/`
+(esclusa da git), con `nodeModulesDir: auto`, così Deno se li scarica da solo e
+il suo `node_modules` **non si mescola a quello di Vite** — due gestori nella
+stessa cartella è un guaio che si paga più tardi.
+
+Perché valeva la pena: un comando che risponde «4 da sistemare» a ogni giro
+smette di essere letto, e il giorno in cui quei quattro diventano cinque nessuno
+se ne accorge. Al primo giro ha trovato un
 `nonRisoltiPerEtichetta` che non è mai esistito (schermata bianca in attesa del
 giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
