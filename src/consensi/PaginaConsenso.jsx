@@ -212,7 +212,7 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   const [v, setV] = useState({
     nome: "", cognome: "", dataNascita: "", luogoNascita: "", residenza: "",
     telefono: "", email: "", documentoTipo: TIPI_DOCUMENTO[0], documentoNumero: "",
-    trattamento: "", trattamentoAltro: "", noteSalute: "",
+    trattamento: "", trattamentoAltro: "", esecutore: "", noteSalute: "",
   });
   // le risposte al questionario: { chiave: { r: true|false, s: "..." } }
   const [anamnesi, setAnamnesi] = useState({});
@@ -245,6 +245,13 @@ export default function PaginaConsenso({ codice, edizione = null }) {
   if (!v.nome.trim() || !v.cognome.trim()) mancanze.push("nome e cognome");
   if (!v.trattamento) mancanze.push("il trattamento");
   if (v.trattamento === "Altro" && !v.trattamentoAltro.trim()) mancanze.push("quale altro trattamento");
+  // CHI ESEGUE, quando il modello lo chiede. Sul cartaceo del
+  // microneedling sono tre righe vuote da riempire a mano: un consenso
+  // che non nomina chi ha operato risponde a meta' della domanda per cui
+  // esiste.
+  if (modello?.contenuto?.esecutore?.obbligatorio && !v.esecutore.trim()) {
+    mancanze.push("chi esegue il trattamento");
+  }
   // Tutte le domande, nessuna esclusa. E' il punto del questionario: una
   // saltata e' proprio quella su cui l'operatore si sarebbe fermato.
   const domande = modello.contenuto.anamnesi || [];
@@ -270,6 +277,7 @@ export default function PaginaConsenso({ codice, edizione = null }) {
         telefono: v.telefono, email: v.email,
         documentoTipo: v.documentoTipo, documentoNumero: v.documentoNumero,
         trattamento: v.trattamento, trattamentoAltro: v.trattamentoAltro,
+        esecutore: v.esecutore,
         noteSalute: v.noteSalute,
         anamnesi,
         consensoTrattamento: true, consensoFotoVideo: fotoVideo,
@@ -341,6 +349,19 @@ export default function PaginaConsenso({ codice, edizione = null }) {
           {v.trattamento === "Altro" && (
             <Campo etichetta="Quale altro" obbligatorio>
               <input style={campo} value={v.trattamentoAltro} onChange={cambia("trattamentoAltro")} />
+            </Campo>
+          )}
+          {/* Le righe che sul cartaceo si riempiono a penna: «incarico
+              ______ di eseguire su di me». Compare solo dove il modello
+              lo prevede, perche' non tutti i moduli le hanno. */}
+          {c.esecutore && (
+            <Campo etichetta={c.esecutore.etichetta} obbligatorio={!!c.esecutore.obbligatorio}>
+              <input
+                style={campo} value={v.esecutore} onChange={cambia("esecutore")}
+                placeholder={c.esecutore.aiuto || ""}
+                className="suggerimento-chiaro"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
+              />
             </Campo>
           )}
         </Sezione>

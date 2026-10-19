@@ -24,6 +24,8 @@ export interface DatiConsenso {
   documentoNumero?: string | null;
   trattamento?: string | null;
   trattamentoAltro?: string | null;
+  /** chi esegue il trattamento: sul cartaceo erano le righe da riempire a mano */
+  esecutore?: string | null;
   noteSalute?: string | null;
   /** risposte al questionario sanitario: { chiave: { r: si/no, s: specifica } } */
   anamnesi?: Record<string, { r: boolean; s?: string }> | null;
@@ -141,6 +143,7 @@ export async function salvaConsenso(
     documento_numero: dati.documentoNumero?.trim() || null,
     trattamento: dati.trattamento || null,
     trattamento_altro: dati.trattamentoAltro?.trim() || null,
+    esecutore: dati.esecutore?.trim() || null,
     note_salute: dati.noteSalute?.trim() || null,
     anamnesi: dati.anamnesi && Object.keys(dati.anamnesi).length > 0 ? dati.anamnesi : null,
     consenso_trattamento: true,
@@ -169,6 +172,7 @@ export interface ConsensoRaccolto {
   documentoNumero: string | null;
   trattamento: string | null;
   trattamentoAltro: string | null;
+  esecutore: string | null;
   noteSalute: string | null;
   anamnesi: Record<string, { r: boolean; s?: string }> | null;
   consensoFotoVideo: boolean;
@@ -195,6 +199,7 @@ function daRiga(r: any): ConsensoRaccolto {
     documentoNumero: r.documento_numero || null,
     trattamento: r.trattamento || null,
     trattamentoAltro: r.trattamento_altro || null,
+    esecutore: r.esecutore || null,
     noteSalute: r.note_salute || null,
     anamnesi: r.anamnesi || null,
     consensoFotoVideo: !!r.consenso_foto_video,

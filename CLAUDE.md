@@ -147,6 +147,15 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   codici e versioni restino unici e che nessun modello resti senza la sua
   versione registrata.
 
+  **Le righe da riempire a penna diventano campi.** Il cartaceo del
+  microneedling ha tre righe vuote per il nome di chi opera («incarico
+  ______ di eseguire su di me»): nella prima trasposizione erano diventate
+  una formula generica e il nome spariva. Ora il modello può dichiarare
+  `esecutore` e il modulo chiede **Chi esegue il trattamento**, salvato in
+  `consensi_modelle.esecutore` e mostrato nell'archivio come pastiglia,
+  senza dover aprire la scheda. Oggi lo chiede solo il needling, perché è
+  l'unico cartaceo che ha quelle righe.
+
   **Gli elenchi di condizioni dei cartacei diventano l'anamnesi**, anche
   quando sul foglio sono dichiarazioni al negativo («di non soffrire di
   patologie oculari» → «Soffre di patologie oculari?»). Una dichiarazione al

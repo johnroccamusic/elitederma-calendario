@@ -45,6 +45,20 @@ export const consensoNeedlingV1 = {
     "Altro",
   ],
 
+  // LE RIGHE DA RIEMPIRE A MANO DEL CARTACEO.
+  //
+  // «Incarico ______ di eseguire su di me», «a regola d'arte da parte di
+  // ______», «dell'attività svolta da ______»: sul foglio sono tre righe
+  // vuote, e la prima versione di questo file le aveva sostituite con una
+  // formula generica. Il nome di chi opera spariva — e un consenso che
+  // non dice chi ha fatto cosa su quella persona risponde a metà della
+  // domanda per cui esiste.
+  esecutore: {
+    etichetta: "Chi esegue il trattamento",
+    aiuto: "Nome e cognome dell'allieva/o che opera",
+    obbligatorio: true,
+  },
+
   // Le diciannove condizioni del cartaceo, nello stesso ordine.
   // `chiave` e' quello che finisce nel database e non si tocca piu': se
   // un giorno la domanda si riscrive, cambia `domanda`, mai `chiave`.
@@ -103,6 +117,8 @@ IL TRATTAMENTO SI SVOLGE DURANTE UN CORSO DI FORMAZIONE
 
 Il trattamento viene eseguito durante un corso di formazione ELITEDERMA e può essere effettuato, in tutto o in parte, da un'allieva/o sotto la supervisione del docente.
 
+Il nome di chi esegue il trattamento è indicato in questo modulo, alla voce «Chi esegue il trattamento», e forma parte integrante del presente consenso.
+
 CHE COSA SUCCEDE DOPO
 
 Subito dopo il trattamento, la pelle può apparire arrossata ed è possibile avvertire una sensazione rinvigorente di turgore, pizzicore, calore, come se la pelle fosse in trazione. Queste reazioni sono temporanee e di solito si risolvono entro 24-48 ore.
@@ -134,11 +150,11 @@ DICHIARAZIONI
 • Il mio corpo è unico: il professionista non può prevedere come la mia pelle reagirà alla procedura.
 • Accetto di seguire tutte le istruzioni post intervento concernenti la cura del mio trattamento di microneedling, procedura che mi è stata spiegata e della quale ho ricevuto un memorandum.
 • Confermo che mi atterrò alle indicazioni spiegatemi ed alle richieste dell'operatore (ad esempio: esposizione solare, lampade abbronzanti, saune, terme, applicazione di make up… etc.).
-• Sono consapevole che se, nonostante tutte le procedure corrette nell'effettuare il trattamento a regola d'arte da parte di ELITEDERMA e dell'allieva/o che lo esegue sotto la supervisione del docente, il risultato del mio trattamento non dovesse essere soddisfacente a causa di problematiche imputabili alle caratteristiche della mia pelle, non mi verrà restituita alcuna somma da me versata come pagamento della prestazione professionale.
+• Sono consapevole che se, nonostante tutte le procedure corrette nell'effettuare il trattamento a regola d'arte da parte della persona indicata in questo modulo come esecutrice, sotto la supervisione del docente, il risultato del mio trattamento non dovesse essere soddisfacente a causa di problematiche imputabili alle caratteristiche della mia pelle, non mi verrà restituita alcuna somma da me versata come pagamento della prestazione professionale.
 
 ACCETTAZIONE
 
-In pieno possesso delle mie facoltà mentali esonero da tutte le responsabilità ed incarico ELITEDERMA, e l'allieva/o che opera sotto la supervisione del docente, di eseguire su di me — secondo quanto concordato e precedentemente evidenziato — il trattamento di microneedling.
+In pieno possesso delle mie facoltà mentali esonero da tutte le responsabilità ed incarico ELITEDERMA e la persona indicata in questo modulo come esecutrice del trattamento, che opera sotto la supervisione del docente, di eseguire su di me — secondo quanto concordato e precedentemente evidenziato — il trattamento di microneedling.
 
 INFORMATIVA PRIVACY
 
@@ -146,5 +162,5 @@ Ai sensi del D. Lgs. 30/06/2003 n. 196 (Codice della Privacy), del Regolamento G
 
 UTILIZZO FOTO E VIDEO — FACOLTATIVO
 
-Acconsento all'acquisizione di foto-ritratti della mia persona precedenti e successivi al trattamento, e autorizzo la pubblicazione di eventuali foto/video del lavoro eseguito, per la documentazione dell'attività svolta da ELITEDERMA e per finalità didattiche, informative e promozionali.`,
+Acconsento all'acquisizione di foto-ritratti della mia persona precedenti e successivi al trattamento, e autorizzo la pubblicazione di eventuali foto/video del lavoro eseguito, per la documentazione dell'attività svolta da ELITEDERMA e dalla persona indicata in questo modulo come esecutrice, e per finalità didattiche, informative e promozionali.`,
 } as const;

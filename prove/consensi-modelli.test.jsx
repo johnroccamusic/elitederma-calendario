@@ -140,6 +140,50 @@ const LEGAMI = [
   { id: "l2", modello_codice: "needling", corso_id: "c-need" },
 ];
 
+// LE RIGHE DEL CARTACEO IN CUI SI SCRIVE CHI OPERA.
+//
+// Erano tre righe vuote sul foglio del microneedling, e nella prima
+// trasposizione erano diventate una formula generica: il nome di chi
+// eseguiva il trattamento spariva dal documento. Un consenso che non
+// dice chi ha fatto cosa su quella persona risponde a meta' della
+// domanda per cui esiste.
+describe("chi esegue il trattamento", () => {
+  it("il needling lo chiede, ed e' obbligatorio", () => {
+    const c = consensoDaCodice("needling").contenuto;
+    expect(c.esecutore).toBeTruthy();
+    expect(c.esecutore.obbligatorio).toBe(true);
+  });
+
+  it("il testo non torna a nominare una formula al posto della persona", () => {
+    const t = consensoDaCodice("needling").contenuto.testo;
+    // deve rimandare al nome scritto nel modulo...
+    expect(t).toContain("indicato in questo modulo");
+    // ...e non dare per scontato chi opera
+    expect(t).not.toContain("da un'allieva/o sotto la supervisione del docente, di eseguire");
+  });
+
+  it("il campo c'e' davvero nel modulo, e senza non si invia", async () => {
+    rispondiCon({});
+    const p = await monta(<PaginaConsenso codice="needling" />);
+    // l'etichetta porta dentro l'asterisco degli obbligatori, quindi non
+    // e' un nodo foglia: si guarda il testo della pagina e il campo vero
+    expect(p.testo()).toContain("Chi esegue il trattamento");
+    const segnaposti = [...p.nodo.querySelectorAll("input")].map((i) => i.placeholder);
+    expect(segnaposti).toContain("Nome e cognome dell'allieva/o che opera");
+    // e finche' e' vuoto il modulo non parte
+    expect(p.testo()).toContain("chi esegue il trattamento");
+    expect(p.tasto("Invia")?.disabled).toBe(true);
+    await p.smonta();
+  });
+
+  it("dove il cartaceo non lo chiede, il campo non compare", async () => {
+    rispondiCon({});
+    const p = await monta(<PaginaConsenso codice="pmu-micro" />);
+    expect(p.testo()).not.toContain("Chi esegue il trattamento");
+    await p.smonta();
+  });
+});
+
 describe("quali corsi la tendina propone", () => {
   it("non propone un corso gia' preso da un altro consenso", async () => {
     rispondiCon({ "/rest/v1/consensi_corsi": LEGAMI });

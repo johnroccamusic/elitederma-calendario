@@ -186,6 +186,12 @@ export function Riga({ c, isMobile, riepilogoSempre = false }) {
         {c.consensoFotoVideo
           ? <Pastiglia testo="foto e video: sì" colore="#2E7D32" sfondo="#E9F6EC" />
           : <Pastiglia testo="foto e video: no" />}
+        {/* CHI HA OPERATO, senza dover aprire la scheda. Sul cartaceo
+            e' una riga scritta a penna in mezzo al testo; qui e' la
+            prima cosa che serve sapere quando si rilegge un consenso
+            mesi dopo, e tenerla chiusa dentro il dettaglio voleva dire
+            non vederla mai. */}
+        {c.esecutore && <Pastiglia testo={`eseguito da ${c.esecutore}`} colore={NAVY} sfondo="#F1EDE4" />}
         <Pastiglia testo={`testo ${c.versioneTesto}`} />
         {c.frontePath && <Pastiglia testo="documento allegato" />}
         {c.firmaPath && <Pastiglia testo="firmato" colore="#2E7D32" sfondo="#E9F6EC" />}
@@ -193,6 +199,7 @@ export function Riga({ c, isMobile, riepilogoSempre = false }) {
 
       {aperta && (
         <div style={{ marginTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
+          {voce("Chi ha eseguito", c.esecutore)}
           {voce("Nata il", soloData(c.dataNascita))}
           {voce("A", c.luogoNascita)}
           {voce("Residenza", c.residenza)}
