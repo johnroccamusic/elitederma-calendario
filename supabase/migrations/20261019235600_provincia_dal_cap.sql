@@ -1,0 +1,51 @@
+-- TRACCIA, NON RIESEGUIBILE. 19/10/2026.
+--
+-- La provincia di residenza mancava su **257 schede su 260**, e non per
+-- distrazione: il modulo di iscrizione del sito chiede via, CAP e
+-- citta', e la provincia non la chiede mai. Per un'etichetta di
+-- spedizione serve, quindi fino a oggi erano spedibili per intero
+-- (indirizzo + citta' + CAP + provincia) **tre** schede su 260.
+--
+-- Ricavata dal dataset ISTAT pubblico `comuni-json`, la stessa fonte da
+-- cui e' stato generato `src/comuni-regioni.js` — che mappa i comuni
+-- alle **regioni**, non alle province, e quindi non bastava.
+--
+-- LA REGOLA, che e' la parte che conta. Nome del comune e CAP si
+-- risolvono SEPARATAMENTE, e poi si confrontano:
+--
+--   * concordano          -> provincia certa (177 coppie su 201)
+--   * risolve solo il CAP -> vale il CAP (10). E' il caso dei nomi
+--     storpiati o delle frazioni: 'Rome', 'Vollw', 'Carchitti',
+--     'Rosignano Solvay', e 'Via chiari 29' scritto dentro il campo
+--     citta' — il CAP 25030 dice Erbusco (BS) e ha ragione lui.
+--   * risolve solo il nome -> vale il nome (2). E' il caso del CAP
+--     sbagliato: 'Scicli' con 98018, che a Scicli non appartiene.
+--   * la sigla fra parentesi scritta dall'allieva ('Sestu (CA)') vale
+--     come terzo parere quando non contraddice il nome (8).
+--   * si CONTRADDICONO -> non si scrive niente (3).
+--
+-- Le tre lasciate vuote, e perche':
+--
+--   'NAPOLI'  CAP 81031 -> dal nome NA, dal CAP CE (Aversa)
+--   'POTENZA' CAP 00040 -> dal nome PZ, dal CAP RM (Ardea)
+--   'SION'    CAP 1950  -> e' in Svizzera, la provincia non esiste
+--
+-- Indovinare quale dei due ha ragione vuol dire spedire a caso. Quelle
+-- le guarda una persona.
+--
+-- PERCHE' NON SI RIESEGUE: la mappa citta'+CAP -> sigla stava in una
+-- tabella di appoggio (`_province_20261019`) costruita fuori dal
+-- database, e le coppie non sono riportate qui perche' sono residenze
+-- di allieve e questo repository e' pubblico.
+--
+-- update iscritti i
+--    set prov_residenza = coalesce(nullif(trim(i.prov_residenza),''), p.sigla)
+--   from _province_20261019 p
+--  where upper(trim(i.citta_residenza)) = p.citta
+--    and coalesce(trim(i.cap_residenza),'') = p.cap;
+--
+-- Risultato: 237 province scritte, schede spedibili da 3 a 237.
+--
+-- DA FARE PERCHE' NON SI RIAPRA: oggi una scheda nuova nasce ancora
+-- senza provincia, perche' nessuno la chiede. O la chiede il modulo, o
+-- la ricava l'app dal CAP al salvataggio.
