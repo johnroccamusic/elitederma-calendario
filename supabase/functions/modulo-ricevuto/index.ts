@@ -185,6 +185,9 @@ Deno.serve(async (req) => {
       firma: await prendi("firma", isc.firma_path),
       fronte: await prendi("fronte", isc.doc_fronte),
       retro: await prendi("retro", isc.doc_retro),
+      // il timbro e la firma della societa': sta nello stesso secchio
+      // privato, in `_azienda/`, e il percorso lo dice l'intestazione
+      timbro: await prendi("timbro", societa?.timbro_path || null),
     });
     pdf = esito.byte;
     pagine = esito.pagine;

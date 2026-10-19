@@ -352,6 +352,22 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   `scartate` e si vede: per un allegato scartato in silenzio nessuno si
   accorgerebbe di una mail partita senza il documento.
 
+  **Il timbro della società in fondo alla copia (19/10/2026).** La copia che
+  l'allieva riceve portava una firma sola, la sua. Ora porta anche timbro e
+  firma di Elitederma, con «ricevuto e accettato»: il file sta nel secchio
+  **privato** `moduli-iscrizione/_azienda/`, e il percorso in
+  `intestazione_societa.timbro_path`.
+
+  **Il file si ritaglia sulla finestra visibile, e non è un dettaglio.** Il
+  timbro fornito è una pagina A4 intera (595×842) con sopra un CropBox di
+  162×107: aprendolo si vede solo il timbro, ma sotto c'è il foglio da cui è
+  stato ricavato — un preventivo, con gli importi. `embedPdf` prende la pagina
+  intera e **ignora il ritaglio**: al primo provino in fondo al contratto è
+  comparso «Totale Formazione € 2.750,00» rimpicciolito. Si usa `embedPage`
+  con il riquadro letto dal CropBox del file stesso. Vale per qualunque PDF
+  si innesti: quello che si vede aprendolo non è detto sia tutto quello che
+  contiene.
+
   **La ricevuta: com'è adesso, e cosa si è perso per strada.** Resend
   richiama `email-eventi` (firma Svix verificata, `RESEND_WEBHOOK_SECRET`)
   e scrive consegna, apertura e rimbalzo su `email_inviate`: quello resta,

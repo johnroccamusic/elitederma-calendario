@@ -84,13 +84,15 @@ export async function comprimiPerIlPdf(byte: Uint8Array, latoMax = 1100, qualita
 
 type Foglio = { pagina: any; y: number };
 
-export async function creaPdfModulo({ iscritto, corso, societa, firma, fronte, retro }: {
+export async function creaPdfModulo({ iscritto, corso, societa, firma, fronte, retro, timbro = null }: {
   iscritto: Record<string, any>;
   corso: Record<string, any> | null;
   societa: Record<string, any> | null;
   firma: Uint8Array | null;
   fronte: Uint8Array | null;
   retro: Uint8Array | null;
+  /** timbro e firma della societa': chiude il documento dall'altra parte */
+  timbro?: Uint8Array | null;
   // CHI GENERA DEVE POTER DIRE COSA MANCA.
   //
   // Le foto si saltano se non si aprono — giusto, un documento storto non
@@ -294,6 +296,53 @@ export async function creaPdfModulo({ iscritto, corso, societa, firma, fronte, r
     }
     spazio(6);
     scrivi("Firmato il " + quando(iscritto.modulo_ricevuto_il), { misura: 8.5, colore: GRIGIO });
+  }
+
+  // IL TIMBRO DELLA SOCIETA', DALL'ALTRA PARTE DEL FOGLIO.
+  //
+  // Finche' non c'era, la copia che l'allieva riceve portava una firma
+  // sola: la sua. Un contratto sottoscritto da una parte e basta —
+  // valido, ma da guardare monco: chi lo riapre fra un anno non ci trova
+  // scritto da nessuna parte che dall'altra parte qualcuno l'ha
+  // accettato, e in che giorno.
+  //
+  // Si innesta come PAGINA e non come immagine: il file e' un PDF, e
+  // cosi' se ne conserva il disegno vettoriale invece di rasterizzarlo.
+  // Un timbro sgranato su un documento che qualcuno conserva per anni e'
+  // la differenza fra una copia e una fotocopia di fotocopia.
+  //
+  // SI RITAGLIA SULLA FINESTRA VISIBILE, E NON E' UN DETTAGLIO.
+  //
+  // Il file del timbro e' una pagina A4 intera (595x842) con sopra una
+  // finestra di ritaglio di 162x107: aprendolo si vede solo il timbro,
+  // ma sotto c'e' tutto il foglio da cui e' stato ricavato — nel nostro
+  // caso un preventivo, con gli importi. `embedPdf` prende la pagina
+  // intera e ignora il ritaglio: al primo provino, in fondo al contratto
+  // e' comparso "Totale Formazione € 2.750,00" rimpicciolito.
+  //
+  // `embedPage` con il riquadro esplicito prende solo quella finestra.
+  // Il riquadro si legge dal file e non si scrive qui: se un domani si
+  // carica un timbro ritagliato diversamente, funziona lo stesso.
+  //
+  // Se manca o non si apre, il documento esce lo stesso: meglio una
+  // copia senza timbro che nessuna copia. Lo scarto resta scritto.
+  if (timbro) {
+    try {
+      const origineTimbro = await PDFDocument.load(timbro, { ignoreEncryption: true });
+      const paginaTimbro = origineTimbro.getPage(0);
+      const r = paginaTimbro.getCropBox();
+      const pagina = await pdf.embedPage(paginaTimbro, {
+        left: r.x, bottom: r.y, right: r.x + r.width, top: r.y + r.height,
+      });
+      const larghezza = 170;
+      const altezza = (pagina.height / pagina.width) * larghezza;
+      spazio(18);
+      scrivi("Per " + (societa?.nome || "Elitederma Srl") + " — ricevuto e accettato", { misura: 8.5, colore: GRIGIO });
+      spazio(altezza + 4);
+      f.pagina.drawPage(pagina, { x: MARGINE, y: f.y, width: larghezza, height: altezza });
+    } catch (e) {
+      scartate.push(`timbro: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   // -------------------------------------------------------- il documento
