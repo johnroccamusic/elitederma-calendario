@@ -1,0 +1,24 @@
+-- IL RECUPERO DEI PAGAMENTI QR NON DEVE CREARE DOPPIONI.
+--
+-- Quando qualcuno paga col QR e la vendita non si chiude da sola, un
+-- lavoro ogni cinque minuti la registra lui. La guardia che aveva era:
+-- non la creo se esiste gia' una vendita che NOMINA quell'incasso
+-- (`pagamento_codice`).
+--
+-- Ma chi sta al banco, se non vede succedere niente, chiude la vendita a
+-- mano — e scegliendo "pos" come metodo, non il QR. Quella vendita non
+-- nomina l'incasso, la guardia non la vede, e cinque minuti dopo ne
+-- nasce una seconda.
+--
+-- E' successo sei volte fra il 25/09 e il 14/10/2026, con tre operatrici
+-- diverse, per 434 euro contati due volte. In due casi anche il
+-- magazzino e' sceso due volte.
+--
+-- LA NUOVA GUARDIA NON INDOVINA. Se trova una vendita al banco con lo
+-- STESSO importo, nei quindici minuti intorno all'incasso e non ancora
+-- legata a nessun pagamento, non la collega da sola e non crea niente:
+-- lascia un avviso in `avvisi_magazzino` e si ferma. Collegare in
+-- automatico vorrebbe dire scommettere che siano la stessa cosa, e se la
+-- scommessa e' sbagliata si e' cancellata una vendita vera.
+--
+-- Applicata con MCP il 19/10/2026; il corpo si rilegge dal database.
