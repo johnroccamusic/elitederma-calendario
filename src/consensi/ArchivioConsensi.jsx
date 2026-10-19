@@ -132,7 +132,7 @@ export function Riga({ c, isMobile, riepilogoSempre = false }) {
   // HIV e gravidanze lungo una lista che si scorre e' un'altra cosa dal
   // leggerle sulla modella che si ha davanti fra due minuti.
   const risposte = c.anamnesi || null;
-  const domande = risposte ? (contenutoDaVersione(c.versioneTesto).anamnesi || []) : [];
+  const domande = risposte ? (contenutoDaVersione(c.versioneTesto, c.modelloCodice).anamnesi || []) : [];
   const siDetti = domande.filter((d) => risposte[d.chiave]?.r === true);
   const voce = (etichetta, valore) => (valore ? (
     <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 3 }}>
@@ -207,7 +207,7 @@ export function Riga({ c, isMobile, riepilogoSempre = false }) {
           {(() => {
             const risposte = c.anamnesi || null;
             if (!risposte) return null;
-            const domande = contenutoDaVersione(c.versioneTesto).anamnesi || [];
+            const domande = contenutoDaVersione(c.versioneTesto, c.modelloCodice).anamnesi || [];
             const si = domande.filter((d) => risposte[d.chiave]?.r === true);
             const senzaRisposta = domande.filter((d) => risposte[d.chiave]?.r == null);
             if (si.length === 0) {

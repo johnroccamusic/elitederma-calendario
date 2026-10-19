@@ -121,6 +121,20 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
   | `?consenso=` | **scrive dritto in `consensi_modelle`** (INSERT per `anon`) + caricamento su `consensi-documenti` |
 
+  **I modelli di consenso sono due, dal 19/10/2026** (`src/content/consensi.ts`):
+  `pmu-micro` e `needling`. Ognuno ha codice — che *è* il QR —, testo e
+  anamnesi propri; `consensi_corsi` dice a quali corsi vale ognuno, e da lì
+  il QR compare nella scheda della classe.
+
+  Due regole che il secondo modello ha reso necessarie: **la versione del
+  testo porta dentro il nome del modello** (`needling-v1`, non `v1`), e
+  `contenutoDaVersione` vuole anche il codice. Senza, un consenso needling
+  salvato come `v1` avrebbe pescato il testo PMU, e l'archivio avrebbe
+  mostrato accanto a quella firma le domande del trucco permanente. Un
+  modello nuovo si aggiunge con una riga in `CONSENSI`, e le prove in
+  `prove/consenso-needling.test.jsx` controllano che codici e versioni
+  restino unici.
+
   La versione precedente di questo file diceva che modelle e biglietti
   «non sono ancora collegati»: non è più vero dal 18/10/2026.
 - **`Accesso.jsx` ORA è collegato. Verificato il 08/10/2026.** In
