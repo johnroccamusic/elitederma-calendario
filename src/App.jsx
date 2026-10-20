@@ -1747,29 +1747,6 @@ function useIsMobile(breakpoint = 700) {
 // una tabella molto larga va spezzata in schede a due colonne (telefono in
 // verticale, tutto leggibile) oppure può restare su una riga sola (telefono
 // in orizzontale, dove c'è più larghezza)
-// Disegna il contenuto coricato di 90 gradi, dentro un riquadro grande
-// quanto lo schermo girato: chi apre la pagina col telefono dritto vede
-// tutto ruotato e gira il telefono, che è l'unico modo — il browser non
-// può ruotare lo schermo per conto suo. Quando "attivo" è falso non fa
-// niente: rende i figli così come sono.
-function ContenitoreCoricato({ attivo, children }) {
-  if (!attivo) return children;
-  return (
-    <div style={{ position: "relative", width: "100%", height: "100dvh", overflow: "hidden" }}>
-      <div
-        style={{
-          position: "absolute", top: 0, left: 0,
-          width: "100dvh", height: "100dvw",
-          transform: "translateX(100dvw) rotate(90deg)", transformOrigin: "top left",
-          overflowY: "auto", WebkitOverflowScrolling: "touch",
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function useIsPortrait() {
   const [portrait, setPortrait] = useState(() => (typeof window === "undefined" ? true : vistaForzata === "mobile" || window.innerHeight >= window.innerWidth));
   useEffect(() => {
@@ -67011,17 +66988,22 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
 // costruisciAllieviCrm) — nessuna query server-side, nessuna
 // paginazione: stesso stile del resto dell'app, tutto già in memoria e
 // filtrato/ordinato nel browser
-function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, onCoricata, titolo = "CRM / Allievi" }) {
+export function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, onCoricata, titolo = "CRM / Allievi" }) {
   const { ordine: ordineCrm, cambiaOrdine: cambiaOrdineCrm, ordina: ordinaCrm } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
-  const portrait = useIsPortrait();
-  // il dock delle azioni vive fuori da questa pagina: gli si dice quando
-  // girarsi insieme a lei, e di rimettersi dritto appena si esce
-  const coricata = isMobile && portrait;
-  useEffect(() => {
-    onCoricata?.(coricata);
-    return () => onCoricata?.(false);
-  }, [coricata, onCoricata]);
+  // LA PAGINA NON SI CORICA PIU' (20/10/2026).
+  //
+  // Col telefono dritto veniva disegnata ruotata di 90 gradi, per
+  // costringere a girare il telefono: la tabella e' larga e cosi' ci
+  // stava tutta. Ma chi apre una pagina e la trova di traverso pensa
+  // che si sia rotta qualcosa, non che debba girare il telefono — e il
+  // resto dell'app, dove le tabelle larghe sono tante, non fa niente di
+  // simile. La tabella sta gia' dentro un riquadro che scorre di lato:
+  // si legge come tutte le altre.
+  //
+  // Al dock si dice comunque di stare dritto: sa ancora coricarsi, e se
+  // un giorno servira' bastera' dirglielo.
+  useEffect(() => { onCoricata?.(false); }, [onCoricata]);
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -67212,10 +67194,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   // rimpicciolire fino a farcela stare la renderebbe illeggibile. Il web
   // non può girare lo schermo da solo (nessun browser lo consente fuori
   // dalla modalità a tutto schermo, e su iPhone nemmeno lì), quindi si
-  // gira il contenuto: la pagina viene disegnata coricata e chi la apre
-  // ruota il telefono per leggerla. Torna dritta appena il telefono lo è.
   return (
-    <ContenitoreCoricato attivo={coricata}>
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         {/* il tondo di uscita non occupa una riga sua: sta a sinistra
@@ -67436,7 +67415,6 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         </Modal>
       )}
     </div>
-    </ContenitoreCoricato>
   );
 }
 
