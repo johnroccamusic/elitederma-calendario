@@ -88,15 +88,25 @@ function Tendina({ valore, opzioni, onCambia, spenta, stile, vuoto, campo }) {
 function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVie, spenta }) {
   const [proposte, setProposte] = useState([]);
   const [aperto, setAperto] = useState(false);
+  // SI CERCA SOLO MENTRE QUALCUNO SCRIVE.
+  //
+  // Senza questo, la ricerca ripartiva a ogni cambio del valore: quindi
+  // anche aprendo una scheda gia' compilata, e anche SUBITO DOPO aver
+  // scelto una proposta — il valore cambia, la ricerca riparte, trova
+  // la stessa via e la ripropone sotto. L'elenco restava li' a
+  // suggerire quello che era appena stato messo, e sembrava che l'app
+  // non si fosse accorta della scelta.
+  const [digitando, setDigitando] = useState(false);
   const comune = cascata?.comuneScelto || "";
   const cap = cascata?.cap || "";
+  const civico = (cascata?.civico || "").trim();
   const scritto = valore || "";
 
   useEffect(() => {
     // Senza comune non si cerca: una via senza il suo paese darebbe
     // venti "Via Roma" di venti posti diversi, cioe' il contrario di un
     // aiuto. Fuori Italia non si cerca affatto.
-    if (spenta || !cercaVie || !comune || cascata?.fuoriItalia || scritto.trim().length < 3) {
+    if (!digitando || spenta || !cercaVie || !comune || cascata?.fuoriItalia || scritto.trim().length < 3) {
       setProposte([]); return;
     }
     let vivo = true;
@@ -114,26 +124,36 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
       if (vivo) { setProposte(Array.isArray(trovate) ? trovate : []); setAperto(true); }
     }, 500);
     return () => { vivo = false; clearTimeout(t); };
-  }, [scritto, comune, cap, spenta, cascata?.fuoriItalia, cercaVie]);
+  }, [scritto, comune, cap, spenta, cascata?.fuoriItalia, cercaVie, digitando]);
+
+  // UNA PROPOSTA CHE NON AGGIUNGE NIENTE NON SI MOSTRA.
+  //
+  // Scritta la via per intero, la ricerca trova quella e la ripropone
+  // identica: un elenco di una voce uguale a quello che si sta
+  // guardando. Si tiene solo se porta un civico che nella scheda manca.
+  const utili = proposte.filter((x) => {
+    if (normalizzaNome(x.via) !== normalizzaNome(scritto)) return true;
+    return !!x.civico && !civico;
+  });
 
   return (
     <div style={{ position: "relative" }}>
       <input
         data-campo={campo.chiave}
         value={scritto} disabled={spenta}
-        onChange={(e) => { scrivi(campo.chiave, e.target.value.toUpperCase()); setAperto(true); }}
+        onChange={(e) => { scrivi(campo.chiave, e.target.value.toUpperCase()); setDigitando(true); setAperto(true); }}
         // il clic su una proposta arriva DOPO il blur: senza il ritardo
         // l'elenco si chiude prima che il clic lo raggiunga
-        onBlur={() => { setTimeout(() => setAperto(false), 150); esceDalCampo(campo); }}
+        onBlur={() => { setTimeout(() => { setAperto(false); setDigitando(false); }, 150); esceDalCampo(campo); }}
         style={stile}
       />
-      {aperto && proposte.length > 0 && (
+      {aperto && utili.length > 0 && (
         <div style={{
           position: "absolute", zIndex: 30, left: 0, right: 0, top: "100%", marginTop: 2,
           background: "#FFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
           boxShadow: "0 6px 18px rgba(14,27,51,0.12)", overflow: "hidden",
         }}>
-          {proposte.map((x, i) => (
+          {utili.map((x, i) => (
             <div
               key={`${x.via}|${x.civico}|${i}`}
               // marcata, come le tendine: cercare questa riga per il
@@ -145,7 +165,11 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
                 // il civico arriva solo se la ricerca l'ha trovato: non
                 // si cancella quello che qualcuno ha gia' scritto
                 if (x.civico) scrivi("civico_residenza", x.civico.toUpperCase());
+                // scelta fatta: l'elenco si chiude e NON si riapre da
+                // solo quando il valore cambia per effetto della scelta
+                setDigitando(false);
                 setAperto(false);
+                setProposte([]);
               }}
               style={{
                 ...fontBody, fontSize: 13.5, color: NAVY, padding: "9px 11px", cursor: "pointer",
@@ -395,6 +419,7 @@ export function AreaAnagrafica({
   const cascata = {
     regione, provincia, comuneScelto, capDisponibili, fuoriItalia,
     cap: (valori.cap_residenza || "").trim(),
+    civico: (valori.civico_residenza || "").trim(),
     scegliStato(v) {
       if (v === "ALTRO") {
         setAltroStato(true); setRegioneScelta("");

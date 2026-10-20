@@ -85,6 +85,47 @@ describe("i suggerimenti della via", () => {
     expect(campoVia(p).value).toBe("VIA CARLO SEVERINI");
   });
 
+  // IL DIFETTO DEL 20/10/2026: l'elenco restava aperto a suggerire la
+  // via che era appena stata scelta, e si apriva anche su una scheda
+  // gia' compilata. La ricerca ripartiva a ogni cambio del valore,
+  // quindi anche quando a cambiarlo era la scelta stessa.
+  it("su una scheda già compilata non si cerca niente", async () => {
+    const cerca = vi.fn(async () => []);
+    await apri({ ...A_ROMA, indirizzo_residenza: "VIA CARLO SEVERINI" }, cerca);
+    await attendi(700);
+    expect(cerca).not.toHaveBeenCalled();
+  });
+
+  it("scelta la proposta, l'elenco si chiude e non si riapre", async () => {
+    const cerca = async () => [{ via: "Via Carlo Severini", civico: "46", cap: "00163", comune: "Roma" }];
+    const p = await apri(A_ROMA, cerca);
+    await scrivi(campoVia(p), "VIA CARLO");
+    await attendi(700);
+    expect(p.nodo.querySelector('[data-proposta="0"]')).not.toBe(null);
+    await premi(p.nodo.querySelector('[data-proposta="0"]'));
+    // il valore e' cambiato per effetto della scelta: la ricerca NON
+    // deve ripartire e riproporre la stessa via
+    await attendi(700);
+    expect(p.nodo.querySelector('[data-proposta="0"]')).toBe(null);
+  });
+
+  it("una proposta identica a quello che c'è già non si mostra", async () => {
+    const cerca = async () => [{ via: "Via Carlo Severini", civico: "", cap: "00163", comune: "Roma" }];
+    const p = await apri({ ...A_ROMA, civico_residenza: "46" }, cerca);
+    // si scrive la via per intero: la ricerca trova quella e basta
+    await scrivi(campoVia(p), "VIA CARLO SEVERINI");
+    await attendi(700);
+    expect(p.nodo.querySelector('[data-proposta="0"]')).toBe(null);
+  });
+
+  it("ma se la proposta porta un civico che manca, si mostra", async () => {
+    const cerca = async () => [{ via: "Via Carlo Severini", civico: "46", cap: "00163", comune: "Roma" }];
+    const p = await apri(A_ROMA, cerca);
+    await scrivi(campoVia(p), "VIA CARLO SEVERINI");
+    await attendi(700);
+    expect(p.nodo.querySelector('[data-proposta="0"]')).not.toBe(null);
+  });
+
   it("fuori Italia non si cerca", async () => {
     const cerca = vi.fn(async () => []);
     const p = await apri({ stato_residenza: "SVIZZERA", citta_residenza: "SION" }, cerca);
