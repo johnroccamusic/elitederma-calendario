@@ -35,18 +35,11 @@ export const AREA_ALLIEVO = {
       { chiave: "nome", etichetta: "Nome", larghezza: 1, maiuscolo: true },
       { chiave: "cognome", etichetta: "Cognome", larghezza: 1, maiuscolo: true },
     ] },
-    // il codice fiscale sta coi dati di chi si iscrive, non col
-    // documento: serve per la fattura e per il diploma, non solo a
-    // identificarla. Prima stava fra "quello che compila l'allieva" e
-    // nella scheda del venditore non c'era proprio.
-    { campi: [
-      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
-    ] },
     // DATA E LUOGO DI NASCITA, dal 20/10/2026: da qui il codice fiscale
-    // si CALCOLA invece di chiederlo. Un codice scritto a mano si
-    // sbaglia — su 247 in archivio, 11 non superavano il carattere di
-    // controllo — mentre dove e quando si e' nati una persona lo sa a
-    // memoria.
+    // — che sta nella riga SOTTO — si CALCOLA invece di chiederlo. Un
+    // codice scritto a mano si sbaglia (su 247 in archivio, 11 non
+    // superavano il carattere di controllo), mentre dove e quando si e'
+    // nati una persona lo sa a memoria.
     //
     // Il calcolo riempie il codice SOLO se la casella e' vuota, e si
     // dichiara: resta correggibile, perche' esiste l'omocodia (quando
@@ -65,7 +58,20 @@ export const AREA_ALLIEVO = {
         ] },
       { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 150px", tipo: "data", salvaUscendo: true },
       { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
-      { chiave: "stato_nascita", etichetta: "Se nata all'estero", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
+      { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
+    ] },
+    // IL CODICE FISCALE VIENE DOPO, E NON E' UN DETTAGLIO DI ORDINE.
+    //
+    // Stava sopra, ed era la prima casella vuota che si incontrava: chi
+    // compila la trova lampeggiante e lo scrive a mano, prima che
+    // esista un solo dato da cui calcolarlo. Il campo che si riempie da
+    // se' va dopo quelli che lo riempiono, o il calcolo arriva sempre
+    // secondo.
+    //
+    // Sta comunque coi dati di chi si iscrive e non col documento:
+    // serve per la fattura e per il diploma, non solo a identificarla.
+    { campi: [
+      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
     ] },
     { campi: [
       // La via si scrive, ma mentre si scrive arrivano i suggerimenti
