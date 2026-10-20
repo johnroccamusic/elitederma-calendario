@@ -40347,30 +40347,59 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
   const [ricerca, setRicerca] = useState("");
   // CHI HA COMPRATO MA NON HA MAI FATTO UN CORSO.
   //
-  // E' il bacino piu' grande che abbiamo — 1.817 su 1.859 — e finora
-  // nessuna pagina lo distingueva dagli altri: per una campagna «vieni
-  // a fare un corso» mandarla a chi il corso l'ha gia' fatto e' il modo
-  // di farsi leggere male da tutti e due.
+  // E' il bacino piu' grande che abbiamo, e finora nessuna pagina lo
+  // distingueva dagli altri: per una campagna «vieni a fare un corso»
+  // mandarla a chi il corso l'ha gia' fatto e' il modo di farsi leggere
+  // male da tutti e due.
   //
-  // Si incrocia per EMAIL, che e' l'unica cosa che le due parti hanno
-  // davvero in comune: il nome si scrive in dieci modi e il telefono
-  // sull'ordine spesso non c'e'. Chi non ha email in nessuna delle due
-  // parti non si puo' incrociare, e resta fra i «mai allievi» — e'
-  // l'ipotesi che sbaglia di meno, perche' un allievo un'email ce l'ha
-  // quasi sempre.
-  const [filtroAllievo, setFiltroAllievo] = useState("tutti"); // tutti | mai | anche
-  const emailAllieve = useMemo(() => new Set(
-    (iscritti || []).map((i) => String(i.email || "").trim().toLowerCase()).filter(Boolean),
-  ), [iscritti]);
+  // TRE RISPOSTE, NON DUE. L'incrocio si fa per EMAIL, che e' l'unica
+  // cosa che le due parti hanno davvero in comune. Ma «l'email non
+  // combacia» non vuol dire «non e' mai stato allievo»: ventinove
+  // allievi su duecentosessanta l'email non ce l'hanno, e chiamarli
+  // «mai allievi» sarebbe dire una cosa che non sappiamo. Quindi chi
+  // non si puo' incrociare finisce in una categoria sua — senza
+  // riferimenti — e nessuno gli mette un'etichetta al posto suo.
+  //
+  // Si finisce li' in due modi: il cliente non ha email, oppure il suo
+  // NOME corrisponde a un allievo mentre l'email no. Dieci clienti su
+  // millenovecento sono in questo secondo caso, e sono esattamente
+  // quelli che un conto a due categorie avrebbe sbagliato.
+  const [filtroAllievo, setFiltroAllievo] = useState("tutti"); // tutti | mai | anche | ignoto
+  const confrontoAllieve = useMemo(() => {
+    const perNome = (x) => String(x || "").normalize("NFD").replace(/\p{Diacritic}/gu, "")
+      .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+    const email = new Set();
+    const nomi = new Set();
+    (iscritti || []).forEach((i) => {
+      const e = String(i.email || "").trim().toLowerCase();
+      if (e) email.add(e);
+      const n = perNome(i.nome), c = perNome(i.cognome);
+      if (n || c) { nomi.add(`${n} ${c}`.trim()); nomi.add(`${c} ${n}`.trim()); }
+    });
+    return { email, nomi, perNome };
+  }, [iscritti]);
   const [colonnaOrdine, setColonnaOrdine] = useState("totaleSpeso");
   const [direzioneOrdine, setDirezioneOrdine] = useState("desc");
   const [chiaveAperta, setChiaveAperta] = useState(null);
 
   const clienti = useMemo(() => {
-    const elenco = costruisciClientiShop(venditeShop);
-    return elenco.map((c) => ({ ...c, eAllieva: !!c.email && emailAllieve.has(c.email.trim().toLowerCase()) }));
-  }, [venditeShop, emailAllieve]);
-  const quantiMai = useMemo(() => clienti.filter((c) => !c.eAllieva).length, [clienti]);
+    const { email, nomi, perNome } = confrontoAllieve;
+    return costruisciClientiShop(venditeShop).map((c) => {
+      const sua = String(c.email || "").trim().toLowerCase();
+      if (sua && email.has(sua)) return { ...c, statoAllievo: "allieva" };
+      // niente email da confrontare, oppure il nome dice una cosa e
+      // l'email un'altra: in tutti e due i casi non si sa
+      if (!sua) return { ...c, statoAllievo: "ignoto" };
+      const suo = perNome(c.nome);
+      if (suo && nomi.has(suo)) return { ...c, statoAllievo: "ignoto" };
+      return { ...c, statoAllievo: "mai" };
+    });
+  }, [venditeShop, confrontoAllieve]);
+  const quanti = useMemo(() => ({
+    allieva: clienti.filter((c) => c.statoAllievo === "allieva").length,
+    mai: clienti.filter((c) => c.statoAllievo === "mai").length,
+    ignoto: clienti.filter((c) => c.statoAllievo === "ignoto").length,
+  }), [clienti]);
   const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop), [venditeShop, vociShopClassificazione, prodottiShop]);
 
   const kpi = useMemo(() => {
@@ -40394,8 +40423,10 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
     let l = q ? clienti.filter((c) => c.nome.toLowerCase().includes(q)
       || c.email.toLowerCase().includes(q)
       || (c.telefono || "").replace(/\s/g, "").includes(q.replace(/\s/g, ""))) : clienti;
-    if (filtroAllievo === "mai") l = l.filter((c) => !c.eAllieva);
-    if (filtroAllievo === "anche") l = l.filter((c) => c.eAllieva);
+    if (filtroAllievo !== "tutti") {
+      const voluto = { mai: "mai", anche: "allieva", ignoto: "ignoto" }[filtroAllievo];
+      l = l.filter((c) => c.statoAllievo === voluto);
+    }
     l = [...l].sort((a, b) => {
       const va = a[colonnaOrdine], vb = b[colonnaOrdine];
       let cmp;
@@ -40473,8 +40504,9 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               {[
                 { v: "tutti", testo: `Tutti (${clienti.length.toLocaleString("it-IT")})` },
-                { v: "mai", testo: `Mai stato allievo (${quantiMai.toLocaleString("it-IT")})` },
-                { v: "anche", testo: `Anche allievo (${(clienti.length - quantiMai).toLocaleString("it-IT")})` },
+                { v: "mai", testo: `Mai stato allievo (${quanti.mai.toLocaleString("it-IT")})` },
+                { v: "anche", testo: `Anche allievo (${quanti.allieva.toLocaleString("it-IT")})` },
+                { v: "ignoto", testo: `Senza riferimenti (${quanti.ignoto.toLocaleString("it-IT")})` },
               ].map((x) => (
                 <button
                   key={x.v} type="button" onClick={() => setFiltroAllievo(x.v)}
@@ -40505,8 +40537,11 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
                     <tr key={c.chiave} onClick={() => setChiaveAperta(c.chiave)} style={{ cursor: "pointer" }}>
                       <td style={{ ...tdStyleCrm, fontWeight: 700 }}>
                         {c.nome ? toTitleCase(c.nome) : <span style={{ fontStyle: "italic", color: MUTED }}>senza nome</span>}
-                        {c.eAllieva && (
-                          <span title="Ha fatto almeno un corso" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>allieva</span>
+                        {c.statoAllievo === "allieva" && (
+                          <span title="L'email corrisponde a un allievo" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>allieva</span>
+                        )}
+                        {c.statoAllievo === "ignoto" && (
+                          <span title="Non si può dire: o manca l'email, o il nome corrisponde a un allievo ma l'email no" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>da verificare</span>
                         )}
                       </td>
                       <td style={tdStyleCrm}>{c.email || "—"}</td>
@@ -40552,7 +40587,9 @@ function DettaglioClienteShop({ cliente }) {
           sull'ultimo ordine in cui l'ha scritto. */}
       {(() => {
         const voci = [
-          ["Ha fatto corsi", cliente.eAllieva ? "sì" : null],
+          ["Ha fatto corsi", cliente.statoAllievo === "allieva" ? "sì, l'email corrisponde"
+            : cliente.statoAllievo === "ignoto" ? "non si può dire: manca un riferimento che combaci"
+            : "no, nessun allievo con questa email"],
           ["Telefono", cliente.telefono],
           ["Email", cliente.email],
           ["Ditta", cliente.ditta],
