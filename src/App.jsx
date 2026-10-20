@@ -30445,6 +30445,13 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // il codice fiscale: lo chiede anche il venditore dal 16/10/2026,
   // prima esisteva solo fra i campi del modulo dell'allieva
   const [codiceFiscale, setCodiceFiscale] = useState("");
+  // data e luogo di nascita, dal 20/10/2026: servono a calcolare il
+  // codice fiscale invece di farselo dettare. `statoNascita` vuoto vuol
+  // dire nata in Italia, che e' il caso di 243 schede su 260.
+  const [sesso, setSesso] = useState("");
+  const [dataNascita, setDataNascita] = useState("");
+  const [comuneNascita, setComuneNascita] = useState("");
+  const [statoNascita, setStatoNascita] = useState("");
   // cosa manca ancora alla scheda. Non impedisce di salvare: si vede e
   // basta, finche' qualcuno non lo completa.
   // l'invio del modulo all'allieva, dal pallino della fascia
@@ -30481,6 +30488,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     stato_residenza: setStatoResidenza,
     email: setEmailIscritto, telefono: setTelefono, tutor: setTutor,
     codice_fiscale: setCodiceFiscale,
+    sesso: setSesso, data_nascita: setDataNascita,
+    comune_nascita: setComuneNascita, stato_nascita: setStatoNascita,
     tipo_cliente: scegliTipoCliente,
     fattura_ditta: setFatturaDitta, fattura_indirizzo: setFatturaIndirizzo,
     fattura_civico: setFatturaCivico, fattura_citta: setFatturaCitta,
@@ -30496,6 +30505,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     stato_residenza: statoResidenza,
     email: emailIscritto, telefono, tutor, tipo_cliente: tipoCliente,
     codice_fiscale: codiceFiscale,
+    sesso, data_nascita: dataNascita,
+    comune_nascita: comuneNascita, stato_nascita: statoNascita,
     fattura_ditta: fatturaDitta, fattura_indirizzo: fatturaIndirizzo,
     fattura_civico: fatturaCivico, fattura_citta: fatturaCitta,
     fattura_prov: fatturaProv, fattura_cap: fatturaCap,
@@ -31298,6 +31309,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setCorsoParziale(false); setGiorniPresenza([]); setTipoOfferta(""); setTagliaDivisa("");
     setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto(""); setCodiceFiscale("");
+    // civico, interno, provincia e stato restavano del precedente: una
+    // scheda nuova nasceva con il civico di un'altra persona
+    setCivicoResidenza(""); setInternoResidenza(""); setProvResidenza(""); setStatoResidenza("");
+    setSesso(""); setDataNascita(""); setComuneNascita(""); setStatoNascita("");
     setDaCompletare([]); setAvvisoQuote("");
     setModoPattuito(modoDiSerie);   // scheda nuova: come si vende questo corso
     setRichiedeFattura(false); svuotaCampiFattura();
@@ -31323,6 +31338,8 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     setCivicoResidenza(i.civico_residenza || ""); setInternoResidenza(i.interno_residenza || "");
     setProvResidenza(i.prov_residenza || ""); setStatoResidenza(i.stato_residenza || "");
     setCodiceFiscale(i.codice_fiscale || "");
+    setSesso(i.sesso || ""); setDataNascita(i.data_nascita || "");
+    setComuneNascita(i.comune_nascita || ""); setStatoNascita(i.stato_nascita || "");
     // le schede fino al 16/10/2026 sono tutte scritte al netto: aprirle
     // in lordo mostrerebbe 671 dove c'e' scritto 550
     setModoPattuito(i.totale_pattuito_modo || "netto");
@@ -31860,6 +31877,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
           prov_residenza: provResidenza.trim().toUpperCase() || null,
           stato_residenza: statoResidenza.trim() || null,
           codice_fiscale: codiceFiscale.trim().toUpperCase() || null,
+          sesso: sesso.trim().toUpperCase() || null,
+          data_nascita: dataNascita.trim() || null,
+          comune_nascita: comuneNascita.trim().toUpperCase() || null,
+          stato_nascita: statoNascita.trim() || null,
           email: emailIscritto.trim().toLowerCase() || null,
         }).eq("id", idIscritto);
       }

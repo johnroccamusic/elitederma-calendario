@@ -21,12 +21,12 @@ import React, { useState, useEffect } from "react";
 import { Field } from "../ui/base.jsx";
 import {
   REGIONI, provinceDiRegione, comuniDiProvincia, capDiComune, regioneDiProvincia,
-  provinciaDiComune,
+  provinciaDiComune, codiceCatastale, nomiStati,
 } from "../comuni-regioni.js";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
-import { filtraCodiceFiscale } from "./codice-fiscale.js";
+import { filtraCodiceFiscale, calcolaCodiceFiscale } from "./codice-fiscale.js";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -219,6 +219,45 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     ...(spenta ? { background: "#F1EEE7" } : {}),
   };
 
+  // --- data e luogo di nascita --------------------------------------
+  if (tipo === "data") {
+    return (
+      <input
+        data-campo={campo.chiave} type="date" value={valore || ""} disabled={spenta}
+        onChange={(e) => scrivi(campo.chiave, e.target.value)}
+        onBlur={() => esceDalCampo(campo)} style={stile}
+      />
+    );
+  }
+  if (tipo === "statoNascita") {
+    // 232 Stati in una tendina: si scorre, ma e' un elenco chiuso e
+    // scritto a mano darebbe "Romania", "ROMANIA" e "Rumania" come tre
+    // posti diversi. Vuoto = Italia, che e' il caso normale.
+    return (
+      <Tendina
+        valore={spenta ? "" : (valore || "")}
+        opzioni={nomiStati().map((x) => ({ valore: x, testo: x }))}
+        onCambia={(v) => { scrivi("stato_nascita", v); if (v) scrivi("comune_nascita", ""); }}
+        spenta={spenta} stile={stile} vuoto="— nata in Italia —" campo="stato_nascita"
+      />
+    );
+  }
+  if (tipo === "comuneNascita") {
+    // Nata all'estero: il comune italiano non c'entra piu'
+    const allEstero = !!String(cascata?.statoNascita || "").trim();
+    return (
+      <input
+        data-campo={campo.chiave} value={allEstero ? "" : (valore || "")}
+        disabled={spenta || allEstero}
+        placeholder={allEstero ? "" : "Reggio di Calabria"}
+        className="suggerimento-chiaro"
+        onChange={(e) => scrivi(campo.chiave, e.target.value.toUpperCase())}
+        onBlur={() => esceDalCampo(campo)}
+        style={{ ...stile, ...(allEstero ? { background: "#F1EEE7" } : {}) }}
+      />
+    );
+  }
+
   if (tipo === "via") {
     return <CampoVia
       valore={spenta ? "" : valore} scrivi={scrivi} esceDalCampo={esceDalCampo}
@@ -307,6 +346,7 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
           return (
             <button
               key={o.valore} type="button" disabled={spenta}
+              data-campo={chiave} data-valore={o.valore}
               onClick={() => { scrivi(chiave, o.valore); esceDalCampo(campo); }}
               style={{
                 ...fontBody, flex: 1, minHeight: 40, borderRadius: 10,
@@ -404,6 +444,33 @@ export function AreaAnagrafica({
   // resterebbe li' a indicare una regione che non e' la sua.
   chiaveScheda = null,
 }) {
+  // IL CODICE FISCALE SI CALCOLA, MA NON SI IMPONE.
+  //
+  // Riempie la casella solo quando e' VUOTA, e una volta sola per ogni
+  // valore calcolato: se chi compila lo cancella, resta cancellato.
+  // Serve per l'omocodia — quando due persone otterrebbero lo stesso
+  // codice l'Agenzia ne cambia alcune cifre, e un calcolo non puo'
+  // saperlo. Quindi il calcolo e' una proposta, scritta e correggibile,
+  // e si dichiara sotto la casella.
+  const [codiceProposto, setCodiceProposto] = useState("");
+  useEffect(() => { setCodiceProposto(""); }, [chiaveScheda]);
+  const codiceScritto = (valori.codice_fiscale || "").trim();
+  useEffect(() => {
+    if (configurazione) return;
+    if (codiceScritto) return;
+    const calcolato = calcolaCodiceFiscale({
+      cognome: valori.cognome, nome: valori.nome, sesso: valori.sesso,
+      dataNascita: valori.data_nascita,
+      comuneNascita: valori.comune_nascita, statoNascita: valori.stato_nascita,
+    });
+    if (!calcolato || calcolato === codiceProposto) return;
+    setCodiceProposto(calcolato);
+    scrivi("codice_fiscale", calcolato);
+    autosalva();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configurazione, codiceScritto, valori.cognome, valori.nome, valori.sesso,
+      valori.data_nascita, valori.comune_nascita, valori.stato_nascita]);
+
   function esceDalCampo(campo) {
     if (configurazione) return;
     if (campo.tipo === "telefono") scrivi(campo.chiave, normalizzaTelefono(valori[campo.chiave] || ""));
@@ -442,6 +509,7 @@ export function AreaAnagrafica({
 
   const cascata = {
     regione, provincia, comuneScelto, capDisponibili, fuoriItalia,
+    statoNascita: (valori.stato_nascita || "").trim(),
     cap: (valori.cap_residenza || "").trim(),
     civico: (valori.civico_residenza || "").trim(),
     scegliStato(v) {
@@ -540,9 +608,17 @@ export function AreaAnagrafica({
                   </Field>
                   {/* in configurazione le caselle sono vuote per forza:
                       li' un avviso sulla lunghezza non vorrebbe dire niente */}
-                  {!configurazione && avvisoCampo(campo, valori[campo.chiave]) && (
+                  {!configurazione && avvisoCampo(campo, valori[campo.chiave], valori) && (
                     <div style={{ ...fontBody, fontSize: 11, color: "#8A6A1B", marginTop: 3, lineHeight: 1.4 }}>
-                      {avvisoCampo(campo, valori[campo.chiave])}
+                      {avvisoCampo(campo, valori[campo.chiave], valori)}
+                    </div>
+                  )}
+                  {/* il codice calcolato lo dice: chi guarda la scheda
+                      deve sapere che quello non l'ha scritto nessuno */}
+                  {!configurazione && campo.chiave === "codice_fiscale"
+                    && codiceProposto && codiceScritto === codiceProposto && (
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>
+                      Calcolato da data e luogo di nascita. Controllalo sul documento: se è un codice da omocodia, correggilo a mano.
                     </div>
                   )}
                 </div>

@@ -36,6 +36,8 @@ import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from 
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
 import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
+import { calcolaCodiceFiscale } from "./codice-fiscale.js";
+import { nomiStati } from "../comuni-regioni.js";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
 
@@ -137,11 +139,32 @@ function Letto({ etichetta, valore, larghezza = "1 1 180px" }) {
 }
 
 /** Un campo che compila lei: casella, oppure tendina se ha un elenco. */
-function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
+// Il valore che il venditore ha gia' scritto, per una chiave sola.
+// Serve al calcolo del codice fiscale: nome e cognome di solito
+// arrivano dalla scheda e sono bloccati, quindi non stanno in
+// `risposte`.
+function perChiaveValore(dati, chiave) {
+  return (dati?.campi || []).find((x) => x.chiave === chiave)?.valore || "";
+}
+
+function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tutte = null, nota = null }) {
   const { chiave, maiuscolo, lunghezza, suggerimento, tipo } = campo;
   // un elenco chiuso si sceglie, non si scrive: cosi' "patente",
   // "Patente" e "pat." non diventano tre cose diverse in archivio
-  const opzioni = campo.opzioni || PER_CHIAVE[chiave]?.opzioni || null;
+  // le opzioni arrivano in due forme: stringhe (elenchi del modulo) e
+  // { valore, etichetta } (i campi della scheda, che qui si riusano).
+  // Normalizzarle qui evita di tenere due elenchi della stessa cosa.
+  const grezze = campo.opzioni
+    || (tipo === "statoNascita" ? nomiStati() : null)
+    || PER_CHIAVE[chiave]?.opzioni || null;
+  const opzioni = grezze
+    ? grezze.map((o) => (typeof o === "string"
+        ? { valore: o, etichetta: o }
+        // nella scheda l'etichetta sta su un tasto largo tre dita e "F"
+        // basta; qui e' una voce di tendina, e una lettera sola non si
+        // capisce
+        : { valore: o.valore, etichetta: o.esteso || o.etichetta }))
+    : null;
   const stileComune = {
     ...fontBody, width: "100%", boxSizing: "border-box", minWidth: 0,
     padding: "11px 11px", fontSize: 16, borderRadius: 8, minHeight: 44,
@@ -154,17 +177,28 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
         {campo.etichetta || etichettaDi(chiave)}
         {obbligatorio && !spento && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
       </div>
-      {opzioni ? (
+      {tipo === "data" ? (
+        <input
+          data-campo={chiave}
+          type="date" value={valore || ""} disabled={spento}
+          onChange={(e) => onCambia(chiave, e.target.value)}
+          style={stileComune}
+        />
+      ) : opzioni ? (
         <select
+          data-campo={chiave}
           value={valore || ""} disabled={spento}
           onChange={(e) => onCambia(chiave, e.target.value)}
           style={stileComune}
         >
-          <option value="">— scegli —</option>
-          {opzioni.map((o) => <option key={o} value={o}>{o}</option>)}
+          <option value="">{tipo === "statoNascita" ? "— sono nata in Italia —" : "— scegli —"}</option>
+          {opzioni.map((o) => <option key={o.valore} value={o.valore}>{o.etichetta}</option>)}
         </select>
       ) : (
       <input
+        // la chiave sulla casella: e' l'unico aggancio che non si
+        // sposta quando una riga del modulo cambia posto
+        data-campo={chiave}
         value={valore || ""} disabled={spento}
         maxLength={lunghezza}
         placeholder={spento ? "" : (suggerimento || "")}
@@ -183,10 +217,13 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
         style={stileComune}
       />
       )}
-      {!spento && avvisoCampo(campo, valore) && (
+      {!spento && avvisoCampo(campo, valore, tutte) && (
         <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6A1B", marginTop: 4, lineHeight: 1.4 }}>
-          {avvisoCampo(campo, valore)}
+          {avvisoCampo(campo, valore, tutte)}
         </div>
+      )}
+      {!spento && nota && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>{nota}</div>
       )}
     </div>
   );
@@ -353,6 +390,9 @@ export default function PaginaModulo({ token }) {
   const [regolamentoLetto, setRegolamentoLetto] = useState(false);
   // per dirle che non deve riscrivere tutto: vedi `chiaveBozza`
   const [bozzaRipresa, setBozzaRipresa] = useState(false);
+  // l'ultimo codice fiscale calcolato: serve a non riscriverlo addosso
+  // a chi l'ha cancellato di proposito
+  const [cfProposto, setCfProposto] = useState("");
 
   useEffect(() => {
     let vivo = true;
@@ -387,6 +427,31 @@ export default function PaginaModulo({ token }) {
     const qualcosa = Object.keys(risposte).length || Object.keys(spunte).length || regolamentoLetto;
     if (qualcosa) scriviBozza(token, { risposte, spunte, regolamentoLetto });
   }, [token, dati, spedito, risposte, spunte, regolamentoLetto]);
+
+  // IL CODICE FISCALE SI CALCOLA DA SE'.
+  //
+  // Stessa regola della scheda: si scrive solo se la casella e' vuota,
+  // una volta sola per ogni valore calcolato. Se lo cancella — perche'
+  // il suo e' un codice da omocodia — resta cancellato.
+  useEffect(() => {
+    if (!dati || spedito) return;
+    const d = (dati.campi || []).find((x) => x.chiave === "codice_fiscale");
+    if (!d || d.bloccato) return;
+    if (String(risposte.codice_fiscale || "").trim()) return;
+    const calcolato = calcolaCodiceFiscale({
+      cognome: risposte.cognome || perChiaveValore(dati, "cognome"),
+      nome: risposte.nome || perChiaveValore(dati, "nome"),
+      sesso: risposte.sesso,
+      dataNascita: risposte.data_nascita,
+      comuneNascita: risposte.comune_nascita,
+      statoNascita: risposte.stato_nascita,
+    });
+    if (!calcolato || calcolato === cfProposto) return;
+    setCfProposto(calcolato);
+    setRisposte((r) => ({ ...r, codice_fiscale: calcolato }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dati, spedito, risposte.codice_fiscale, risposte.cognome, risposte.nome,
+      risposte.sesso, risposte.data_nascita, risposte.comune_nascita, risposte.stato_nascita]);
 
   if (caricando) return <Avviso titolo="Un momento" testo="Sto aprendo il tuo modulo." />;
   if (errore) return <Avviso titolo="Qualcosa non ha funzionato" testo={`Riprova fra poco. Se continua, scrivici. (${errore})`} />;
@@ -425,7 +490,14 @@ export default function PaginaModulo({ token }) {
     if (!d || !d.obbligatorio || d.bloccato || spento) return;
     if (!String(risposte[campo.chiave] || "").trim()) mancanti.push(campo.etichetta || etichettaDi(campo.chiave));
   };
-  AREA_ALLIEVO.righe.forEach((r) => r.campi.forEach((campo) => { if (campo.chiave !== "tipo_cliente") serve(campo, false); }));
+  // il comune di nascita non si chiede a chi e' nata all'estero: la
+  // casella e' spenta, e pretenderla vorrebbe dire un modulo che non si
+  // puo' spedire
+  const natoFuori = !!String(risposte.stato_nascita || "").trim();
+  AREA_ALLIEVO.righe.forEach((r) => r.campi.forEach((campo) => {
+    if (campo.chiave === "tipo_cliente") return;
+    serve(campo, campo.chiave === "comune_nascita" && natoFuori);
+  }));
   AREA_FATTURAZIONE.righe.forEach((r) => r.campi.forEach((campo) => serve(campo, !eAzienda)));
   if (c("doc_tipo"))   serve({ chiave: "doc_tipo" }, false);
   if (c("doc_numero")) serve({ chiave: "doc_numero" }, false);
@@ -567,8 +639,16 @@ export default function PaginaModulo({ token }) {
           return <Letto key={campo.chiave} etichetta={campo.etichetta || etichettaDi(campo.chiave)}
                         valore={mostra(campo.chiave, d.valore)} larghezza={campo.larghezza} />;
         }
-        return <DaRiempire key={campo.chiave} campo={campo} valore={risposte[campo.chiave]}
-                           onCambia={scrivi} obbligatorio={d.obbligatorio} spento={spenti} />;
+        // nata all'estero: il comune italiano non le si chiede piu'
+        const fuori = campo.chiave === "comune_nascita"
+          && !!String(risposte.stato_nascita || "").trim();
+        return <DaRiempire key={campo.chiave} campo={campo} valore={fuori ? "" : risposte[campo.chiave]}
+                           onCambia={scrivi} obbligatorio={d.obbligatorio} spento={spenti || fuori}
+                           tutte={risposte}
+                           nota={campo.chiave === "codice_fiscale" && cfProposto
+                             && risposte.codice_fiscale === cfProposto
+                             ? "L'abbiamo calcolato dalla tua data e dal tuo luogo di nascita: confrontalo con quello sul documento e, se è diverso, correggilo."
+                             : null} />;
       })}
     </div>
   );

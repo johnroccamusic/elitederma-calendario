@@ -200,6 +200,11 @@ export async function creaPdfModulo({ iscritto, corso, societa, firma, fronte, r
   // --------------------------------------------------------------- allieva
   titolo("Dati dell'allievo/a");
   riga("Nome e cognome", [iscritto.nome, iscritto.cognome].filter(Boolean).join(" "));
+  // la nascita sta accanto al codice fiscale perche' e' quello che lo
+  // genera: su una copia firmata, un codice e la data da cui esce si
+  // leggono insieme o non si controllano
+  riga("Nata/o il", giorno(iscritto.data_nascita));
+  riga("A", [iscritto.comune_nascita, iscritto.stato_nascita].filter(Boolean).join(" — "));
   riga("Codice fiscale", iscritto.codice_fiscale);
   riga("Residenza", [iscritto.indirizzo_residenza, iscritto.civico_residenza].filter(Boolean).join(" "));
   riga("", [iscritto.cap_residenza, iscritto.citta_residenza, iscritto.prov_residenza ? "(" + iscritto.prov_residenza + ")" : null, iscritto.stato_residenza].filter(Boolean).join(" "));

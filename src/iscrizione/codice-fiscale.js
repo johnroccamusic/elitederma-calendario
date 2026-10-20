@@ -13,6 +13,8 @@
 // PRESO UN ERRORE ANCHE A ME: leggendo un modulo da una foto avevo
 // trascritto `1422` dove c'era `I422`. Il controllo l'ha detto subito.
 
+import { codiceCatastale, codiceCatastaleStato } from "../comuni-regioni.js";
+
 // Le due tabelle della regola: i caratteri in posizione dispari valgono
 // diversamente da quelli in posizione pari.
 const ALFABETO = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -112,4 +114,121 @@ export function filtraCodiceFiscale(testo) {
     fuori.push(buono);
   }
   return fuori.join("");
+}
+
+// ---------------------------------------------------------------- calcolo
+//
+// IL CODICE FISCALE SI CALCOLA: non e' un dato da chiedere, e' una
+// conseguenza di cognome, nome, sesso, data e luogo di nascita. L'ha
+// scritto l'Agenzia delle Entrate, e qui si ripete la sua regola.
+//
+// DUE COSE DA DIRE, SEMPRE, quando lo si mostra:
+//
+//   * L'OMOCODIA. Quando due persone otterrebbero lo stesso codice,
+//     l'Agenzia ne cambia alcune cifre in lettere. Il calcolo non lo
+//     puo' sapere. Per questo il risultato va proposto come
+//     SUGGERIMENTO CORREGGIBILE, mai scritto d'autorita'.
+//   * Chi un codice italiano non ce l'ha proprio. Li' il campo resta
+//     libero e il calcolo tace.
+
+const CONSONANTI = (t) => t.split("").filter((c) => /[A-Z]/.test(c) && !VOCALI.includes(c));
+const VOCALI_DI = (t) => t.split("").filter((c) => VOCALI.includes(c));
+const VOCALI = "AEIOU";
+
+function soloLettere(t) {
+  return String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toUpperCase().replace(/[^A-Z]/g, "");
+}
+
+/** Le tre lettere del cognome: consonanti, poi vocali, poi X. */
+export function treDelCognome(cognome) {
+  const t = soloLettere(cognome);
+  return (CONSONANTI(t).join("") + VOCALI_DI(t).join("") + "XXX").slice(0, 3);
+}
+
+/** Le tre del nome, con la regola che lo distingue dal cognome: con
+ *  quattro o piu' consonanti si prendono la PRIMA, la TERZA e la QUARTA.
+ *  Senza di questa, Marco e Mario avrebbero lo stesso gruppo. */
+export function treDelNome(nome) {
+  const t = soloLettere(nome);
+  const cons = CONSONANTI(t);
+  if (cons.length >= 4) return cons[0] + cons[2] + cons[3];
+  return (cons.join("") + VOCALI_DI(t).join("") + "XXX").slice(0, 3);
+}
+
+/** Il codice fiscale, o "" se manca un ingrediente o il luogo non si
+ *  riconosce. Non tira a indovinare: o lo sa, o tace. */
+export function calcolaCodiceFiscale({ cognome, nome, sesso, dataNascita, comuneNascita, statoNascita } = {}) {
+  const c = soloLettere(cognome);
+  const n = soloLettere(nome);
+  if (!c || !n) return "";
+
+  const giorni = String(dataNascita ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!giorni) return "";
+  const [, anno, mese, giorno] = giorni.map(Number).length ? giorni : [];
+  const m = Number(mese), g = Number(giorno);
+  if (m < 1 || m > 12 || g < 1 || g > 31) return "";
+
+  // Sesso mancante = niente calcolo. Senza questo controllo un sesso
+  // non dichiarato passava per maschile, e quello che usciva era un
+  // codice valido — lettera di controllo giusta — di un'altra persona:
+  // il peggiore dei risultati possibili, perche' nessuno lo mette in
+  // dubbio.
+  const s = String(sesso ?? "").trim().toUpperCase().slice(0, 1);
+  if (s !== "F" && s !== "M") return "";
+  const femmina = s === "F";
+  const luogo = String(statoNascita ?? "").trim()
+    ? codiceCatastaleStato(statoNascita)
+    : codiceCatastale(comuneNascita);
+  if (!luogo) return "";
+
+  const primi15 = treDelCognome(c) + treDelNome(n)
+    + String(anno).slice(-2)
+    + MESI[m - 1]
+    + String(g + (femmina ? 40 : 0)).padStart(2, "0")
+    + luogo;
+  return primi15 + letteraDiControllo(primi15 + "X");
+}
+
+/** Quello che il codice fiscale DICE di chi lo porta: sesso, data e
+ *  luogo di nascita. Serve a confrontarlo con quello che la persona ha
+ *  scritto — se non combaciano, uno dei due e' sbagliato, e il momento
+ *  per accorgersene e' adesso. */
+export function leggiCodiceFiscale(codice) {
+  const cf = String(codice ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9]{16}$/.test(cf)) return null;
+  const m = MESI.indexOf(cf[8]);
+  const gg = Number(cf.slice(9, 11));
+  if (m < 0 || !Number.isFinite(gg)) return null;
+  const femmina = gg > 40;
+  const giorno = femmina ? gg - 40 : gg;
+  if (giorno < 1 || giorno > 31) return null;
+  return {
+    sesso: femmina ? "F" : "M",
+    giorno,
+    mese: m + 1,
+    // l'anno ha due cifre sole: il secolo non c'e' scritto
+    anniDue: cf.slice(6, 8),
+    luogo: cf.slice(11, 15),
+  };
+}
+
+/** Un avviso quando il codice scritto contraddice la data di nascita
+ *  dichiarata. Tace se uno dei due manca: non si rimprovera chi non ha
+ *  ancora finito di scrivere. */
+export function avvisoCoerenza(codice, { dataNascita, sesso } = {}) {
+  const letto = leggiCodiceFiscale(codice);
+  if (!letto) return null;
+  const d = String(dataNascita ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (d) {
+    const [, anno, mese, giorno] = d;
+    if (anno.slice(-2) !== letto.anniDue || Number(mese) !== letto.mese || Number(giorno) !== letto.giorno) {
+      return "Il codice fiscale dice una data di nascita diversa da quella scritta qui sopra: controlla quale delle due è giusta.";
+    }
+  }
+  const s = String(sesso ?? "").trim().toUpperCase();
+  if (s && s[0] !== letto.sesso) {
+    return "Il codice fiscale dice un sesso diverso da quello indicato.";
+  }
+  return null;
 }

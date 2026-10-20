@@ -8,7 +8,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import React from "react";
 import PaginaModulo from "../src/iscrizione/PaginaModulo.jsx";
 import { rispondiCon } from "./preparazione.js";
-import { monta, clicca } from "./aiuto.js";
+import { monta, clicca, scrivi, scegli } from "./aiuto.js";
 
 const CLAUSOLA = "non ha diritto ad alcun rimborso";
 
@@ -24,6 +24,19 @@ const VISTA = {
     { chiave: "stato_residenza", valore: null, bloccato: false, obbligatorio: true },
     { chiave: "telefono", valore: null, bloccato: false, obbligatorio: true },
     { chiave: "tipo_cliente", valore: "privato", bloccato: false, obbligatorio: true },
+  ],
+};
+
+// la stessa vista, piu' i quattro campi della nascita: sono quelli che
+// fanno comparire il codice fiscale da se'
+const VISTA_CON_NASCITA = {
+  ...VISTA,
+  campi: [
+    ...VISTA.campi,
+    { chiave: "sesso", valore: null, bloccato: false, obbligatorio: true },
+    { chiave: "data_nascita", valore: null, bloccato: false, obbligatorio: true },
+    { chiave: "comune_nascita", valore: null, bloccato: false, obbligatorio: true },
+    { chiave: "stato_nascita", valore: null, bloccato: false, obbligatorio: false },
   ],
 };
 
@@ -175,5 +188,36 @@ describe("modulo di iscrizione", () => {
     for (const casella of conSuggerimento) {
       expect(casella.className).toContain("suggerimento-chiaro");
     }
+  });
+
+  it("data e luogo di nascita compilano il codice fiscale", async () => {
+    const p = await apriIlModulo(VISTA_CON_NASCITA);
+    const casella = (k) => p.nodo.querySelector(`[data-campo="${k}"]`);
+    expect(casella("codice_fiscale").value).toBe("");
+    await scegli(casella("sesso"), "F");
+    await scrivi(casella("data_nascita"), "1987-12-25");
+    await scrivi(casella("comune_nascita"), "REGGIO DI CALABRIA");
+    // nome e cognome li ha scritti il venditore e sono bloccati: non
+    // stanno fra le risposte, e il calcolo deve andarseli a prendere
+    // dalla vista. Senza, il codice non uscirebbe mai.
+    expect(casella("codice_fiscale").value).toBe("PRVNNA87T65H224P");
+    expect(p.testo()).toMatch(/calcolato dalla tua data e dal tuo luogo di nascita/i);
+  });
+
+  it("scelto uno Stato estero, il comune non si chiede piu'", async () => {
+    const p = await apriIlModulo(VISTA_CON_NASCITA);
+    const casella = (k) => p.nodo.querySelector(`[data-campo="${k}"]`);
+    await scegli(casella("stato_nascita"), "Romania");
+    expect(casella("comune_nascita").disabled).toBe(true);
+    await scegli(casella("sesso"), "F");
+    await scrivi(casella("data_nascita"), "1990-03-12");
+    expect(casella("codice_fiscale").value).toMatch(/Z129.$/);
+    // e non resta fra le cose che mancano, o il modulo non partirebbe
+    await leggiEChiudi(p);
+    // l'etichetta resta scritta: quello che conta e' che non compaia
+    // fra le cose che mancano, o il modulo non partirebbe mai
+    const manca = (p.testo().match(/Manca ancora:[^.]*/) || [""])[0];
+    expect(manca).not.toMatch(/Comune di nascita/i);
+    expect(manca).toMatch(/Cellulare/);
   });
 });

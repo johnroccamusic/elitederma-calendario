@@ -24,7 +24,7 @@
 // si e' lasciato com'era invece di "sistemarlo" di slancio. Toccarlo
 // cambia quando la scheda scrive nel database, e va deciso a parte.
 
-import { avvisoCodiceFiscale } from "./codice-fiscale.js";
+import { avvisoCodiceFiscale, avvisoCoerenza } from "./codice-fiscale.js";
 
 export const AREA_ALLIEVO = {
   titolo: "Dati dell'allievo",
@@ -41,6 +41,31 @@ export const AREA_ALLIEVO = {
     // nella scheda del venditore non c'era proprio.
     { campi: [
       { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
+    ] },
+    // DATA E LUOGO DI NASCITA, dal 20/10/2026: da qui il codice fiscale
+    // si CALCOLA invece di chiederlo. Un codice scritto a mano si
+    // sbaglia — su 247 in archivio, 11 non superavano il carattere di
+    // controllo — mentre dove e quando si e' nati una persona lo sa a
+    // memoria.
+    //
+    // Il calcolo riempie il codice SOLO se la casella e' vuota, e si
+    // dichiara: resta correggibile, perche' esiste l'omocodia (quando
+    // due persone otterrebbero lo stesso codice l'Agenzia ne cambia
+    // delle cifre, e il calcolo non puo' saperlo).
+    { campi: [
+      // Il sesso sta qui e non altrove perche' serve solo a questo: nel
+      // codice fiscale di una donna il giorno di nascita e' il giorno
+      // + 40. Non si deduce dal nome — un nome non lo dice — e un
+      // valore sbagliato produce un codice che passa la lettera di
+      // controllo e appartiene a qualcun altro.
+      { chiave: "sesso", etichetta: "Sesso", larghezza: "0 0 130px", tipo: "scelta",
+        opzioni: [
+          { valore: "F", etichetta: "F", esteso: "Femminile" },
+          { valore: "M", etichetta: "M", esteso: "Maschile" },
+        ] },
+      { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 150px", tipo: "data", salvaUscendo: true },
+      { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
+      { chiave: "stato_nascita", etichetta: "Se nata all'estero", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
     ] },
     { campi: [
       // La via si scrive, ma mentre si scrive arrivano i suggerimenti
@@ -184,11 +209,21 @@ export const NOTA_VENDITORE = {
 // L'avviso da mostrare sotto una casella: la lunghezza, e per il codice
 // fiscale anche la lettera di controllo. Uno solo alla volta — due righe
 // rosse sotto la stessa casella sembrano due guasti invece di uno.
-export function avvisoCampo(campo, valore) {
+export function avvisoCampo(campo, valore, valori = null) {
   const perLunghezza = avvisoLunghezza(campo, valore);
   if (perLunghezza) return perLunghezza;
   if (campo?.chiave === "codice_fiscale" || campo?.tipo === "codice_fiscale") {
-    return avvisoCodiceFiscale(valore);
+    // prima la forma, poi il contenuto: un codice malfatto non ha senso
+    // confrontarlo con la data di nascita
+    const perForma = avvisoCodiceFiscale(valore);
+    if (perForma) return perForma;
+    // Un codice che passa la lettera di controllo puo' comunque essere
+    // di un'altra persona: se dice una data di nascita diversa da
+    // quella scritta due campi sopra, uno dei due e' sbagliato, e il
+    // momento per accorgersene e' mentre la scheda e' aperta.
+    if (valori) {
+      return avvisoCoerenza(valore, { dataNascita: valori.data_nascita, sesso: valori.sesso });
+    }
   }
   return null;
 }

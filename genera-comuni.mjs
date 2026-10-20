@@ -13,6 +13,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const FONTE = "https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json";
+// Gli Stati esteri col loro codice catastale (quello che nel codice
+// fiscale comincia per Z). Verificato il 20/10/2026 contro i 17 codici
+// gia' presenti nelle schede: combaciano tutti e diciassette, e ognuno
+// torna coi cognomi di chi li porta — Z129 Romania, Z100 Albania, Z604
+// Colombia, Z138 Ucraina, Z504 Cuba…
+const FONTE_STATI = "https://raw.githubusercontent.com/EvolvifyApp/database-comuni-italiani-demo/main/json/nazioni.json";
 const USCITA = "src/comuni-regioni.js";
 
 const vecchio = readFileSync(USCITA, "utf8");
@@ -20,6 +26,7 @@ const REGIONI = JSON.parse(vecchio.match(/export const REGIONI = (\[[\s\S]*?\]);
 const CAP_REG = vecchio.match(/const CAP_REG = (\{[\s\S]*?\});/)[1];
 
 const comuni = await fetch(FONTE).then((r) => r.json());
+const nazioni = await fetch(FONTE_STATI).then((r) => r.json());
 for (const c of comuni) {
   if (!REGIONI.includes(c.regione.nome)) {
     throw new Error(`regione nuova: "${c.regione.nome}". Va aggiunta IN CODA a REGIONI, mai in mezzo.`);
@@ -37,8 +44,14 @@ const indiceProv = new Map(PROVINCE.map((r, i) => [r.split("|")[0], i]));
 // i comuni, ordinati per nome: "Nome|indiceProvincia|cap,cap,..."
 // Un comune su 7904 ha un CAP solo in 7860 casi; Roma ne ha 82.
 const COMUNI = comuni
-  .map((c) => `${c.nome}|${indiceProv.get(c.sigla)}|${[...c.cap].sort().join(",")}`)
+  .map((c) => `${c.nome}|${indiceProv.get(c.sigla)}|${[...c.cap].sort().join(",")}|${c.codiceCatastale}`)
   .sort((a, b) => a.localeCompare(b, "it"));
+
+// "Znnn|Nome dello Stato", solo quelli che un codice catastale ce l'hanno
+const STATI = nazioni
+  .filter((n) => String(n.codice_at || "").startsWith("Z"))
+  .map((n) => `${n.codice_at}|${n.denominazione}`)
+  .sort((a, b) => a.split("|")[1].localeCompare(b.split("|")[1], "it"));
 
 // GLI OMONIMI, che sono sette e stanno tutti in regioni diverse.
 //
@@ -83,8 +96,12 @@ export const REGIONI = ${JSON.stringify(REGIONI)};
 // "SIGLA|Nome provincia|indice in REGIONI"
 export const PROVINCE = ${JSON.stringify(PROVINCE)};
 
-// "Nome comune|indice in PROVINCE|CAP separati da virgola"
+// "Nome comune|indice in PROVINCE|CAP separati da virgola|codice catastale"
 const COMUNI = ${JSON.stringify(COMUNI)};
+
+// "codice catastale|Nome", per chi e' nato fuori Italia. Il codice
+// fiscale di chi nasce all'estero porta questo al posto del comune.
+export const STATI = ${JSON.stringify(STATI)};
 
 const CAP_REG = ${CAP_REG};
 
@@ -166,6 +183,31 @@ export function capDiComune(sigla, comune) {
 
 // La provincia di un comune, quando la si sa per nome e non per cascata
 // (serve a ricostruire la scelta da una scheda gia' compilata).
+// Il codice catastale di un comune (quattro caratteri: una lettera e tre
+// cifre), che e' il pezzo centrale del codice fiscale.
+export function codiceCatastale(comune) {
+  const chiave = normalizza(comune);
+  for (const riga of COMUNI) {
+    const [nome, , , catastale] = riga.split("|");
+    if (normalizza(nome) === chiave) return catastale || "";
+  }
+  return "";
+}
+
+// Lo stesso, per chi e' nato fuori Italia.
+export function codiceCatastaleStato(stato) {
+  const chiave = normalizza(stato);
+  for (const riga of STATI) {
+    const [codice, nome] = riga.split("|");
+    if (normalizza(nome) === chiave) return codice;
+  }
+  return "";
+}
+
+export function nomiStati() {
+  return STATI.map((r) => r.split("|")[1]);
+}
+
 export function provinciaDiComune(comune, cap) {
   const chiave = normalizza(comune);
   const capPulito = (cap || "").toString().replace(/[^0-9]/g, "");
