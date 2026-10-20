@@ -34,6 +34,7 @@ import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
 import FirmaDito from "../ui/FirmaDito.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
+import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
@@ -173,6 +174,9 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
         onChange={(e) => {
           let v = e.target.value;
           if (maiuscolo) v = v.toUpperCase();
+          // stessa regola della scheda: il codice fiscale ha una forma,
+          // e la casella la fa rispettare anche qui
+          if (chiave === "codice_fiscale") v = filtraCodiceFiscale(v);
           if (lunghezza) v = v.slice(0, lunghezza);
           onCambia(chiave, v);
         }}

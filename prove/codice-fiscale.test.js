@@ -4,7 +4,7 @@
 // macchia: la differenza la scopriva la fattura, settimane dopo.
 import { describe, it, expect } from "vitest";
 import { avvisoLunghezza, avvisoCampo } from "../src/iscrizione/disposizione.js";
-import { letteraDiControllo, avvisoCodiceFiscale } from "../src/iscrizione/codice-fiscale.js";
+import { letteraDiControllo, avvisoCodiceFiscale, filtraCodiceFiscale } from "../src/iscrizione/codice-fiscale.js";
 
 const campo = { chiave: "codice_fiscale", etichetta: "Codice fiscale", lunghezzaEsatta: 16 };
 
@@ -96,5 +96,52 @@ describe("l'avviso del campo mette in fila i due controlli", () => {
   it("su un altro campo da sedici caratteri non si inventa niente", () => {
     const altro = { chiave: "fattura_piva", etichetta: "P.IVA", lunghezzaEsatta: 16 };
     expect(avvisoCampo(altro, "DPLMLN02C55H7031")).toBeNull();
+  });
+});
+
+// LA FORMA DELLA CASELLA, misurata sugli undici codici veri che in
+// archivio non tornavano. Due si raddrizzano da soli, cinque si
+// fermano mentre si scrive, quattro passano e li prende la lettera di
+// controllo: insieme coprono tutti e undici.
+describe("la casella del codice fiscale fa rispettare la forma", () => {
+  it("un codice giusto passa intero, senza essere toccato", () => {
+    expect(filtraCodiceFiscale("BMBGNN87T65H224D")).toBe("BMBGNN87T65H224D");
+    expect(filtraCodiceFiscale("bmbgnn87t65h224d")).toBe("BMBGNN87T65H224D");
+  });
+
+  it("raddrizza da sola le due confusioni che abbiamo trovato davvero", () => {
+    // Melania De Paola: un 1 dove va una lettera
+    expect(filtraCodiceFiscale("DPLMLN02C55H7031")).toBe("DPLMLN02C55H703I");
+    expect(avvisoCodiceFiscale(filtraCodiceFiscale("DPLMLN02C55H7031"))).toBeNull();
+    // Antonia Borrelli: una O dove va una cifra
+    expect(filtraCodiceFiscale("BRRNTNO7E70H892A")).toBe("BRRNTN07E70H892A");
+    expect(avvisoCodiceFiscale(filtraCodiceFiscale("BRRNTNO7E70H892A"))).toBeNull();
+  });
+
+  it("SI FERMA, non salta: saltare farebbe scalare tutto il resto", () => {
+    // «BRNSFNY8R70H501K» saltando la Y diventerebbe «BRNSFN87H50I»:
+    // un codice diverso, con la faccia giusta. Fermandosi resta corto
+    // e lo dice l'avviso sulla lunghezza.
+    expect(filtraCodiceFiscale("BRNSFNY8R70H501K")).toBe("BRNSFN");
+  });
+
+  it("si ferma su quello che non puo' stare in quella posizione", () => {
+    // K non e' un mese
+    expect(filtraCodiceFiscale("SCCGLI85K60L849D")).toBe("SCCGLI85");
+    // la parentesi quadra non e' niente
+    expect(filtraCodiceFiscale("HTCRNI97P55Z140]")).toBe("HTCRNI97P55Z140");
+  });
+
+  it("non va oltre i sedici caratteri", () => {
+    expect(filtraCodiceFiscale("BMBGNN87T65H224DXXXX")).toHaveLength(16);
+  });
+
+  it("regge un codice incollato con spazi e punteggiatura in mezzo", () => {
+    expect(filtraCodiceFiscale("BMB GNN 87T65 H224D")).toBe("BMBGNN87T65H224D");
+  });
+
+  it("sulla casella vuota non inventa niente", () => {
+    expect(filtraCodiceFiscale("")).toBe("");
+    expect(filtraCodiceFiscale(null)).toBe("");
   });
 });

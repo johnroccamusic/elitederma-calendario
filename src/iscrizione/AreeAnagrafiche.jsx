@@ -26,6 +26,7 @@ import {
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
+import { filtraCodiceFiscale } from "./codice-fiscale.js";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -351,6 +352,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
       onChange={(e) => {
         let t = e.target.value;
         if (maiuscolo) t = t.toUpperCase();
+        // IL CODICE FISCALE HA UNA FORMA, E LA CASELLA LA FA RISPETTARE.
+        // Vale anche sull'incollatura, che e' come la maggioranza lo
+        // scrive: `onChange` scatta anche li'.
+        if (chiave === "codice_fiscale") t = filtraCodiceFiscale(t);
         if (lunghezza) t = t.slice(0, lunghezza);
         scrivi(chiave, t);
       }}
