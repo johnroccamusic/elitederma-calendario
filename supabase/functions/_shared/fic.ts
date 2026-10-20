@@ -114,7 +114,7 @@ export async function metodiPagamento(token: string, companyId: number): Promise
 export async function emettiFattura(
   token: string,
   companyId: number,
-  { cliente, righe, aliquotaId, dataIso, importoPagato, metodo, metodoId, contoSaldoId }: {
+  { cliente, righe, aliquotaId, dataIso, importoPagato, metodo, metodoId, contoSaldoId, codiceEiPagamento }: {
     cliente: Record<string, any>;
     righe: { nome: string; quantita: number; prezzoNetto: number }[];
     aliquotaId: number;
@@ -123,6 +123,9 @@ export async function emettiFattura(
     metodo: string;
     metodoId?: number | null;
     contoSaldoId?: number | null;
+    /** La ModalitaPagamento dello SdI: MP01 contanti, MP05 bonifico,
+     *  MP08 carta. Obbligatoria in un documento elettronico. */
+    codiceEiPagamento?: string | null;
   },
 ): Promise<{ id: number; numero: string }> {
   // Una fattura elettronica vuole sapere DOVE mandarla: il codice
@@ -199,6 +202,20 @@ export async function emettiFattura(
       // voci nate una per fattura. Meglio una fattura senza quella riga
       // che una fattura che non parte.
       ...(metodoId ? { payment_method: { id: metodoId } } : {}),
+      // LA MODALITA' DI PAGAMENTO DELLO SdI, CHE E' UN'ALTRA COSA.
+      //
+      // `payment_method` qui sopra e' il metodo censito in Fatture in
+      // Cloud, facoltativo e buono per i suoi conti. Questo e' il codice
+      // che lo Stato vuole dentro il file elettronico — MP01 contanti,
+      // MP05 bonifico, MP08 carta — e NON e' facoltativo: senza, l'SdI
+      // non accetta il documento e Fatture in Cloud rifiuta prima di
+      // provarci. La prima emissione vera, il 20/10/2026, si e' fermata
+      // qui: 422, "Il metodo di pagamento e' obbligatorio in un
+      // documento elettronico".
+      //
+      // Due campi che si chiamano quasi uguale e vogliono due cose
+      // diverse: uno l'anagrafica di casa, l'altro la legge.
+      ...(codiceEiPagamento ? { ei_data: { payment_method: codiceEiPagamento } } : {}),
     },
   };
 

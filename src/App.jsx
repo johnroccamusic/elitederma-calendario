@@ -1781,9 +1781,28 @@ function useIsPortrait() {
   return portrait;
 }
 
-function fmtData(d) {
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y}`;
+// UNA DATA O UN ISTANTE, SENZA SCHIANTARSI SUL SECONDO.
+//
+// Era `d.split("-")` e basta: passandogli un istante
+// (`2026-10-14T15:21:07.653+00:00`) il terzo pezzo diventava
+// "14T15:21:07.653+00:00" e usciva «14T15:21:07.653+00:00/10/2026».
+// Succedeva in Fatture da emettere, che legge `pagato_il` — che e' un
+// istante, non una data.
+//
+// Un istante si riporta al fuso di Roma PRIMA di guardarne il giorno: un
+// incasso delle 23:30 e' di oggi anche se in UTC e' gia' domani.
+export function fmtData(d) {
+  const testo = String(d ?? "");
+  if (!testo) return "";
+  if (testo.includes("T")) {
+    try {
+      return new Date(testo).toLocaleDateString("it-IT", {
+        timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric",
+      });
+    } catch { /* non si e' capito: si prova col taglio qui sotto */ }
+  }
+  const [y, m, day] = testo.slice(0, 10).split("-");
+  return y && m && day ? `${day}/${m}/${y}` : testo;
 }
 
 // vendite_shop.data_ordine e' un istante UTC (il date_created_gmt di Woo): per

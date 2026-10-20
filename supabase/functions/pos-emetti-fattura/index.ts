@@ -152,6 +152,13 @@ Deno.serve(async (req) => {
       : metodoVendita === "buono_amazon"
         ? "Buono Amazon"
         : "POS / Bancomat";
+  // La ModalitaPagamento che lo SdI pretende nel file elettronico. Non
+  // ha niente a che vedere col metodo censito in Fatture in Cloud: quello
+  // e' per i conti di casa ed e' facoltativo, questa e' obbligatoria.
+  // Qui si fatturano solo incassi a carta — col QR o col terminale —
+  // quindi MP08; il contante resta mappato perche' il giorno in cui
+  // entrera' da questa porta non deve fermarsi di nuovo.
+  const codiceEiPagamento = metodoVendita === "contanti" ? "MP01" : "MP08";
 
   try {
     const conn = await leggiConnessione(sb);
@@ -221,6 +228,7 @@ Deno.serve(async (req) => {
       importoPagato: Number(pag.importo) || 0,
       metodo: nomeMetodo,
       metodoId: metodoFic?.id || null,
+      codiceEiPagamento,
       contoSaldoId: conto.id,
     });
 
