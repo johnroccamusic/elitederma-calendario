@@ -12995,7 +12995,7 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
         <div style={pannello}>
           <IntestazioneArea Icona={IconaClipboardErp}>Dati organizzativi</IntestazioneArea>
           <RigaLettura>
-            <CampoLettura label="Accordi commerciali" valore={d.accordi_commerciali} larghezza="1 1 100%" />
+            <CampoLettura label="Accordi commerciali particolare" valore={d.accordi_commerciali} larghezza="1 1 100%" />
           </RigaLettura>
           <RigaLettura>
             <CampoLettura label="Richiede modelle a pagamento?" valore={d.richiede_modelle ? "Sì" : "No"} larghezza="1 1 180px" />
@@ -27543,7 +27543,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         )}
         {i.accordi_commerciali && (
           <>
-            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Accordi commerciali</div>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Accordi commerciali particolare</div>
             <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
           </>
         )}
@@ -33780,8 +33780,20 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "accordiCommerciali")}
               <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-          <IntestazioneArea Icona={IconaRicevutaErp}>Accordi commerciali</IntestazioneArea>
-          <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
+          <IntestazioneArea Icona={IconaRicevutaErp}>Accordi commerciali particolare</IntestazioneArea>
+          {/* Il suggerimento dice QUANDO lasciarlo vuoto, non cosa
+              scriverci: un campo libero in mezzo a una scheda invita a
+              riempirlo, e qui riempirlo per forza vorrebbe dire inventare
+              un accordo che non c'e'. Grigio chiaro (`suggerimento-chiaro`
+              in index.html): deve leggersi come un'istruzione, non
+              scambiarsi per una risposta gia' data. */}
+          <input
+            value={accordiCommerciali}
+            onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())}
+            placeholder="Compilare solo in caso di accordi particolari"
+            className="suggerimento-chiaro"
+            style={{ ...campoAreaScheda, textTransform: "uppercase" }}
+          />
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "accordiCommerciali")}
@@ -34800,7 +34812,7 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                       Da incassare: {round2((i.saldo_totale || 0) + modelleTotaleDi(i))} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
                     </div>
                   )}
-                  {i.accordi_commerciali && <div>Accordi commerciali: {i.accordi_commerciali}</div>}
+                  {i.accordi_commerciali && <div>Accordi commerciali particolare: {i.accordi_commerciali}</div>}
                   {i.note && <div>Note: {i.note}</div>}
                 </div>
               ))}

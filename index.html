@@ -83,6 +83,11 @@
       .suggerimento-chiaro::placeholder {
         color: #BCBFC9;
         opacity: 1;
+        /* Alcune caselle scrivono in maiuscolo (`textTransform:
+           uppercase`), e la regola prende anche il suggerimento: un
+           consiglio scritto URLATO sembra un avviso. Il suggerimento
+           resta com'e' stato scritto. */
+        text-transform: none;
       }
 
       /* Il quadro "Costi della classe": tutto in Sofia Sans Condensed. Sette
