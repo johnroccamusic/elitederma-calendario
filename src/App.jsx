@@ -30529,14 +30529,48 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // manca non e' un guasto da annunciare a chi sta compilando.
   // useMemo e non useCallback: in questo file useCallback non e'
   // importato (vedi la nota su venditeNel) e la build non lo segnala.
+  //
+  // UN GUASTO NON E' «NESSUN SUGGERIMENTO», E NON VA INGHIOTTITO.
+  //
+  // Qui dentro ogni errore finiva in un `return []`: una ricerca
+  // rifiutata e una ricerca senza risultati erano la stessa cosa — una
+  // casella che non propone niente — e dal di fuori non c'era modo di
+  // sapere quale delle due. «Non ricevo alcun suggerimento» e' durato
+  // un giorno prima che qualcuno lo dicesse, e per capirlo sarebbe
+  // servito aprire la console del telefono.
+  //
+  // Adesso torna indietro anche il motivo, e chi disegna la casella lo
+  // scrive sotto. Un elenco vuoto resta muto, come dev'essere.
+  //
+  // IL RIPESCAGGIO. `cerca-indirizzo` vuole una sessione valida, e il
+  // gettone in memoria puo' essere scaduto mentre la scheda era aperta:
+  // in quel caso si chiede la sessione — che se serve si rinnova da
+  // sola — e si riprova una volta. Un 401 che si risolve da se' non
+  // deve diventare un difetto da raccontare.
   const cercaVie = useMemo(() => async (cerca, comune, cap) => {
+    const chiedi = async () => supabase.functions.invoke("cerca-indirizzo", { body: { cerca, comune, cap } });
     try {
-      const { data, error } = await supabase.functions.invoke("cerca-indirizzo", {
-        body: { cerca, comune, cap },
-      });
-      if (error) return [];
-      return Array.isArray(data?.vie) ? data.vie : [];
-    } catch { return []; }
+      let { data, error } = await chiedi();
+      if (error) {
+        await supabase.auth.getSession();
+        ({ data, error } = await chiedi());
+      }
+      if (error) {
+        const stato = error?.context?.status;
+        return {
+          vie: [],
+          errore: stato === 401
+            ? "La ricerca degli indirizzi non ti riconosce: esci e rientra nell'app."
+            : `La ricerca degli indirizzi non risponde${stato ? ` (${stato})` : ""}: scrivi la via a mano.`,
+        };
+      }
+      // la funzione risponde 200 anche quando Photon non c'e': il
+      // motivo sta in `avviso`, e vale la pena dirlo
+      if (data?.avviso) return { vie: [], errore: `${data.avviso}. Scrivi la via a mano.` };
+      return { vie: Array.isArray(data?.vie) ? data.vie : [] };
+    } catch (e) {
+      return { vie: [], errore: `La ricerca degli indirizzi non è partita: ${e?.message || e}` };
+    }
   }, []);
 
   // esito dell'ultimo invio della mail di conferma: { stato: "lavoro" | "ok" | "errore", testo }

@@ -188,4 +188,23 @@ describe("la via scelta porta con se' il resto", () => {
     await attendi(700);
     expect(cerca).toHaveBeenCalledWith("VIA TERNI", "Roma", "00166");
   });
+
+  it("se la ricerca si rompe lo dice, invece di sembrare vuota", async () => {
+    // una ricerca rifiutata e una ricerca senza risultati erano la
+    // stessa cosa vista da fuori — una casella che non propone niente —
+    // e per sapere quale delle due serviva la console del telefono.
+    const p = await apri(A_ROMA, async () => ({
+      vie: [], errore: "La ricerca degli indirizzi non ti riconosce: esci e rientra nell'app.",
+    }));
+    await scrivi(campoVia(p), "VIA CARLO SEVERINI");
+    await attendi(700);
+    expect(p.testo()).toMatch(/non ti riconosce/);
+  });
+
+  it("ma nessun risultato resta muto", async () => {
+    const p = await apri(A_ROMA, async () => ({ vie: [] }));
+    await scrivi(campoVia(p), "VIA CHE NON ESISTE");
+    await attendi(700);
+    expect(p.testo()).not.toMatch(/ricerca degli indirizzi/);
+  });
 });

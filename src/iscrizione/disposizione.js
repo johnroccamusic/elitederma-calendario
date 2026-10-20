@@ -84,7 +84,15 @@ export const AREA_ALLIEVO = {
       // registrare chi esiste.
       { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", tipo: "via", maiuscolo: true, salvaUscendo: true },
       { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
-      { chiave: "interno_residenza", etichetta: "Interno", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
+      // L'INTERNO NON SI CHIEDE PIU' QUI (20/10/2026). Quasi nessuno lo
+      // riempiva e nessuno lo aspettava: era una casella in piu' da
+      // saltare su una scheda che si compila col cliente davanti.
+      //
+      // La colonna `iscritti.interno_residenza` resta, e resta quello
+      // che c'e' scritto: la scheda lo rilegge e lo riscrive com'era,
+      // non lo cancella. Dove serve davvero — preparare un pacco — il
+      // POS ha il suo campo interno fra i dati di spedizione, ed e'
+      // quello il momento in cui qualcuno lo sa.
     ] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
     //

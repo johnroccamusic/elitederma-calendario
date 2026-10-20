@@ -91,6 +91,8 @@ function Tendina({ valore, opzioni, onCambia, spenta, stile, vuoto, campo }) {
 function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVie, spenta }) {
   const [proposte, setProposte] = useState([]);
   const [aperto, setAperto] = useState(false);
+  // perche' la ricerca non ha proposto niente, quando c'e' un perche'
+  const [guasto, setGuasto] = useState("");
   // SI CERCA SOLO MENTRE QUALCUNO SCRIVE.
   //
   // Senza questo, la ricerca ripartiva a ogni cambio del valore: quindi
@@ -114,7 +116,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
     //
     // Fuori Italia non si cerca affatto: li' questa ricerca non copre.
     if (!digitando || spenta || !cercaVie || cascata?.fuoriItalia || scritto.trim().length < 3) {
-      setProposte([]); return;
+      setProposte([]); setGuasto(""); return;
     }
     let vivo = true;
     // Mezzo secondo di attesa: Photon e' un servizio gratuito e una
@@ -126,9 +128,18 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
       // errore non lo prende nessuno e resta un rifiuto senza padrone.
       // Qui vale la regola di sempre — un suggerimento che manca non
       // ferma chi sta compilando.
-      let trovate = [];
-      try { trovate = await cercaVie(scritto, comune, cap); } catch { trovate = []; }
-      if (vivo) { setProposte(Array.isArray(trovate) ? trovate : []); setAperto(true); }
+      // la ricerca puo' tornare l'elenco e basta (e' cosi' nei banchi
+      // di prova) oppure l'elenco col motivo: si accettano tutte e due
+      let esito = { vie: [] };
+      try {
+        const r = await cercaVie(scritto, comune, cap);
+        esito = Array.isArray(r) ? { vie: r } : (r || { vie: [] });
+      } catch (e) { esito = { vie: [], errore: `La ricerca degli indirizzi si è rotta: ${e?.message || e}` }; }
+      if (vivo) {
+        setProposte(Array.isArray(esito.vie) ? esito.vie : []);
+        setGuasto(esito.errore || "");
+        setAperto(true);
+      }
     }, 500);
     return () => { vivo = false; clearTimeout(t); };
   }, [scritto, comune, cap, spenta, cascata?.fuoriItalia, cercaVie, digitando]);
@@ -160,6 +171,14 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
         onBlur={() => { setTimeout(() => { setAperto(false); setDigitando(false); }, 150); esceDalCampo(campo); }}
         style={stile}
       />
+      {/* NESSUN SUGGERIMENTO NON SI ANNUNCIA, UN GUASTO SI'.
+          Sono due cose diverse e vanno dette diversamente: che una via
+          non sia nell'elenco di OpenStreetMap e' normale e non riguarda
+          chi compila; che la ricerca non abbia funzionato e' una cosa
+          che qualcuno deve poter riferire. */}
+      {guasto && utili.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 11, color: "#8A6A1B", marginTop: 3, lineHeight: 1.4 }}>{guasto}</div>
+      )}
       {aperto && utili.length > 0 && (
         <div style={{
           position: "absolute", zIndex: 30, left: 0, right: 0, top: "100%", marginTop: 2,
