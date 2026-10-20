@@ -10,6 +10,8 @@
 // A chi: si passa UNO fra
 //   { masterId: "<uuid>" }   tutti i dispositivi di quella master
 //   { venditoreId: "<uuid>" } tutti i dispositivi di quel venditore
+//   { gruppo: "venditori" }  tutti i venditori, nessuna master
+//   { gruppo: "master" }     tutte le master, nessun venditore
 //   { endpoint: "https://…" } un dispositivo solo (serve alla prova)
 //   { tutte: true }           tutti i dispositivi attivi
 // piu' { titolo, testo, url?, tag? }.
@@ -59,7 +61,13 @@ Deno.serve(async (req) => {
   if (corpo.endpoint) query = query.eq("endpoint", String(corpo.endpoint));
   else if (corpo.masterId) query = query.eq("master_id", String(corpo.masterId));
   else if (corpo.venditoreId) query = query.eq("venditore_id", String(corpo.venditoreId));
-  else if (corpo.tutte !== true) return json({ errore: "Dire a chi: masterId, venditoreId, endpoint, oppure tutte: true" }, 400);
+  // UN GRUPPO INTERO. Una comunicazione di servizio riguarda tutti i
+  // venditori o tutte le master, non l'una e le altre insieme: mandarla
+  // a `tutte: true` la farebbe leggere anche a chi non c'entra, e una
+  // notifica che non riguarda chi la riceve insegna a ignorarle.
+  else if (corpo.gruppo === "venditori") query = query.not("venditore_id", "is", null);
+  else if (corpo.gruppo === "master") query = query.not("master_id", "is", null);
+  else if (corpo.tutte !== true) return json({ errore: "Dire a chi: masterId, venditoreId, gruppo, endpoint, oppure tutte: true" }, 400);
 
   const { data: iscrizioni, error } = await query;
   if (error) return json({ errore: "Lettura iscrizioni: " + error.message }, 500);

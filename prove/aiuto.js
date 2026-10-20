@@ -40,7 +40,13 @@ export async function clicca(elemento) {
 }
 
 export async function scrivi(campo, valore) {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  // il setter giusto dipende dall'elemento: quello di HTMLInputElement
+  // su una <textarea> lancia "called on an object that is not a valid
+  // instance", e la prova sembra rotta per un motivo che non c'entra
+  const prototipo = campo?.tagName === "TEXTAREA"
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototipo, "value").set;
   await act(async () => {
     setter.call(campo, valore);
     campo.dispatchEvent(new window.Event("input", { bubbles: true }));

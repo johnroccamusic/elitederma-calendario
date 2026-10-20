@@ -13,11 +13,27 @@ import PannelloNotifiche from "./PannelloNotifiche.jsx";
 
 const quando = (ts) => (ts ? new Date(ts).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
 
+// Da "m:<id>" al corpo che vuole la funzione. Tenute fuori dal
+// componente perche' sono due tabelle di traduzione, non stato.
+function corpoDestinatario(a) {
+  if (!a) return { tutte: true };
+  if (a === "g:venditori") return { gruppo: "venditori" };
+  if (a === "g:master") return { gruppo: "master" };
+  if (a.startsWith("m:")) return { masterId: a.slice(2) };
+  if (a.startsWith("v:")) return { venditoreId: a.slice(2) };
+  return { tutte: true };
+}
+
 export default function PaginaNotifichePush({ master = [], venditori = [], utenteLoggato = null }) {
   const [righe, setRighe] = useState(null);
   const [msg, setMsg] = useState(null);
   const [inCorso, setInCorso] = useState("");
-  const [a, setA] = useState("");          // "" = tutti, altrimenti master_id
+  // IL DESTINATARIO, CODIFICATO. "" = tutti i dispositivi;
+  // "g:venditori" / "g:master" = un gruppo intero; "m:<id>" una master,
+  // "v:<id>" un venditore. Il prefisso serve perche' senza di lui un
+  // uuid non dice se e' di una master o di un venditore, e la notifica
+  // finirebbe a nessuno — in silenzio, che e' il modo peggiore.
+  const [a, setA] = useState("");
   const [titolo, setTitolo] = useState("GENYON");
   const [testo, setTesto] = useState("");
 
@@ -29,11 +45,11 @@ export default function PaginaNotifichePush({ master = [], venditori = [], utent
 
   async function manda() {
     if (!testo.trim()) { setMsg({ tipo: "errore", testo: "Scrivi il messaggio." }); return; }
-    const chi = a ? (master || []).find((m) => m.id === a)?.nome : "TUTTI i dispositivi iscritti";
+    const chi = descriviDestinatario(a);
     if (!window.confirm(`Mandare la notifica a ${chi}?\n\n«${titolo.trim() || "GENYON"} — ${testo.trim()}»`)) return;
     setInCorso("manda"); setMsg(null);
     try {
-      const corpo = a ? { masterId: a } : { tutte: true };
+      const corpo = corpoDestinatario(a);
       const { data, error } = await supabase.functions.invoke("invia-notifica-push", {
         body: { ...corpo, titolo: titolo.trim() || "GENYON", testo: testo.trim() },
       });
@@ -65,6 +81,18 @@ export default function PaginaNotifichePush({ master = [], venditori = [], utent
   const senzaVend = (venditori || []).filter((v) => !conDispositivoVend.has(v.id));
   const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || null;
 
+  // Quello che si legge nella domanda di conferma. Prima diceva sempre
+  // il nome di una master, o "TUTTI": con i venditori in mezzo poteva
+  // chiedere "mandare a undefined?" — e si premeva Sì comunque.
+  function descriviDestinatario(scelta) {
+    if (!scelta) return "TUTTI i dispositivi iscritti";
+    if (scelta === "g:venditori") return `TUTTI i venditori (${conDispositivoVend.size})`;
+    if (scelta === "g:master") return `TUTTE le master (${conDispositivo.size})`;
+    if (scelta.startsWith("m:")) return nomeMaster(scelta.slice(2)) || "una master";
+    if (scelta.startsWith("v:")) return nomeVenditore(scelta.slice(2)) || "un venditore";
+    return "TUTTI i dispositivi iscritti";
+  }
+
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "9px 12px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY };
 
@@ -80,8 +108,21 @@ export default function PaginaNotifichePush({ master = [], venditori = [], utent
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 8 }}>
         <select value={a} onChange={(e) => setA(e.target.value)} style={{ ...fontBody, fontSize: 13, padding: "8px 10px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, flex: "1 1 200px", minWidth: 0 }}>
           <option value="">A tutti i dispositivi iscritti</option>
+          {/* i gruppi stanno in cima: una comunicazione di servizio si
+              manda a tutti i venditori o a tutte le master, ed e' il
+              caso piu' frequente. Compaiono solo se qualcuno in quel
+              gruppo ha un telefono iscritto. */}
+          {conDispositivoVend.size > 0 && (
+            <option value="g:venditori">Tutti i venditori ({conDispositivoVend.size})</option>
+          )}
+          {conDispositivo.size > 0 && (
+            <option value="g:master">Tutte le master ({conDispositivo.size})</option>
+          )}
           {(master || []).filter((m) => conDispositivo.has(m.id)).map((m) => (
-            <option key={m.id} value={m.id}>{m.nome}</option>
+            <option key={m.id} value={`m:${m.id}`}>{m.nome} — master</option>
+          ))}
+          {(venditori || []).filter((v) => conDispositivoVend.has(v.id)).map((v) => (
+            <option key={v.id} value={`v:${v.id}`}>{v.nome} — venditore</option>
           ))}
         </select>
         <input value={titolo} onChange={(e) => setTitolo(e.target.value)} placeholder="Titolo"
