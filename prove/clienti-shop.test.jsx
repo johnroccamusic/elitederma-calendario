@@ -28,9 +28,18 @@ const ordine = (n, quando, totale, extra = {}) => ({
   },
 });
 
+// un secondo cliente, che ha anche fatto un corso
+const ALTRA = {
+  id: "v9", origine: "woocommerce", numero_ordine: "W-9", data_ordine: "2026-02-02T10:00:00Z",
+  totale: 300, stato: "completed", cliente_nome: "Anna Verdi", cliente_email: "anna@esempio.it",
+  prodotti: [], payload_raw: { customer_id: 77, billing: { phone: "3451112222" } },
+};
+const ISCRITTI = [{ id: "i1", nome: "ANNA", cognome: "VERDI", email: "ANNA@esempio.it " }];
+
 const VENDITE = [
   ordine(1, "2025-03-02T10:00:00Z", 120),
   ordine(2, "2026-01-10T10:00:00Z", 80),
+  ALTRA,
   // un ordine del POS non e' un cliente dello shop: non deve entrare
   { id: "p1", origine: "pos", numero_ordine: "POS-1", data_ordine: "2026-02-01T10:00:00Z", totale: 50, prodotti: [] },
 ];
@@ -38,7 +47,7 @@ const VENDITE = [
 async function apri() {
   rispondiCon({});
   return monta(
-    <PaginaCrmShop venditeShop={VENDITE} vociShopClassificazione={[]} prodottiShop={[]}
+    <PaginaCrmShop venditeShop={VENDITE} vociShopClassificazione={[]} prodottiShop={[]} iscritti={ISCRITTI}
       onApriClassificazioneVoci={() => {}} onBack={() => {}} />,
   );
 }
@@ -53,10 +62,10 @@ describe("clienti shop", () => {
   it("gli ordini dello stesso cliente fanno una riga sola", async () => {
     const p = await apri();
     const righe = [...p.nodo.querySelectorAll("tbody tr")];
-    expect(righe.length).toBe(1);
-    expect(righe[0].textContent).toContain("Giulia Bianchi");
+    expect(righe.length).toBe(2);
+    const giulia = righe.find((r) => r.textContent.includes("Giulia Bianchi"));
     // due ordini, 200 € in tutto
-    expect(righe[0].textContent).toContain("200,00");
+    expect(giulia.textContent).toContain("200,00");
   });
 
   it("le vendite al banco non sono clienti dello shop", async () => {
@@ -66,7 +75,7 @@ describe("clienti shop", () => {
 
   it("aprendo il cliente si vede quello che l'ordine porta con sé", async () => {
     const p = await apri();
-    const riga = [...p.nodo.querySelectorAll("tbody tr")][0];
+    const riga = [...p.nodo.querySelectorAll("tbody tr")].find((r) => r.textContent.includes("Giulia"));
     await clicca(riga);
     const testo = p.testo();
     expect(testo).toContain("VIA TERNI 90");
@@ -75,5 +84,25 @@ describe("clienti shop", () => {
     // e gli ordini restano, uno per riga
     expect(testo).toContain("W-1");
     expect(testo).toContain("W-2");
+  });
+
+  it("si separa chi non ha mai fatto un corso, incrociando per email", async () => {
+    const p = await apri();
+    // i conti stanno sui tasti: si sa quanti sono prima di premerli
+    expect(p.testo()).toContain("Mai stato allievo (1)");
+    expect(p.testo()).toContain("Anche allievo (1)");
+    // e chi ha fatto un corso porta la pastiglia, anche se l'email in
+    // archivio è scritta con le maiuscole e uno spazio in coda
+    const diAnna = [...p.nodo.querySelectorAll("tbody tr")].find((r) => r.textContent.includes("Anna Verdi"));
+    expect(diAnna.textContent).toContain("allieva");
+  });
+
+  it("il filtro «mai stato allievo» lascia passare solo loro", async () => {
+    const p = await apri();
+    const tasto = [...p.nodo.querySelectorAll("button")].find((b) => b.textContent.startsWith("Mai stato allievo"));
+    await clicca(tasto);
+    const righe = [...p.nodo.querySelectorAll("tbody tr")];
+    expect(righe.length).toBe(1);
+    expect(righe[0].textContent).toContain("Giulia Bianchi");
   });
 });

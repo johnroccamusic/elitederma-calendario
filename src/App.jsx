@@ -40341,15 +40341,36 @@ const COLONNE_CRM_SHOP = [
   { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
 ];
 
-export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], onApriClassificazioneVoci, onBack, titolo = "Clienti shop" }) {
+export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], iscritti = [], onApriClassificazioneVoci, onBack, titolo = "Clienti shop" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("clienti"); // clienti | classifica
   const [ricerca, setRicerca] = useState("");
+  // CHI HA COMPRATO MA NON HA MAI FATTO UN CORSO.
+  //
+  // E' il bacino piu' grande che abbiamo — 1.817 su 1.859 — e finora
+  // nessuna pagina lo distingueva dagli altri: per una campagna «vieni
+  // a fare un corso» mandarla a chi il corso l'ha gia' fatto e' il modo
+  // di farsi leggere male da tutti e due.
+  //
+  // Si incrocia per EMAIL, che e' l'unica cosa che le due parti hanno
+  // davvero in comune: il nome si scrive in dieci modi e il telefono
+  // sull'ordine spesso non c'e'. Chi non ha email in nessuna delle due
+  // parti non si puo' incrociare, e resta fra i «mai allievi» — e'
+  // l'ipotesi che sbaglia di meno, perche' un allievo un'email ce l'ha
+  // quasi sempre.
+  const [filtroAllievo, setFiltroAllievo] = useState("tutti"); // tutti | mai | anche
+  const emailAllieve = useMemo(() => new Set(
+    (iscritti || []).map((i) => String(i.email || "").trim().toLowerCase()).filter(Boolean),
+  ), [iscritti]);
   const [colonnaOrdine, setColonnaOrdine] = useState("totaleSpeso");
   const [direzioneOrdine, setDirezioneOrdine] = useState("desc");
   const [chiaveAperta, setChiaveAperta] = useState(null);
 
-  const clienti = useMemo(() => costruisciClientiShop(venditeShop), [venditeShop]);
+  const clienti = useMemo(() => {
+    const elenco = costruisciClientiShop(venditeShop);
+    return elenco.map((c) => ({ ...c, eAllieva: !!c.email && emailAllieve.has(c.email.trim().toLowerCase()) }));
+  }, [venditeShop, emailAllieve]);
+  const quantiMai = useMemo(() => clienti.filter((c) => !c.eAllieva).length, [clienti]);
   const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop), [venditeShop, vociShopClassificazione, prodottiShop]);
 
   const kpi = useMemo(() => {
@@ -40373,6 +40394,8 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
     let l = q ? clienti.filter((c) => c.nome.toLowerCase().includes(q)
       || c.email.toLowerCase().includes(q)
       || (c.telefono || "").replace(/\s/g, "").includes(q.replace(/\s/g, ""))) : clienti;
+    if (filtroAllievo === "mai") l = l.filter((c) => !c.eAllieva);
+    if (filtroAllievo === "anche") l = l.filter((c) => c.eAllieva);
     l = [...l].sort((a, b) => {
       const va = a[colonnaOrdine], vb = b[colonnaOrdine];
       let cmp;
@@ -40381,7 +40404,7 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
       return direzioneOrdine === "asc" ? cmp : -cmp;
     });
     return l;
-  }, [clienti, ricerca, colonnaOrdine, direzioneOrdine]);
+  }, [clienti, ricerca, colonnaOrdine, direzioneOrdine, filtroAllievo]);
 
   function cambiaOrdinamento(chiave) {
     if (colonnaOrdine === chiave) { setDirezioneOrdine((d) => (d === "asc" ? "desc" : "asc")); return; }
@@ -40443,6 +40466,29 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
               <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca per nome, email o telefono…" />
             </div>
 
+            {/* MAI STATO ALLIEVO: il filtro che serve alle campagne.
+                Si incrocia per email — l'unica cosa che le due parti
+                hanno davvero in comune — e il conto sta sul tasto, cosi'
+                si sa quanti sono prima di premerlo. */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+              {[
+                { v: "tutti", testo: `Tutti (${clienti.length.toLocaleString("it-IT")})` },
+                { v: "mai", testo: `Mai stato allievo (${quantiMai.toLocaleString("it-IT")})` },
+                { v: "anche", testo: `Anche allievo (${(clienti.length - quantiMai).toLocaleString("it-IT")})` },
+              ].map((x) => (
+                <button
+                  key={x.v} type="button" onClick={() => setFiltroAllievo(x.v)}
+                  style={{
+                    ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 14px", borderRadius: 20,
+                    border: "none", cursor: "pointer",
+                    background: filtroAllievo === x.v ? NAVY : "#fff",
+                    color: filtroAllievo === x.v ? "#fff" : NAVY,
+                    boxShadow: filtroAllievo === x.v ? "none" : `inset 0 0 0 1px ${CREAM_BORDER}`,
+                  }}
+                >{x.testo}</button>
+              ))}
+            </div>
+
             <div style={{ ...cardStyle, padding: 0, overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                 <thead>
@@ -40457,7 +40503,12 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
                 <tbody>
                   {elencoFiltrato.map((c) => (
                     <tr key={c.chiave} onClick={() => setChiaveAperta(c.chiave)} style={{ cursor: "pointer" }}>
-                      <td style={{ ...tdStyleCrm, fontWeight: 700 }}>{c.nome ? toTitleCase(c.nome) : <span style={{ fontStyle: "italic", color: MUTED }}>senza nome</span>}</td>
+                      <td style={{ ...tdStyleCrm, fontWeight: 700 }}>
+                        {c.nome ? toTitleCase(c.nome) : <span style={{ fontStyle: "italic", color: MUTED }}>senza nome</span>}
+                        {c.eAllieva && (
+                          <span title="Ha fatto almeno un corso" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>allieva</span>
+                        )}
+                      </td>
                       <td style={tdStyleCrm}>{c.email || "—"}</td>
                       <td style={tdStyleCrm}>{c.telefono || "—"}</td>
                       <td style={tdStyleCrm}>{c.numeroOrdini}</td>
@@ -40501,6 +40552,7 @@ function DettaglioClienteShop({ cliente }) {
           sull'ultimo ordine in cui l'ha scritto. */}
       {(() => {
         const voci = [
+          ["Ha fatto corsi", cliente.eAllieva ? "sì" : null],
           ["Telefono", cliente.telefono],
           ["Email", cliente.email],
           ["Ditta", cliente.ditta],
@@ -82202,7 +82254,7 @@ function Gestionale() {
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "costi_categorie"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
-    crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop"],
+    crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop", "iscritti"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti", "categorie_prodotti", "prodotti_categorie"],
     statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
@@ -84164,7 +84216,7 @@ function Gestionale() {
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "Clienti shop")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} iscritti={iscritti} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "Clienti shop")} />
       )}
 
       {view === "generacoupon" && (
