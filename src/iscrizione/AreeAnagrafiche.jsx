@@ -25,7 +25,7 @@ import {
 } from "../comuni-regioni.js";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
-import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoLunghezza } from "./disposizione.js";
+import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -497,9 +497,9 @@ export function AreaAnagrafica({
                   </Field>
                   {/* in configurazione le caselle sono vuote per forza:
                       li' un avviso sulla lunghezza non vorrebbe dire niente */}
-                  {!configurazione && avvisoLunghezza(campo, valori[campo.chiave]) && (
+                  {!configurazione && avvisoCampo(campo, valori[campo.chiave]) && (
                     <div style={{ ...fontBody, fontSize: 11, color: "#8A6A1B", marginTop: 3, lineHeight: 1.4 }}>
-                      {avvisoLunghezza(campo, valori[campo.chiave])}
+                      {avvisoCampo(campo, valori[campo.chiave])}
                     </div>
                   )}
                 </div>

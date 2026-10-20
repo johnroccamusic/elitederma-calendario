@@ -24,6 +24,8 @@
 // si e' lasciato com'era invece di "sistemarlo" di slancio. Toccarlo
 // cambia quando la scheda scrive nel database, e va deciso a parte.
 
+import { avvisoCodiceFiscale } from "./codice-fiscale.js";
+
 export const AREA_ALLIEVO = {
   titolo: "Dati dell'allievo",
   icona: "persona",
@@ -179,6 +181,18 @@ export const NOTA_VENDITORE = {
 // `maxLength` sull'input impedisce di andare oltre, quindi in pratica
 // qui si arriva solo per difetto; il caso contrario e' scritto lo stesso,
 // perche' un campo incollato da fuori quel limite lo scavalca.
+// L'avviso da mostrare sotto una casella: la lunghezza, e per il codice
+// fiscale anche la lettera di controllo. Uno solo alla volta — due righe
+// rosse sotto la stessa casella sembrano due guasti invece di uno.
+export function avvisoCampo(campo, valore) {
+  const perLunghezza = avvisoLunghezza(campo, valore);
+  if (perLunghezza) return perLunghezza;
+  if (campo?.chiave === "codice_fiscale" || campo?.tipo === "codice_fiscale") {
+    return avvisoCodiceFiscale(valore);
+  }
+  return null;
+}
+
 export function avvisoLunghezza(campo, valore) {
   const attesa = campo?.lunghezzaEsatta;
   if (!attesa) return null;

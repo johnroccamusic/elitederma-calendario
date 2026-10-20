@@ -27,6 +27,12 @@ describe("scheda dell'iscritto", () => {
     expect(p.testo()).toMatch(/codice fiscale ne ha 16/);
   });
 
+  it("col codice fiscale la cui ultima lettera non torna, lo dice", async () => {
+    const p = await conValori({ codice_fiscale: "DPLMLN02C55H7031" });
+    expect(p.testo()).toMatch(/non torna/);
+    expect(p.testo()).toMatch(/Ricontrollalo sul documento/);
+  });
+
   it("col codice fiscale giusto non dice niente", async () => {
     const p = await conValori({ codice_fiscale: "RZZMNL90L42I452E" });
     expect(p.testo()).not.toMatch(/Manca|Mancano/);

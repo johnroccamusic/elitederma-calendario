@@ -33,7 +33,7 @@ import { supabase } from "../supabase.js";
 import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
 import FirmaDito from "../ui/FirmaDito.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
-import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoLunghezza } from "./disposizione.js";
+import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
@@ -179,9 +179,9 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false }) {
         style={stileComune}
       />
       )}
-      {!spento && avvisoLunghezza(campo, valore) && (
+      {!spento && avvisoCampo(campo, valore) && (
         <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6A1B", marginTop: 4, lineHeight: 1.4 }}>
-          {avvisoLunghezza(campo, valore)}
+          {avvisoCampo(campo, valore)}
         </div>
       )}
     </div>
