@@ -248,12 +248,23 @@ export async function creaPdfModulo({ iscritto, corso, societa, firma, fronte, r
   for (const casella of (contratto.consensi || []) as Record<string, any>[]) {
     if (casella?.chiave) caselleFirmate[casella.chiave] = casella;
   }
+  // I RIASSUNTI SONO UN RIPIEGO, NON L'ATTO.
+  //
+  // Quando il contratto congelato ha la casella (`caselleFirmate`, qui
+  // sotto) il PDF stampa la frase PER INTERO, quella che la persona ha
+  // letto quel giorno. Questi riassunti di una riga compaiono solo
+  // quando quella traccia non c'e': firme vecchie, o un contratto
+  // salvato senza i consensi.
+  //
+  // Vanno comunque tenuti allineati alle parole del modulo: una copia
+  // che riassume con parole diverse da quelle sottoscritte fa dubitare
+  // di se stessa, e il dubbio nasce proprio quando la copia serve.
   const dichiarazioni: [string, string, unknown, unknown][] = [
     ["regolamento", "Ha letto e accettato il regolamento", iscritto.consenso_regolamento_il, iscritto.consenso_regolamento_il],
     ["clausole", "Approva specificamente le clausole indicate", iscritto.consenso_clausole_il, iscritto.consenso_clausole_il],
     ["privacy", "Ha letto l'informativa sul trattamento dei dati", iscritto.consenso_privacy_il, iscritto.consenso_privacy_il],
     ["avvio_immediato", "Chiede l'avvio immediato e rinuncia al recesso", iscritto.rinuncia_recesso, iscritto.rinuncia_recesso_il],
-    ["promozionali", "Acconsente alle comunicazioni promozionali", iscritto.consenso_promozionali, iscritto.consenso_promozionali_il],
+    ["promozionali", "Acconsente alle comunicazioni e agli aggiornamenti", iscritto.consenso_promozionali, iscritto.consenso_promozionali_il],
     ["immagini", "Acconsente all'uso di foto e video", iscritto.consenso_immagini, iscritto.consenso_immagini_il],
   ];
   for (const [chiave, riassunto, data, ora] of dichiarazioni) {
