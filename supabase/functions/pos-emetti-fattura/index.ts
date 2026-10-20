@@ -14,6 +14,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leggiConnessione, tokenValido, idAliquota, emettiFattura, contiSaldo, metodiPagamento } from "../_shared/fic.ts";
+import { righeFattura } from "../_shared/righe-fattura.js";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -115,46 +116,13 @@ Deno.serve(async (req) => {
     return risposta({ errore: "Senza codice fiscale ne' partita IVA la fattura elettronica non parte." }, 400);
   }
 
-  // IL NETTO NON SI ARROTONDA. MAI.
-  //
-  // I prezzi del POS sono IVA inclusa e la fattura vuole il netto.
-  // Dividere per 1,22 e arrotondare a due decimali — che e' quello che
-  // si faceva qui — perde centesimi a ogni riga: su una vendita da
-  // 315,00 i quattro netti facevano 258,17 invece di 258,20, l'IVA
-  // 56,80, il totale 314,97, e Fatture in Cloud rifiutava con «Il
-  // totale dei pagamenti non corrisponde al totale da pagare».
-  //
-  // Il netto si manda com'e': 119,70 / 1,22 fa 98,114754, non 98,11.
-  // E' la stessa regola con cui l'anagrafica tiene i prezzi — il lordo
-  // scritto comanda, il netto lo segue — e con il netto intero la somma
-  // torna da sola: la somma dei netti e' il lordo diviso 1,22, e
-  // riaggiungendo l'IVA si riottiene il lordo esatto. Non c'e' niente
-  // da spalmare e nessun centesimo da sistemare: non se n'e' perso
-  // nessuno.
-  const inCentesimi = (x: unknown) => Math.round((Number(x) || 0) * 100);
-  const grezze = (Array.isArray(pag.righe) ? pag.righe : []).map((r: any) => ({
-    nome: String(r.nome || "Articolo"),
-    quantita: Math.max(1, Math.round(Number(r.quantita) || 1)),
-    lordo: inCentesimi((Number(r.prezzo) || 0) * (Number(r.quantita) || 1)),
-  })).filter((r: any) => r.lordo > 0);
-  if (grezze.length === 0) return risposta({ errore: "Il pagamento non ha righe da fatturare." }, 400);
-
-  // UN BUCO VERO NON SI SPALMA. Se fra le righe e quello che si e'
-  // incassato ci sono piu' di cinque centesimi, non e' arrotondamento:
-  // e' qualcosa che nelle righe non c'e' — la spedizione, di solito. Si
-  // scrive come riga sua invece di gonfiare di nascosto i prodotti.
-  const lordoIncassato = inCentesimi(pag.importo);
-  const lordoRighe = grezze.reduce((s: number, r: any) => s + r.lordo, 0);
-  if (lordoIncassato - lordoRighe > 5) {
-    grezze.push({ nome: "Spese di spedizione", quantita: 1, lordo: lordoIncassato - lordoRighe });
-  }
-
-  const righe = grezze.map((r: any) => ({
-    nome: r.nome,
-    quantita: r.quantita,
-    // il netto unitario, per intero: niente `Math.round`
-    prezzoNetto: (r.lordo / 100) / r.quantita / (1 + ALIQUOTA / 100),
-  }));
+  // Il calcolo delle righe sta in `_shared/righe-fattura.js`, dove il
+  // banco di prova puo' arrivarci: tre emissioni rifiutate di fila le ha
+  // pagate il titolare premendo il tasto, e un conto sui soldi che si
+  // puo' provare solo in produzione non e' un conto.
+  const documento = righeFattura(pag.righe, pag.importo, ALIQUOTA);
+  const righe = documento.righe;
+  if (righe.length === 0) return risposta({ errore: "Il pagamento non ha righe da fatturare." }, 400);
 
   // COME E' STATA INCASSATA, presa dai dati e non scritta a mano.
   //
@@ -254,7 +222,12 @@ Deno.serve(async (req) => {
 
     const fattura = await emettiFattura(token, conn.company_id, {
       cliente, righe, aliquotaId, dataIso,
-      importoPagato: Number(pag.importo) || 0,
+      // IL PAGAMENTO SCRITTO SOPRA E' IL TOTALE DEL DOCUMENTO, non quello
+      // che e' entrato in cassa. Quasi sempre coincidono; quando no — un
+      // totale su sei non esiste, vedi `righe-fattura.js` — e' questo che
+      // Fatture in Cloud confronta, ed e' questo che deve tornare. Lo
+      // scarto e' al massimo un centesimo.
+      importoPagato: documento.totale,
       metodo: nomeMetodo,
       metodoId: metodoFic?.id || null,
       codiceEiPagamento,
