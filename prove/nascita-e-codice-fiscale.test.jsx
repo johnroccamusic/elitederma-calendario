@@ -124,4 +124,20 @@ describe("il codice fiscale si compila da se'", () => {
     const p = await apri({ ...BAMBACE, comune_nascita: "REGGIO DI CALABRIA" });
     expect(p.nodo.querySelector('[data-proposta="0"]')).toBe(null);
   });
+
+  it("scritto «ROMA» per intero, Roma resta in cima all'elenco", async () => {
+    // c'era un filtro che toglieva la proposta identica a quello che si
+    // stava scrivendo: sparivano Roma e restavano sette paesi che si
+    // chiamano Romano. La riga che conta e' quella che se ne andava.
+    const p = await apri(BAMBACE);
+    await scrivi(campo(p, "comune_nascita"), "ROMA");
+    const voci = [...p.nodo.querySelectorAll("[data-proposta]")].map((d) => d.textContent);
+    expect(voci[0]).toContain("Roma");
+    expect(voci[0]).toContain("RM");
+    expect(voci[0]).not.toContain("Romano");
+    // e il codice si calcola comunque, perche' «ROMA» l'elenco lo conosce
+    await clicca(tastoSesso(p, "F"));
+    await scrivi(campo(p, "data_nascita"), "1987-12-25");
+    expect(campo(p, "codice_fiscale").value).toBe("BMBGNN87T65H501A");
+  });
 });

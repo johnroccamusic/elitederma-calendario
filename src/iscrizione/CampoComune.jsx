@@ -33,11 +33,21 @@ export default function CampoComuneNascita({
   // gia' — e' lo stesso motivo per cui esiste in CampoVia
   const [digitando, setDigitando] = useState(false);
   const scritto = valore || "";
-  const proposte = digitando && !spenta && scritto.trim().length >= 2
+  // IL COMUNE SCRITTO PER INTERO RESTA NELL'ELENCO, ED E' IL PRIMO.
+  //
+  // C'era un filtro che toglieva la proposta identica a quello che si
+  // stava scrivendo — copiato dal campo della via, dove ha senso perche'
+  // li' la proposta non porta niente che non ci sia gia'. Qui toglieva
+  // la riga che conta: scritto «ROMA» sparivano Roma e restavano Fiano
+  // Romano, Monte Romano, Cineto Romano… cioe' sette paesi e non il
+  // posto che si era appena scritto.
+  //
+  // Vedere «Roma (RM)» in cima non e' una ripetizione: e' la conferma
+  // che quel nome l'elenco lo conosce, ed e' l'unica cosa da cui
+  // dipende il codice fiscale.
+  const utili = digitando && !spenta && scritto.trim().length >= 2
     ? cercaComuni(scritto)
     : [];
-  // una proposta identica a quello che c'e' scritto non aggiunge niente
-  const utili = proposte.filter((x) => x.nome.toUpperCase() !== scritto.trim().toUpperCase());
 
   return (
     <div style={{ position: "relative" }}>
