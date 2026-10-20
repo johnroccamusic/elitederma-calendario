@@ -87,10 +87,19 @@ export const inputStyle = {
 // `appearance: none` toglie a Safari il controllo nativo e con esso la
 // misura intrinseca; `maxWidth: 100%` e' la cintura, per il giorno in
 // cui un browser ignori anche quello.
+// E L'ALTEZZA VA RIMESSA A MANO. Tolto il controllo nativo, un campo
+// data VUOTO non ha niente dentro — su iOS nemmeno il «gg/mm/aaaa», che
+// lo disegnava il controllo — quindi non ha riga di testo e si schiaccia
+// a due millimetri: una sottiletta accanto ai tasti F e M. L'altezza qui
+// e' quella dei tasti della scheda (40) e degli altri campi, che con
+// padding 10+10 e testo da 14 fanno lo stesso.
 export const campoDataStyle = {
   appearance: "none",
   WebkitAppearance: "none",
   maxWidth: "100%",
+  minHeight: 40,
+  lineHeight: "20px",
+  display: "block",
 };
 
 // campi piccoli per liste fitte di righe con numeri corti (Riepilogo
