@@ -1,0 +1,25 @@
+-- TRACCIA. 20/10/2026.
+--
+-- Due CAP erano stati scritti sul modulo senza lo zero davanti: uno di
+-- Roma («148» per 00148) e uno di Quartu Sant'Elena («9045» per 09045).
+-- Un CAP di quattro cifre in Italia non esiste, e con quello
+-- un'etichetta di spedizione non parte.
+--
+-- Non e' stata una correzione a sentimento: prima di scrivere si e'
+-- verificato sul dataset ISTAT (comuni-json) che il CAP riempito a
+-- cinque cifre appartenga **davvero** a quel comune. Se non ci fosse
+-- stato quel riscontro non si toccava niente.
+--
+-- PERCHE' NON C'E' UNA REGOLA GENERALE tipo «riempi a cinque tutti i
+-- CAP corti», che sarebbe stata una riga sola: avrebbe preso anche una
+-- residenza **svizzera**, dove il CAP di quattro cifre e' quello
+-- giusto. Quel caso non e' un CAP sbagliato — e' uno stato di
+-- residenza che manca, cosa diversa, che non si sistema qui.
+--
+-- Le due UPDATE erano scritte con le condizioni per intero (CAP, comune
+-- e provincia tutti e tre) proprio per non poter toccare altre righe.
+-- I valori non sono riportati qui: sono residenze di allieve e questo
+-- repository e' pubblico.
+--
+-- Verificato dopo: 243 CAP su 245 scritti sono di cinque cifre. I due
+-- che restano sono la residenza svizzera e la scheda di prova.
