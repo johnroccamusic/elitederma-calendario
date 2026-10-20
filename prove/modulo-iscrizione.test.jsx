@@ -69,6 +69,27 @@ describe("modulo di iscrizione", () => {
     expect(p.testo()).not.toContain(CLAUSOLA);
   });
 
+  // IL CONSENSO ALLE COMUNICAZIONI E' FACOLTATIVO, E DEVE DIRE TRE COSE.
+  //
+  // Un consenso al marketing vale se e' separato dagli altri, se nomina
+  // i canali (WhatsApp compreso, che e' quello che si usa davvero) e se
+  // dice che si puo' revocare. Qui si guarda che l'allieva le legga
+  // tutte e tre, non che esistano in un file.
+  it("il consenso alle comunicazioni si legge, e si puo' revocare", async () => {
+    const p = await apriIlModulo();
+    expect(p.testo()).toContain("Comunicazioni e aggiornamenti");
+    expect(p.testo()).toContain("community Elitederma");
+    expect(p.testo()).toContain("WhatsApp");
+    expect(p.testo()).toMatch(/revocare il consenso in qualsiasi momento/i);
+  });
+
+  it("e resta facoltativo: si firma anche senza spuntarlo", async () => {
+    const p = await apriIlModulo();
+    await leggiEChiudi(p);
+    // la riga delle facoltative lo dice per iscritto
+    expect(p.testo()).toMatch(/puoi lasciarle vuote/i);
+  });
+
   it("la dichiarazione obbligatoria resta sul modulo anche col regolamento chiuso", async () => {
     const p = await apriIlModulo();
     expect(p.testo()).toMatch(/regolamento/i);
