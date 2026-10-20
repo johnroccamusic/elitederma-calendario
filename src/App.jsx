@@ -67319,17 +67319,32 @@ function costruisciStoricoUnificato(storicoAllievi, iscritti, corsiDate, locatio
 
   const daStorico = (storicoAllievi || []).map((r) => ({ ...r, origine: "storico" }));
 
+  // TUTTI GLI ISCRITTI, NON SOLO I CORSI FINITI (20/10/2026).
+  //
+  // Entravano solo le classi gia' concluse, e l'idea era «lo storico e'
+  // il passato». Ma chi apre questa pagina cerca una persona, non una
+  // data: cercava un'allieva iscritta a ottobre e non la trovava, e
+  // l'unica spiegazione a schermo era una lista vuota. Un elenco di
+  // allievi che esclude quelli di adesso non e' un elenco di allievi.
+  //
+  // Lo stato del corso resta scritto sulla riga — concluso, in corso, in
+  // programma — cosi' chi filtra per campagne sa cosa sta guardando.
   const daGestionale = (iscritti || [])
     .map((i) => {
       const cd = cdById[i.corso_data_id];
-      if (!cd || !cd.data_fine || cd.data_fine >= oggi) return null; // solo corsi già conclusi
+      if (!cd) return null;
+      const fine = cd.data_fine || cd.data_inizio || null;
+      const statoCorso = !fine ? "senza data"
+        : fine < oggi ? "concluso"
+        : (cd.data_inizio && cd.data_inizio <= oggi) ? "in corso"
+        : "in programma";
       return {
         id: `iscritto-${i.id}`,
         nome: i.nome || "",
         cognome: i.cognome || "",
-        citta: locById[cd.location_id]?.nome || "",
+        citta: locById[cd.location_id]?.nome || cd.citta || "",
         corso_id: cd.corso_id || null,
-        data: cd.data_fine,
+        data: fine,
         precisione_data: "giorno",
         telefono: i.telefono || "",
         email: i.email || "",
@@ -67338,7 +67353,13 @@ function costruisciStoricoUnificato(storicoAllievi, iscritti, corsiDate, locatio
         citta_disaccordo: false,
         file_origine: null,
         origine: "gestionale",
+        statoCorso,
         iscrittoId: i.id,
+        // la scheda intera, per l'occhio: qui non si copia campo per
+        // campo, o il giorno che se ne aggiunge uno sulla scheda qui
+        // manca e nessuno se ne accorge
+        iscritto: i,
+        classe: cd,
       };
     })
     .filter(Boolean);
@@ -67376,6 +67397,61 @@ function intestazioneOrdinabile(etichetta, campo, ordinamento, setOrdinamento, w
   );
 }
 
+// TUTTI I DATI DI UN'ALLIEVA, IN SOLA LETTURA.
+//
+// Non si scrive un elenco di campi a mano: si dichiara quali si mostrano
+// e come si chiamano, e quelli vuoti non compaiono. Una scheda che
+// stampa dieci righe con «—» non dice niente di piu' di una che ne
+// stampa tre piene, e si legge peggio.
+function SchedaDatiAllievo({ iscritto, classe }) {
+  const i = iscritto || {};
+  const indirizzo = [i.indirizzo_residenza, i.civico_residenza].filter(Boolean).join(" ");
+  const luogo = [i.cap_residenza, i.citta_residenza, i.prov_residenza ? `(${i.prov_residenza})` : null]
+    .filter(Boolean).join(" ");
+  const nascita = [
+    i.data_nascita ? fmtData(i.data_nascita) : null,
+    i.comune_nascita || i.stato_nascita || null,
+  ].filter(Boolean).join(" · ");
+  const voci = [
+    ["Codice fiscale", i.codice_fiscale],
+    ["Nata/o il", nascita],
+    ["Sesso", i.sesso],
+    ["Email", i.email],
+    ["Telefono", i.telefono],
+    ["Residenza", indirizzo],
+    ["", luogo],
+    ["Stato", i.stato_residenza],
+    ["Tutor", i.tutor],
+    ["Classe", classe?.data_inizio ? `${fmtData(classe.data_inizio)}${classe.data_fine && classe.data_fine !== classe.data_inizio ? ` – ${fmtData(classe.data_fine)}` : ""}` : null],
+    ["Pacchetto", i.pacchetto_kit],
+    ["Taglia divisa", i.taglia_divisa],
+    ["Intestazione", i.tipo_cliente === "azienda" ? "Azienda" : i.tipo_cliente ? "Privato" : null],
+    ["Ditta", i.fattura_ditta],
+    ["P. IVA", i.fattura_piva],
+    ["Cod. destinatario", i.fattura_cod_dest],
+    ["PEC", i.fattura_pec],
+    ["Stato iscrizione", i.stato],
+    ["Note", i.note],
+  ].filter(([, valore]) => String(valore ?? "").trim() !== "");
+  if (voci.length === 0) {
+    return (
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+        Di questa iscrizione non risulta nessun altro dato.
+      </div>
+    );
+  }
+  return (
+    <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
+      {voci.map(([etichetta, valore], n) => (
+        <div key={`${etichetta}-${n}`} style={{ display: "flex", gap: 10, ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
+          <span style={{ color: MUTED, minWidth: 128, flexShrink: 0 }}>{etichetta}</span>
+          <span style={{ minWidth: 0, wordBreak: "break-word" }}>{valore}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // scheda di dettaglio: telefono/email sono editabili solo per le righe
 // "storico" (tabella storico_allievi, non ancora arricchita). Le righe
 // "gestionale" vengono dall'iscrizione live e si modificano da lì (CRM
@@ -67403,7 +67479,7 @@ function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
     <Modal title={`${toTitleCase(riga.nome)} ${toTitleCase(riga.cognome)}`} onClose={onClose} maxWidth={480}>
       <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>
         {toTitleCase(riga.citta)}{corso ? ` · ${toTitleCase(corso.nome)}` : ""} · {fmtDataStoricoAllievo(riga.data, riga.precisione_data)}
-        {" · "}{riga.origine === "storico" ? "Storico (pre-gestionale)" : "Corso concluso nel gestionale"}
+        {" · "}{riga.origine === "storico" ? "Storico (pre-gestionale)" : `Corso ${riga.statoCorso || "nel gestionale"}`}
       </div>
 
       {modificabile ? (
@@ -67416,9 +67492,16 @@ function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
           </Field>
         </>
       ) : (
-        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
-          Telefono ed email di questa allieva vengono dal modulo di iscrizione: si modificano da lì o da CRM Allievi, non da qui.
-        </div>
+        <>
+          {/* TUTTO QUELLO CHE DI QUESTA PERSONA SI SA.
+              Qui c'era una riga che diceva dove andare a cercarlo. Ma chi
+              apre l'occhio lo apre per vedere, non per sapere in quale
+              altra pagina guardare — e i dati li abbiamo tutti. */}
+          <SchedaDatiAllievo iscritto={riga.iscritto} classe={riga.classe} />
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 12, marginBottom: 4, lineHeight: 1.5 }}>
+            Questi dati vengono dall'iscrizione: si correggono dalla scheda dell'allievo o dal suo modulo, non da qui — un secondo posto dove scriverli vorrebbe dire due verità.
+          </div>
+        </>
       )}
 
       {riga.file_origine && (
@@ -67437,7 +67520,7 @@ function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
   );
 }
 
-function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, location, ricarica, onBack, titolo = "Storico Allievi" }) {
+export function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, location, ricarica, onBack, titolo = "Storico Allievi" }) {
   const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const tutte = useMemo(() => costruisciStoricoUnificato(storicoAllievi, iscritti, corsiDate, location), [storicoAllievi, iscritti, corsiDate, location]);
@@ -67569,7 +67652,17 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
           <div>
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>
-              Corsi pre-gestionale recuperati dagli archivi, più i corsi già conclusi nel gestionale ({tutte.length.toLocaleString("it-IT")} allieve).
+              Corsi pre-gestionale recuperati dagli archivi, più tutte le iscrizioni del gestionale — concluse, in corso e in programma ({tutte.length.toLocaleString("it-IT")} allieve).
+              {/* UNA LISTA VUOTA HA DUE CAUSE, E NON SONO LA STESSA COSA.
+                  O i filtri non lasciano passare niente, o l'archivio non
+                  e' arrivato: la seconda e' un guasto e va detta, perche'
+                  altrimenti si cerca una persona che c'e' e si conclude
+                  che non c'e'. */}
+              {storicoAllievi.length === 0 && (iscritti || []).length === 0 && (
+                <span style={{ display: "block", color: "#C0392B", fontWeight: 700, marginTop: 6 }}>
+                  Non è arrivata nessuna riga: l'archivio non si è caricato. Torna alla home e rientra; se resta vuoto, dillo.
+                </span>
+              )}
             </div>
           </div>
           <Button variant="ghost" onClick={() => esportaCsvStoricoAllievi(risultati, corsoById)}>⭱ Esporta</Button>
