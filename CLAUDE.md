@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 10 bucket Supabase, **tutti pubblici** |
-| Backend | 44 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Backend | 45 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -40,7 +40,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
 prove/                   22 file, 239 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
-supabase/functions/      44 edge function + _shared
+supabase/functions/      45 edge function + _shared
 supabase/migrations/     329 migrazioni versionate
 supabase-*.sql           130 script di setup storici, cumulativi e idempotenti
 ```

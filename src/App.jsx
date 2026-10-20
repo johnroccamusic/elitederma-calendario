@@ -65925,6 +65925,30 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
   // Il link lo compone la edge function `fic-autorizza`, perche' dentro
   // c'e' il FIC_CLIENT_ID: sta nei secret di Supabase e non deve finire
   // nel bundle, che e' pubblico.
+  // SCARICARE LA FATTURA EMESSA, per mandarla al cliente.
+  //
+  // Il link del PDF lo da' Fatture in Cloud ed e' TEMPORANEO: non si
+  // tiene in tabella, si chiede fresco. E si apre in una finestra
+  // aperta SUBITO, vuota, perche' la richiesta dura un secondo e una
+  // `window.open` chiamata dopo l'attesa non e' piu' attaccata al dito
+  // che ha premuto — iPhone la blocca come fosse pubblicita'. Stessa
+  // lezione del link di pagamento al banco.
+  const [scaricandoId, setScaricandoId] = useState(null);
+  async function scaricaFattura(p) {
+    const finestra = window.open("", "_blank");
+    setScaricandoId(p.id); setMsg("");
+    const { data, error } = await supabase.functions.invoke("fic-fattura-pdf", { body: { ficId: p.fattura_fic_id } });
+    setScaricandoId(null);
+    if (error || data?.errore) {
+      finestra?.close();
+      setMsg("Non riesco a prendere il PDF: " + (data?.errore || await testoErroreFunzione(error)));
+      return;
+    }
+    if (!data?.url) { finestra?.close(); setMsg("Fatture in Cloud non ha dato nessun PDF per questa fattura."); return; }
+    if (finestra) finestra.location.href = data.url;
+    else setMsg("Il browser non mi ha fatto aprire il PDF: riprova, oppure aprilo da Fatture in Cloud.");
+  }
+
   async function rifaiCollegamentoFic() {
     setPreparandoLink(true); setMsg("");
     const { data, error } = await supabase.functions.invoke("fic-autorizza", { body: {} });
@@ -66053,13 +66077,26 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
           vista === "daemettere"
             ? <SchedaFatturaDaEmettere key={p.id} pagamento={p} isMobile={isMobile} onSalvato={carica} chi={chi} />
             : (
-              <RigaAmministrazione
-                key={p.id}
-                data={(p.fattura_emessa_il || p.pagato_il || "").slice(0, 10)}
-                titolo={p.cliente?.ditta || [p.cliente?.nome, p.cliente?.cognome].filter(Boolean).join(" ") || "Cliente"}
-                sottotitolo={[p.fattura_numero ? `Fattura ${p.fattura_numero}` : null, p.fattura_manuale ? "emessa a mano" : "emessa dall’app", `codice ${p.codice}`].filter(Boolean).join(" · ")}
-                importo={fmtEuroErp2(Number(p.importo) || 0)}
-              />
+              <div key={p.id}>
+                <RigaAmministrazione
+                  data={(p.fattura_emessa_il || p.pagato_il || "").slice(0, 10)}
+                  titolo={p.cliente?.ditta || [p.cliente?.nome, p.cliente?.cognome].filter(Boolean).join(" ") || "Cliente"}
+                  sottotitolo={[p.fattura_numero ? `Fattura ${p.fattura_numero}` : null, p.fattura_manuale ? "emessa a mano" : "emessa dall’app", `codice ${p.codice}`].filter(Boolean).join(" · ")}
+                  importo={fmtEuroErp2(Number(p.importo) || 0)}
+                />
+                {/* il PDF solo per quelle che l'app ha davvero emesso:
+                    una fattura fatta a mano su Fatture in Cloud qui non
+                    ha un numero da chiedere */}
+                {p.fattura_fic_id && (
+                  <div style={{ marginTop: -4, marginBottom: 10 }}>
+                    <Button variant="ghost" onClick={() => scaricaFattura(p)} disabled={scaricandoId === p.id}
+                      style={{ fontSize: 12.5, padding: "6px 12px" }}
+                      title="Apre il PDF della fattura: da lì si salva e si manda al cliente">
+                      {scaricandoId === p.id ? "Preparo il PDF…" : "Scarica la fattura"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             )
         ))}
 
