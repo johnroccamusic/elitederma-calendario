@@ -70426,12 +70426,24 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           boxShadow: OMBRA_POS.tessera, padding: isMobile ? "8px 10px" : "10px 12px",
           marginBottom: isMobile ? 8 : 12,
         }}>
-          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5 }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
             A chi vendi
           </div>
+          {/* PIU' GRANDE E IN NERETTO DEL RESTO DEI CAMPI. 20/10/2026, su
+              segnalazione: i nomi non si leggevano. Qui dentro c'e' il
+              nome di una persona a cui si sta per spedire un pacco, e si
+              legge in piedi, col telefono in mano, in un'aula. Non e'
+              un campo come gli altri e non deve vestirsi come loro.
+
+              17px e non 16: sotto i 16 iOS ingrandisce la pagina da se'
+              quando si tocca il campo, e la vista salta. */}
           <select
             data-campo="allieva-pos"
-            style={{ ...inputStyle, width: "100%" }}
+            style={{
+              ...inputStyle, width: "100%",
+              fontSize: 17, fontWeight: 700, color: NAVY,
+              padding: "13px 12px", minHeight: 48,
+            }}
             value={spedIscrittoId}
             onChange={(e) => selezionaIscrittoSped(e.target.value)}
           >
@@ -70447,12 +70459,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               senza provincia o senza cellulare si blocca in logistica, e
               li' l'allieva e' andata via da un pezzo. */}
           {spedIscrittoId && mancanzeIscrittoSped.length > 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", marginTop: 6, lineHeight: 1.5 }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#8A6D1D", marginTop: 7, lineHeight: 1.5 }}>
               Dalla sua scheda manca: {mancanzeIscrittoSped.join(", ")}. Completa qui sotto.
             </div>
           )}
           {spedIscrittoId && mancanzeIscrittoSped.length === 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", marginTop: 6 }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#2E7D32", marginTop: 7 }}>
               Indirizzo completo, preso dalla sua scheda.
             </div>
           )}
