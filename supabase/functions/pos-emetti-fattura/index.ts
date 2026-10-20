@@ -115,17 +115,46 @@ Deno.serve(async (req) => {
     return risposta({ errore: "Senza codice fiscale ne' partita IVA la fattura elettronica non parte." }, 400);
   }
 
-  const righe = (Array.isArray(pag.righe) ? pag.righe : []).map((r: any) => {
-    const lordo = (Number(r.prezzo) || 0) * (Number(r.quantita) || 1);
-    const quantita = Math.max(1, Number(r.quantita) || 1);
-    return {
-      nome: String(r.nome || "Articolo"),
-      quantita,
-      // i prezzi del POS sono IVA inclusa: la fattura vuole il netto
-      prezzoNetto: Math.round((lordo / quantita) / (1 + ALIQUOTA / 100) * 100) / 100,
-    };
-  });
-  if (righe.length === 0) return risposta({ errore: "Il pagamento non ha righe da fatturare." }, 400);
+  // IL NETTO NON SI ARROTONDA. MAI.
+  //
+  // I prezzi del POS sono IVA inclusa e la fattura vuole il netto.
+  // Dividere per 1,22 e arrotondare a due decimali — che e' quello che
+  // si faceva qui — perde centesimi a ogni riga: su una vendita da
+  // 315,00 i quattro netti facevano 258,17 invece di 258,20, l'IVA
+  // 56,80, il totale 314,97, e Fatture in Cloud rifiutava con «Il
+  // totale dei pagamenti non corrisponde al totale da pagare».
+  //
+  // Il netto si manda com'e': 119,70 / 1,22 fa 98,114754, non 98,11.
+  // E' la stessa regola con cui l'anagrafica tiene i prezzi — il lordo
+  // scritto comanda, il netto lo segue — e con il netto intero la somma
+  // torna da sola: la somma dei netti e' il lordo diviso 1,22, e
+  // riaggiungendo l'IVA si riottiene il lordo esatto. Non c'e' niente
+  // da spalmare e nessun centesimo da sistemare: non se n'e' perso
+  // nessuno.
+  const inCentesimi = (x: unknown) => Math.round((Number(x) || 0) * 100);
+  const grezze = (Array.isArray(pag.righe) ? pag.righe : []).map((r: any) => ({
+    nome: String(r.nome || "Articolo"),
+    quantita: Math.max(1, Math.round(Number(r.quantita) || 1)),
+    lordo: inCentesimi((Number(r.prezzo) || 0) * (Number(r.quantita) || 1)),
+  })).filter((r: any) => r.lordo > 0);
+  if (grezze.length === 0) return risposta({ errore: "Il pagamento non ha righe da fatturare." }, 400);
+
+  // UN BUCO VERO NON SI SPALMA. Se fra le righe e quello che si e'
+  // incassato ci sono piu' di cinque centesimi, non e' arrotondamento:
+  // e' qualcosa che nelle righe non c'e' — la spedizione, di solito. Si
+  // scrive come riga sua invece di gonfiare di nascosto i prodotti.
+  const lordoIncassato = inCentesimi(pag.importo);
+  const lordoRighe = grezze.reduce((s: number, r: any) => s + r.lordo, 0);
+  if (lordoIncassato - lordoRighe > 5) {
+    grezze.push({ nome: "Spese di spedizione", quantita: 1, lordo: lordoIncassato - lordoRighe });
+  }
+
+  const righe = grezze.map((r: any) => ({
+    nome: r.nome,
+    quantita: r.quantita,
+    // il netto unitario, per intero: niente `Math.round`
+    prezzoNetto: (r.lordo / 100) / r.quantita / (1 + ALIQUOTA / 100),
+  }));
 
   // COME E' STATA INCASSATA, presa dai dati e non scritta a mano.
   //
