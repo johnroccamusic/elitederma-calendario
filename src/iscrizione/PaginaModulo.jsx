@@ -38,6 +38,7 @@ import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
+import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI } from "./RitaglioFoto.jsx";
 import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
 // lo stesso confronto della cascata della scheda: "PATERNO" e
 // "Paternò" sono lo stesso posto, e due copie di questa regola
@@ -289,7 +290,45 @@ function SceltaIntestazione({ valore, onCambia }) {
  * ma presente e raggiungibile — niente `pointer-events: none`, niente
  * misure da un pixel.
  */
+// IL DOCUMENTO SI GUARDA E SI RITAGLIA PRIMA DI MANDARLO.
+//
+// Prima: si sceglieva un file e via, senza vederlo. Chi caricava da PC
+// non aveva modo di accorgersi che era storto, scuro o che era partito
+// lo scatto sbagliato — e il primo a cui e' successo e' stato il
+// titolare. Adesso si apre il ritaglio: anteprima, rotazione, riquadro
+// intorno al documento, e quello che parte e' il ritaglio in JPEG.
+//
+// SOLO PNG E JPG (20/10/2026). Il formato si legge dai PRIMI BYTE e non
+// dal nome: su iPhone un HEIC rinominato `.jpg` arriva lo stesso, e un
+// `accept` nell'input non e' una garanzia, e' un suggerimento al
+// selettore dei file. Quello che non si accetta SI DICE, con il rimedio
+// accanto: scartare in silenzio e' il modo migliore per ricevere moduli
+// senza documento senza che nessuno se ne accorga.
 function Foto({ etichetta, file, onCambia, obbligatorio }) {
+  const [daRitagliare, setDaRitagliare] = useState(null);
+  const [rifiutato, setRifiutato] = useState("");
+
+  async function scelto(grezzo) {
+    setRifiutato("");
+    if (!grezzo) { onCambia(null); return; }
+    const tipo = await tipoVero(grezzo);
+    if (!FORMATI.includes(tipo)) { setRifiutato(perchePuoiNonMandarlo(tipo)); return; }
+    setDaRitagliare(grezzo);
+  }
+
+  if (daRitagliare) {
+    return (
+      <div style={{ flex: "1 1 100%", minWidth: 0, marginBottom: 12 }}>
+        <div style={etichettaStile}>{etichetta}</div>
+        <RitaglioFoto
+          file={daRitagliare} etichetta={etichetta}
+          onAnnulla={() => setDaRitagliare(null)}
+          onConferma={(pronto) => { onCambia(pronto); setDaRitagliare(null); }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{ flex: "1 1 160px", minWidth: 0, marginBottom: 12 }}>
       <div style={etichettaStile}>
@@ -305,9 +344,10 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
         }}
       >
         <input
-          type="file" accept="image/*,application/pdf"
+          type="file" accept="image/jpeg,image/png"
+          data-foto={etichetta}
           onChange={(e) => {
-            onCambia(e.target.files?.[0] || null);
+            scelto(e.target.files?.[0] || null);
             // si svuota: scegliendo DUE VOLTE lo stesso file, senza questo
             // il campo non cambia valore e non succede niente
             e.target.value = "";
@@ -316,9 +356,18 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
           // `display:none` alcuni browser smettono di aprirlo dalla label.
           style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
         />
-        <span>{file ? `✓ ${file.name.length > 26 ? file.name.slice(0, 24) + "…" : file.name}` : "Scegli o scatta"}</span>
-        {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>galleria, fotocamera o file</span>}
+        <span>{file ? "✓ pronta da mandare" : "Scegli o scatta"}</span>
+        {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>foto JPG o PNG</span>}
       </label>
+      {file && (
+        <button type="button" onClick={() => setDaRitagliare(file)}
+          style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: "6px 0 0", cursor: "pointer", textDecoration: "underline" }}>
+          guarda o ritaglia di nuovo
+        </button>
+      )}
+      {rifiutato && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: 6, lineHeight: 1.45 }}>{rifiutato}</div>
+      )}
     </div>
   );
 }
