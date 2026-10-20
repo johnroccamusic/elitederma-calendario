@@ -40220,6 +40220,15 @@ function costruisciClientiShop(venditeShop) {
     const ordini = righe.slice().sort((a, b) => (a.data_ordine || "").localeCompare(b.data_ordine || ""));
     const conNome = [...ordini].reverse().find((o) => o.cliente_nome);
     const conEmail = [...ordini].reverse().find((o) => o.cliente_email);
+    // IL TELEFONO E L'INDIRIZZO STANNO NELL'ORDINE, non in un'anagrafica:
+    // lo shop non ci ha mandato una rubrica, ci ha mandato ordini, e il
+    // cliente e' scritto su ognuno. Si prende dal piu' recente che ce
+    // l'ha — un numero cambiato si cambia comprando di nuovo, e l'ordine
+    // vecchio porta quello vecchio.
+    const conFattura = [...ordini].reverse().find((o) => o?.payload_raw?.billing?.phone
+      || o?.payload_raw?.billing?.address_1);
+    const fatt = conFattura?.payload_raw?.billing || {};
+    const sped = conFattura?.payload_raw?.shipping || {};
     const totali = ordini.map((o) => o.totale || 0);
     const numeroOrdini = ordini.length;
     const totaleSpeso = totali.reduce((a, b) => a + b, 0);
@@ -40233,6 +40242,12 @@ function costruisciClientiShop(venditeShop) {
       chiave,
       nome: conNome?.cliente_nome || "",
       email: conEmail?.cliente_email || "",
+      telefono: (fatt.phone || "").trim(),
+      indirizzo: [fatt.address_1, fatt.address_2].filter(Boolean).join(", ").trim(),
+      citta: [fatt.postcode, fatt.city, fatt.state ? `(${fatt.state})` : null].filter(Boolean).join(" ").trim(),
+      paese: (fatt.country || "").trim(),
+      ditta: (fatt.company || "").trim(),
+      spedizioneDiversa: [sped.address_1, sped.city].filter(Boolean).join(" ").trim(),
       numeroOrdini,
       totaleSpeso,
       carrelloMedio: numeroOrdini > 0 ? totaleSpeso / numeroOrdini : 0,
@@ -40316,6 +40331,7 @@ function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, 
 const COLONNE_CRM_SHOP = [
   { chiave: "nome", etichetta: "Cliente" },
   { chiave: "email", etichetta: "Email" },
+  { chiave: "telefono", etichetta: "Telefono" },
   { chiave: "numeroOrdini", etichetta: "Ordini" },
   { chiave: "totaleSpeso", etichetta: "Totale speso" },
   { chiave: "carrelloMedio", etichetta: "Carrello medio" },
@@ -40325,7 +40341,7 @@ const COLONNE_CRM_SHOP = [
   { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
 ];
 
-function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], onApriClassificazioneVoci, onBack, titolo = "CRM Shop Online" }) {
+export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], onApriClassificazioneVoci, onBack, titolo = "Clienti shop" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("clienti"); // clienti | classifica
   const [ricerca, setRicerca] = useState("");
@@ -40352,7 +40368,11 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = []
 
   const elencoFiltrato = useMemo(() => {
     const q = ricerca.trim().toLowerCase();
-    let l = q ? clienti.filter((c) => c.nome.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)) : clienti;
+    // anche per telefono: al banco di un cliente si ricorda il numero
+    // molto piu' spesso dell'email
+    let l = q ? clienti.filter((c) => c.nome.toLowerCase().includes(q)
+      || c.email.toLowerCase().includes(q)
+      || (c.telefono || "").replace(/\s/g, "").includes(q.replace(/\s/g, ""))) : clienti;
     l = [...l].sort((a, b) => {
       const va = a[colonnaOrdine], vb = b[colonnaOrdine];
       let cmp;
@@ -40420,7 +40440,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = []
             </div>
 
             <div style={{ marginBottom: 14, maxWidth: 320 }}>
-              <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca per nome o email…" />
+              <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca per nome, email o telefono…" />
             </div>
 
             <div style={{ ...cardStyle, padding: 0, overflow: "auto" }}>
@@ -40439,6 +40459,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = []
                     <tr key={c.chiave} onClick={() => setChiaveAperta(c.chiave)} style={{ cursor: "pointer" }}>
                       <td style={{ ...tdStyleCrm, fontWeight: 700 }}>{c.nome ? toTitleCase(c.nome) : <span style={{ fontStyle: "italic", color: MUTED }}>senza nome</span>}</td>
                       <td style={tdStyleCrm}>{c.email || "—"}</td>
+                      <td style={tdStyleCrm}>{c.telefono || "—"}</td>
                       <td style={tdStyleCrm}>{c.numeroOrdini}</td>
                       <td style={tdStyleCrm}>{fmtEuroErp2(c.totaleSpeso)}</td>
                       <td style={tdStyleCrm}>{fmtEuroErp2(c.carrelloMedio)}</td>
@@ -40471,7 +40492,39 @@ function DettaglioClienteShop({ cliente }) {
   return (
     <div>
       <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{cliente.nome ? toTitleCase(cliente.nome) : "Cliente senza nome"}</div>
-      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>{cliente.email || "email non disponibile"} · {cliente.numeroOrdini} ordin{cliente.numeroOrdini === 1 ? "e" : "i"} · {fmtEuroErp2(cliente.totaleSpeso)} totali</div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 14 }}>{cliente.email || "email non disponibile"} · {cliente.numeroOrdini} ordin{cliente.numeroOrdini === 1 ? "e" : "i"} · {fmtEuroErp2(cliente.totaleSpeso)} totali</div>
+
+      {/* QUELLO CHE DI QUESTA PERSONA SAPPIAMO, e che finora restava
+          sepolto nell'ordine. Non e' un'anagrafica: lo shop non ci ha
+          mandato una rubrica, ci ha mandato ordini, e il cliente e'
+          scritto su ognuno. Qui si legge quello che ha scritto lui
+          sull'ultimo ordine in cui l'ha scritto. */}
+      {(() => {
+        const voci = [
+          ["Telefono", cliente.telefono],
+          ["Email", cliente.email],
+          ["Ditta", cliente.ditta],
+          ["Indirizzo", cliente.indirizzo],
+          ["", cliente.citta],
+          ["Paese", cliente.paese && cliente.paese !== "IT" ? cliente.paese : null],
+          ["Spedisce a", cliente.spedizioneDiversa && cliente.spedizioneDiversa !== cliente.indirizzo ? cliente.spedizioneDiversa : null],
+          ["Primo ordine", cliente.primoOrdine ? fmtData(cliente.primoOrdine) : null],
+          ["Ultimo ordine", cliente.ultimoOrdine ? fmtData(cliente.ultimoOrdine) : null],
+          ["Carrello medio", cliente.numeroOrdini > 0 ? fmtEuroErp2(cliente.carrelloMedio) : null],
+          ["Ogni", cliente.giorniMedi != null ? `${Math.round(cliente.giorniMedi)} giorni` : null],
+        ].filter(([, valore]) => String(valore ?? "").trim() !== "");
+        if (voci.length === 0) return null;
+        return (
+          <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 18 }}>
+            {voci.map(([etichetta, valore], i) => (
+              <div key={`${etichetta}-${i}`} style={{ display: "flex", gap: 10, ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
+                <span style={{ color: MUTED, minWidth: 110, flexShrink: 0 }}>{etichetta}</span>
+                <span style={{ minWidth: 0, wordBreak: "break-word" }}>{valore}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {ordiniRecentiPrimi.map((o) => {
@@ -54627,7 +54680,7 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
           pagina="crm" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={2}
           definizioni={[
             { chiave: "crmallievielenco", title: "CRM Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso.", Icona: IconaGruppoTeam, attivo: true, onClick: onApriCrmAllievi },
-            { chiave: "crmshop", title: "CRM Shop Online", descrizione: "Clienti dello shop: ordini, spesa, carrello medio.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
+            { chiave: "crmshop", title: "Clienti shop", descrizione: "Chi ha comprato online: contatti, ordini, spesa. E la classifica dei prodotti.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
           ]}
         />
       </div>
@@ -83208,7 +83261,7 @@ function Gestionale() {
     ] },
     { chiave: "crmallievi", titolo: etichettaTasto("home", "crmallievi", "CRM / Allievi"), apri: apriCrmAllievi, figli: [
       { chiave: "crmallievielenco", titolo: etichettaTasto("crm", "crmallievielenco", "CRM Allievi"), apri: apriCrmAllieviElenco },
-      { chiave: "crmshop", titolo: etichettaTasto("crm", "crmshop", "CRM Shop Online"), apri: apriCrmShop },
+      { chiave: "crmshop", titolo: etichettaTasto("crm", "crmshop", "Clienti shop"), apri: apriCrmShop },
     ] },
     { chiave: "storicoallievi", titolo: etichettaTasto("home", "storicoallievi", "Storico Allievi"), apri: apriStoricoAllievi, figli: [] },
     { chiave: "normative", titolo: etichettaTasto("home", "normative", "Normative"), apri: apriNormative, figli: [
@@ -84111,7 +84164,7 @@ function Gestionale() {
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "CRM Shop Online")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "Clienti shop")} />
       )}
 
       {view === "generacoupon" && (
