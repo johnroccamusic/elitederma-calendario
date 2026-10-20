@@ -1,0 +1,34 @@
+-- TRACCIA. 20/10/2026. Segnalazione dall'amministrazione: stampando i
+-- diplomi «l'app dice che il kit non esiste».
+--
+-- IL FATTO. Il pacchetto vive in due campi: `pacchetto_kit` (il nome,
+-- che legge il magazzino) e `kit_id` (il collegamento, da cui esce il
+-- diploma). Su **20 iscrizioni** il nome c'era e il collegamento no. Il
+-- diploma guarda solo `kit_id`: non trovava niente.
+--
+-- Tutte e venti avevano un nome che corrisponde a UN SOLO pacchetto del
+-- loro corso, e quel pacchetto il modello ce l'ha. Non c'era niente da
+-- indovinare: c'era da scrivere il collegamento. Quattordici erano di
+-- corsi gia' finiti — quattordici diplomi che non uscivano.
+--
+-- La condizione `= 1` sul conteggio dei pacchetti con quel nome e' la
+-- serratura: con due pacchetti omonimi nello stesso corso non si
+-- collega niente, perche' sceglierne uno a caso vuol dire stampare il
+-- diploma sbagliato, e un diploma consegnato non si ritira piu'.
+--
+-- E' la stessa operazione del tasto «Collega» in Assegnazione kit,
+-- fatta in una volta: non cambia nessun nome e non tocca il magazzino.
+--
+-- Chi e' stato collegato, e cosa aveva prima, sta in
+-- `_kit_collegati_20261020`. Per tornare indietro: `kit_id = null` su
+-- quegli `iscritto_id`.
+--
+-- update iscritti i set kit_id = b.kit_id_da_scrivere
+--   from _kit_collegati_20261020 b
+--  where b.iscritto_id = i.id and i.kit_id is null;
+--
+-- INSIEME A QUESTO e' stato corretto il MESSAGGIO, che e' il difetto
+-- vero: diceva «il loro pacchetto non ha un modello di diploma» anche
+-- quando il modello c'era e mancava il collegamento. Chi leggeva andava
+-- a controllare il modello, lo trovava al suo posto, e concludeva che
+-- l'app si sbagliasse. Si sbagliava il messaggio.

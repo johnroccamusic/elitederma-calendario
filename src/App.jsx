@@ -30956,9 +30956,41 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     return kit?.diploma_path || null;
   };
 
+  // PERCHE' QUESTO DIPLOMA NON ESCE. Tre risposte diverse, e dirle
+  // mescolate costa un giro a vuoto a chi legge.
+  //
+  // Il 20/10/2026 l'amministrazione ha segnalato che «l'app dice che il
+  // kit non esiste». Non lo diceva: diceva «il loro pacchetto non ha un
+  // modello di diploma» a venti allieve che il pacchetto ce l'avevano
+  // scritto e il modello pure — quello che mancava era il COLLEGAMENTO
+  // (`kit_id`), e il diploma guarda solo quello. Chi leggeva andava a
+  // controllare il modello, lo trovava al suo posto, e concludeva che
+  // l'app si sbagliasse. Si sbagliava il messaggio.
+  const motivoSenzaDiploma = (iscritto) => {
+    if (!iscritto?.kit_id) {
+      const nome = String(iscritto?.pacchetto_kit || "").trim();
+      return nome
+        ? `il pacchetto "${nome}" è scritto nella scheda ma non collegato`
+        : "non ha nessun pacchetto";
+    }
+    const kit = kitPerIdDiplomi[iscritto.kit_id];
+    if (!kit) return "il pacchetto collegato non esiste più";
+    if (!kit.diploma_path) return `il pacchetto "${kit.nome}" non ha un modello di diploma`;
+    return null;
+  };
+
   async function stampaDiplomi() {
     if (listaIscritti.length > 0 && !listaIscritti.some((i) => percorsoDiplomaDi(i))) {
-      window.alert("Nessun diploma da stampare: nessuno dei pacchetti di questa classe ha un modello.\n\nSi carica sul pacchetto, in Impostazioni → Tipologie di kit.");
+      // si dice il motivo di ciascuna invece di una frase sola che vale
+      // per tutte e per nessuna
+      const motivi = listaIscritti
+        .map((i) => `· ${`${i.nome || ""} ${i.cognome || ""}`.trim()}: ${motivoSenzaDiploma(i)}`)
+        .join("\n");
+      window.alert(
+        "Nessun diploma da stampare. Per ogni allieva, il motivo:\n\n" + motivi
+        + "\n\nUn pacchetto «scritto ma non collegato» si sistema da Assegnazione kit, col tasto «Collega»."
+        + "\nUn modello mancante si carica in Impostazioni → Tipologie di kit.",
+      );
       return;
     }
     if (listaIscritti.length === 0) {
@@ -31032,7 +31064,10 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
         const docDaUsare = await docTemplatePer(iscritto);
         // nessun modello né sul pacchetto né sul corso: si salta, invece di
         // far fallire l'intera stampa per un allievo solo
-        if (!docDaUsare) { senzaModello.push(`${iscritto.nome} ${iscritto.cognome}`.trim()); continue; }
+        if (!docDaUsare) {
+          senzaModello.push(`${`${iscritto.nome || ""} ${iscritto.cognome || ""}`.trim()} — ${motivoSenzaDiploma(iscritto)}`);
+          continue;
+        }
         const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
         outputPdf.addPage(pagina);
         const { width: larghezzaPaginaDiploma } = pagina.getSize();
@@ -31102,11 +31137,14 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
       }
 
       if (outputPdf.getPageCount() === 0) {
-        window.alert(`Nessun diploma generato — questi pacchetti non hanno un modello: ${senzaModello.join(", ")}.`);
+        window.alert("Nessun diploma generato. Per ognuna, il motivo:\n\n· " + senzaModello.join("\n· "));
         return;
       }
       if (senzaModello.length > 0) {
-        window.alert(`Diplomi generati, tranne per: ${senzaModello.join(", ")} — il loro pacchetto non ha un modello di diploma. Caricalo in Impostazioni → Tipologie di kit e ristampa solo per loro.`);
+        window.alert(
+          "Diplomi generati, tranne per queste:\n\n· " + senzaModello.join("\n· ")
+          + "\n\nSistemato il motivo, si ristampa solo per loro spuntando «Ristampa solo questo».",
+        );
       }
       const bytesFinali = await outputPdf.save();
       const blob = new Blob([bytesFinali], { type: "application/pdf" });
