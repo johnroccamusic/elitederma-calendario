@@ -68145,10 +68145,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // fatto, e resta il modo predefinito — "qr" e' la cliente che paga
   // col suo telefono. Non sono due metodi di pagamento: per la vendita,
   // per l'IVA, per i punti e per le fasce restano tutti e due "POS".
-  const [modoIncassoPos, setModoIncassoPos] = useState("esterno");
+  //
+  // IL POS ESTERNO E' SOLO DELL'AMMINISTRAZIONE (20/10/2026). Il
+  // terminale fisico sta in amministrazione, e una master non ce l'ha:
+  // lasciarglielo nella scelta vuol dire offrirle una strada che non
+  // puo' percorrere — e, peggio, una strada che non chiede nessuna
+  // conferma a nessuno (la vendita la si dichiara incassata a mano).
+  // Al banco di una master la carta e' il QR, e basta.
+  const [modoIncassoPos, setModoIncassoPos] = useState(chiAmministra ? "esterno" : "qr");
   // LA DOMANDA PRIMA DEL QR: "serve fattura?".
   //
-  // Finche' vale `{ perIlLink }` la domanda e' a schermo e il pagamento
+  // Finche' vale `{ apriIlLink }` la domanda e' a schermo e il pagamento
   // non e' ancora partito. La risposta cambia la pagina che vedra' la
   // cliente — con o senza i campi della fattura — e per questo si chiede
   // prima: dopo, quella pagina e' gia' nata.
@@ -69046,7 +69053,20 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     } catch { return false; }
   }
 
-  async function chiediPagamentoQr(perIlLink = false, vuoleFattura = false) {
+  // `apriIlLink`: invece di copiare l'indirizzo negli appunti, lo apre.
+  //
+  // LA FINESTRA SI APRE SUBITO, VUOTA, E SOLO DOPO LE SI DA' L'INDIRIZZO.
+  // Non e' un giro inutile: la sessione di Stripe la crea il server e
+  // ci vuole un secondo, e una `window.open` chiamata DOPO quell'attesa
+  // non e' piu' attaccata al dito che ha premuto — iPhone e Safari la
+  // bloccano come fosse pubblicita'. Aperta qui, dentro il gesto, e
+  // riempita quando l'indirizzo arriva, passa sempre.
+  //
+  // Se il browser la blocca lo stesso (`null`), non si perde niente: si
+  // ripiega sulla copia negli appunti, che e' quello che si faceva
+  // prima, e lo si dice.
+  async function chiediPagamentoQr(apriIlLink = false, vuoleFattura = false) {
+    const finestra = apriIlLink ? window.open("", "_blank") : null;
     setChiedoFattura(null);
     setCreandoQr(true); setMsgQr("");
     const { data, error } = await supabase.functions.invoke("stripe-crea-pagamento", {
@@ -69067,18 +69087,30 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // il messaggio vero, non "errore sconosciuto": al banco serve sapere
       // se riprovare o passare al terminale
       const dettaglio = data?.errore || error?.message || "nessuna risposta dal server";
-      setMsgQr(`QR non creato: ${dettaglio}. Puoi incassare col POS esterno e confermare la vendita a mano.`);
+      // il ripiego si nomina solo a chi ce l'ha: una master senza
+      // terminale, mandata al "POS esterno", resta ferma col cliente
+      // davanti a cercare una cosa che non esiste
+      setMsgQr(`QR non creato: ${dettaglio}. ${chiAmministra
+        ? "Puoi incassare col POS esterno e confermare la vendita a mano."
+        : "Riprova fra un momento; se continua, chiama l'amministrazione."}`);
+      // la finestra vuota non resta li' a far credere che stia caricando
+      finestra?.close();
       return;
     }
     if (!data?.codice) {
-      setMsgQr("QR non creato: il server ha risposto senza codice. Riprova, oppure incassa col POS esterno.");
+      setMsgQr(`QR non creato: il server ha risposto senza codice. Riprova${chiAmministra ? ", oppure incassa col POS esterno." : "; se continua, chiama l'amministrazione."}`);
+      finestra?.close();
       return;
     }
     setRichiestaQr(data);
     setStatoQr("in_attesa");
-    if (perIlLink) {
+    if (apriIlLink) {
+      if (finestra) { finestra.location.href = data.indirizzo; return; }
+      // finestra bloccata: si ripiega sulla copia, e si dice perche'
       const copiato = await copiaLink(data.indirizzo);
-      if (!copiato) setMsgQr("Il telefono non mi fa copiare da solo: il link è scritto nella finestra, tienilo premuto e copialo.");
+      setMsgQr(copiato
+        ? "Il browser non mi ha fatto aprire la pagina: il link è negli appunti, incollalo e aprilo a mano."
+        : "Il browser non mi ha fatto aprire la pagina e il telefono non mi fa copiare: il link è scritto qui nella finestra, tienilo premuto e copialo.");
     }
   }
 
@@ -70722,26 +70754,37 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           </div>
 
           {/* Col POS si incassa in due modi, e il conto non cambia: il
-              terminale fisico al banco, oppure il QR che la cliente
-              inquadra col telefono. Non sono due metodi di pagamento —
-              per la vendita, per l'IVA e per i punti restano "POS". */}
+              terminale fisico al banco — che pero' ce l'ha solo
+              l'amministrazione — oppure il QR che la cliente inquadra
+              col telefono. Non sono due metodi di pagamento: per la
+              vendita, per l'IVA e per i punti restano tutti e due
+              "POS". */}
           {metodoPagamento === "pos" && (
             // incassato nella pagina e non appoggiato sopra: e' un
             // dettaglio DENTRO "Carta", non una scelta allo stesso livello
             <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4F6FB", border: `1px solid #DEE4F0`, boxShadow: OMBRA_POS.incassato }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
-              <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
-                <SceltaPos
-                  scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
-                  titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
-                  onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
-                />
-                <SceltaPos
-                  scelto={modoIncassoPos === "qr"} Icona={IconaAnelloLink}
-                  titolo="Carta / Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
-                  onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}
-                />
-              </div>
+              {/* La scelta fra terminale e QR esiste solo dove esiste il
+                  terminale, cioe' in amministrazione. Per tutti gli altri
+                  la carta e' il QR e non c'e' niente da scegliere: due
+                  tasti di cui uno solo premibile sono un tasto e un
+                  dubbio. */}
+              {chiAmministra && (
+                <>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
+                  <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
+                    <SceltaPos
+                      scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
+                      titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
+                      onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
+                    />
+                    <SceltaPos
+                      scelto={modoIncassoPos === "qr"} Icona={IconaAnelloLink}
+                      titolo="Carta / Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
+                      onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}
+                    />
+                  </div>
+                </>
+              )}
 
               {modoIncassoPos === "esterno" ? (
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 10 }}>
@@ -70760,7 +70803,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                       ? "Il carrello è vuoto: aggiungi i prodotti e il QR si accende."
                       : totaleDaIncassare <= 0
                         ? "Il totale da incassare è zero: non c'è niente da far pagare."
-                        : "La cliente inquadra il QR — o riceve il link su WhatsApp — e paga. I dati per la fattura glieli chiede solo se rispondi che le serve."}
+                        : "La cliente inquadra il QR col suo telefono, oppure paga sul tuo: la pagina si apre qui. I dati per la fattura glieli chiede solo se rispondi che le serve."}
                   </span>
                   {chiedoFattura ? (
                     <div style={{ flex: "1 1 100%", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "10px 12px", borderRadius: 14, background: "#fff", border: `1px solid ${NAVY}` }}>
@@ -70768,14 +70811,14 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                         Il cliente ha bisogno di fattura?
                       </span>
                       <button
-                        type="button" data-niente-ombra onClick={() => chiediPagamentoQr(chiedoFattura.perIlLink, true)}
+                        type="button" data-niente-ombra onClick={() => chiediPagamentoQr(chiedoFattura.apriIlLink, true)}
                         title="La pagina di pagamento le chiederà indirizzo, codice fiscale e partita IVA"
                         style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: "pointer", whiteSpace: "nowrap" }}
                       >
                         Sì, serve fattura
                       </button>
                       <button
-                        type="button" data-niente-ombra onClick={() => chiediPagamentoQr(chiedoFattura.perIlLink, false)}
+                        type="button" data-niente-ombra onClick={() => chiediPagamentoQr(chiedoFattura.apriIlLink, false)}
                         title="Paga e basta: nessun dato da scrivere, sulla transazione resta «Acquisto da shop online»"
                         style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 15px", cursor: "pointer", whiteSpace: "nowrap" }}
                       >
@@ -70794,20 +70837,28 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     return (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
                         {/* DUE STRADE PER LO STESSO PAGAMENTO. Il QR se la
-                            cliente e' davanti; il link se non c'e' — si
-                            incolla su WhatsApp e paga da casa. E' lo stesso
-                            indirizzo, chiesto allo stesso modo: cambia solo
-                            come le arriva. */}
+                            cliente e' davanti con il suo telefono; la
+                            pagina aperta qui se il telefono e' quello di
+                            chi vende — si porge e si paga. E' lo stesso
+                            indirizzo, chiesto allo stesso modo: cambia
+                            solo su quale schermo finisce.
+
+                            Copiava il link negli appunti, e da li' andava
+                            incollato da qualche parte per aprirlo: un
+                            passaggio in mezzo che al banco, col cliente
+                            che aspetta, non ha motivo di esistere. Chi il
+                            link lo vuole mandare davvero lo copia dalla
+                            finestra del QR, dove il tasto e' rimasto. */}
                         <button
-                          type="button" onClick={() => setChiedoFattura({ perIlLink: true })} data-niente-ombra
-                          title={perche || "Prepara il link da mandare su WhatsApp"}
+                          type="button" onClick={() => setChiedoFattura({ apriIlLink: true })} data-niente-ombra
+                          title={perche || "Apre la pagina di pagamento su questo telefono"}
                           disabled={spento}
-                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: linkCopiato ? "#2E7D32" : NAVY, background: "#fff", border: `1px solid ${linkCopiato ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
+                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, flex: "1 1 auto", minWidth: 0 }}
                         >
-                          {linkCopiato ? "Link copiato ✓" : "Copia il link"}
+                          Apri link sul tuo telefono per pagare
                         </button>
                         <button
-                          type="button" onClick={() => setChiedoFattura({ perIlLink: false })} data-niente-ombra
+                          type="button" onClick={() => setChiedoFattura({ apriIlLink: false })} data-niente-ombra
                           title={perche || "Prepara il QR da far inquadrare"}
                           disabled={spento}
                           style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
