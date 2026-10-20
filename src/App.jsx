@@ -67584,7 +67584,10 @@ function PuntiDellaRiga({ punti, isMobile }) {
   );
 }
 
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
+// `export` solo per poterla montare in una prova: dentro App.jsx non la
+// importa nessuno. Il banco e' il posto dove si sbagliano i soldi, ed era
+// l'unico grande componente che nessuna prova aveva mai aperto.
+export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
   // i punti del listino si rileggono ogni volta che si apre il banco:
   // se nel frattempo qualcuno li ha corretti in Prezzi e listini, qui si
   // vede subito invece che al prossimo ricaricamento della pagina
@@ -67958,6 +67961,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return mancanti;
   })();
   const iscrittiCorsoPos = corsoPosSel ? (iscritti || []).filter((i) => i.corso_data_id === corsoPosSel.id) : [];
+  // Cosa manca all'indirizzo appena riempito. Si guardano i campi della
+  // SPEDIZIONE, non quelli della scheda: se chi vende ha gia' aggiunto
+  // il civico a mano, non deve rileggere che manca.
+  const mancanzeIscrittoSped = [
+    [spedIndirizzo, "la via"], [spedCap, "il CAP"], [spedCitta, "la città"],
+    [spedProvincia, "la provincia"], [spedCellulare, "il cellulare"],
+  ].filter(([v]) => !String(v || "").trim()).map(([, etichetta]) => etichetta);
   function selezionaIscrittoSped(iscrittoId) {
     setSpedIscrittoId(iscrittoId);
     const isc = iscrittiCorsoPos.find((i) => i.id === iscrittoId);
@@ -67968,11 +67978,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       setSpedNome(toTitleCase(isc.nome || ""));
       setSpedCognome(toTitleCase(isc.cognome || ""));
       setSpedIndirizzo(isc.indirizzo_residenza || isc.fattura_indirizzo || "");
-      setSpedCivico(isc.fattura_civico || "");
+      setSpedCivico(isc.civico_residenza || isc.fattura_civico || "");
       setSpedCitta(toTitleCase(isc.citta_residenza || isc.fattura_citta || ""));
       setSpedCap(isc.cap_residenza || isc.fattura_cap || "");
-      setSpedProvincia((isc.fattura_prov || "").toUpperCase());
+      // LA PROVINCIA DI RESIDENZA PRIMA DI QUELLA DI FATTURAZIONE.
+      //
+      // Qui c'era solo `fattura_prov`, e il civico solo `fattura_civico`:
+      // per un'allieva che non chiede fattura — la maggioranza — la
+      // provincia usciva VUOTA anche quando l'iscrizione la aveva. Fino
+      // al 19/10/2026 era vuota comunque (257 schede su 260), quindi non
+      // si notava; da quando c'e', leggerla dal posto sbagliato e'
+      // perdere un dato che abbiamo.
+      setSpedProvincia((isc.prov_residenza || isc.fattura_prov || "").toUpperCase());
       setSpedCellulare(isc.telefono || "");
+      // scegliere l'allieva vuol dire che le si spedisce: la spedizione
+      // si accende da se', e si toglie se non serve
+      setSpedizioneAttiva(true);
       if (isc.richiede_fattura) {
         setFattAttiva(true);
         setFattDitta(isc.fattura_ditta || "");
@@ -69788,7 +69809,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               esterna, acquisto personale — e l'etichetta ne annunciava
               una. */}
           <Field label="Opzioni di vendita">
-            <select style={inputStyle} value={acquistoPersonale ? "__personale" : referralPersonaleInUso ? "__referral" : corsoPosId} onChange={(e) => {
+            <select data-campo="corso-pos" style={inputStyle} value={acquistoPersonale ? "__personale" : referralPersonaleInUso ? "__referral" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setSpedIscrittoId("");
               if (nuovoId === "__personale") {
@@ -69828,6 +69849,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               setAcquistoPersonale(false);
               setReferralPersonaleAttivo(false);
               setCorsoPosId(nuovoId); setScontoCorsoAttivo(true);
+              // LA SPEDIZIONE PARTE ACCESA, su richiesta del 20/10/2026:
+              // «meglio che le toglie la master piuttosto che le
+              // dimentica». A un corso la merce quasi sempre si spedisce,
+              // e una spesa di spedizione dimenticata non si recupera —
+              // la cliente e' gia' andata via. Toglierla e' un tocco.
+              //
+              // Si accende qui, scegliendo il corso, e NON come valore di
+              // partenza del banco: una vendita fuori dai corsi e' uno
+              // che compra e porta via, e li' addebitare la spedizione
+              // sarebbe un errore in senso opposto.
+              if (nuovoId) setSpedizioneAttiva(true);
               applicaCouponDelCorso(nuovoId);
             }}>
               <option value="">— vendita fuori dai corsi senza sconti —</option>
@@ -70379,6 +70411,53 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           spedizione" non ci starebbe mai in un terzo di riquadro, ne' sul
           telefono ne' sul monitor: si spezzava lettera per lettera. I
           moduli si aprono sotto. */}
+      {/* LA BARRA DEGLI ALLIEVI DEL CORSO. 20/10/2026.
+          Sta QUI, sopra le opzioni, e non dentro il riquadro della
+          spedizione dov'era prima: la' si vedeva solo DOPO aver acceso
+          la spedizione, quindi chi non la accendeva non sapeva che
+          esistesse e ribatteva l'indirizzo a mano. Scegliere l'allieva
+          e' il primo gesto di una vendita al corso, non l'ultimo.
+
+          Compare solo se il corso scelto ha iscritti: fuori dai corsi
+          non c'e' nessun elenco da cui scegliere. */}
+      {iscrittiCorsoPos.length > 0 && (
+        <div style={{
+          border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "#FFFDF8",
+          boxShadow: OMBRA_POS.tessera, padding: isMobile ? "8px 10px" : "10px 12px",
+          marginBottom: isMobile ? 8 : 12,
+        }}>
+          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5 }}>
+            A chi vendi
+          </div>
+          <select
+            data-campo="allieva-pos"
+            style={{ ...inputStyle, width: "100%" }}
+            value={spedIscrittoId}
+            onChange={(e) => selezionaIscrittoSped(e.target.value)}
+          >
+            <option value="">— scegli l&apos;allieva e compilo io l&apos;indirizzo —</option>
+            {iscrittiCorsoPos.map((i) => (
+              <option key={i.id} value={i.id}>
+                {toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim())}
+                {(i.citta_residenza || "").trim() ? ` · ${toTitleCase(i.citta_residenza)}` : " · indirizzo da completare"}
+              </option>
+            ))}
+          </select>
+          {/* Si dice cosa manca PRIMA di arrivare al fondo: un pacco
+              senza provincia o senza cellulare si blocca in logistica, e
+              li' l'allieva e' andata via da un pezzo. */}
+          {spedIscrittoId && mancanzeIscrittoSped.length > 0 && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", marginTop: 6, lineHeight: 1.5 }}>
+              Dalla sua scheda manca: {mancanzeIscrittoSped.join(", ")}. Completa qui sotto.
+            </div>
+          )}
+          {spedIscrittoId && mancanzeIscrittoSped.length === 0 && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", marginTop: 6 }}>
+              Indirizzo completo, preso dalla sua scheda.
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
       <div style={{
         // Su un iPad in verticale il carrello e' largo un terzo di
@@ -70441,16 +70520,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       </div>
       {spedizioneAttiva && (
         <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
-          {iscrittiCorsoPos.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <Field label="Iscritto (opzionale, precompila indirizzo)">
-                <select style={inputStyle} value={spedIscrittoId} onChange={(e) => selezionaIscrittoSped(e.target.value)}>
-                  <option value="">— nessuno, compila a mano —</option>
-                  {iscrittiCorsoPos.map((i) => <option key={i.id} value={i.id}>{i.nome} {i.cognome}</option>)}
-                </select>
-              </Field>
-            </div>
-          )}
+          {/* Qui c'era un secondo selettore degli iscritti, identico a
+              quello della barra «A chi vendi» qui sopra. Due tendine per
+              la stessa scelta, una che ne sposta l'altra: si tocca una
+              delle due e sembra che l'app abbia cambiato idea da sola. */}
           {/* campi a meta' altezza e spazi dimezzati, etichette due punti
               piu' piccole: sul telefono il modulo stava in due schermate */}
           <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
