@@ -21,13 +21,24 @@ const CORSO_DATA = {
   data_inizio: oggi, data_fine: oggi, citta: "ROMA",
 };
 
+// due codici: uno generico e attivo, uno di una master. In tendina deve
+// finire solo il primo — quello della master non e' di tutti.
+const COUPON = [
+  { id: "cp1", codice: "need30", valore: "30.00", tipo_sconto: "percent", ambito: "categorie",
+    stato: "attivo", master_id: null, corsi_date_id: null, categorie_ids: [64] },
+  { id: "cp2", codice: "TG997U", valore: "20.00", tipo_sconto: "percent", ambito: "tutto",
+    stato: "attivo", master_id: "m1", corsi_date_id: null },
+  { id: "cp3", codice: "e10", valore: "10.00", tipo_sconto: "percent", ambito: "tutto",
+    stato: "bozza", master_id: null, corsi_date_id: null },
+];
+
 async function apriBanco(ruoloUtente) {
   rispondiCon({});
   return monta(
     <PaginaPOS
       prodottiShop={[]} categorieProdotti={[]} prodottiCategorie={[]} prodottiImmagini={[]}
       venditeShop={[]} corsiDate={[CORSO_DATA]} corsi={[CORSO]} location={[]}
-      iscritti={[]} coupon={[]} bundleComponenti={[]} master={[]}
+      iscritti={[]} coupon={COUPON} bundleComponenti={[]} master={[]}
       ricarica={() => {}} onBack={() => {}} utenteLoggato={null} venditoreLoggato={null}
       targetVenditeProdotti={[]} ruoloUtente={ruoloUtente}
     />,
@@ -87,5 +98,19 @@ describe("il POS esterno e' solo dell'amministrazione", () => {
   it("e anche chi non amministra ce l'ha, come prima", async () => {
     const p = await apriBanco("user");
     expect(p.testo()).toContain("Codice sconto extra");
+  });
+
+  it("i codici generici si scelgono da una tendina, non si sanno a memoria", async () => {
+    const p = await apriBanco("amministratore");
+    const tendina = [...p.nodo.querySelectorAll("select")]
+      .find((x) => [...x.options].some((o) => o.value === "need30"));
+    expect(tendina).toBeTruthy();
+    const voci = [...tendina.options].map((o) => o.textContent);
+    // il codice porta con se' quanto sconta e che non vale su tutto
+    expect(voci.join(" ")).toContain("NEED30 · −30%");
+    expect(voci.join(" ")).toContain("solo su certi prodotti");
+    // il codice di una master non e' di tutti, e una bozza non e' nata
+    expect(voci.join(" ")).not.toContain("TG997U");
+    expect(voci.join(" ")).not.toContain("E10");
   });
 });

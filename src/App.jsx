@@ -69014,6 +69014,33 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     () => (couponAttivo ? copertureCoupon(couponAttivo, prodottiShop, categorieProdotti, prodottiCategorie) : null),
     [couponAttivo, prodottiShop, categorieProdotti, prodottiCategorie],
   );
+  // I CODICI CHE VALGONO PER TUTTI, in una tendina.
+  //
+  // Un codice d'aula appartiene a una classe e uno di referral a una
+  // master: quelli arrivano da soli o si scrivono. Questi non sono di
+  // nessuno — `need30` e' il 30% sui prodotti da needling, lo stesso per
+  // chiunque lo chieda — e per usarli bisognava sapere il codice a
+  // memoria. Sono pochi e cambiano di rado: starli a cercare e' lavoro
+  // sprecato, e scriverli a memoria e' un modo di sbagliarli.
+  //
+  // Solo gli ATTIVI: una bozza e' un codice che non e' ancora nato, e
+  // proporlo al banco vorrebbe dire pubblicarlo di fatto. Chi ne ha
+  // bisogno lo scrive lo stesso nella casella qui sotto.
+  const couponGenerici = useMemo(() => {
+    const oggi = dataOggiStr();
+    return (coupon || [])
+      .filter((c) => c.codice && !c.master_id && !c.corsi_date_id && c.stato === "attivo"
+        && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a))
+      .sort((a, b) => String(a.codice).localeCompare(String(b.codice)));
+  }, [coupon]);
+  const etichettaCouponGenerico = (c) => {
+    const quanto = c.tipo_sconto === "percent" ? `−${numeroFascia(parseNum(c.valore))}%` : `−${fmtEuroErp2(parseNum(c.valore))}`;
+    // «solo su certi prodotti» non e' un dettaglio: e' la differenza fra
+    // uno sconto che si vede nel totale e uno che non si vede
+    const dove = (c.ambito || "tutto") === "tutto" ? "" : " · solo su certi prodotti";
+    return `${String(c.codice).toUpperCase()} · ${quanto}${dove}`;
+  };
+
   // UN CODICE VALIDO CHE NON TOCCA NIENTE VA DETTO.
   //
   // `need30` vale sui soli prodotti da needling: scritto su un carrello
@@ -70637,15 +70664,43 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               <div style={etichettaSconto}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
               <input style={{ ...campoSconto, opacity: (couponNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
             </div>
-            <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
           </>
         )}
-        {puoScontare ? (
+        {/* QUI C'ERA «COUPON (%)», UNA TERZA PERCENTUALE DA SCRIVERE.
+            Non era un coupon: era una cifra battuta a mano che entrava
+            nella strada dei coupon senza nessun codice sopra. Senza
+            codice non ci sono base, fasce ne' categorie, quindi faceva
+            esattamente quello che fa «Sconto vendita → Percentuale» due
+            caselle a sinistra — con una differenza sola, che sulla
+            vendita non restava scritto niente: ne' il codice (non c'era)
+            ne' lo sconto a mano (era passato dall'altra parte).
+            Tre caselle per due cose, e quella di troppo era anche
+            l'unica che perdeva l'informazione.
+            Adesso: la cifra inventata sta a sinistra, il codice sta
+            sotto, e `couponValore` lo scrivono solo un codice vero o lo
+            sconto della classe. */}
+        {puoScontare && couponGenerici.length > 0 && (
           <div style={{ flex: "1 1 0", minWidth: 0 }}>
-            <div style={etichettaSconto}>Coupon (%)</div>
-            <input style={{ ...campoSconto, opacity: (scontoNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0 || scontoFieraAttivo} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
+            <div style={etichettaSconto}>Codice sconto</div>
+            <select
+              style={{ ...campoSconto, background: BG, opacity: (scontoNum > 0 || scontoFieraAttivo || acquistoPersonale) ? 0.5 : 1 }}
+              disabled={scontoNum > 0 || scontoFieraAttivo || acquistoPersonale || referralPersonaleInUso || !!(scontoCorsoAttivo && couponDellEdizione(corsoPosId))}
+              // un codice scritto a mano che non sta in elenco non deve
+              // far sembrare la tendina vuota: si mostra com'e'
+              value={couponAttivo && !couponGenerici.some((c) => c.id === couponAttivo.id) ? "__fuori" : (couponCodiceTesto || "")}
+              onChange={(e) => applicaCodiceCoupon(e.target.value === "__fuori" ? couponCodiceTesto : e.target.value)}
+            >
+              <option value="">— nessun codice —</option>
+              {couponAttivo && !couponGenerici.some((c) => c.id === couponAttivo.id) && (
+                <option value="__fuori">{String(couponAttivo.codice).toUpperCase()} · scritto a mano</option>
+              )}
+              {couponGenerici.map((c) => (
+                <option key={c.id} value={c.codice}>{etichettaCouponGenerico(c)}</option>
+              ))}
+            </select>
           </div>
-        ) : (
+        )}
+        {!puoScontare && (
           // Due sole strade, e si escludono: o lo sconto della classe —
           // gia' acceso quando si vende stando a quel corso — oppure un
           // codice dato dall'amministrazione, scritto a mano dopo aver
@@ -70705,7 +70760,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: grigioCarrello }}>
             {scontoFieraAttivo
               ? "Sta valendo lo sconto fiera: spegnilo qui sopra per scontare a mano o usare un codice."
-              : couponNum > 0 ? "Svuota il campo Coupon per inserire uno sconto manuale." : "Svuota lo sconto vendita per usare un coupon."}
+              : couponNum > 0 ? "Togli il codice qui sotto per inserire uno sconto a mano." : "Svuota lo sconto vendita per usare un codice."}
           </div>
         )}
       </div>
