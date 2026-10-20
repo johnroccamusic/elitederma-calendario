@@ -234,12 +234,19 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     // 232 Stati in una tendina: si scorre, ma e' un elenco chiuso e
     // scritto a mano darebbe "Romania", "ROMANIA" e "Rumania" come tre
     // posti diversi. Vuoto = Italia, che e' il caso normale.
+    //
+    // La voce vuota dice «Italia» e basta. Diceva «nata in Italia»: al
+    // banco si iscrivono anche uomini — otto su 242 — e una casella che
+    // da' del femminile a chiunque la apra e' sbagliata per tutti e
+    // otto. Il genere qui non serve a niente, e nemmeno i trattini: il
+    // campo si chiama «Stato di nascita» e la voce vuota deve dire solo
+    // quale Stato.
     return (
       <Tendina
         valore={spenta ? "" : (valore || "")}
         opzioni={nomiStati().map((x) => ({ valore: x, testo: x }))}
         onCambia={(v) => { scrivi("stato_nascita", v); if (v) scrivi("comune_nascita", ""); }}
-        spenta={spenta} stile={stile} vuoto="— nata in Italia —" campo="stato_nascita"
+        spenta={spenta} stile={stile} vuoto="Italia" campo="stato_nascita"
       />
     );
   }

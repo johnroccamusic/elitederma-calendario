@@ -201,7 +201,7 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
           onChange={(e) => onCambia(chiave, e.target.value)}
           style={stileComune}
         >
-          <option value="">{tipo === "statoNascita" ? "— sono nata in Italia —" : "— scegli —"}</option>
+          <option value="">{tipo === "statoNascita" ? "Italia" : "— scegli —"}</option>
           {opzioni.map((o) => <option key={o.valore} value={o.valore}>{o.etichetta}</option>)}
         </select>
       ) : (
@@ -500,7 +500,7 @@ export default function PaginaModulo({ token }) {
     if (!d || !d.obbligatorio || d.bloccato || spento) return;
     if (!String(risposte[campo.chiave] || "").trim()) mancanti.push(campo.etichetta || etichettaDi(campo.chiave));
   };
-  // il comune di nascita non si chiede a chi e' nata all'estero: la
+  // il comune di nascita non si chiede a chi e' nato all'estero: la
   // casella e' spenta, e pretenderla vorrebbe dire un modulo che non si
   // puo' spedire
   const natoFuori = !!String(risposte.stato_nascita || "").trim();
@@ -652,7 +652,7 @@ export default function PaginaModulo({ token }) {
           return <Letto key={campo.chiave} etichetta={campo.etichetta || etichettaDi(campo.chiave)}
                         valore={mostra(campo.chiave, d.valore)} larghezza={campo.larghezza} />;
         }
-        // nata all'estero: il comune italiano non le si chiede piu'
+        // nato all'estero: il comune italiano non si chiede piu'
         const fuori = campo.chiave === "comune_nascita"
           && !!String(risposte.stato_nascita || "").trim();
         return <DaRiempire key={campo.chiave} campo={campo} valore={fuori ? "" : risposte[campo.chiave]}
