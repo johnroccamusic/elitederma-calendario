@@ -140,4 +140,37 @@ describe("il codice fiscale si compila da se'", () => {
     await scrivi(campo(p, "data_nascita"), "1987-12-25");
     expect(campo(p, "codice_fiscale").value).toBe("BMBGNN87T65H501A");
   });
+
+  it("cambiata la data, il codice calcolato si rifà invece di contraddirsi", async () => {
+    // il calendario del telefono parte da OGGI: si apre il campo, si
+    // chiude, e il codice nasce sulla data sbagliata. Correggendo la
+    // data il codice restava quello di prima, e sotto compariva
+    // l'avviso che non torna — l'app si dava torto da sola.
+    const p = await apri(BAMBACE);
+    await clicca(tastoSesso(p, "F"));
+    await scrivi(campo(p, "data_nascita"), "1990-12-25");
+    await scrivi(campo(p, "comune_nascita"), "ROMA");
+    const primo = campo(p, "codice_fiscale").value;
+    expect(primo).toMatch(/^BMBGNN90/);
+    await scrivi(campo(p, "data_nascita"), "1987-12-25");
+    expect(campo(p, "codice_fiscale").value).toBe("BMBGNN87T65H501A");
+    expect(p.testo()).not.toMatch(/una data di nascita diversa/);
+  });
+
+  it("ma un codice scritto a mano non si rifà mai", async () => {
+    // l'omocodia: l'Agenzia cambia delle cifre, e quello che c'e'
+    // scritto comanda su qualunque calcolo
+    const p = await apri({ ...BAMBACE, codice_fiscale: "BMBGNN87T65H501P" });
+    await clicca(tastoSesso(p, "F"));
+    await scrivi(campo(p, "data_nascita"), "1987-12-25");
+    await scrivi(campo(p, "comune_nascita"), "ROMA");
+    expect(campo(p, "codice_fiscale").value).toBe("BMBGNN87T65H501P");
+  });
+
+  it("una data di nascita di quest'anno si dice", async () => {
+    const p = await apri(BAMBACE);
+    const quest_anno = `${new Date().getFullYear()}-03-13`;
+    await scrivi(campo(p, "data_nascita"), quest_anno);
+    expect(p.testo()).toMatch(/il calendario parte da oggi/);
+  });
 });

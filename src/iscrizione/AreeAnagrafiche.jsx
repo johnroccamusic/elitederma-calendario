@@ -462,20 +462,36 @@ export function AreaAnagrafica({
   const [codiceProposto, setCodiceProposto] = useState("");
   useEffect(() => { setCodiceProposto(""); }, [chiaveScheda]);
   const codiceScritto = (valori.codice_fiscale || "").trim();
+  // UN CODICE CHE ABBIAMO SCRITTO NOI SI RIFA'; UNO SCRITTO A MANO NO.
+  //
+  // Prima bastava che la casella fosse piena per non toccarla piu'. Ma
+  // la prima data che il calendario propone e' OGGI: chi apre il campo,
+  // lo chiude e poi corregge la data si trovava il codice calcolato
+  // sulla data sbagliata, congelato li', e sotto l'avviso che diceva che
+  // non torna. L'app generava un codice e poi dava torto a se stessa.
+  //
+  // La differenza che conta non e' vuoto/pieno: e' di chi e' quel
+  // codice. Se e' esattamente quello che abbiamo proposto noi, i dati
+  // che lo generano comandano e lo riscriviamo. Se dentro c'e' qualcosa
+  // d'altro — scritto, incollato o corretto a mano per omocodia — non si
+  // tocca, come prima.
+  const nostro = !!codiceProposto && codiceScritto === codiceProposto;
   useEffect(() => {
     if (configurazione) return;
-    if (codiceScritto) return;
+    if (codiceScritto && !nostro) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: valori.cognome, nome: valori.nome, sesso: valori.sesso,
       dataNascita: valori.data_nascita,
       comuneNascita: valori.comune_nascita, statoNascita: valori.stato_nascita,
     });
+    // gia' proposto una volta: se la casella e' vuota e' perche'
+    // qualcuno l'ha svuotata, e resta vuota
     if (!calcolato || calcolato === codiceProposto) return;
     setCodiceProposto(calcolato);
     scrivi("codice_fiscale", calcolato);
     autosalva();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configurazione, codiceScritto, valori.cognome, valori.nome, valori.sesso,
+  }, [configurazione, codiceScritto, nostro, valori.cognome, valori.nome, valori.sesso,
       valori.data_nascita, valori.comune_nascita, valori.stato_nascita]);
 
   function esceDalCampo(campo) {

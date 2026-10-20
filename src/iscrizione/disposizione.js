@@ -232,6 +232,31 @@ export const NOTA_VENDITORE = {
 export function avvisoCampo(campo, valore, valori = null) {
   const perLunghezza = avvisoLunghezza(campo, valore);
   if (perLunghezza) return perLunghezza;
+  // UNA DATA DI NASCITA NEL FUTURO SI DICE SUBITO.
+  //
+  // Il calendario del telefono propone OGGI: chi apre il campo e lo
+  // chiude si porta a casa la data di oggi, e da li' esce un codice
+  // fiscale di un neonato — formalmente giusto, buono per niente. E'
+  // successo davvero: «13 mar 2026» su una scheda di ottobre 2026.
+  if (campo?.chiave === "data_nascita" || campo?.tipo === "data") {
+    const d = String(valore ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!d) return null;
+    const nata = new Date(`${valore}T00:00:00`);
+    if (Number.isNaN(nata.getTime())) return null;
+    const oggi = new Date();
+    if (nata > oggi) return "Questa data è nel futuro: il calendario parte da oggi, controlla l'anno.";
+    // gli anni compiuti, non la differenza fra gli anni: chi compie gli
+    // anni a dicembre, a ottobre ne ha ancora uno in meno
+    let anni = oggi.getFullYear() - nata.getFullYear();
+    const m = oggi.getMonth() - nata.getMonth();
+    if (m < 0 || (m === 0 && oggi.getDate() < nata.getDate())) anni -= 1;
+    // sotto l'anno non si dice "0 anni": si dice da dove viene quel
+    // numero, che e' il calendario fermo su oggi
+    if (anni < 1) return "Questa data è di quest'anno: il calendario parte da oggi, controlla l'anno.";
+    if (anni < 18) return `Questa data dice ${anni} ann${anni === 1 ? "o" : "i"}: ai corsi si iscrivono maggiorenni, controllala.`;
+    return null;
+  }
+
   // UN COMUNE CHE NON STA NELL'ELENCO SI DICE.
   //
   // Senza, chi scrive «REGGIO CALABRIA» vede una casella piena, un

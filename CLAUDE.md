@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   19 file, 212 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   19 file, 215 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      44 edge function + _shared
@@ -413,11 +413,20 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   niente calcolo**, perche' il giorno di una donna e' il giorno + 40 e un
   sesso indovinato produce un codice che *passa la lettera di controllo*
   ed e' di un'altra persona — il peggiore dei risultati, perche' nessuno
-  lo mette in dubbio. **Si scrive solo se la casella e' vuota, e una
-  volta sola per ogni valore calcolato**: se chi compila lo cancella
-  resta cancellato, perche' esiste l'omocodia e un calcolo non puo'
-  saperla; e si dichiara sotto la casella. **Un codice che contraddice la
-  data scritta sopra si segnala**, non si corregge.
+  lo mette in dubbio. **Si rifa' solo il codice che abbiamo scritto noi**:
+  quello che la casella contiene se non l'ha toccato nessuno e' nostro e
+  segue i dati che lo generano, mentre uno scritto, incollato o corretto
+  a mano non si tocca — esiste l'omocodia e un calcolo non puo' saperla.
+  Cancellato a mano resta cancellato. **Un codice che contraddice la data
+  scritta sopra si segnala**, non si corregge.
+
+  La regola di prima era «si scrive solo se la casella e' vuota», e
+  produceva il caso peggiore: **il calendario del telefono parte da
+  oggi**, quindi chi apriva il campo e lo chiudeva si portava il codice
+  calcolato sulla data di oggi, congelato li', e sotto l'avviso che non
+  torna — l'app generava un codice e poi dava torto a se stessa. Per lo
+  stesso motivo una data **di quest'anno o nel futuro** adesso si dice,
+  e sotto i 18 anni anche.
 
   **Il comune di nascita si sceglie da un elenco** (`CampoComune.jsx`).
   Era testo libero, e `codiceCatastale` vuole il nome ufficiale parola
@@ -700,7 +709,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 19 file e 212 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 19 file e 215 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

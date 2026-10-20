@@ -447,7 +447,10 @@ export default function PaginaModulo({ token }) {
     if (!dati || spedito) return;
     const d = (dati.campi || []).find((x) => x.chiave === "codice_fiscale");
     if (!d || d.bloccato) return;
-    if (String(risposte.codice_fiscale || "").trim()) return;
+    // stessa regola della scheda: si rifa' solo il codice che abbiamo
+    // proposto noi. Quello che ha scritto lei non si tocca.
+    const scritto = String(risposte.codice_fiscale || "").trim();
+    if (scritto && scritto !== cfProposto) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: risposte.cognome || perChiaveValore(dati, "cognome"),
       nome: risposte.nome || perChiaveValore(dati, "nome"),
