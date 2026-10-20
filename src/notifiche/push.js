@@ -116,7 +116,7 @@ export async function attivaNotifiche({ masterId = null, venditoreId = null, ute
 
   // upsert sull'endpoint: riattivare dallo stesso telefono aggiorna la
   // riga, non ne crea una seconda
-  const { error } = await supabase.from("push_iscrizioni").upsert({
+  const iscrizione = {
     endpoint: j.endpoint,
     p256dh: j.keys.p256dh,
     auth: j.keys.auth,
@@ -128,7 +128,32 @@ export async function attivaNotifiche({ masterId = null, venditoreId = null, ute
     dispositivo: nomeDispositivo(),
     attiva: true,
     ultimo_errore: null,
-  }, { onConflict: "endpoint" });
+  };
+  let { error } = await supabase.from("push_iscrizioni").upsert(iscrizione, { onConflict: "endpoint" });
+
+  // SE `venditore_id` NON LO CONOSCE, SI RIPROVA SENZA.
+  //
+  // PostgREST butta TUTTA la scrittura quando si nomina una colonna che
+  // non trova, anche col valore a null — e la sua cache dello schema
+  // resta indietro per qualche minuto dopo un `alter table`. Aggiungendo
+  // quel campo il 20/10/2026 ho reso l'iscrizione di QUALUNQUE
+  // dispositivo dipendente da lui: le master, che funzionavano, hanno
+  // smesso di poter accendere le notifiche.
+  //
+  // E' lo stesso guasto che fermo' le spedizioni POS per sei giorni per
+  // una colonna mancante. Qui il ripiego e' semplice: si riprova senza
+  // il campo nuovo, cosi' il telefono si iscrive comunque. Perde il
+  // legame col venditore — e lo dice, invece di far finta.
+  if (error && /venditore_id/i.test(error.message || "")) {
+    const { venditore_id: _nonConosciuto, ...senzaVenditore } = iscrizione;
+    const secondo = await supabase.from("push_iscrizioni").upsert(senzaVenditore, { onConflict: "endpoint" });
+    if (!secondo.error) {
+      return venditoreId
+        ? { ok: true, avviso: "Notifiche attive, ma il collegamento col venditore non è stato salvato: ricarica la pagina e ripremi fra un minuto." }
+        : { ok: true };
+    }
+    error = secondo.error;
+  }
   if (error) return { ok: false, errore: "Iscrizione non salvata: " + error.message };
   return { ok: true };
 }

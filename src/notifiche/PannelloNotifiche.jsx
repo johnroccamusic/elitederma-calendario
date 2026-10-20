@@ -29,7 +29,9 @@ export default function PannelloNotifiche({ masterId = null, venditoreId = null,
     setInCorso("");
     rileggi();
     setMsg(esito.ok
-      ? { tipo: "ok", testo: "Notifiche attive su questo dispositivo." }
+      // un'iscrizione riuscita a meta' si dice: e' il caso in cui il
+      // telefono riceve, ma non e' legato a chi deve essere avvisato
+      ? { tipo: esito.avviso ? "errore" : "ok", testo: esito.avviso || "Notifiche attive su questo dispositivo." }
       : { tipo: "errore", testo: esito.errore });
   }
   async function spegni() {
