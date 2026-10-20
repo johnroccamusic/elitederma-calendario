@@ -38,12 +38,15 @@ describe("i suggerimenti della via", () => {
     expect(cerca).toHaveBeenCalledWith("VIA CARLO", "Roma", "00166");
   });
 
-  it("senza comune non si cerca niente", async () => {
+  // Fino al 20/10/2026 senza comune non si cercava affatto. Adesso si
+  // cerca in tutta Italia e la proposta porta con se' il paese: vedi
+  // "la via scelta porta con se' il resto", qui sotto.
+  it("senza comune si cerca in tutta Italia", async () => {
     const cerca = vi.fn(async () => []);
     const p = await apri({}, cerca);
     await scrivi(campoVia(p), "VIA CARLO SEVERINI");
     await attendi(700);
-    expect(cerca).not.toHaveBeenCalled();
+    expect(cerca).toHaveBeenCalledWith("VIA CARLO SEVERINI", "", "");
   });
 
   it("cliccando la proposta si riempiono via e civico", async () => {
@@ -132,5 +135,57 @@ describe("i suggerimenti della via", () => {
     await scrivi(campoVia(p), "AVENUE DE TOURBILLON");
     await attendi(700);
     expect(cerca).not.toHaveBeenCalled();
+  });
+});
+
+// IL GESTO CHIESTO IL 20/10/2026: «via Terni a Viterbo, via Terni a
+// Roma, via Terni a Milano — scegli quella di Roma e ti mette CAP,
+// provincia e tutto quanto».
+describe("la via scelta porta con se' il resto", () => {
+  const TRE_VIE_TERNI = async () => [
+    { via: "Via Terni", civico: "", cap: "01100", comune: "Viterbo" },
+    { via: "Via Terni", civico: "", cap: "00182", comune: "Roma" },
+    { via: "Via Terni", civico: "", cap: "20159", comune: "Milano" },
+  ];
+
+  it("ogni proposta dice il paese e la sua provincia", async () => {
+    const p = await apri({}, TRE_VIE_TERNI);
+    await scrivi(campoVia(p), "VIA TERNI");
+    await attendi(700);
+    const righe = [...p.nodo.querySelectorAll("[data-proposta]")].map((d) => d.textContent);
+    expect(righe[0]).toMatch(/Viterbo \(VT\) 01100/);
+    expect(righe[1]).toMatch(/Roma \(RM\) 00182/);
+    expect(righe[2]).toMatch(/Milano \(MI\) 20159/);
+  });
+
+  it("scelta quella di Roma, comune CAP e provincia si riempiono da soli", async () => {
+    const p = await apri({}, TRE_VIE_TERNI);
+    await scrivi(campoVia(p), "VIA TERNI");
+    await attendi(700);
+    await premi(p.nodo.querySelector('[data-proposta="1"]'));
+    expect(campoVia(p).value).toBe("VIA TERNI");
+    expect(p.tendina("citta_residenza").value).toBe("Roma");
+    expect(p.tendina("cap_residenza").value).toBe("00182");
+    expect(p.tendina("prov_residenza").value).toBe("RM");
+    // e la regione, che non si salva, esce dalla provincia
+    expect(p.tendina("regione_residenza").value).toBe("Lazio");
+  });
+
+  it("scegliendo Milano si riempie Milano, non Roma", async () => {
+    const p = await apri({}, TRE_VIE_TERNI);
+    await scrivi(campoVia(p), "VIA TERNI");
+    await attendi(700);
+    await premi(p.nodo.querySelector('[data-proposta="2"]'));
+    expect(p.tendina("citta_residenza").value).toBe("Milano");
+    expect(p.tendina("prov_residenza").value).toBe("MI");
+    expect(p.tendina("regione_residenza").value).toBe("Lombardia");
+  });
+
+  it("col comune gia' scelto la ricerca resta ristretta a lui", async () => {
+    const cerca = vi.fn(async () => []);
+    const p = await apri(A_ROMA, cerca);
+    await scrivi(campoVia(p), "VIA TERNI");
+    await attendi(700);
+    expect(cerca).toHaveBeenCalledWith("VIA TERNI", "Roma", "00166");
   });
 });

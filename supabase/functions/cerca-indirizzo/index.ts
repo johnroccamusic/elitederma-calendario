@@ -152,9 +152,15 @@ Deno.serve(async (req) => {
   // Sotto le tre lettere non si cerca: i risultati sarebbero inutili e
   // la richiesta sarebbe comunque partita.
   if (cerca.length < MINIMO_LETTERE) return json({ vie: [] });
-  if (!comune) return json({ errore: "Prima si sceglie il comune." }, 400);
+  // Il comune NON e' piu' obbligatorio. Senza, si cerca in tutta Italia
+  // e la proposta porta con se' il paese: e' il gesto di chi scrive
+  // l'indirizzo per intero e se lo vede completare, invece di dover
+  // prima dichiarare dove abita. «Via Carlo Severini» in tutta Italia
+  // da' una riga sola; «Via Roma» ne da' undici, e si sceglie la
+  // propria leggendo il paese accanto.
+  const inTuttaItalia = !comune;
 
-  const ricordo = `${chiave(cerca)}|${chiave(comune)}|${cap}`;
+  const ricordo = `${chiave(cerca)}|${chiave(comune)}|${cap}|${inTuttaItalia ? "IT" : ""}`;
   const giaVisto = dalRicordo(ricordo);
   if (giaVisto) return json({ vie: giaVisto });
 
@@ -173,8 +179,10 @@ Deno.serve(async (req) => {
   // giusta; aggiungendo `lang=it` ne da' **zero**. Sembra il parametro
   // piu' ovvio da mettere su un'app italiana ed e' quello che spegne la
   // ricerca. Se un giorno i suggerimenti sparissero, guardare qui.
-  url.searchParams.set("q", `${cerca}, ${comune}`);
-  url.searchParams.set("limit", String(QUANTI * 4));
+  url.searchParams.set("q", inTuttaItalia ? cerca : `${cerca}, ${comune}`);
+  // senza comune il campo da setacciare e' tutta Italia: si chiede piu'
+  // largo, perche' il filtro sul Paese scarta parecchio
+  url.searchParams.set("limit", String(inTuttaItalia ? 40 : QUANTI * 4));
   url.searchParams.set("layer", "street");
 
   let risposta: Response;
@@ -211,14 +219,25 @@ Deno.serve(async (req) => {
     // Il comune deve combaciare. Quando Photon non lo dice, vale il CAP:
     // e' il caso delle frazioni, dove `city` e' la frazione e non il
     // comune che l'allieva ha scelto.
-    const perNome = cittaRisposta && chiave(cittaRisposta) === kComune;
-    const perCap = !!cap && !!capRisposta && capRisposta === cap;
-    if (!perNome && !perCap) continue;
+    if (inTuttaItalia) {
+      // fuori dall'Italia non si spedisce da questa casella, e un
+      // indirizzo straniero in mezzo ai suggerimenti confonde e basta
+      if ((p.countrycode || "").toUpperCase() !== "IT") continue;
+      // senza il paese la proposta non si puo' scegliere: due "Via
+      // Roma" identiche nell'elenco sono peggio di nessuna proposta
+      if (!cittaRisposta) continue;
+    } else {
+      const perNome = cittaRisposta && chiave(cittaRisposta) === kComune;
+      const perCap = !!cap && !!capRisposta && capRisposta === cap;
+      if (!perNome && !perCap) continue;
+    }
     // ...e il nome deve c'entrare: il comune giusto da solo non basta
     if (!nomeCentra(cerca, via)) continue;
 
     const civico = (p.housenumber || "").trim();
-    const firma = `${chiave(via)}|${civico}`;
+    const firma = inTuttaItalia
+      ? `${chiave(via)}|${chiave(cittaRisposta)}|${capRisposta}`
+      : `${chiave(via)}|${civico}`;
     if (viste.has(firma)) continue;
     viste.add(firma);
     vie.push({ via, civico, cap: capRisposta || cap, comune: cittaRisposta || comune });

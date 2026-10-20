@@ -104,10 +104,14 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
   const scritto = valore || "";
 
   useEffect(() => {
-    // Senza comune non si cerca: una via senza il suo paese darebbe
-    // venti "Via Roma" di venti posti diversi, cioe' il contrario di un
-    // aiuto. Fuori Italia non si cerca affatto.
-    if (!digitando || spenta || !cercaVie || !comune || cascata?.fuoriItalia || scritto.trim().length < 3) {
+    // SENZA COMUNE SI CERCA IN TUTTA ITALIA, e la proposta porta con se'
+    // il paese: «Via Terni» da' Roma, Viterbo, Milano… e si sceglie la
+    // propria leggendo il nome accanto. Scelta, si riempie tutto il
+    // resto. Col comune gia' scelto la ricerca si restringe a lui, che
+    // da' risultati migliori: e' lo stesso campo, due comportamenti.
+    //
+    // Fuori Italia non si cerca affatto: li' questa ricerca non copre.
+    if (!digitando || spenta || !cercaVie || cascata?.fuoriItalia || scritto.trim().length < 3) {
       setProposte([]); return;
     }
     let vivo = true;
@@ -133,6 +137,12 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
   // identica: un elenco di una voce uguale a quello che si sta
   // guardando. Si tiene solo se porta un civico che nella scheda manca.
   const utili = proposte.filter((x) => {
+    // SENZA COMUNE LA PROPOSTA AGGIUNGE SEMPRE QUALCOSA: porta il paese,
+    // il CAP e la provincia, che sono tutto cio' che manca. Qui la
+    // regola del "non aggiunge niente" la nascondeva proprio quando
+    // serviva di piu' — scritta "Via Terni" per intero, le tre proposte
+    // di Viterbo, Roma e Milano sparivano tutte.
+    if (!comune) return true;
     if (normalizzaNome(x.via) !== normalizzaNome(scritto)) return true;
     return !!x.civico && !civico;
   });
@@ -166,8 +176,11 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
                 // il civico arriva solo se la ricerca l'ha trovato: non
                 // si cancella quello che qualcuno ha gia' scritto
                 if (x.civico) scrivi("civico_residenza", x.civico.toUpperCase());
-                // scelta fatta: l'elenco si chiude e NON si riapre da
-                // solo quando il valore cambia per effetto della scelta
+                // QUI SI CHIUDE IL CERCHIO: se il comune non era ancora
+                // stato scelto, la proposta lo porta con se' insieme al
+                // CAP, e provincia e regione escono da soli. Un tocco
+                // invece di cinque.
+                if (!comune) cascata?.riempiDaVia?.(x);
                 setDigitando(false);
                 setAperto(false);
                 setProposte([]);
@@ -179,7 +192,13 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
             >
               {x.via}{x.civico ? ` ${x.civico}` : ""}
               <span style={{ color: MUTED }}>
-                {" — "}{x.comune}{x.cap ? ` ${x.cap}` : ""}
+                {" — "}{x.comune}
+                {/* la sigla si ricava dal nostro elenco, non da quello
+                    della ricerca: li' la provincia di Roma si chiama
+                    "Roma Capitale", e una sigla inventata e' peggio di
+                    nessuna sigla */}
+                {provinciaDiComune(x.comune, x.cap) ? ` (${provinciaDiComune(x.comune, x.cap)})` : ""}
+                {x.cap ? ` ${x.cap}` : ""}
                 {/* un CAP diverso da quello scelto si dice: non si
                     riscrive la scheda, si fa vedere che non torna */}
                 {x.cap && cap && x.cap !== cap ? " ⚠︎" : ""}
@@ -445,6 +464,25 @@ export function AreaAnagrafica({
     scegliProvincia(v) {
       scrivi("prov_residenza", v);
       scrivi("citta_residenza", ""); scrivi("cap_residenza", "");
+      autosalva();
+    },
+    // Dalla proposta della ricerca ai campi della scheda.
+    //
+    // Il comune e il CAP arrivano da fuori, ma provincia e nome
+    // ufficiale si risolvono contro il dataset ISTAT che spediamo gia':
+    // cosi' la tendina dei comuni trova il suo valore e non resta
+    // "fuori elenco", e la provincia e' quella vera e non "Roma
+    // Capitale".
+    riempiDaVia(proposta) {
+      const sigla = provinciaDiComune(proposta?.comune, proposta?.cap);
+      const ufficiale = sigla
+        ? comuniDiProvincia(sigla).find((x) => normalizzaNome(x) === normalizzaNome(proposta?.comune))
+        : null;
+      if (sigla) scrivi("prov_residenza", sigla);
+      scrivi("citta_residenza", ufficiale || (proposta?.comune || ""));
+      if (proposta?.cap) scrivi("cap_residenza", proposta.cap);
+      // se lo Stato non era stato toccato, una via italiana lo dice
+      if (!statoScritto) scrivi("stato_residenza", "ITALIA");
       autosalva();
     },
     scegliComune(v) {
