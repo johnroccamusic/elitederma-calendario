@@ -143,4 +143,24 @@ describe("la disposizione dei gradini", () => {
     // che in flexbox e' la stessa cosa
     expect(riga.style.flexWrap).not.toBe("wrap");
   });
+
+  it("le caselle di una riga partono tutte dalla stessa altezza", async () => {
+    // «opzionale» andava a capo da se' su «Stato» e «Provincia» e non su
+    // «Regione», piu' corta: tre etichette alte diverse e tre tendine
+    // sfalsate. Adesso «opzionale» sta su una riga sua sempre, e lo
+    // spazio riservato all'etichetta e' lo stesso per tutte.
+    const p = await apri({});
+    const etichette = ["stato_residenza", "regione_residenza", "prov_residenza"].map((k) => {
+      let n = p.tendina(k);
+      while (n && !n.previousElementSibling) n = n.parentElement;
+      return n?.previousElementSibling;
+    });
+    expect(etichette.every(Boolean)).toBe(true);
+    for (const e of etichette) expect(e.style.minHeight).toBe("28px");
+    // e l'«opzionale» e' un blocco suo, non una parola in coda al nome
+    const opzionale = [...etichette[1].querySelectorAll("span")]
+      .find((x) => x.textContent.trim() === "opzionale");
+    expect(opzionale).toBeTruthy();
+    expect(opzionale.style.display).toBe("block");
+  });
 });

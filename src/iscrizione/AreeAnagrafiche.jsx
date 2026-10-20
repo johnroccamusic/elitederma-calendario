@@ -600,7 +600,23 @@ export function AreaAnagrafica({
                       onCambiaObbligo={onCambiaObbligo}
                     />
                   )}
-                  <Field label={configurazione ? campo.etichetta : <EtichettaVenditore campo={campo} />}>
+                  <Field
+                    label={configurazione ? campo.etichetta : <EtichettaVenditore campo={campo} />}
+                    // LE CASELLE DI UNA RIGA PARTONO TUTTE DALLA STESSA
+                    // ALTEZZA. «opzionale» va a capo da se' su «Stato» e
+                    // «Provincia» e non su «Regione», che e' piu' corta:
+                    // tre etichette alte diverse, e le tre tendine
+                    // sfalsate di mezza riga l'una dall'altra. Qui si
+                    // riserva lo spazio di due righe a tutte, cosi' quello
+                    // che sta sotto comincia allo stesso punto — anche
+                    // sulle quattro etichette con l'asterisco, che di
+                    // righe ne occupano una sola.
+                    //
+                    // Solo dove le caselle sono affiancate: su una riga
+                    // da sola non c'e' niente con cui allinearsi, e la
+                    // riga vuota sarebbe spazio e basta.
+                    minLabelHeight={!configurazione && riga.campi.length > 1 ? 28 : undefined}
+                  >
                     <Casella
                       campo={campo}
                       valore={configurazione ? "" : valori[campo.chiave]}
@@ -654,9 +670,14 @@ function EtichettaVenditore({ campo }) {
     <span>
       {campo.etichetta}
       {serve && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
+      {/* «opzionale» su una riga sua, sempre. Lasciato in coda al nome
+          andava a capo solo quando non ci stava, cioe' su alcune
+          etichette si' e su altre no, e la stessa riga finiva con le
+          caselle a tre altezze diverse. Una regola che vale sempre non
+          dipende da quanto e' larga la finestra. */}
       {!serve && (
-        <span style={{ color: CREAM_BORDER, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-          {" "}{nota || "opzionale"}
+        <span style={{ display: "block", color: CREAM_BORDER, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+          {nota || "opzionale"}
         </span>
       )}
     </span>
