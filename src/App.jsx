@@ -69014,6 +69014,85 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     () => (couponAttivo ? copertureCoupon(couponAttivo, prodottiShop, categorieProdotti, prodottiCategorie) : null),
     [couponAttivo, prodottiShop, categorieProdotti, prodottiCategorie],
   );
+  // UN CODICE VALIDO CHE NON TOCCA NIENTE VA DETTO.
+  //
+  // `need30` vale sui soli prodotti da needling: scritto su un carrello
+  // che non ne ha, era "Codice valido: −30%" in verde e zero euro di
+  // sconto. Verde e inutile e' la peggiore delle risposte — chi sta
+  // battendo crede di aver scontato.
+  const righeToccateDalCodice = useMemo(() => {
+    if (!couponAttivo || !coperturaCoupon) return null;
+    return (carrello || []).filter((r) => coperturaCoupon(r.prodottoId)).length;
+  }, [couponAttivo, coperturaCoupon, carrello]);
+  // IL CAMPO DEL CODICE SCONTO, PER CHIUNQUE POSSA SCONTARE.
+  //
+  // Stava SOLO nel ramo di chi NON puo' scontare a mano. Chi amministra
+  // vedeva «Sconto vendita», «%» e «Coupon (%)» — cioe' una percentuale
+  // da scrivere — e nessun posto dove battere un codice. Per applicare
+  // `need30` bisognava sapere a memoria che fa 24,59% sul lordo e
+  // scriverlo a mano: lo sconto usciva giusto e sulla vendita non
+  // restava scritto QUALE codice era, che e' quello che serve ai punti
+  // della master e a ogni conto sui codici.
+  //
+  // Lo stesso campo nei due rami, scritto una volta sola: due copie
+  // dello stesso riquadro si sarebbero allontanate alla prima
+  // correzione.
+  function riquadroCodiceSconto() {
+    return (codiceExtraAperto || couponCodiceTesto.trim() !== "") ? (
+              <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    autoFocus={codiceExtraAperto}
+                    style={{ ...inputStyle, padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: acquistoPersonale || (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
+                    value={couponCodiceTesto}
+                    // in un acquisto personale il codice e' quello suo e
+                    // basta: un secondo codice sopra vorrebbe dire due
+                    // sconti sulla stessa riga, e la vendita non
+                    // apparterrebbe piu' a nessuno dei due
+                    disabled={acquistoPersonale || !!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
+                    onChange={(e) => applicaCodiceCoupon(e.target.value)}
+                    placeholder={acquistoPersonale ? "Acquisto personale: nessun altro codice" : scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
+                  />
+                  <button onClick={() => { applicaCodiceCoupon(""); setCodiceExtraAperto(false); }} title="Chiudi il codice extra"
+                    style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
+                </div>
+                {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
+                  couponAttivo ? (
+                    righeToccateDalCodice === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", marginTop: 3, lineHeight: 1.45 }}>
+                      Codice valido, ma non tocca nessuna riga di questo carrello.
+                      <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 1 }}>
+                        Vale solo su certi prodotti, quindi lo sconto è zero. Se va scontato lo stesso, usa «Sconto vendita» qui sopra.
+                      </span>
+                    </div>
+                    ) : (
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
+                      Codice valido: −{fmtPctErp2(percentualeErogata)}
+                      {/* quanto durera': un codice a uso singolo sparisce dopo
+                          questo carrello, e saperlo prima evita di cercarlo
+                          alla vendita dopo credendo che sia sparito per errore */}
+                      <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 1 }}>
+                        {couponAttivo.utilizzi_max === 1
+                          ? "Uso singolo: dopo questa vendita si toglie da solo."
+                          : couponAttivo.valido_fino_a
+                          ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
+                          : "Resta finché non lo cancelli."}
+                      </span>
+                    </div>
+                    )
+                  ) : (
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>Codice non valido o scaduto: nessuno sconto.</div>
+                  )
+                )}
+              </div>
+    ) : (
+      <button onClick={() => setCodiceExtraAperto(true)}
+        style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", marginLeft: "auto" }}>
+        Codice sconto extra <span style={{ fontSize: 15, lineHeight: 1 }}>›</span>
+      </button>
+    );
+  }
+
   const couponAFasce = couponAttivo?.tipo_regola_sconto === "fasce";
   const couponSulMargine = !couponAFasce && baseCoupon === "margine";
   // le fasce da applicare: quelle scritte sul coupon, salvo che sia il
@@ -70544,7 +70623,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           sconto di corso da accendere ne' un codice scritto, il link
           resta da solo, senza bordo e senza fondo. */}
       {(() => { const riquadroVuoto = !puoScontare && !couponDellEdizione(corsoPosId) && !acquistoPersonale && !codiceExtraAperto && couponCodiceTesto.trim() === ""; return (
-      <div style={{ border: riquadroVuoto ? "none" : `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: riquadroVuoto ? "transparent" : (puoScontare ? undefined : "#EDF2F8"), borderRadius: 14, padding: riquadroVuoto ? 0 : (puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px")), marginBottom: isMobile ? 10 : 14, boxShadow: riquadroVuoto ? "none" : (puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto), display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: puoScontare ? "nowrap" : "wrap" }}>
+      <div style={{ border: riquadroVuoto ? "none" : `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: riquadroVuoto ? "transparent" : (puoScontare ? undefined : "#EDF2F8"), borderRadius: 14, padding: riquadroVuoto ? 0 : (puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px")), marginBottom: isMobile ? 10 : 14, boxShadow: riquadroVuoto ? "none" : (puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto), display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: "wrap" }}>
         {puoScontare && (
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -70606,50 +70685,20 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 </span>
                 · nessun altro codice
               </span>
-            ) : codiceExtraAperto || couponCodiceTesto.trim() !== "" ? (
-              <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input
-                    autoFocus={codiceExtraAperto}
-                    style={{ ...inputStyle, padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: acquistoPersonale || (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
-                    value={couponCodiceTesto}
-                    // in un acquisto personale il codice e' quello suo e
-                    // basta: un secondo codice sopra vorrebbe dire due
-                    // sconti sulla stessa riga, e la vendita non
-                    // apparterrebbe piu' a nessuno dei due
-                    disabled={acquistoPersonale || !!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso}
-                    onChange={(e) => applicaCodiceCoupon(e.target.value)}
-                    placeholder={acquistoPersonale ? "Acquisto personale: nessun altro codice" : scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
-                  />
-                  <button onClick={() => { applicaCodiceCoupon(""); setCodiceExtraAperto(false); }} title="Chiudi il codice extra"
-                    style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
-                </div>
-                {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
-                  couponAttivo ? (
-                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
-                      Codice valido: −{fmtPctErp2(percentualeErogata)}
-                      {/* quanto durera': un codice a uso singolo sparisce dopo
-                          questo carrello, e saperlo prima evita di cercarlo
-                          alla vendita dopo credendo che sia sparito per errore */}
-                      <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 1 }}>
-                        {couponAttivo.utilizzi_max === 1
-                          ? "Uso singolo: dopo questa vendita si toglie da solo."
-                          : couponAttivo.valido_fino_a
-                          ? `Resta fino al ${fmtData(couponAttivo.valido_fino_a)}, o finché non lo cancelli.`
-                          : "Resta finché non lo cancelli."}
-                      </span>
-                    </div>
-                  ) : (
-                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>Codice non valido o scaduto: nessuno sconto.</div>
-                  )
-                )}
-              </div>
-            ) : (
-              <button onClick={() => setCodiceExtraAperto(true)}
-                style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", marginLeft: "auto" }}>
-                Codice sconto extra <span style={{ fontSize: 15, lineHeight: 1 }}>›</span>
-              </button>
-            )}
+            ) : riquadroCodiceSconto()}
+          </div>
+        )}
+        {/* IL CODICE SCONTO ANCHE A CHI AMMINISTRA.
+            Lassu' ci sono «Sconto vendita» e «Coupon (%)»: due
+            percentuali da scrivere a mano. Per applicare `need30`
+            bisognava sapere a memoria che fa 24,59% sul lordo (e' un 30%
+            sul netto) e battere quel numero — lo sconto usciva giusto, e
+            sulla vendita non restava scritto QUALE codice era. Senza
+            quello i punti della master e ogni conto sui codici non hanno
+            a cosa attaccarsi. */}
+        {puoScontare && !acquistoPersonale && (
+          <div style={{ flexBasis: "100%", minWidth: 0, marginTop: 2 }}>
+            {riquadroCodiceSconto()}
           </div>
         )}
         {(couponNum > 0 || scontoNum > 0 || scontoFieraAttivo) && (

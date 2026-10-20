@@ -74,4 +74,18 @@ describe("il POS esterno e' solo dell'amministrazione", () => {
     const p = await apriBanco("user");
     expect(p.testo()).not.toContain("Copia il link");
   });
+
+  it("chi amministra ha dove scrivere il codice sconto", async () => {
+    // il campo del codice stava SOLO nel ramo di chi non puo' scontare a
+    // mano: chi amministra vedeva «Sconto vendita», «%» e «Coupon (%)» —
+    // tre percentuali — e nessun posto dove battere `need30`. Per
+    // applicarlo bisognava sapere a memoria che fa 24,59% sul lordo.
+    const p = await apriBanco("amministratore");
+    expect(p.testo()).toContain("Codice sconto extra");
+  });
+
+  it("e anche chi non amministra ce l'ha, come prima", async () => {
+    const p = await apriBanco("user");
+    expect(p.testo()).toContain("Codice sconto extra");
+  });
 });
