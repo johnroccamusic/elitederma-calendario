@@ -74,7 +74,7 @@ import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import { statoDi, aggiornaStatoDopoAcconto, iscrittiAttiviDi } from "./iscrizioni/stato.js";
-import { inviaModulo, linkModulo, segnaInviatoAMano } from "./iscrizioni/invio.js";
+import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
 import { INDIRIZZO_APP } from "./indirizzo.js";
 import FasciaStato from "./iscrizioni/FasciaStato.jsx";
 import Fascicolo from "./iscrizioni/Fascicolo.jsx";
@@ -30437,7 +30437,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
   // la domanda prima di spedire. Non window.confirm: quello ha solo due
   // tasti, e qui ne servono tre — manda, copia il link, lascia perdere.
   const [chiediInvio, setChiediInvio] = useState(null);   // { rec, giaPartito, salvaPrima }
-  const [linkCopiatoModulo, setLinkCopiatoModulo] = useState(false);
   const [inviandoId, setInviandoId] = useState(null);
   const [esitoModulo, setEsitoModulo] = useState(null);   // { id, ok, testo, link }
   // il fascicolo aperto dalla tessera "Modulo ricevuto": quale iscritta.
@@ -32012,7 +32011,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
     if (!rec?.id) return;
     // SI CHIEDE SEMPRE, anche la prima volta: da qui parte una mail a
     // una persona vera, e non deve succedere per un tocco di troppo.
-    setLinkCopiatoModulo(false);
     setEsitoModulo(null);
     setChiediInvio({ rec, giaPartito, salvaPrima });
   }
@@ -32663,34 +32661,28 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                     >
                       Invia la mail
                     </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={async () => {
-                        const link = linkModulo(chiediInvio.rec.token_modulo);
-                        try { await navigator.clipboard.writeText(link); }
-                        catch { window.prompt("Copia il link:", link); }
-                        setLinkCopiatoModulo(true);
-                        const { data: utenteOra } = await supabase.auth.getUser();
-                        const errore = await segnaInviatoAMano({
-                          iscritto: chiediInvio.rec,
-                          corsoData: corsiDate.find((x) => x.id === chiediInvio.rec.corso_data_id) || corsoData,
-                          chi: utenteOra?.user?.email || "",
-                        });
-                        setEsitoModulo(errore
-                          ? { id: chiediInvio.rec.id, ok: false, testo: `Link copiato, ma la scheda non si è aggiornata: ${errore}`, link }
-                          : { id: chiediInvio.rec.id, ok: true, testo: "Link copiato e segnato come inviato: mandalo tu.", link });
-                        setChiediInvio(null);
-                        await ricarica();
-                      }}
-                    >
-                      {linkCopiatoModulo ? "Link copiato ✓" : "Copia il link"}
-                    </Button>
+                    {/* IL LINK NON SI COPIA PIU'. 20/10/2026.
+                        C'era un tasto che copiava il link e segnava
+                        l'iscrizione come «modulo inviato», per mandarlo
+                        a mano su WhatsApp. Togliendolo resta un canale
+                        solo, la mail, ed e' il punto: della mail si sa
+                        se e' partita, a chi, quando, se e' stata
+                        consegnata e se e' rimbalzata — tutto scritto in
+                        `email_inviate`. Di un messaggio incollato in
+                        una chat non si sa niente, e «te l'ho mandato»
+                        contro «non l'ho ricevuto» non si risolve.
+
+                        Nessuno resta fuori: le 14 schede senza email
+                        sono tutte CONFERMATE, e dal 19/10 il modulo
+                        online rifiuta le iscrizioni confermate — quel
+                        link non si sarebbe aperto comunque. Loro hanno
+                        il modulo cartaceo. */}
                     <Button variant="ghost" onClick={() => setChiediInvio(null)}>Chiudi</Button>
                   </div>
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
                     {chiediInvio.rec.email
-                      ? <>Copiando il link l'iscrizione viene segnata come «modulo inviato»: vuol dire che lo mandi tu, su WhatsApp o altrove.</>
-                      : <>Questa scheda non ha un'email: si può solo copiare il link.</>}
+                      ? <>Il modulo parte per email, e solo per email: così resta scritto che è partito, a chi e quando. Le arriva anche la richiesta di conferma di ricezione.</>
+                      : <>Questa scheda non ha un'email, e senza email il modulo non si manda: scrivila nella scheda e salva.</>}
                   </div>
                 </Modal>
               );
@@ -32993,20 +32985,6 @@ function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle 
                   color: esitoModulo.ok ? "#2E7D32" : "#B3261E",
                 }}>
                   {esitoModulo.testo}
-                  {/* il link torna sempre, anche quando la mail non e'
-                      partita: cosi' lo si copia e si manda a mano */}
-                  {esitoModulo.link && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try { navigator.clipboard.writeText(esitoModulo.link); setEsitoModulo({ ...esitoModulo, copiato: true }); }
-                        catch { window.prompt("Copia il link:", esitoModulo.link); }
-                      }}
-                      style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "5px 10px", marginLeft: 8, cursor: "pointer" }}
-                    >
-                      {esitoModulo.copiato ? "Link copiato ✓" : "Copia il link"}
-                    </button>
-                  )}
                 </div>
               )}
               {rec.modulo_inviato_il && (

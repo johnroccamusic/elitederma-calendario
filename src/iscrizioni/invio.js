@@ -131,8 +131,27 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
 
   const mail = componiMailModulo({ valori, righe: righeDettagli, link, modello: riga, societa });
 
+  // `ricevuta: true` CHIEDE LA CONFERMA DI LETTURA.
+  //
+  // Aggiunge alla mail le tre intestazioni dello standard
+  // (`Disposition-Notification-To` e le due varianti): il programma di
+  // posta dell'allieva, se le implementa, le mostra come «il mittente
+  // ha chiesto la conferma di ricezione» e le propone di mandarla.
+  //
+  // La capacita' era in `invia-email` dal 19/10/2026 e NESSUNO la
+  // chiedeva: le intestazioni non sono mai partite, e la conferma non
+  // poteva comparire a nessuno. Di qui in avanti parte.
+  //
+  // NON SI VEDRA' SU TUTTI, e va saputo: Mail di iPhone e di Mac non
+  // implementa affatto quelle intestazioni, Gmail le ignora sugli
+  // account normali. Dove compaiono, la destinataria puo' comunque
+  // rifiutare. La ricevuta torna come una mail a
+  // notifiche@elitederma.it, non nel registro dell'app.
   const { data, error } = await supabase.functions.invoke("invia-email", {
-    body: { a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo },
+    body: {
+      a: destinatario, oggetto: mail.oggetto, html: mail.html, testo: mail.testo,
+      ricevuta: true,
+    },
   });
   const errore = data?.errore || (error ? (error.message || String(error)) : "");
 
@@ -177,35 +196,13 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
   return { ok: true, errore: "", link };
 }
 
-/**
- * Segna il modulo come inviato SENZA mandare la mail.
- *
- * Serve a chi copia il link e lo manda su WhatsApp: il modulo e'
- * partito davvero, solo per un'altra strada, e la scheda deve dirlo. Se
- * non lo segnasse, quell'iscrizione resterebbe per sempre su "Invia
- * modulo" e qualcuno lo rimanderebbe.
- *
- * Lascia la sua riga nel registro, con esito "ok" e destinatario vuoto:
- * cosi' si distingue dalle mail partite da qui.
- */
-export async function segnaInviatoAMano({ iscritto, corsoData, chi = "" }) {
-  const patch = { stato: "modulo_inviato" };
-  if (!iscritto.modulo_inviato_il) patch.modulo_inviato_il = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("iscritti").update(patch).eq("id", iscritto.id).select("id");
-  if (error) return error.message;
-  if (!data?.length) return "Nessuna riga aggiornata: controlla i permessi.";
-
-  const { error: erroreRegistro } = await supabase.from("email_inviate").insert({
-    chiave_modello: "invio_modulo",
-    iscritto_id: iscritto.id,
-    corso_data_id: corsoData?.id || null,
-    destinatario: "",
-    oggetto: "Link copiato e mandato a mano",
-    esito: "ok",
-    automatica: false,
-    inviata_da: chi || null,
-  });
-  if (erroreRegistro) console.error("email_inviate: riga non scritta —", erroreRegistro.message);
-  return null;
-}
+// QUI C'ERA `segnaInviatoAMano`, TOLTA IL 20/10/2026.
+//
+// Segnava il modulo come inviato senza mandare la mail: serviva al tasto
+// "Copia il link", per chi lo mandava su WhatsApp. Via il tasto, quella
+// funzione non la chiamava piu' nessuno — e una funzione che scrive
+// `modulo_inviato_il` senza che sia partito niente, lasciata in giro, e'
+// la prossima scorciatoia che qualcuno ritrova e riusa.
+//
+// Se un giorno servisse un canale diverso dalla mail, va rifatta
+// insieme alla sua traccia: chi l'ha mandato, dove, e come si dimostra.
