@@ -48,6 +48,61 @@ const json = (corpo: unknown, status = 200) =>
 
 const emailValida = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 
+// AVVISA CHI HA VENDUTO, APPENA IL MODULO ARRIVA.
+//
+// Chi ha chiuso l'iscrizione e' l'unico che sa se quei dati sono quelli
+// giusti: finche' non guarda, l'iscrizione resta ferma. La mail di
+// conferma va all'allieva, non a lui, e nessuno gli diceva niente.
+//
+// NON PUO' FAR FALLIRE NIENTE. Qualunque cosa vada storta qui — nessun
+// venditore col nome del tutor, nessun telefono iscritto, il servizio
+// di push giu' — si scrive in console e si va avanti: il modulo e'
+// arrivato, la copia firmata deve partire comunque. Una notifica
+// mancata e' un fastidio; una conferma mancata e' un contratto senza
+// copia.
+//
+// Il legame iscritta -> venditore e' il NOME in `iscritti.tutor`: nella
+// scheda si scegle da una tendina dei venditori, e tutta l'app accoppia
+// cosi' (vedi `chiusure` in PaginaDashboardVenditori). Non e' una
+// chiave, e un venditore rinominato perde le sue notifiche finche'
+// qualcuno non riallinea i nomi: e' il limite di oggi, scritto qui per
+// non riscoprirlo.
+function chiaveNome(x: string): string {
+  return (x || "").normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+}
+
+async function avvisaIlVenditore(isc: Record<string, unknown>): Promise<void> {
+  try {
+    const tutor = chiaveNome(String(isc.tutor || ""));
+    if (!tutor) return;
+    const { data: venditori } = await admin.from("venditori").select("id, nome");
+    const suo = (venditori || []).find((v: { nome: string }) => chiaveNome(v.nome) === tutor);
+    if (!suo) { console.log(`push: nessun venditore di nome "${isc.tutor}"`); return; }
+
+    const chi = [isc.nome, isc.cognome].filter(Boolean).join(" ").trim() || "Un'allieva";
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/invia-notifica-push`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        venditoreId: suo.id,
+        titolo: "Modulo di iscrizione ricevuto",
+        testo: `${chi} ha inviato il suo modulo di iscrizione, accedi per verificare`,
+        // `tag` uguale per la stessa iscritta: due notifiche per lo
+        // stesso modulo si sostituiscono invece di impilarsi
+        tag: `modulo-${isc.id}`,
+      }),
+    });
+    const esito = await r.json().catch(() => ({}));
+    if (!r.ok || esito?.errore) console.log("push non mandata:", esito?.errore || r.status);
+  } catch (e) {
+    console.log("push non mandata:", e instanceof Error ? e.message : String(e));
+  }
+}
+
 async function spedisci(
   a: string,
   mail: { oggetto: string; testo: string; html: string },
@@ -250,6 +305,13 @@ Deno.serve(async (req) => {
       esito: "ok", automatica: true, inviata_da: "modulo",
     }).select("id").single();
   if (erroreRegistro) return json({ ok: true, gia: true, messaggio: "La conferma era già partita." });
+
+  // Qui la corsa e' vinta: questa chiamata e' la prima per questo
+  // modulo. Si avvisa chi ha venduto ADESSO e non dopo la mail, perche'
+  // se la mail fallisce il modulo e' arrivato lo stesso e lui deve
+  // saperlo; e si avvisa una volta sola, perche' chi perde la corsa e'
+  // uscito alla riga sopra.
+  await avvisaIlVenditore(isc);
 
   const { errore, id } = await spedisci(destinatario, mail,
     pdf ? [{ nome: nomeAllegato, contenuto: encodeBase64(pdf), tipo: "application/pdf" }] : []);

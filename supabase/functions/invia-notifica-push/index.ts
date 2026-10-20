@@ -9,6 +9,7 @@
 //
 // A chi: si passa UNO fra
 //   { masterId: "<uuid>" }   tutti i dispositivi di quella master
+//   { venditoreId: "<uuid>" } tutti i dispositivi di quel venditore
 //   { endpoint: "https://…" } un dispositivo solo (serve alla prova)
 //   { tutte: true }           tutti i dispositivi attivi
 // piu' { titolo, testo, url?, tag? }.
@@ -57,7 +58,8 @@ Deno.serve(async (req) => {
   let query = supabase.from("push_iscrizioni").select("id, endpoint, p256dh, auth").eq("attiva", true);
   if (corpo.endpoint) query = query.eq("endpoint", String(corpo.endpoint));
   else if (corpo.masterId) query = query.eq("master_id", String(corpo.masterId));
-  else if (corpo.tutte !== true) return json({ errore: "Dire a chi: masterId, endpoint, oppure tutte: true" }, 400);
+  else if (corpo.venditoreId) query = query.eq("venditore_id", String(corpo.venditoreId));
+  else if (corpo.tutte !== true) return json({ errore: "Dire a chi: masterId, venditoreId, endpoint, oppure tutte: true" }, 400);
 
   const { data: iscrizioni, error } = await query;
   if (error) return json({ errore: "Lettura iscrizioni: " + error.message }, 500);

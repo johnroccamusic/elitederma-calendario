@@ -12,7 +12,7 @@ import { NAVY, MUTED, CREAM_BORDER, BG, fontBody } from "../ui/stile.js";
 import { supabase } from "../supabase.js";
 import { statoNotifiche, attivaNotifiche, disattivaNotifiche, pushSupportate } from "./push.js";
 
-export default function PannelloNotifiche({ masterId = null, utente = null, compatto = false }) {
+export default function PannelloNotifiche({ masterId = null, venditoreId = null, utente = null, compatto = false }) {
   const [stato, setStato] = useState(null);
   const [inCorso, setInCorso] = useState("");
   const [msg, setMsg] = useState(null);   // { tipo, testo }
@@ -25,7 +25,7 @@ export default function PannelloNotifiche({ masterId = null, utente = null, comp
 
   async function accendi() {
     setInCorso("attiva"); setMsg(null);
-    const esito = await attivaNotifiche({ masterId, utente });
+    const esito = await attivaNotifiche({ masterId, venditoreId, utente });
     setInCorso("");
     rileggi();
     setMsg(esito.ok

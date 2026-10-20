@@ -87,7 +87,7 @@ function nomeDispositivo() {
 
 // Accende le notifiche su questo dispositivo. Torna { ok, errore }: chi
 // chiama mostra l'errore com'e' scritto, senza interpretarlo.
-export async function attivaNotifiche({ masterId = null, utente = null } = {}) {
+export async function attivaNotifiche({ masterId = null, venditoreId = null, utente = null } = {}) {
   if (!pushSupportate()) return { ok: false, errore: "Questo browser non sa ricevere notifiche." };
   if (suIPhone() && !appInstallata()) {
     return { ok: false, errore: "Su iPhone le notifiche arrivano solo all'app aggiunta alla schermata Home: aprila dalla sua icona e riprova." };
@@ -121,6 +121,9 @@ export async function attivaNotifiche({ masterId = null, utente = null } = {}) {
     p256dh: j.keys.p256dh,
     auth: j.keys.auth,
     master_id: masterId || null,
+    // una riga porta l'uno o l'altro: il dispositivo e' di una master
+    // oppure di un venditore, mai di entrambi
+    venditore_id: venditoreId || null,
     utente: utente || null,
     dispositivo: nomeDispositivo(),
     attiva: true,

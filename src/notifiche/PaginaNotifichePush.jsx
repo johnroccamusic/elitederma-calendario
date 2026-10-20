@@ -13,7 +13,7 @@ import PannelloNotifiche from "./PannelloNotifiche.jsx";
 
 const quando = (ts) => (ts ? new Date(ts).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
 
-export default function PaginaNotifichePush({ master = [], utenteLoggato = null }) {
+export default function PaginaNotifichePush({ master = [], venditori = [], utenteLoggato = null }) {
   const [righe, setRighe] = useState(null);
   const [msg, setMsg] = useState(null);
   const [inCorso, setInCorso] = useState("");
@@ -52,6 +52,18 @@ export default function PaginaNotifichePush({ master = [], utenteLoggato = null 
   const attive = (righe || []).filter((r) => r.attiva);
   const conDispositivo = new Set(attive.map((r) => r.master_id).filter(Boolean));
   const senza = (master || []).filter((m) => m.attiva !== false && !conDispositivo.has(m.id));
+
+  // I VENDITORI, dal 20/10/2026. Dal giorno in cui l'arrivo di un
+  // modulo manda una notifica a chi ha venduto, un venditore senza
+  // dispositivo non e' piu' una mancanza senza conseguenze: e'
+  // un'iscrizione che resta ferma perche' nessuno sa che e' arrivata.
+  // Per questo stanno in un riquadro loro e non mescolati alle master.
+  const conDispositivoVend = new Set(attive.map((r) => r.venditore_id).filter(Boolean));
+  // nessun filtro sugli "attivi": `venditori` non ha una colonna che lo
+  // dica, e scrivere `v.attivo !== false` prometteva una colonna che non
+  // esiste. Chi e' in anagrafica deve ricevere le notifiche.
+  const senzaVend = (venditori || []).filter((v) => !conDispositivoVend.has(v.id));
+  const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || null;
 
   const th = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "9px 12px", background: BG, whiteSpace: "nowrap" };
   const td = { padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY };
@@ -100,7 +112,10 @@ export default function PaginaNotifichePush({ master = [], utenteLoggato = null 
               <tbody>
                 {righe.map((r) => (
                   <tr key={r.id} style={{ opacity: r.attiva ? 1 : 0.55 }}>
-                    <td style={{ ...td, fontWeight: 700 }}>{nomeMaster(r.master_id) || r.utente || "—"}</td>
+                    <td style={{ ...td, fontWeight: 700 }}>
+                      {nomeMaster(r.master_id) || nomeVenditore(r.venditore_id) || r.utente || "—"}
+                      {r.venditore_id && <span style={{ ...fontBody, fontWeight: 400, fontSize: 11, color: MUTED }}> · venditore</span>}
+                    </td>
                     <td style={td}>{r.dispositivo || "—"}</td>
                     <td style={td}>{quando(r.creato_il)}</td>
                     <td style={td}>{quando(r.ultimo_invio)}</td>
@@ -122,6 +137,25 @@ export default function PaginaNotifichePush({ master = [], utenteLoggato = null 
         <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginTop: 12, lineHeight: 1.55 }}>
           <b>Non ricevono niente</b> ({senza.length}): {senza.map((m) => m.nome).join(", ")}.
           <span style={{ display: "block", color: MUTED, marginTop: 3 }}>Devono aprire GENYON dall'icona sulla Home e premere «Attiva le notifiche» nella loro dashboard.</span>
+        </div>
+      )}
+
+      {/* I VENDITORI SENZA NOTIFICHE, che da oggi e' la riga che costa:
+          se il suo telefono non e' iscritto, l'arrivo di un modulo non
+          lo sa nessuno e l'iscrizione resta in attesa. */}
+      {righe !== null && senzaVend.length > 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#8A2E2E", background: "#FDECEC", border: "1px solid #F0C9C9", borderRadius: 10, padding: "9px 11px", marginTop: 10, lineHeight: 1.55 }}>
+          <b>Venditori che non sanno quando arriva un modulo</b> ({senzaVend.length}): {senzaVend.map((v) => v.nome).join(", ")}.
+          <span style={{ display: "block", color: MUTED, marginTop: 3 }}>
+            Ognuno deve entrare con il suo accesso, aprire la sua dashboard e premere «Attiva le notifiche».
+            Su iPhone funziona solo dall'app aggiunta alla schermata Home: dal browser il tasto non compare.
+          </span>
+        </div>
+      )}
+
+      {righe !== null && senzaVend.length === 0 && (venditori || []).length > 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginTop: 10 }}>
+          Tutti i venditori ricevono le notifiche.
         </div>
       )}
     </div>

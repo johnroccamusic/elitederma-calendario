@@ -11507,6 +11507,23 @@ function PaginaDashboardVenditori({ eventi = [], onApriEvento,
         </div>
         {venditoreSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area venditore</div>}
 
+        {/* LE NOTIFICHE SI ACCENDONO DA QUI, E DA NESSUN ALTRO POSTO.
+            Fino al 20/10/2026 l'interruttore stava solo nell'area
+            master: un venditore non aveva modo di accenderle, quindi
+            non le riceveva — e la notifica che gli dice "e' arrivato un
+            modulo" non sarebbe arrivata a nessuno.
+
+            Si mostra solo al venditore che ha fatto accesso come se
+            stesso (`venditoreBloccato`). Chi amministra sceglie un
+            venditore dalla tendina qui sopra per guardare i suoi
+            numeri: accendere le notifiche da li' le accenderebbe sul
+            PROPRIO telefono intestandole a un altro. */}
+        {venditoreSel && venditoreBloccato?.id === venditoreSel.id && (
+          <div style={{ marginBottom: 18 }}>
+            <PannelloNotifiche venditoreId={venditoreSel.id} utente={venditoreSel.nome} />
+          </div>
+        )}
+
         {!venditoreSel ? (
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli un venditore per vedere le sue chiusure e commissioni.</div>
         ) : (
@@ -19524,7 +19541,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
 
       {showNotificheModal && (
         <Modal title="Notifiche push" onClose={() => setShowNotificheModal(false)} maxWidth={760}>
-          <PaginaNotifichePush master={master} utenteLoggato={utenteLoggato} />
+          <PaginaNotifichePush master={master} venditori={venditori} utenteLoggato={utenteLoggato} />
         </Modal>
       )}
 
