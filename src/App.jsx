@@ -52146,8 +52146,27 @@ function etichettaStatoVenditaShop(stato) {
 // payload originale di WooCommerce (indirizzi, coupon, spese di spedizione)
 // pesa troppo per tenerlo caricato per mille ordini, quindi si legge qui,
 // una riga sola, quando si apre la scheda
-function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], onAssociato }) {
+export function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], onAssociato, puoRiscuotere = false }) {
+  const isMobile = useIsMobile();
   const [payload, setPayload] = useState(null);
+  // RISCUOTERE DOPO, QUANDO AL BANCO IL PAGAMENTO NON E' ANDATO.
+  //
+  // La vendita e' registrata — il magazzino e' sceso, la riga c'e' — ma
+  // i soldi non sono arrivati: la carta rifiutata, il QR scaduto, la
+  // cliente uscita. Finora l'unica strada era rifare tutto al banco con
+  // la persona davanti, che spesso e' gia' a casa.
+  //
+  // Qui nasce un link di pagamento per QUESTA vendita: stessa edge
+  // function del banco, stesso giro di Stripe, e quando paga l'incasso
+  // finisce dove finiscono gli altri — fra le fatture da emettere se ha
+  // chiesto fattura. Non nasce nessuna seconda vendita: la riga esiste
+  // gia' e il webhook di Stripe non ne crea (scrive solo in
+  // `pagamenti_pos`). Serve proprio a non doverla rifare.
+  const [chiedoFatturaLink, setChiedoFatturaLink] = useState(false);
+  const [creandoLink, setCreandoLink] = useState(false);
+  const [linkPagamento, setLinkPagamento] = useState(null);
+  const [msgLink, setMsgLink] = useState("");
+  const [linkOrdineCopiato, setLinkOrdineCopiato] = useState(false);
   const [caricando, setCaricando] = useState(false);
   // Associare una vendita a un corso dopo che e' stata fatta.
   //
@@ -52213,6 +52232,55 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
     if (error) { window.alert("Non tolta: " + testoErrore(error)); return; }
     onAssociato?.();
   }
+  async function creaLinkPagamento(vuoleFattura) {
+    setChiedoFatturaLink(false);
+    setCreandoLink(true); setMsgLink("");
+    const totale = round2(Number(vendita?.totale) || 0);
+    const numero = vendita?.numero_ordine || vendita?.woo_order_id || "";
+    // UNA RIGA SOLA, COL TOTALE DELL'ORDINE, e non le righe dei
+    // prodotti. Non e' pigrizia: `stripe-crea-pagamento` pretende che le
+    // righe facciano esattamente il totale, e le righe dei prodotti non
+    // lo fanno — ci sono le spese di spedizione, gli sconti sul
+    // carrello, e un prezzo unitario ricavato dividendo per la quantita'
+    // che a volte perde un centesimo. Qui si sta riscuotendo un ordine
+    // gia' fatto, e quello che si deve e' il suo totale.
+    const { data, error } = await supabase.functions.invoke("stripe-crea-pagamento", {
+      body: {
+        importo: totale,
+        descrizione: `Elitederma · ordine ${numero}`,
+        righe: [{ nome: `Ordine ${numero}`, prezzo: totale, quantita: 1 }],
+        // l'incasso appartiene a chi ha fatto la vendita, non a chi
+        // manda il link: e' la stessa vendita, ripresa
+        operatore: {
+          tipo: vendita?.operatore_tipo || null,
+          id: vendita?.operatore_id || null,
+          nome: vendita?.operatore_nome || null,
+        },
+        corsoDataId: vendita?.corso_data_id || null,
+        richiedeFattura: vuoleFattura === true,
+        // un link mandato su WhatsApp viene aperto la sera, non entro
+        // due ore: qui vale il massimo che Stripe concede
+        oreValide: 24,
+      },
+    });
+    setCreandoLink(false);
+    if (error || data?.errore) {
+      setMsgLink("Link non creato: " + (data?.errore || error?.message || "nessuna risposta dal server"));
+      return;
+    }
+    if (!data?.indirizzo) { setMsgLink("Link non creato: il server ha risposto senza indirizzo."); return; }
+    setLinkPagamento(data);
+  }
+
+  async function copiaLinkOrdine(indirizzo) {
+    try {
+      await navigator.clipboard.writeText(indirizzo);
+      setLinkOrdineCopiato(true); setTimeout(() => setLinkOrdineCopiato(false), 2500);
+    } catch {
+      setMsgLink("Il browser non mi fa copiare: il link è scritto qui sopra, tienilo premuto e copialo.");
+    }
+  }
+
   useEffect(() => {
     if (!vendita?.id) return;
     let annullato = false;
@@ -52274,9 +52342,12 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
     const citta = [a.postcode, a.city, a.state && `(${a.state})`].filter(Boolean).join(" ");
     return [nome, a.company, via, citta, a.country, a.phone, a.email].filter(Boolean);
   }
+  // 130 punti fissi per l'etichetta su un telefono sono un terzo dello
+  // schermo, e il valore finisce a capo a meta' parola: li' etichetta
+  // sopra e valore sotto.
   const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
-    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
-      <span style={{ color: MUTED, minWidth: 130, flexShrink: 0 }}>{etichetta}</span>
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 1 : 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
+      <span style={{ color: MUTED, minWidth: isMobile ? 0 : 130, flexShrink: 0 }}>{etichetta}</span>
       <span style={{ minWidth: 0 }}>{valore}</span>
     </div>
   );
@@ -52347,6 +52418,36 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
         ) : righe.map((r, i) => {
           const sc = scontiRighe[i];
           const unitario = sc?.listino ?? r.prezzo_unitario ?? r.prezzo_listino ?? null;
+          const scontoTesto = sc && sc.sconto > 0
+            ? `− ${fmtEuroErp2(sc.sconto)}${sc.pct != null ? ` (${String(sc.pct).replace(".", ",")}%)` : ""}${sc.stimato ? " ≈" : ""}`
+            : "—";
+          // SU UN TELEFONO LE COLONNE NON CI STANNO, E NON E' UN DETTAGLIO
+          // ESTETICO. Le quattro cifre occupano 300 punti fissi: al nome
+          // ne restavano trenta, cioe' una parola per riga — «Borsa / da /
+          // lavoro / PMU…» alta sei righe accanto a un numero solo. Qui il
+          // nome si prende la riga intera e le cifre scendono sotto, in
+          // fila: stessi dati, letti nell'ordine in cui si guardano.
+          if (isMobile) {
+            return (
+              <div key={i} style={{ padding: "9px 12px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.35 }}>
+                  {r.nome || "—"}
+                  <span style={{ color: MUTED }}>{` ×${r.quantita ?? 1}`}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>
+                    {unitario != null ? fmtEuroErp2(unitario) : "—"}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: sc && sc.sconto > 0 ? "#C0392B" : MUTED, whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                    {scontoTesto}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                    {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
+                  </span>
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
               <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
@@ -52358,7 +52459,7 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
                   colonna che dice quanto ha pesato il codice su QUESTO
                   prodotto, non sul carrello */}
               <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: sc && sc.sconto > 0 ? "#C0392B" : MUTED, whiteSpace: "nowrap", minWidth: 110, textAlign: "right" }} title={sc?.stimato ? "Stimato sul listino di oggi" : undefined}>
-                {sc && sc.sconto > 0 ? `− ${fmtEuroErp2(sc.sconto)}${sc.pct != null ? ` (${String(sc.pct).replace(".", ",")}%)` : ""}${sc.stimato ? " ≈" : ""}` : "—"}
+                {scontoTesto}
               </span>
               <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
                 {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
@@ -52382,10 +52483,91 @@ function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate = [], 
         {rigaInfo("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : null)}
         {rigaInfo("Sconto", (sconto ?? scontoRigheTotale) > 0 ? `− ${fmtEuroErp2(sconto ?? scontoRigheTotale)}${codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}${sconto == null && qualcheStima ? " ≈" : ""}` : (codiceCoupon ? `coupon ${codiceCoupon}` : null))}
         <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 6, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <span style={{ minWidth: 130, flexShrink: 0 }}>Totale</span>
+          <span style={{ minWidth: isMobile ? 0 : 130, flexShrink: 0, flex: isMobile ? 1 : undefined }}>Totale</span>
           <span>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
         </div>
       </div>
+
+      {/* RISCUOTERE UN ORDINE RIMASTO NON PAGATO.
+          Solo in amministrazione, solo sulle vendite al banco, e solo su
+          una vendita vera con un totale: su un reso o su un omaggio non
+          c'e' niente da incassare. */}
+      {puoRiscuotere && vendita?.origine === "pos" && (vendita?.tipo_movimento || "vendita") === "vendita"
+        && Number(vendita?.totale) > 0 && (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "11px 12px", marginBottom: 14, background: "#FBFAF7" }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>Il pagamento non è arrivato?</div>
+
+          {linkPagamento ? (
+            <div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
+                Link pronto per <b>{fmtEuroErp2(vendita.totale)}</b>. Mandalo alla persona: vale 24 ore.
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, color: NAVY, wordBreak: "break-all", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", marginTop: 7 }}>
+                {linkPagamento.indirizzo}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                <button
+                  type="button" onClick={() => copiaLinkOrdine(linkPagamento.indirizzo)}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: linkOrdineCopiato ? "#2E7D32" : NAVY, background: "#fff", border: `1px solid ${linkOrdineCopiato ? "#BFE3C6" : CREAM_BORDER}`, borderRadius: 12, padding: "9px 15px", cursor: "pointer" }}
+                >
+                  {linkOrdineCopiato ? "Link copiato ✓" : "Copia il link"}
+                </button>
+                <a
+                  href={linkPagamento.indirizzo} target="_blank" rel="noopener noreferrer"
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 12, padding: "9px 15px", textDecoration: "none" }}
+                >
+                  Apri la pagina
+                </a>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
+                Oppure detta il codice <b style={{ color: NAVY, letterSpacing: 1 }}>{linkPagamento.codice}</b>.
+                Quando paga, l'incasso compare dove compaiono gli altri{" "}
+                — se ha chiesto fattura, in Amministrazione → Fatture da emettere. La vendita resta questa: non se ne crea una seconda.
+              </div>
+            </div>
+          ) : chiedoFatturaLink ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flex: "1 1 180px" }}>
+                Il cliente ha bisogno di fattura?
+              </span>
+              <button
+                type="button" onClick={() => creaLinkPagamento(true)}
+                title="La pagina di pagamento gli chiederà indirizzo, codice fiscale e partita IVA"
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "9px 15px", cursor: "pointer" }}
+              >
+                Sì, serve fattura
+              </button>
+              <button
+                type="button" onClick={() => creaLinkPagamento(false)}
+                title="Paga e basta: nessun dato da scrivere"
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "9px 15px", cursor: "pointer" }}
+              >
+                No, paga e basta
+              </button>
+              <button
+                type="button" onClick={() => setChiedoFatturaLink(false)}
+                style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer" }}
+              >
+                annulla
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                type="button" onClick={() => { setMsgLink(""); setChiedoFatturaLink(true); }}
+                disabled={creandoLink}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "9px 15px", cursor: creandoLink ? "default" : "pointer", opacity: creandoLink ? 0.5 : 1 }}
+              >
+                {creandoLink ? "Preparo…" : `Genera un link di pagamento · ${fmtEuroErp2(vendita.totale)}`}
+              </button>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
+                Per quando al banco la carta non è passata: il link si manda e la persona paga da casa.
+              </span>
+            </div>
+          )}
+          {msgLink && <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 8 }}>{msgLink}</div>}
+        </div>
+      )}
 
       {rigaInfo("Cliente", vendita?.cliente_nome || null)}
       {rigaInfo("Email", vendita?.cliente_email || fatturazione?.email || null)}
@@ -54439,7 +54621,11 @@ function SemaforoSyncShop({ esiti = [], isMobile }) {
   );
 }
 
-function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], syncEsiti = [], origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], syncEsiti = [], origine, ricarica, onBack, ruoloUtente = "", titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+  // riscuotere un ordine rimasto non pagato e' un gesto
+  // dell'amministrazione: chi vende al banco non manda link di
+  // pagamento su vendite gia' chiuse
+  const puoRiscuotere = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
   // Cancellare una vendita: non deve restarne niente. Sparisce la riga (e
   // con lei prima nota, cassa, provvigioni, statistiche, che la leggono
   // da li'), spariscono la spedizione e le righe preparate, spariscono
@@ -55244,6 +55430,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
       {ordineAperto && (
         <ModaleDettaglioOrdine
           vendita={ordineAperto}
+          puoRiscuotere={puoRiscuotere}
           corsi={corsi} corsiDate={corsiDate}
           onAssociato={() => { setOrdineAperto(null); ricarica(["vendite_shop"]); }}
           onChiudi={() => setOrdineAperto(null)}
@@ -83649,7 +83836,7 @@ function Gestionale() {
       )}
 
       {view === "venditealbanco" && (
-        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
+        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="pos" ruoloUtente={ruoloUtente} ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
       )}
 
       {view === "omaggi" && (

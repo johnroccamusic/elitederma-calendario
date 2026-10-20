@@ -71,7 +71,16 @@ Deno.serve(async (req) => {
   // scarica come file, col sorgente dentro. La ricevuta la fa l'app.
   const app = (Deno.env.get("APP_URL") || "https://app.elitederma.net").replace(/\/$/, "");
   const ricevuta = `${app}/?ricevuta=${codice}`;
-  const scadeIl = new Date(Date.now() + 2 * 3600 * 1000);
+  // QUANTO VALE IL LINK.
+  //
+  // Due ore sono la misura del banco: la cliente e' li' davanti e o
+  // paga o non paga. Non sono la misura di un link mandato a qualcuno
+  // perche' paghi piu' tardi — quello arriva su WhatsApp e viene aperto
+  // la sera, e scaduto non dice nemmeno perche'. Chi chiama puo'
+  // chiedere di piu'; Stripe non accetta oltre le 24 ore dalla
+  // creazione, quindi quello e' il tetto.
+  const ore = Math.min(24, Math.max(0.5, Number(corpo?.oreValide) || 2));
+  const scadeIl = new Date(Date.now() + ore * 3600 * 1000);
 
   // SERVE LA FATTURA, SI' O NO: lo decide il banco prima di mostrare il
   // QR, e cambia tutto quello che la cliente si trova davanti.
