@@ -627,9 +627,12 @@ export default function PaginaModulo({ token }) {
   // Misurato il 17/10/2026 sul modulo vero: sedici caselle rifatte in
   // tre lettere. Chiamandola, i figli restano `Letto`/`DaRiempire`, che
   // stanno fuori di qui e non cambiano mai identita'.
-  const rigaSua = (campi, spenti = false) => (
-    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-      {campi.map((campo) => {
+  const rigaSua = (riga, spenti = false) => (
+    // `aCapo: false` vale anche qui: una riga tenuta insieme nella
+    // scheda e spezzata nel modulo e' la stessa riga disegnata in due
+    // modi, cioe' due disposizioni da mantenere invece di una
+    <div style={{ display: "flex", gap: 14, flexWrap: riga.aCapo === false ? "nowrap" : "wrap" }}>
+      {riga.campi.map((campo) => {
         const d = c(campo.chiave);
         if (!d) return null;
         if (campo.chiave === "tipo_cliente") {
@@ -701,7 +704,7 @@ export default function PaginaModulo({ token }) {
 
         <div style={pannello}>
           <IntestazioneArea>I tuoi dati</IntestazioneArea>
-          {AREA_ALLIEVO.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r.campi)}</React.Fragment>)}
+          {AREA_ALLIEVO.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r)}</React.Fragment>)}
         </div>
 
         <div style={pannello}>
@@ -711,7 +714,7 @@ export default function PaginaModulo({ token }) {
               ? "Servono tutti, altrimenti la fattura non si può emettere."
               : "Si compilano solo se sopra scegli Azienda. Da privata non servono."}
           </div>
-          {AREA_FATTURAZIONE.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r.campi, !eAzienda)}</React.Fragment>)}
+          {AREA_FATTURAZIONE.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r, !eAzienda)}</React.Fragment>)}
         </div>
 
         <div style={pannello}>
@@ -719,7 +722,7 @@ export default function PaginaModulo({ token }) {
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
             Carta d'identità o patente. Le foto restano riservate: non sono raggiungibili da nessun indirizzo pubblico.
           </div>
-          {rigaSua(["doc_tipo", "doc_numero"].filter((k) => c(k)).map((k) => ({ chiave: k })))}
+          {rigaSua({ campi: ["doc_tipo", "doc_numero"].filter((k) => c(k)).map((k) => ({ chiave: k })) })}
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
             {c("doc_fronte") && <Foto etichetta="Fronte" file={docFronte} onCambia={setDocFronte} obbligatorio={c("doc_fronte").obbligatorio} />}
             {c("doc_retro")  && <Foto etichetta="Retro"  file={docRetro}  onCambia={setDocRetro}  obbligatorio={c("doc_retro").obbligatorio} />}

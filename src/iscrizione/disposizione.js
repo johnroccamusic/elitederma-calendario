@@ -93,23 +93,34 @@ export const AREA_ALLIEVO = {
     // Lo stato viene PRIMA della regione perche' decide tutto il resto:
     // «Altro stato» spegne la cascata italiana e apre la scrittura
     // libera, che e' l'unico modo di registrare chi vive a Sion.
-    { campi: [
-      { chiave: "stato_residenza", etichetta: "Stato", larghezza: "1 1 130px", tipo: "stato", salvaUscendo: true },
-      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "2 1 160px", tipo: "regione" },
-      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "2 1 170px", tipo: "provincia", salvaUscendo: true },
+    //
+    // Tutti e tre su UNA riga (20/10/2026), e le misure vengono dal
+    // contenuto: la provincia e' un nome e una sigla, la regione al
+    // massimo «Emilia-Romagna», e lo spazio che resta va allo stato, che
+    // e' l'unico a crescere. `aCapo: false` perche' andassero a capo
+    // sarebbero tre righe per una scelta sola.
+    { aCapo: false, campi: [
+      { chiave: "stato_residenza", etichetta: "Stato", larghezza: "3 1 100px", tipo: "stato", salvaUscendo: true },
+      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "0 1 150px", tipo: "regione" },
+      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "0 1 130px", tipo: "provincia", salvaUscendo: true },
     ] },
     { campi: [
       { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
       { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 120px", tipo: "cap", salvaUscendo: true },
     ] },
+    // L'email da sola: e' il campo piu' lungo di tutta la scheda
+    // (nome.cognome@qualcosa.it) e in mezza riga si legge a meta'.
     { campi: [
-      { chiave: "email", etichetta: "Email", larghezza: "2 1 200px", salvaUscendo: true },
-      { chiave: "telefono", etichetta: "Cellulare (+39...)", larghezza: "1 1 150px", tipo: "telefono", suggerimento: "+39 333 1234567", salvaUscendo: true },
+      { chiave: "email", etichetta: "Email", larghezza: "1 1 100%", salvaUscendo: true },
     ] },
-    // la tendina del tutor e i due tasti Privato/Azienda sono alti
-    // diversi: si allineano in basso, non in alto
-    { inBasso: true, campi: [
+    // Tutor e cellulare insieme (20/10/2026): due campi corti, una riga.
+    { campi: [
       { chiave: "tutor", etichetta: "Tutor", larghezza: "2 1 140px", tipo: "venditori", maiuscolo: true },
+      { chiave: "telefono", etichetta: "Cellulare (+39...)", larghezza: "2 1 150px", tipo: "telefono", suggerimento: "+39 333 1234567", salvaUscendo: true },
+    ] },
+    // L'intestazione resta per se': non e' un dato, e' la scelta che
+    // apre o chiude tutto il riquadro della fatturazione qui sotto.
+    { campi: [
       { chiave: "tipo_cliente", etichetta: "Intestazione", larghezza: "1 1 220px", tipo: "scelta",
         opzioni: [{ valore: "privato", etichetta: "Privato" }, { valore: "azienda", etichetta: "Azienda" }] },
     ] },

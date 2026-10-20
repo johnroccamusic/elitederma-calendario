@@ -122,4 +122,25 @@ describe("chi non vive in Italia", () => {
     expect(valori).toContain("1950");
     expect(valori).toContain("SVIZZERA");
   });
+
+
+});
+
+describe("la disposizione dei gradini", () => {
+  it("stato, regione e provincia stanno su una riga sola e non vanno a capo", async () => {
+    // jsdom non impagina, quindi non si misura: si guarda la struttura,
+    // che e' quella che decide. Tre caselle nello stesso contenitore
+    // `nowrap` sono una riga; in tre contenitori sono tre righe.
+    const p = await apri({});
+    // si risale dallo stato fino al primo contenitore che tiene dentro
+    // anche la provincia: quello e' la riga
+    let riga = p.tendina("stato_residenza");
+    while (riga && !riga.contains(p.tendina("prov_residenza"))) riga = riga.parentElement;
+    expect(riga).not.toBe(null);
+    expect(riga.contains(p.tendina("regione_residenza"))).toBe(true);
+    expect(riga.contains(p.tendina("citta_residenza"))).toBe(false);
+    // `aCapo: false` non scrive "nowrap": smette di scrivere "wrap",
+    // che in flexbox e' la stessa cosa
+    expect(riga.style.flexWrap).not.toBe("wrap");
+  });
 });
