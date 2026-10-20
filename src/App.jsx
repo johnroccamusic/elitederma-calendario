@@ -40318,7 +40318,7 @@ const COLONNE_CRM_SHOP = [
   { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
 ];
 
-export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], iscritti = [], onApriClassificazioneVoci, onBack, titolo = "Clienti shop" }) {
+export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiShop = [], iscritti = [], storicoAllievi = [], master = [], onApriClassificazioneVoci, onBack, titolo = "Clienti shop" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("clienti"); // clienti | classifica
   const [ricerca, setRicerca] = useState("");
@@ -40329,32 +40329,63 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
   // mandarla a chi il corso l'ha gia' fatto e' il modo di farsi leggere
   // male da tutti e due.
   //
-  // TRE RISPOSTE, NON DUE. L'incrocio si fa per EMAIL, che e' l'unica
-  // cosa che le due parti hanno davvero in comune. Ma «l'email non
-  // combacia» non vuol dire «non e' mai stato allievo»: ventinove
-  // allievi su duecentosessanta l'email non ce l'hanno, e chiamarli
-  // «mai allievi» sarebbe dire una cosa che non sappiamo. Quindi chi
-  // non si puo' incrociare finisce in una categoria sua — senza
-  // riferimenti — e nessuno gli mette un'etichetta al posto suo.
+  // «MAI STATO ALLIEVO» NON LO POSSIAMO DIRE, E PER UN PO' L'ABBIAMO
+  // DETTO. Debora Fumagalli — una delle nostre master, che con noi i
+  // corsi li ha fatti — compariva fra i «mai allievi».
   //
-  // Si finisce li' in due modi: il cliente non ha email, oppure il suo
-  // NOME corrisponde a un allievo mentre l'email no. Dieci clienti su
-  // millenovecento sono in questo secondo caso, e sono esattamente
-  // quelli che un conto a due categorie avrebbe sbagliato.
-  const [filtroAllievo, setFiltroAllievo] = useState("tutti"); // tutti | mai | anche | ignoto
+  // Il motivo e' strutturale: l'incrocio si faceva per email contro
+  // `iscritti`, cioe' contro le sole iscrizioni nate nel gestionale. Ma
+  // chi ha fatto corsi prima sta in `storico_allievi`, e quelle 2.816
+  // righe **non hanno nessuna email**: nessun incrocio per email potra'
+  // mai trovarle. Debora non e' fra gli iscritti, e' nello storico e
+  // fra le master, e sullo shop compra con due indirizzi diversi.
+  //
+  // Contati: includendo lo storico, 1.054 clienti su 1.952 hanno un
+  // nome che compare fra chi ha fatto corsi. Il «mai» di prima ne
+  // dichiarava 1.817: sbagliava in grande.
+  //
+  // Quindi tre risposte, e nessuna che affermi piu' di quanto si sa:
+  //   · RISULTA ALLIEVO — l'email combacia: e' un fatto;
+  //   · DA VERIFICARE — il nome compare fra allievi, storico o master,
+  //     ma l'email no. Puo' essere lei o un'omonima: lo dice una
+  //     persona, non un confronto di stringhe;
+  //   · NESSUN RISCONTRO — non risulta da nessuna parte. Che e' una
+  //     cosa diversa da «non e' mai stato allievo», e si dice cosi'.
+  const [filtroAllievo, setFiltroAllievo] = useState("tutti"); // tutti | nessuno | allieva | forse
   const confrontoAllieve = useMemo(() => {
     const perNome = (x) => String(x || "").normalize("NFD").replace(/\p{Diacritic}/gu, "")
       .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
     const email = new Set();
     const nomi = new Set();
+    const aggiungiNome = (nome, cognome) => {
+      const n = perNome(nome), c = perNome(cognome);
+      if (!n && !c) return;
+      nomi.add(`${n} ${c}`.trim());
+      if (c) nomi.add(`${c} ${n}`.trim());
+    };
     (iscritti || []).forEach((i) => {
       const e = String(i.email || "").trim().toLowerCase();
       if (e) email.add(e);
-      const n = perNome(i.nome), c = perNome(i.cognome);
-      if (n || c) { nomi.add(`${n} ${c}`.trim()); nomi.add(`${c} ${n}`.trim()); }
+      aggiungiNome(i.nome, i.cognome);
+    });
+    // lo storico: 2.816 persone che i corsi li hanno fatti davvero, e
+    // di cui non sappiamo l'email. Senza queste righe il confronto
+    // guarda solo gli ultimi due anni e chiama «mai allievo» tutto il
+    // resto della storia dell'accademia.
+    (storicoAllievi || []).forEach((r) => aggiungiNome(r.nome, r.cognome));
+    // E LE MASTER, che i corsi li hanno fatti prima di tenerli — e la
+    // loro email vale quanto quella di un'iscrizione: Angelica Burelli
+    // compra sullo shop con lo stesso indirizzo con cui sta in
+    // anagrafica master, e chiamarla «mai stata allieva» era il secondo
+    // caso segnalato dopo Debora. Dove l'email combacia non c'e' niente
+    // da verificare: e' lei.
+    (master || []).forEach((m) => {
+      const e = String(m.email || "").trim().toLowerCase();
+      if (e) email.add(e);
+      aggiungiNome(m.nome, m.cognome);
     });
     return { email, nomi, perNome };
-  }, [iscritti]);
+  }, [iscritti, storicoAllievi, master]);
   const [colonnaOrdine, setColonnaOrdine] = useState("totaleSpeso");
   const [direzioneOrdine, setDirezioneOrdine] = useState("desc");
   const [chiaveAperta, setChiaveAperta] = useState(null);
@@ -40364,18 +40395,17 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
     return costruisciClientiShop(venditeShop).map((c) => {
       const sua = String(c.email || "").trim().toLowerCase();
       if (sua && email.has(sua)) return { ...c, statoAllievo: "allieva" };
-      // niente email da confrontare, oppure il nome dice una cosa e
-      // l'email un'altra: in tutti e due i casi non si sa
-      if (!sua) return { ...c, statoAllievo: "ignoto" };
       const suo = perNome(c.nome);
-      if (suo && nomi.has(suo)) return { ...c, statoAllievo: "ignoto" };
-      return { ...c, statoAllievo: "mai" };
+      // senza email non si puo' confrontare niente; col nome che compare
+      // fra chi ha fatto corsi si puo' solo sospettare
+      if (!sua || (suo && nomi.has(suo))) return { ...c, statoAllievo: "forse" };
+      return { ...c, statoAllievo: "nessuno" };
     });
   }, [venditeShop, confrontoAllieve]);
   const quanti = useMemo(() => ({
     allieva: clienti.filter((c) => c.statoAllievo === "allieva").length,
-    mai: clienti.filter((c) => c.statoAllievo === "mai").length,
-    ignoto: clienti.filter((c) => c.statoAllievo === "ignoto").length,
+    nessuno: clienti.filter((c) => c.statoAllievo === "nessuno").length,
+    forse: clienti.filter((c) => c.statoAllievo === "forse").length,
   }), [clienti]);
   const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop), [venditeShop, vociShopClassificazione, prodottiShop]);
 
@@ -40401,8 +40431,7 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
       || c.email.toLowerCase().includes(q)
       || (c.telefono || "").replace(/\s/g, "").includes(q.replace(/\s/g, ""))) : clienti;
     if (filtroAllievo !== "tutti") {
-      const voluto = { mai: "mai", anche: "allieva", ignoto: "ignoto" }[filtroAllievo];
-      l = l.filter((c) => c.statoAllievo === voluto);
+      l = l.filter((c) => c.statoAllievo === filtroAllievo);
     }
     l = [...l].sort((a, b) => {
       const va = a[colonnaOrdine], vb = b[colonnaOrdine];
@@ -40481,9 +40510,9 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               {[
                 { v: "tutti", testo: `Tutti (${clienti.length.toLocaleString("it-IT")})` },
-                { v: "mai", testo: `Mai stato allievo (${quanti.mai.toLocaleString("it-IT")})` },
-                { v: "anche", testo: `Anche allievo (${quanti.allieva.toLocaleString("it-IT")})` },
-                { v: "ignoto", testo: `Senza riferimenti (${quanti.ignoto.toLocaleString("it-IT")})` },
+                { v: "allieva", testo: `Risulta allievo (${quanti.allieva.toLocaleString("it-IT")})` },
+                { v: "forse", testo: `Da verificare (${quanti.forse.toLocaleString("it-IT")})` },
+                { v: "nessuno", testo: `Nessun riscontro (${quanti.nessuno.toLocaleString("it-IT")})` },
               ].map((x) => (
                 <button
                   key={x.v} type="button" onClick={() => setFiltroAllievo(x.v)}
@@ -40517,8 +40546,8 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
                         {c.statoAllievo === "allieva" && (
                           <span title="L'email corrisponde a un allievo" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#3D4A94", background: "#ECEDFA", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>allieva</span>
                         )}
-                        {c.statoAllievo === "ignoto" && (
-                          <span title="Non si può dire: o manca l'email, o il nome corrisponde a un allievo ma l'email no" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>da verificare</span>
+                        {c.statoAllievo === "forse" && (
+                          <span title="Il nome compare fra allievi, storico o master, ma l'email non lo conferma: può essere lei o un'omonima" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>da verificare</span>
                         )}
                       </td>
                       <td style={tdStyleCrm}>{c.email || "—"}</td>
@@ -40564,9 +40593,9 @@ function DettaglioClienteShop({ cliente }) {
           sull'ultimo ordine in cui l'ha scritto. */}
       {(() => {
         const voci = [
-          ["Ha fatto corsi", cliente.statoAllievo === "allieva" ? "sì, l'email corrisponde"
-            : cliente.statoAllievo === "ignoto" ? "non si può dire: manca un riferimento che combaci"
-            : "no, nessun allievo con questa email"],
+          ["Ha fatto corsi", cliente.statoAllievo === "allieva" ? "sì, l'email corrisponde a un'iscrizione"
+            : cliente.statoAllievo === "forse" ? "da verificare: il nome compare fra allievi, storico o master, l'email no"
+            : "nessun riscontro: né l'email né il nome compaiono da nessuna parte"],
           ["Telefono", cliente.telefono],
           ["Email", cliente.email],
           ["Ditta", cliente.ditta],
@@ -82269,7 +82298,13 @@ function Gestionale() {
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "costi_categorie"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
-    crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop", "iscritti"],
+    // `vendite_shop_storico` e NON `vendite_shop`: quest'ultima si ferma
+    // al 2026-06-01, perche' per quasi tutta l'app le vendite vecchie
+    // sono peso morto. Qui no — qui si contano i CLIENTI, e un cliente
+    // del 2022 e' un cliente. Con la lista corta se ne vedevano 183 su
+    // 1.859, e i numeri in cima (carrello medio, ordini per cliente)
+    // raccontavano gli ultimi mesi spacciandoli per sempre.
+    crmshop: ["vendite_shop_storico", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop", "iscritti", "storico_allievi", "master"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti", "categorie_prodotti", "prodotti_categorie"],
     statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
@@ -84231,7 +84266,7 @@ function Gestionale() {
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} iscritti={iscritti} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "Clienti shop")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} prodottiShop={prodottiShop} iscritti={iscritti} storicoAllievi={storicoAllievi} master={master} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "Clienti shop")} />
       )}
 
       {view === "generacoupon" && (
