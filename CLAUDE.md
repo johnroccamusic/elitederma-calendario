@@ -28,7 +28,7 @@ introdurre librerie nuove senza una ragione forte.
 ## 3. Struttura reale
 
 ```
-src/App.jsx              83.340 righe — ancora il grosso dell'applicazione
+src/App.jsx              84.395 righe — ancora il grosso dell'applicazione
 src/main.jsx             entry point
 src/Accesso.jsx          gate Supabase Auth (collegato, vedi § 4)
 src/comuni-regioni.js    dati statici
@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   32 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   17 file, 195 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      44 edge function + _shared
@@ -401,6 +401,33 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   `{ soloPdf: true }`, che scrive il documento senza far ripartire
   nessuna mail.
 
+  **Il codice fiscale lo calcola l'app (20/10/2026).** La scheda e il
+  modulo chiedono **sesso, data e luogo di nascita** (`iscritti.sesso`,
+  `data_nascita`, `comune_nascita`, `stato_nascita` — vuoto = Italia) e
+  il codice lo scrive `calcolaCodiceFiscale` in
+  `src/iscrizione/codice-fiscale.js`. Lo si chiedeva e basta, e **11 dei
+  253 in archivio avevano la lettera di controllo sbagliata**: copiati a
+  mano, con un errore che nessuno ha visto.
+
+  Tre regole, ognuna nata da un modo di sbagliare. **Sesso mancante =
+  niente calcolo**, perche' il giorno di una donna e' il giorno + 40 e un
+  sesso indovinato produce un codice che *passa la lettera di controllo*
+  ed e' di un'altra persona — il peggiore dei risultati, perche' nessuno
+  lo mette in dubbio. **Si scrive solo se la casella e' vuota, e una
+  volta sola per ogni valore calcolato**: se chi compila lo cancella
+  resta cancellato, perche' esiste l'omocodia e un calcolo non puo'
+  saperla; e si dichiara sotto la casella. **Un codice che contraddice la
+  data scritta sopra si segnala**, non si corregge.
+
+  Il codice fiscale *contiene* data, sesso e comune, quindi le 253 schede
+  che ne avevano uno non avevano niente da chiedere a nessuno:
+  `20261020120000_nascita_dal_codice_fiscale.sql` ne ha letti **242**, e
+  tutti e 242 ricostruiscono esattamente le nove cifre centrali del loro
+  codice. I 17 che restano — 7 senza codice, 10 col codice malfatto —
+  vanno letti dal documento. I comuni e i 232 Stati esteri (codici `Z`)
+  stanno in `src/comuni-regioni.js`, generato da `genera-comuni.mjs`:
+  non si aggiungono a mano.
+
   **Il link del modulo vale una volta sola (19/10/2026).** `modulo_salva`
   si fermava solo davanti a un'iscrizione già *confermata*, ma fra «il
   modulo è arrivato» e «l'iscrizione è confermata» passa l'acconto: in
@@ -663,7 +690,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 32 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 17 file e 195 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
