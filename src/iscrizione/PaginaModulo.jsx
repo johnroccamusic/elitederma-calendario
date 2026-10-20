@@ -188,7 +188,7 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
         // codice fiscale
         <CampoComuneNascita
           chiave={chiave} valore={valore} spenta={spento}
-          scrivi={onCambia} suggerimento={spento ? "" : "Reggio di Calabria"}
+          scrivi={onCambia} suggerimento={spento ? "" : "Inserisci la tua città"}
           stile={stileComune}
         />
       ) : tipo === "data" ? (

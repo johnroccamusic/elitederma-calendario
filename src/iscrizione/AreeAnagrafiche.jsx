@@ -278,7 +278,12 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         chiave={campo.chiave} valore={allEstero ? "" : valore}
         scrivi={scrivi} esceDalCampo={() => esceDalCampo(campo)}
         spenta={spenta || allEstero}
-        suggerimento={allEstero ? "" : "Reggio di Calabria"}
+        // «Reggio di Calabria» era un esempio, e un esempio dentro la
+        // casella si legge come un valore gia' scritto: qualcuno ha
+        // davvero chiesto perche' ci fosse scritto Reggio. Qui dice cosa
+        // fare, e lo dice in terza persona perche' chi compila non e' la
+        // persona che si iscrive.
+        suggerimento={allEstero ? "" : "Inserisci la città"}
         stile={{ ...stile, ...(allEstero ? { background: "#F1EEE7" } : {}) }}
       />
     );
