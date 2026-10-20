@@ -41919,6 +41919,25 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setMsgTipo("successo"); setMsg(`Coupon "${riga.codice}" creato su WooCommerce.`);
     ricarica(["coupon"]);
   }
+  // RIMANDARE AL SITO LA REGOLA DI UN CODICE GIA' PUBBLICATO.
+  //
+  // Si poteva creare un coupon su WooCommerce e cancellarlo, ma non
+  // ripubblicarne la regola: cambiata la percentuale nell'app, il sito
+  // restava a quella di prima, e il guaio e' tutto li' — chi vende al
+  // banco sconta una cifra e chi compra online un'altra, e nessuno dei
+  // due se ne accorge finche' non si confrontano due scontrini.
+  // Succedeva solo dentro i due riscritture di massa (codici d'aula e
+  // codici personali); un codice da solo non aveva nessun tasto.
+  const [ripubblicandoId, setRipubblicandoId] = useState(null);
+  async function ripubblicaRegola(riga) {
+    setRipubblicandoId(riga.id); setMsg("");
+    const { data, error } = await supabase.functions.invoke("woo-aggiorna-coupon", { body: { couponId: riga.id, aggiornaRegola: true } });
+    setRipubblicandoId(null);
+    if (error || data?.errore) { setMsgTipo("errore"); setMsg("Non riscritto sul sito: " + (data?.errore || error.message)); return; }
+    setMsgTipo("successo");
+    setMsg(`"${riga.codice.toUpperCase()}" riscritto su WooCommerce: ${riga.tipo_sconto === "percent" ? `${riga.valore}%` : fmtEuroErp2(riga.valore)}.`);
+    ricarica(["coupon"]);
+  }
   const [eliminandoId, setEliminandoId] = useState(null);
   async function eliminaCoupon(riga) {
     if (!window.confirm(`Eliminare il coupon "${riga.codice.toUpperCase()}"?${riga.woo_coupon_id ? " Verrà rimosso anche da WooCommerce." : ""}`)) return;
@@ -42312,6 +42331,12 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {(c.stato === "bozza" || c.stato === "programmato") && (
                   <Button onClick={() => attivaCoupon(c)} disabled={attivandoId === c.id}>{attivandoId === c.id ? "Creo…" : "Crea su WooCommerce"}</Button>
+                )}
+                {c.stato === "attivo" && c.woo_coupon_id && (
+                  <Button variant="ghost" onClick={() => ripubblicaRegola(c)} disabled={ripubblicandoId === c.id}
+                    title="Riscrive sul sito la percentuale e le fasce che ha adesso nell'app">
+                    {ripubblicandoId === c.id ? "Riscrivo…" : "Riscrivi sul sito"}
+                  </Button>
                 )}
                 {c.stato === "attivo" && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>ID WooCommerce: {c.woo_coupon_id}</div>}
                 <button onClick={() => eliminaCoupon(c)} disabled={eliminandoId === c.id} title="Elimina coupon" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
