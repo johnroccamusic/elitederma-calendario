@@ -75,6 +75,24 @@ export const inputStyle = {
   border: `1px solid ${CREAM_BORDER}`,
   fontSize: 14,
 };
+// IL CAMPO DATA SU IPHONE NON STA DENTRO LA SUA COLONNA.
+//
+// `input type="date"` su Safari di iOS e' un controllo nativo che si
+// misura da se' sul testo «gg/mm/aaaa» piu' il suo meccanismo interno:
+// quella e' la sua larghezza intrinseca, e `width: 100%` governa la
+// larghezza voluta, non quella minima. In una riga stretta il campo
+// resta grande e sborda dal riquadro — si e' visto sulla data di
+// nascita, che usciva dall'area dei dati dell'allievo.
+//
+// `appearance: none` toglie a Safari il controllo nativo e con esso la
+// misura intrinseca; `maxWidth: 100%` e' la cintura, per il giorno in
+// cui un browser ignori anche quello.
+export const campoDataStyle = {
+  appearance: "none",
+  WebkitAppearance: "none",
+  maxWidth: "100%",
+};
+
 // campi piccoli per liste fitte di righe con numeri corti (Riepilogo
 // amministrativo → Costi della classe): inputStyle è pensato per form
 // con pochi campi, troppo alto per una tabella di più righe

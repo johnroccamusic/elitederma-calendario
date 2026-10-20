@@ -24,6 +24,7 @@ import {
   provinciaDiComune, codiceCatastale, nomiStati,
 } from "../comuni-regioni.js";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
+import { campoDataStyle } from "../ui/stile.js";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
 import { filtraCodiceFiscale, calcolaCodiceFiscale } from "./codice-fiscale.js";
@@ -226,7 +227,7 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
       <input
         data-campo={campo.chiave} type="date" value={valore || ""} disabled={spenta}
         onChange={(e) => scrivi(campo.chiave, e.target.value)}
-        onBlur={() => esceDalCampo(campo)} style={stile}
+        onBlur={() => esceDalCampo(campo)} style={{ ...stile, ...campoDataStyle }}
       />
     );
   }

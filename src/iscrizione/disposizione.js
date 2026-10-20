@@ -52,12 +52,14 @@ export const AREA_ALLIEVO = {
       // + 40. Non si deduce dal nome — un nome non lo dice — e un
       // valore sbagliato produce un codice che passa la lettera di
       // controllo e appartiene a qualcun altro.
-      { chiave: "sesso", etichetta: "Sesso", larghezza: "0 0 130px", tipo: "scelta",
+      // `0 1` e non `0 0`: due tasti da sessanta punti si stringono
+      // benissimo, e non cedendo mai spingevano fuori il campo accanto
+      { chiave: "sesso", etichetta: "Sesso", larghezza: "0 1 120px", tipo: "scelta",
         opzioni: [
           { valore: "F", etichetta: "F", esteso: "Femminile" },
           { valore: "M", etichetta: "M", esteso: "Maschile" },
         ] },
-      { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 150px", tipo: "data", salvaUscendo: true },
+      { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 140px", tipo: "data", salvaUscendo: true },
       { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
       { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
     ] },

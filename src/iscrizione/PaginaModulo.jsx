@@ -32,7 +32,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
 import FirmaDito from "../ui/FirmaDito.jsx";
-import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
+import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, campoDataStyle } from "../ui/stile.js";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
 import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
@@ -192,7 +192,7 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
           data-campo={chiave}
           type="date" value={valore || ""} disabled={spento}
           onChange={(e) => onCambia(chiave, e.target.value)}
-          style={stileComune}
+          style={{ ...stileComune, ...campoDataStyle }}
         />
       ) : opzioni ? (
         <select
