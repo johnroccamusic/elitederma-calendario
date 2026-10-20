@@ -64,9 +64,13 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 // cosa fare: "Invia modulo". Premuto, diventa "Modulo inviato" — ed e'
 // la stessa cosa, guardata prima e dopo.
 //
-// Resta premibile anche dopo: se la scheda cambia, il modulo che
-// l'allieva ha in mano non e' piu' quello giusto, e si rimanda. Ma non
-// di sfuggita: chiede conferma, perche' le arriva una mail.
+// Si rimanda finche' l'allieva non l'ha spedito, e non di sfuggita:
+// chiede conferma, perche' le arriva una mail. Appena il modulo
+// ARRIVA (`arrivato`, qui sotto) il pallino smette di premersi, e
+// passandoci sopra dice perche': il link vale una volta sola.
+//
+// Questo commento diceva «resta premibile anche dopo»: era vero fino al
+// 19/10/2026 e non lo e' piu'.
 //
 // Senza `onInvia` la fascia e' quella di prima e non si tocca: nelle
 // liste serve a leggere, non a spedire.
