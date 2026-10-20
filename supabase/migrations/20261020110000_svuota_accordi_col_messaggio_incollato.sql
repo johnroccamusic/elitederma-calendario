@@ -33,3 +33,28 @@
 --
 -- update iscritti set accordi_commerciali = null
 --  where length(accordi_commerciali) > 200 and id not in (le due);
+
+-- ----------------------------------------------------------------
+-- CORREZIONE, poche ore dopo. Otto rimesse indietro.
+--
+-- Il primo passaggio cercava le parole di un accordo «commerciale»
+-- (sconto, omaggio, rate) e ne aveva salvate due. Era una rete troppo
+-- stretta: dentro quei messaggi c'erano anche RATEIZZAZIONI CON
+-- SCADENZA, CONTRIBUTI PER LE MODELLE e QUOTE INTERESSI — impegni di
+-- denaro, non convenevoli.
+--
+-- Rilette tutte dal salvataggio, otto contenevano qualcosa che nei
+-- campi della scheda non c'e':
+--   * tre un SECONDO ACCONTO con una data, e `acconto_extra` vuoto:
+--     quella rata non era scritta da nessun'altra parte;
+--   * quattro un CONTRIBUTO MODELLA, e tre di loro con
+--     `prezzo_speciale_modelle` a null;
+--   * una un prezzo «promo» che non torna col totale pattuito.
+--
+-- Rimesse dal salvataggio. Il conto finale: 28 lunghe di partenza, 18
+-- svuotate, 10 lasciate.
+--
+-- LA LEZIONE, che vale oltre questo caso: quando si cancella in blocco
+-- per una regola, la regola va provata CONTRO IL CONTENUTO prima di
+-- eseguire, non dopo. Qui il salvataggio ha reso l'errore gratuito;
+-- senza, sarebbero spariti tre crediti e tre contributi modella.
