@@ -25,6 +25,7 @@
 // cambia quando la scheda scrive nel database, e va deciso a parte.
 
 import { avvisoCodiceFiscale, avvisoCoerenza } from "./codice-fiscale.js";
+import { codiceCatastale } from "../comuni-regioni.js";
 
 export const AREA_ALLIEVO = {
   titolo: "Dati dell'allievo",
@@ -229,6 +230,18 @@ export const NOTA_VENDITORE = {
 export function avvisoCampo(campo, valore, valori = null) {
   const perLunghezza = avvisoLunghezza(campo, valore);
   if (perLunghezza) return perLunghezza;
+  // UN COMUNE CHE NON STA NELL'ELENCO SI DICE.
+  //
+  // Senza, chi scrive «REGGIO CALABRIA» vede una casella piena, un
+  // codice fiscale che non compare, e nessun motivo: sembra che il
+  // calcolo non funzioni, quando e' il nome a non combaciare.
+  if (campo?.tipo === "comuneNascita") {
+    const scritto = String(valore ?? "").trim();
+    if (scritto && !codiceCatastale(scritto)) {
+      return `«${scritto}» non è nell'elenco dei comuni italiani: sceglilo dai suggerimenti, o il codice fiscale non si può calcolare.`;
+    }
+    return null;
+  }
   if (campo?.chiave === "codice_fiscale" || campo?.tipo === "codice_fiscale") {
     // prima la forma, poi il contenuto: un codice malfatto non ha senso
     // confrontarlo con la data di nascita

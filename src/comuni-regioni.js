@@ -108,6 +108,49 @@ export function codiceCatastale(comune) {
   return "";
 }
 
+// CERCARE UN COMUNE SCRIVENDO, invece di indovinarne il nome esatto.
+//
+// `codiceCatastale` vuole il nome ufficiale, parola per parola: chi
+// scrive «REGGIO CALABRIA» — cioe' chiunque — non trova niente, e il
+// codice fiscale non si calcola senza che una riga spieghi perche'.
+//
+// Qui si cerca come si scrive: ogni parola scritta dev'essere l'inizio
+// di una parola del nome. Cosi' «reggio cal» trova «Reggio di
+// Calabria», «s giovanni rot» trova «San Giovanni Rotondo», e le
+// parolette di mezzo — di, in, sul, nell' — non vanno sapute.
+//
+// L'elenco e' quello che l'app si porta gia' dietro: nessuna rete,
+// nessuna attesa, e funziona anche col telefono senza campo.
+const PAROLINE = new Set(["DI", "DA", "DE", "DEL", "DELLA", "DEI", "D", "IN", "SU", "SUL", "SULLA", "A", "AL", "E", "NEL", "NELL", "SAN", "SANTA", "SANT", "SANTO"]);
+
+export function cercaComuni(testo, quanti = 8) {
+  const parole = normalizza(testo).split(" ").filter(Boolean);
+  if (!parole.length) return [];
+  // «San» da solo non restringe niente — ci sono 700 comuni che
+  // cominciano cosi' — ma se e' l'unica cosa scritta vale lo stesso:
+  // togliere tutto vorrebbe dire cercare a vuoto.
+  const utili = parole.filter((p) => !PAROLINE.has(p));
+  const cercate = utili.length ? utili : parole;
+  const trovati = [];
+  for (const riga of COMUNI) {
+    const [nome, prov] = riga.split("|");
+    const dentro = normalizza(nome).split(" ");
+    if (!cercate.every((c) => dentro.some((d) => d.startsWith(c)))) continue;
+    const p = PROVINCE[Number(prov)];
+    trovati.push({ nome, sigla: p ? p.split("|")[0] : "" });
+    if (trovati.length >= quanti * 3) break;
+  }
+  // Chi comincia con quello che si e' scritto viene prima: cercando
+  // «roma» si vuole Roma, non «Romagnano al Monte».
+  const primo = cercate[0];
+  trovati.sort((a, b) => {
+    const da = normalizza(a.nome).startsWith(primo) ? 0 : 1;
+    const db = normalizza(b.nome).startsWith(primo) ? 0 : 1;
+    return da - db || a.nome.length - b.nome.length;
+  });
+  return trovati.slice(0, quanti);
+}
+
 // Lo stesso, per chi e' nato fuori Italia.
 export function codiceCatastaleStato(stato) {
   const chiave = normalizza(stato);

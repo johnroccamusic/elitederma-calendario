@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   17 file, 196 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   17 file, 199 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      44 edge function + _shared
@@ -419,6 +419,16 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   saperla; e si dichiara sotto la casella. **Un codice che contraddice la
   data scritta sopra si segnala**, non si corregge.
 
+  **Il comune di nascita si sceglie da un elenco** (`CampoComune.jsx`).
+  Era testo libero, e `codiceCatastale` vuole il nome ufficiale parola
+  per parola: chi scriveva «REGGIO CALABRIA» — cioe' chiunque, perche'
+  il «di» non lo dice nessuno — non otteneva nessun codice e nessun
+  motivo. Ora `cercaComuni` cerca come si scrive (ogni parola e' l'inizio
+  di una parola del nome, le paroline di mezzo non vanno sapute) e
+  propone il comune con la sua provincia accanto, che serve a
+  distinguere i quattro Paterno. Un comune fuori elenco lo dice sotto la
+  casella. Niente rete: l'elenco ISTAT sta gia' nel bundle.
+
   Il codice fiscale *contiene* data, sesso e comune, quindi le 253 schede
   che ne avevano uno non avevano niente da chiedere a nessuno:
   `20261020120000_nascita_dal_codice_fiscale.sql` ne ha letti **242**, e
@@ -690,7 +700,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 17 file e 196 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 17 file e 199 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

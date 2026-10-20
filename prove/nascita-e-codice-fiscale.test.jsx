@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import React, { useState } from "react";
 import { AreaAnagrafica } from "../src/iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO } from "../src/iscrizione/disposizione.js";
-import { monta, clicca, scrivi, scegli } from "./aiuto.js";
+import { monta, clicca, scrivi, scegli, premi } from "./aiuto.js";
 
 function Scheda({ iniziali = {} }) {
   const [valori, setValori] = useState(iniziali);
@@ -92,5 +92,36 @@ describe("il codice fiscale si compila da se'", () => {
       codice_fiscale: "BMBGNN90T65H224Y",
     });
     expect(p.testo()).toMatch(/una data di nascita diversa/);
+  });
+
+  it("il comune si sceglie dall'elenco, e «REGGIO CALABRIA» lo trova", async () => {
+    // il nome ufficiale e' «Reggio di Calabria»: chi scrive senza il
+    // «di» — cioe' chiunque — non otteneva nessun codice e nessun
+    // motivo. Adesso lo trova e lo sceglie.
+    const p = await apri(BAMBACE);
+    await clicca(tastoSesso(p, "F"));
+    await scrivi(campo(p, "data_nascita"), "1987-12-25");
+    await scrivi(campo(p, "comune_nascita"), "REGGIO CALABRIA");
+    const prima = p.nodo.querySelector('[data-proposta="0"]');
+    expect(prima).not.toBe(null);
+    expect(prima.textContent).toContain("Reggio di Calabria");
+    // la provincia accanto non e' decorazione: i Reggio sono tre
+    expect(prima.textContent).toContain("RC");
+    await premi(prima);
+    expect(campo(p, "comune_nascita").value).toBe("REGGIO DI CALABRIA");
+    expect(campo(p, "codice_fiscale").value).toBe("BMBGNN87T65H224D");
+  });
+
+  it("un comune che non esiste lo dice, invece di tacere", async () => {
+    const p = await apri(BAMBACE);
+    await scrivi(campo(p, "comune_nascita"), "REGGIO CALABRIA");
+    expect(p.testo()).toMatch(/non è nell'elenco dei comuni/);
+    await premi(p.nodo.querySelector('[data-proposta="0"]'));
+    expect(p.testo()).not.toMatch(/non è nell'elenco dei comuni/);
+  });
+
+  it("su una scheda gia' compilata l'elenco non si apre da solo", async () => {
+    const p = await apri({ ...BAMBACE, comune_nascita: "REGGIO DI CALABRIA" });
+    expect(p.nodo.querySelector('[data-proposta="0"]')).toBe(null);
   });
 });

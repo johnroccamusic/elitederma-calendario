@@ -37,6 +37,7 @@ import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./
 import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
+import CampoComuneNascita from "./CampoComune.jsx";
 import { nomiStati } from "../comuni-regioni.js";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
@@ -177,7 +178,16 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
         {campo.etichetta || etichettaDi(chiave)}
         {obbligatorio && !spento && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
       </div>
-      {tipo === "data" ? (
+      {tipo === "comuneNascita" ? (
+        // stesso elenco della scheda: il comune si sceglie, non si
+        // indovina, e il nome ufficiale e' quello che fa uscire il
+        // codice fiscale
+        <CampoComuneNascita
+          chiave={chiave} valore={valore} spenta={spento}
+          scrivi={onCambia} suggerimento={spento ? "" : "Reggio di Calabria"}
+          stile={stileComune}
+        />
+      ) : tipo === "data" ? (
         <input
           data-campo={chiave}
           type="date" value={valore || ""} disabled={spento}

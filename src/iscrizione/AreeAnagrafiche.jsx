@@ -27,6 +27,7 @@ import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/sch
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
 import { filtraCodiceFiscale, calcolaCodiceFiscale } from "./codice-fiscale.js";
+import CampoComuneNascita from "./CampoComune.jsx";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -246,14 +247,12 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     // Nata all'estero: il comune italiano non c'entra piu'
     const allEstero = !!String(cascata?.statoNascita || "").trim();
     return (
-      <input
-        data-campo={campo.chiave} value={allEstero ? "" : (valore || "")}
-        disabled={spenta || allEstero}
-        placeholder={allEstero ? "" : "Reggio di Calabria"}
-        className="suggerimento-chiaro"
-        onChange={(e) => scrivi(campo.chiave, e.target.value.toUpperCase())}
-        onBlur={() => esceDalCampo(campo)}
-        style={{ ...stile, ...(allEstero ? { background: "#F1EEE7" } : {}) }}
+      <CampoComuneNascita
+        chiave={campo.chiave} valore={allEstero ? "" : valore}
+        scrivi={scrivi} esceDalCampo={() => esceDalCampo(campo)}
+        spenta={spenta || allEstero}
+        suggerimento={allEstero ? "" : "Reggio di Calabria"}
+        stile={{ ...stile, ...(allEstero ? { background: "#F1EEE7" } : {}) }}
       />
     );
   }
