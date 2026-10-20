@@ -40,6 +40,18 @@ const VISTA_CON_NASCITA = {
   ],
 };
 
+// la vista con la residenza come la lascia il venditore: comune e
+// provincia scritti e bloccati, CAP da riempire
+const VISTA_RESIDENZA = {
+  ...VISTA,
+  campi: [
+    ...VISTA.campi,
+    { chiave: "citta_residenza", valore: "Roma", bloccato: true, obbligatorio: true },
+    { chiave: "prov_residenza", valore: "RM", bloccato: true, obbligatorio: true },
+    { chiave: "cap_residenza", valore: null, bloccato: false, obbligatorio: true },
+  ],
+};
+
 const TOKEN = "g".repeat(40);
 // la bozza vive in localStorage: senza questa pulizia una prova si
 // porterebbe dietro quello che ha scritto la precedente. Si cancella per
@@ -219,5 +231,27 @@ describe("modulo di iscrizione", () => {
     const manca = (p.testo().match(/Manca ancora:[^.]*/) || [""])[0];
     expect(manca).not.toMatch(/Comune di nascita/i);
     expect(manca).toMatch(/Cellulare/);
+  });
+
+  it("il CAP si sceglie fra quelli del comune che il venditore ha gia' scritto", async () => {
+    // era una casella di testo libero: comune bloccato su «Roma» e CAP
+    // da indovinare a memoria, mentre gli ottantadue di Roma li abbiamo
+    // qui nel bundle.
+    const p = await apriIlModulo(VISTA_RESIDENZA);
+    const cap = p.nodo.querySelector('[data-campo="cap_residenza"]');
+    expect(cap.tagName).toBe("SELECT");
+    const voci = [...cap.options].map((o) => o.value);
+    expect(voci).toContain("00166");
+    expect(voci).toContain("00184");
+    expect(voci.length).toBeGreaterThan(50);
+  });
+
+  it("lo Stato di residenza e' una scelta, non una riga da scrivere", async () => {
+    const p = await apriIlModulo(VISTA_RESIDENZA);
+    const stato = p.nodo.querySelector('[data-campo="stato_residenza"]');
+    expect(stato.tagName).toBe("SELECT");
+    const voci = [...stato.options].map((o) => o.value);
+    expect(voci).toContain("ITALIA");
+    expect(voci).toContain("Romania");
   });
 });

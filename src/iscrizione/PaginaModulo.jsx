@@ -38,7 +38,11 @@ import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
-import { nomiStati } from "../comuni-regioni.js";
+import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
+// lo stesso confronto della cascata della scheda: "PATERNO" e
+// "Paternò" sono lo stesso posto, e due copie di questa regola
+// prima o poi direbbero cose diverse
+import { normalizzaNome } from "./AreeAnagrafiche.jsx";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
 
@@ -488,6 +492,45 @@ export default function PaginaModulo({ token }) {
 
   const perChiave = Object.fromEntries((dati.campi || []).map((c) => [c.chiave, c]));
   const c = (k) => perChiave[k];
+
+  // LA RESIDENZA SI SCEGLIE ANCHE QUI, NON SOLO NELLA SCHEDA.
+  //
+  // La cascata (stato -> provincia -> comune -> CAP) viveva solo dalla
+  // parte del venditore. Di qua erano quattro caselle di testo libero, e
+  // il caso peggiore e' proprio quello normale: il venditore ha gia'
+  // scritto «Roma», l'allieva trova il comune bloccato e il CAP vuoto, e
+  // il CAP di Roma lo deve sapere a memoria — mentre noi li abbiamo
+  // tutti e ottantadue qui nel bundle.
+  //
+  // Le liste si ricavano da quello che c'e' gia': la provincia da quella
+  // scritta o dal comune, i comuni dalla provincia, i CAP dal comune. Se
+  // non si ricava niente — comune fuori elenco, residenza all'estero —
+  // la casella resta di testo libero com'era: un elenco chiuso
+  // incompleto impedirebbe di registrare chi esiste.
+  const valoreDi = (k) => String(risposte[k] ?? c(k)?.valore ?? "").trim();
+  const statoScritto = valoreDi("stato_residenza");
+  const fuoriItaliaModulo = statoScritto !== "" && normalizzaNome(statoScritto) !== "ITALIA";
+  const comuneScritto = valoreDi("citta_residenza");
+  const provinciaModulo = (valoreDi("prov_residenza") || provinciaDiComune(comuneScritto) || "").toUpperCase();
+  // UN ELENCO CHIUSO NON PUO' CANCELLARE QUELLO CHE C'E' GIA'. Se il
+  // valore in casella non e' fra le voci, la tendina lo mostrerebbe
+  // vuoto e basterebbe spedire per perderlo: li' si resta sul testo.
+  const elencoBuono = (voci, valore) => voci.length > 0
+    && (!valore || voci.some((x) => normalizzaNome(x) === normalizzaNome(valore)));
+  const comuniModulo = !fuoriItaliaModulo && provinciaModulo ? comuniDiProvincia(provinciaModulo) : [];
+  const capModulo = !fuoriItaliaModulo && comuneScritto ? capDiComune(provinciaModulo, comuneScritto) : [];
+  function campoConElenco(campo) {
+    if (campo.chiave === "stato_residenza") {
+      return { ...campo, opzioni: [{ valore: "ITALIA", etichetta: "Italia" }, ...nomiStati().map((x) => ({ valore: x, etichetta: x }))] };
+    }
+    if (campo.chiave === "citta_residenza" && elencoBuono(comuniModulo, comuneScritto)) {
+      return { ...campo, opzioni: comuniModulo };
+    }
+    if (campo.chiave === "cap_residenza" && elencoBuono(capModulo, valoreDi("cap_residenza"))) {
+      return { ...campo, opzioni: capModulo };
+    }
+    return campo;
+  }
   const scrivi = (k, v) => setRisposte((r) => ({ ...r, [k]: v }));
   const testi = {
     intro:       dati.contratto?.intro       || DAL_CODICE.intro,
@@ -658,7 +701,7 @@ export default function PaginaModulo({ token }) {
         // nato all'estero: il comune italiano non si chiede piu'
         const fuori = campo.chiave === "comune_nascita"
           && !!String(risposte.stato_nascita || "").trim();
-        return <DaRiempire key={campo.chiave} campo={campo} valore={fuori ? "" : risposte[campo.chiave]}
+        return <DaRiempire key={campo.chiave} campo={campoConElenco(campo)} valore={fuori ? "" : risposte[campo.chiave]}
                            onCambia={scrivi} obbligatorio={d.obbligatorio} spento={spenti || fuori}
                            tutte={risposte}
                            nota={campo.chiave === "codice_fiscale" && cfProposto

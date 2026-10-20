@@ -48,7 +48,7 @@ const SMORZATO = { opacity: 0.45 };
 // Il valore in archivio resta citta' + CAP + sigla provincia: la
 // regione non si salva, si ricava dalla provincia. Una colonna in meno
 // che puo' contraddire le altre.
-function normalizzaNome(s) {
+export function normalizzaNome(s) {
   return (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toUpperCase().replace(/\([^)]*\)/g, " ").replace(/[^A-Z0-9]+/g, " ").trim();
 }
