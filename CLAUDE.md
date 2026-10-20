@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   19 file, 222 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   20 file, 226 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      44 edge function + _shared
@@ -709,7 +709,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 19 file e 222 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 20 file e 226 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

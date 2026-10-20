@@ -5511,11 +5511,15 @@ function marginePercentualeMedio(prodotti) {
 // differenza, perche' un coupon WooCommerce porta un numero solo e non
 // puo' cambiarlo prodotto per prodotto. Per quei casi serve il frammento
 // a fasce, che il prezzo netto lo legge da ogni riga.
-function percentualeWooEquivalente(percentuale, base, margineMedioPct) {
+export function percentualeWooEquivalente(percentuale, base, margineMedioPct) {
   const pct = Number(percentuale) || 0;
   if (!(pct > 0)) return pct;
   const fattoreIva = 1 + ALIQUOTA_IVA_STANDARD / 100;
-  if (base === "netto") return round2(pct / fattoreIva);
+  // «netto» non si converte piu': scontare il 30% dell'imponibile e
+  // scontare il 30% del prezzo finale sono la stessa cifra (vedi
+  // `scontoCouponCarrello`). Dividere per 1,22 mandava al sito un
+  // 24,59% che scontava meno del dovuto.
+  if (base === "netto") return round2(pct);
   if (base === "margine") return round2((pct * (Number(margineMedioPct) || 0)) / 100 / fattoreIva);
   return round2(pct);
 }
@@ -5579,20 +5583,29 @@ function copertureCoupon(coupon, prodottiShop, categorieProdotti, prodottiCatego
 // sconta tutto, come prima: le chiamate che non hanno sottomano
 // l'anagrafica delle categorie non possono decidere, e cambiare il loro
 // risultato di nascosto sarebbe peggio del guasto.
-function scontoCouponCarrello(righe, prodottoPerId, percentuale, base, copre = null) {
+export function scontoCouponCarrello(righe, prodottoPerId, percentuale, base, copre = null) {
   if (!(percentuale > 0)) return 0;
   if (copre) righe = (righe || []).filter((r) => copre(r.prodottoId));
   const lordo = round2((righe || []).reduce((s, r) => s + r.prezzo * r.quantita, 0));
   if (lordo <= 0) return 0;
   if (base === "margine") return scontoSulMargineCarrello(righe, prodottoPerId, percentuale);
-  if (base === "netto") {
-    const netto = (righe || []).reduce((s, r) => {
-      const prodotto = prodottoPerId[r.prodottoId];
-      const aliquota = prodotto?.aliquota_iva_vendita ?? 22;
-      return s + (r.prezzo * r.quantita) / (1 + aliquota / 100);
-    }, 0);
-    return round2(netto * (percentuale / 100));
-  }
+  // «SUL NETTO» E «SUL LORDO» SONO LA STESSA CIFRA, E PRIMA NON LO ERANO.
+  //
+  // Scontare del 30% l'imponibile e poi aggiungere l'IVA da' lo stesso
+  // totale che scontare del 30% il prezzo finale: l'IVA e' proporzionale,
+  // e 0,70 × netto × 1,22 fa 0,70 × lordo. Una percentuale non cambia
+  // secondo il lato da cui la si guarda.
+  //
+  // Prima qui si calcolava il 30% DEL NETTO e lo si toglieva DAL LORDO:
+  // due lati diversi nella stessa operazione. Sui prodotti coperti
+  // usciva uno sconto del 24,59% — su un carrello di 220,70 € con
+  // `need30` si incassava 187,01 invece di 179,60, cioe' 7,41 € di
+  // troppo, che e' esattamente l'IVA sullo sconto. Regola confermata dal
+  // titolare il 20/10/2026: quel coupon e' 30% sul netto, e il 30% sul
+  // netto si vede cosi'.
+  //
+  // Resta scritto `netto` sul coupon perche' e' come la regola viene
+  // detta e pensata, non perche' il conto sia un altro.
   return round2(lordo * (percentuale / 100));
 }
 // Quanto valeva una vendita a listino, prima degli sconti. Le righe dal
@@ -69327,6 +69340,38 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
   // il totale "da incassare" e le sue componenti diventano sempre zero
   const totaleDaIncassare = omaggioAttivo ? 0 : totaleConSpedizione;
+  // IL CONTO DI UNO SCONTO SUL NETTO, SCRITTO.
+  //
+  // «Subtotale 220,70, sconto 41,10» e' vero ma non dimostra niente: chi
+  // guarda non puo' vedere che lo sconto e' il 30% dell'imponibile dei
+  // soli prodotti coperti. Qui si mostrano i due pezzi che fanno
+  // l'imponibile — il netto scontato e il netto che non si tocca — e la
+  // somma e' la riga «Imponibile» subito sotto: il conto si legge per
+  // intero senza rifarlo a mano.
+  //
+  // Niente righe quando non quadrerebbero: senza IVA da scorporare non
+  // c'e' nessun netto, e con le provvigioni scalate la somma non fa
+  // l'imponibile (quelle non sono uno sconto sui prodotti).
+  const dettaglioNetto = useMemo(() => {
+    if (!couponAttivo || baseCoupon !== "netto" || couponAFasce) return null;
+    if (senzaIva || omaggioAttivo || provvigioniScalabili > 0 || !(couponNum > 0)) return null;
+    let coperto = 0;
+    let libero = 0;
+    for (const r of carrello) {
+      const aliquota = prodottiPerId[r.prodottoId]?.aliquota_iva_vendita ?? 22;
+      const netto = (r.prezzo * r.quantita) / (1 + aliquota / 100);
+      if (!coperturaCoupon || coperturaCoupon(r.prodottoId)) coperto += netto; else libero += netto;
+    }
+    if (coperto <= 0) return null;
+    return {
+      coperto: round2(coperto),
+      scontato: round2(coperto * (1 - couponNum / 100)),
+      // la spedizione sta col netto che non si sconta: e' quello che
+      // tiene in piedi la somma con l'imponibile
+      libero: round2(libero + speseSpedizione / 1.22),
+    };
+  }, [couponAttivo, baseCoupon, couponAFasce, senzaIva, omaggioAttivo, provvigioniScalabili,
+      couponNum, carrello, prodottiPerId, coperturaCoupon, speseSpedizione]);
   // Le righe che finiscono sulla pagina di pagamento. Devono sommare
   // esattamente quello che si incassa, sconti compresi: la pagina di
   // Stripe non e' un preventivo, e' quello che la cliente paga davvero.
@@ -70796,7 +70841,16 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         <div style={{ flex: 1, minWidth: 0 }}>
           {[
             { etichetta: senzaIva ? "Subtotale" : "Subtotale (IVA incl.)", valore: subtotale },
-            ...(scontoApplicato > 0 ? [{ etichetta: "Sconto", valore: scontoApplicato, negativo: true }] : []),
+            ...(scontoApplicato > 0 ? [{
+              etichetta: dettaglioNetto ? `Sconto ${numeroFascia(couponNum)}% sul netto` : "Sconto",
+              valore: scontoApplicato, negativo: true,
+            }] : []),
+            // i due pezzi che fanno l'imponibile, quando lo sconto e' sul
+            // netto: si legge il 30% applicato e quello che non si tocca
+            ...(dettaglioNetto ? [
+              { etichetta: `Netto scontato (da ${fmtEuroErp2(dettaglioNetto.coperto)})`, valore: dettaglioNetto.scontato },
+              { etichetta: "Netto non scontato", valore: dettaglioNetto.libero },
+            ] : []),
             // LE PROVVIGIONI SCALATE, scritte.
             //
             // Senza questa riga il riquadro diceva 600 di subtotale, 110,70
