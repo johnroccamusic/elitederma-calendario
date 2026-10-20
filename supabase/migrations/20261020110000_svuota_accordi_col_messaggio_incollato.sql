@@ -1,0 +1,35 @@
+-- TRACCIA. 20/10/2026.
+--
+-- «Accordi commerciali particolare» era stato riempito, su 28 schede,
+-- incollandoci dentro il messaggio di benvenuto mandato all'allieva su
+-- WhatsApp: «Grazie mille X e benvenuta ufficialmente in Elitederma
+-- Academy, ti confermo la partecipazione al corso di…». Centinaia di
+-- caratteri, emoji comprese, in un campo che dovrebbe dire in una riga
+-- cosa si e' pattuito di diverso dal solito.
+--
+-- COME SI RICONOSCONO, e perche' non e' «sono quelli lunghi». I due
+-- insiemi sono separati da un vuoto: su 108 compilati la mediana era
+-- **51 caratteri**, e fra 200 e 400 non c'era NESSUNO. Sopra i 200 solo
+-- messaggi incollati, sotto solo note vere. La soglia non e' stata
+-- scelta, e' stata trovata.
+--
+-- DUE SONO RIMASTE, ed e' la parte che conta. Dentro il messaggio
+-- incollato, in due casi, c'era un accordo che non sta scritto da
+-- nessun'altra parte: una rateizzazione concordata (bonifico piu' saldo
+-- in aula) e un prodotto promesso in omaggio al corso. Svuotarle
+-- avrebbe cancellato l'unica traccia di cio' che e' stato promesso a
+-- una persona. Le riscrive in breve chi le ha pattuite.
+--
+-- Il controllo e' stato fatto cercando nel testo le parole che tradiscono
+-- un accordo (sconto, omaggio, rate, «come d'accordi»...) e LEGGENDO la
+-- frase intorno, non fidandosi del fatto che la parola ci fosse: due
+-- delle quattro trovate erano «rate» dentro «preparate».
+--
+-- Risultato: 26 svuotate, 82 compilate restano, mediana scesa a 36.
+--
+-- I valori di prima — tutti e 108, non solo quelli svuotati — stanno in
+-- `_accordi_commerciali_prima_20261020`. Non sono riportati qui perche'
+-- sono messaggi scritti a persone e questo repository e' pubblico.
+--
+-- update iscritti set accordi_commerciali = null
+--  where length(accordi_commerciali) > 200 and id not in (le due);
