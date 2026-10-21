@@ -98,24 +98,6 @@ describe("il venditore iscrive", () => {
     expect(portato).toBeGreaterThan(0);
   });
 
-  it("dice che la data si sceglie prima", async () => {
-    const p = await monta(
-      <PaginaDashboardVenditori
-        venditoreBloccato={MARIO} venditori={[MARIO]}
-        corsi={[CORSO]} location={[SEDE]} corsiDate={[CD]} iscritti={[]} master={[]}
-        venditeShop={[]} prodottiShop={[]} targetVenditeProdotti={[]} eventi={[]}
-        onBack={() => {}} ricarica={() => {}} apriData={() => {}}
-      />
-    );
-    expect(p.testo()).toMatch(/Scegli qui sotto la data del corso/);
-  });
-
-  // SI DEVE VEDERE IN QUALE AREA SI STA (21/10/2026). Chi vende e'
-  // entrato in "Iscrivi allievo" senza accorgersi di esserci: il segno
-  // era un filo blu di 2px attorno alla tessera, invisibile sul bianco
-  // del medaglione. Qui si prova che una tessera sola risulta accesa, e
-  // che e' quella giusta — il come (anello oro, cuscino acceso, nome in
-  // oro, dentino sotto) e' aspetto, questo e' il fatto.
   it("una tessera sola è accesa, ed è quella dell'area aperta", async () => {
     const p = await monta(
       <PaginaDashboardVenditori

@@ -11657,17 +11657,11 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
                 gia' quella aperta. */}
             <div ref={rifSezioneAperta} style={{ scrollMarginTop: 12 }} />
 
-            {/* IL GESTO SUCCESSIVO, DETTO. "Iscrivi allievo" non apre un
-                modulo: apre l'elenco delle date, e l'allievo si iscrive
-                dentro una classe — una classe va scelta prima, perche'
-                un'iscrizione senza edizione non esiste. Chi non lo sa
-                premeva la tessera aspettando un modulo, e non succedeva
-                niente: era gia' aperta. */}
-            {tabDashboardVenditore === "corsi" && (
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, textAlign: "center", marginBottom: 14, lineHeight: 1.5 }}>
-                Scegli qui sotto la data del corso: si apre la classe, e da lì il tasto <b style={{ color: NAVY }}>Iscrivi</b>.
-              </div>
-            )}
+            {/* Qui c'era una riga che spiegava il gesto successivo
+                ("scegli la data, si apre la classe, e da li' Iscrivi").
+                Tolta il 21/10/2026 su richiesta: la tessera adesso si
+                chiama "Calendario iscrizioni" e lo dice da sola — quella
+                riga spiegava un nome che non c'e' piu'. */}
 
             {/* il titolo della scheda aperta, come per "Iscrivi allievo":
                 quello lo scrive la sezione dei corsi per conto suo, gli
