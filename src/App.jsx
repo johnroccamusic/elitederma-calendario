@@ -6856,9 +6856,10 @@ function Gate({ onOk }) {
     const masterTrovata = (masterRighe || []).find((m) => !!m.password && code && m.password === code);
     // stesso meccanismo delle master: il venditore entra qui direttamente
     // con la propria password (Password menù > Password venditori), senza
-    // passare dalla tendina "Utente generico" + selezione nome — atterra
-    // subito sulla Dashboard venditori (gestito nel chiamante tramite
-    // venditoreId)
+    // passare dalla tendina "Utente generico" + selezione nome. Dal
+    // 21/10/2026 atterra in Home come tutti: `venditoreId` serve ancora,
+    // ma piu' avanti — e' quello che fa aprire ad "apriLoginVenditore" la
+    // dashboard bloccata sui suoi dati invece del selettore dei venditori
     const venditoreTrovato = (venditoriRighe || []).find((v) => !!v.password && code && v.password === code);
     // collegamento esplicito (Password menù > Password Master > "Venditore
     // collegato"), non più affidato alla coincidenza delle due password:
@@ -6935,9 +6936,10 @@ function Gate({ onOk }) {
       // (utenteLoggato.venditoreId) e va dritto alla sua scheda, mai al
       // selettore con tutti i venditori. A differenza di chi entra con la
       // propria password venditore, però, questo account fa anche altro
-      // (es. ufficio/magazzino): al login atterra sempre in Home come
-      // qualunque altro utente nominale, mai dritto sulla dashboard
-      // venditori (restaSuHomeAlLogin, letto più sotto in onOk del Gate)
+      // (es. ufficio/magazzino). Qui c'era `restaSuHomeAlLogin`, che
+      // serviva a tenerlo in Home mentre un venditore "puro" ci saltava
+      // sopra: dal 21/10/2026 in Home ci si entra tutti, e quel flag non
+      // lo leggeva più nessuno. Tolto invece che lasciato a sembrare vivo.
       // il grado batte tutto il resto: un account nominale marcato
       // amministratore entra come tale anche se è collegato a un venditore
       // — altrimenti trovava le schede iscritto in sola lettura, come un
@@ -6947,7 +6949,7 @@ function Gate({ onOk }) {
         id: nominale.id, nome: nominale.nome,
         permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
         chiave_sistema: null,
-        ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome, restaSuHomeAlLogin: true } : {}),
+        ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome } : {}),
         // profilo "kiosk": entra dritto su Gestione corsi (mai Home), sola
         // lettura del calendario, niente Home/Indietro/Avanti nella
         // barra di navigazione (vedi onOk del Gate e l'header/pasticca)
@@ -82863,16 +82865,28 @@ function Gestionale() {
     setRuoloUtente(ruolo);
     setUtenteLoggato(utente);
     setOk(true);
-    // atterra dritto sulla Dashboard venditori solo per chi entra SOLO come
-    // venditore: chi è anche master (venditoreId + masterId insieme) resta
-    // su Home per poter scegliere quale delle due dashboard aprire, così
-    // come chi è un account nominale con un venditore collegato
-    // (restaSuHomeAlLogin) — fa anche altro, non deve finire forzato fuori
-    // da Home appena entra
-    if (utente?.venditoreId && !utente?.masterId && !utente?.restaSuHomeAlLogin) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.venditoreNome || utente.nome }); setView("dashboardvenditori"); }
-    // profilo "kiosk" (Gestione utenti > Solo calendario): entra dritto su
-    // Gestione corsi, mai in Home — l'header/pasticca nasconderanno anche
-    // Home/Indietro/Avanti per lui (vedi utenteLoggato.soloCalendarioLettura)
+    // SI ENTRA DALLA HOME. TUTTI (21/10/2026).
+    //
+    // Chi entrava con la sola password venditore atterrava dritto sulla
+    // Dashboard venditori, saltando la Home. Aveva senso quando le
+    // password erano poche e non c'erano permessi: quella dashboard era
+    // tutto quello che un venditore poteva vedere, e la Home sarebbe
+    // stata una schermata di passaggio con un tasto solo. Adesso ogni
+    // persona ha la sua password e i suoi permessi, e la Home mostra
+    // esattamente le aree che le spettano — saltarla vuol dire non
+    // sapere di averle.
+    //
+    // Non si perde niente: premendo "Dashboard venditori" dalla Home,
+    // `apriLoginVenditore` riconosce `utenteLoggato.venditoreId` e apre
+    // la dashboard bloccata sui propri dati, senza chiedere altro. E
+    // `operatoreCorrente` sa chi sta operando anche senza
+    // `venditoreLoggato`, perche' ripiega su `utenteLoggato.venditoreId`.
+    // L'UNICO SALTO RIMASTO, e non e' una dimenticanza: il profilo
+    // "kiosk" (Gestione utenti > Solo calendario) entra dritto su
+    // Gestione corsi, mai in Home. Per quel profilo la pasticca nasconde
+    // Home/Indietro/Avanti (vedi `soloCalendarioLettura`): mandarlo in
+    // Home sarebbe un viaggio di sola andata — entra, apre una pagina, e
+    // non ha piu' il tasto per tornare.
     if (utente?.soloCalendarioLettura) { setView("gestionedate"); }
   }} /></div>;
 
