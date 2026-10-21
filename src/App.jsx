@@ -4178,6 +4178,21 @@ button[style*="background: #"]:not([data-niente-ombra]) { box-shadow: ${ombra}; 
 // non si leggevano comunque. Vale per tutte le pagine che riusano questo
 // componente (Home, Statistiche, Amministrazione, Gestione magazzino e
 // shop), non solo la Home.
+// Il dentino sotto la tessera accesa: lega la linguetta a quello che sta
+// sotto, che e' il modo in cui le cartelle dicono "sei in questa".
+// Appeso in assoluto, cosi' la tessera accesa non e' piu' alta delle
+// altre e la fila non si muove passando da una all'altra.
+function DentinoLinguetta() {
+  return (
+    <span aria-hidden="true" style={{
+      position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)",
+      width: 0, height: 0,
+      borderLeft: "8px solid transparent", borderRight: "8px solid transparent",
+      borderTop: `8px solid ${GOLD}`,
+    }} />
+  );
+}
+
 function TileHome({
   title, descrizione, Icona, attivo = true, onClick, badge,
   // Identita' stabile del tasto, per il colore dato a mano col tasto
@@ -4189,7 +4204,21 @@ function TileHome({
   // riordino/cartelle (solo programmatore, vedi GrigliaTasti) — tutti
   // opzionali: i 27+ usi esistenti di TileHome non li passano e restano
   // identici a prima
-  maniglia, draggableTasto = false, onDragStartTasto, onDragEndTasto, onDragOverTasto, onDropTasto, attenuato = false, evidenziato = false,
+  maniglia, draggableTasto = false, onDragStartTasto, onDragEndTasto, onDragOverTasto, onDropTasto, attenuato = false,
+  // "SEI QUI": la tessera dell'area in cui si sta. La passano tutte le
+  // fasce di tessere che fanno da linguette (Dashboard venditori e
+  // master, Gestione corsi, Contabilita', Statistiche...) e il bersaglio
+  // di un trascinamento sulla home.
+  //
+  // Fino al 21/10/2026 era un filo blu di 2px attorno al quadrato, e su
+  // una tessera bianca col medaglione non si vedeva: chi vende e' entrato
+  // in "Iscrivi allievo" senza accorgersi di esserci, ha ripremuto la
+  // tessera — che era gia' quella aperta — e ha concluso che il tasto
+  // fosse rotto. Un segno che si vede solo se lo stai cercando non e' un
+  // segno: ora l'anello e' oro e spesso, il cuscino si accende, il nome
+  // si scurisce in oro, e sotto la tessera c'e' il dentino che la lega a
+  // quello che sta sotto — come la linguetta di una cartella.
+  evidenziato = false,
   // rinomina del tasto (solo programmatore, vedi GrigliaTasti): col
   // TASTO DESTRO sulla tessera. Prima stava sul clic sinistro del solo
   // nome sotto l'icona, e li' era un tranello: meta' del tasto apriva la
@@ -4207,7 +4236,14 @@ function TileHome({
 }) {
   const isMobile = useIsMobile();
   const ricca = !!Icona;
-  const coloreTesto = attivo ? NAVY : MUTED;
+  // l'anello dell'acceso: oro, spesso, e staccato dalla tessera. Il
+  // dentino sotto lo completa — vedi DentinoLinguetta qui sotto
+  const anelloAcceso = { outline: `3px solid ${GOLD}`, outlineOffset: 3, boxShadow: `0 0 0 6px rgba(201,162,109,0.22)` };
+  // e il cuscino si scalda: il bianco diventa un avorio appena dorato.
+  // Da solo non basterebbe — e' l'anello che si vede da lontano — ma
+  // tiene insieme il segno e la tessera invece di appoggiarglielo sopra.
+  const cuscinoAcceso = "#FFF6E5";
+  const coloreTesto = evidenziato && attivo ? "#8A5A00" : attivo ? NAVY : MUTED;
   // le icone dei tasti sono nere pure, il testo sotto resta blu
   const coloreIcona = attivo ? "#000000" : MUTED;
   // forma, colore e ombra arrivano da Impostazioni -> Aspetto dell'app,
@@ -4238,6 +4274,7 @@ function TileHome({
     return (
       <button
         data-niente-ombra="1"
+        data-aperto={evidenziato ? "1" : undefined}
         onClick={attivo ? onClick : undefined}
         onContextMenu={onRinominaEtichetta ? (e) => { e.preventDefault(); e.stopPropagation(); onRinominaEtichetta(); } : undefined}
         disabled={!attivo}
@@ -4256,14 +4293,19 @@ function TileHome({
           ...fontBody, width: etichettaDueRighe ? "100%" : `min(100%, ${aspettoMobile.dimensione}px)`, minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
+          position: "relative",
         }}
       >
+        {evidenziato && attivo && <DentinoLinguetta />}
         <div data-stile-tasto={chiaveStile || undefined} style={{
           width: etichettaDueRighe ? `min(100%, ${aspettoMobile.dimensione}px)` : "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: aspettoMobile.stile === "medaglione" ? sfondoMedaglione(aspettoMobile.cuscino) : (attivo ? aspettoMobile.colore : "#F1EAE0"), borderRadius: aspettoMobile.raggio,
+          background: aspettoMobile.stile === "medaglione"
+            ? sfondoMedaglione(evidenziato && attivo ? cuscinoAcceso : aspettoMobile.cuscino)
+            : (attivo ? (evidenziato ? cuscinoAcceso : aspettoMobile.colore) : "#F1EAE0"),
+          borderRadius: aspettoMobile.raggio,
           boxShadow: aspettoMobile.stile === "medaglione" ? ombraMedaglione(aspettoMobile.ombra) : ombraCssTasto(aspettoMobile.ombra),
-          outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
+          ...(evidenziato ? anelloAcceso : null),
         }}>
           {maniglia}
           {aspettoMobile.stile === "medaglione"
@@ -4304,6 +4346,7 @@ function TileHome({
     <button
       ref={rifTasto}
       data-niente-ombra="1"
+      data-aperto={evidenziato ? "1" : undefined}
       data-stile-tasto={chiaveStile || undefined}
       onClick={attivo ? onClick : undefined}
       onContextMenu={onRinominaEtichetta ? (e) => { e.preventDefault(); e.stopPropagation(); onRinominaEtichetta(); } : undefined}
@@ -4325,7 +4368,11 @@ function TileHome({
         // blu con l'icona bianca. Il disco e il pozzetto prendono i colori
         // scelti per il telefono in Aspetto dell'app, cosi' i due mondi
         // restano uguali
-        background: attivo ? (isMobile ? "#FFFFFF" : (ricca ? sfondoMedaglione(aspettoMobile.cuscino || "#FFFFFF") : aspettoDesktop.colore)) : "#F1EAE0", border: ricca && !isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
+        background: attivo
+          ? (isMobile ? (evidenziato ? cuscinoAcceso : "#FFFFFF")
+            : (ricca ? sfondoMedaglione(evidenziato ? cuscinoAcceso : (aspettoMobile.cuscino || "#FFFFFF"))
+              : (evidenziato ? cuscinoAcceso : aspettoDesktop.colore)))
+          : "#F1EAE0", border: ricca && !isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : aspettoDesktop.raggio,
         boxShadow: isMobile ? "none" : (ricca ? ombraMedaglione(aspettoDesktop.ombra) : ombraCssTasto(aspettoDesktop.ombra)),
         // le proporzioni del mock del 16/09/2026, misurate sul tasto: il
         // pozzetto parte al 13% dell'altezza, il titolo al 6,5% del lato
@@ -4336,9 +4383,10 @@ function TileHome({
         padding: ricca ? (isMobile ? "16px 10px 12px" : `${Math.round(latoTessera * 0.087)}px ${Math.round(latoTessera * 0.06)}px ${Math.round(latoTessera * 0.12)}px`) : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
         opacity: attenuato ? 0.5 : 1,
-        outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
+        ...(evidenziato ? anelloAcceso : null),
       }}
     >
+      {evidenziato && attivo && <DentinoLinguetta />}
       {maniglia}
       {!attivo && (
         <span style={{ position: "absolute", top: isMobile ? 10 : 16, right: isMobile ? 8 : 18, ...fontBody, fontSize: isMobile ? 8 : 10.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "2px 8px" : "3px 10px" }}>Non attivo</span>
