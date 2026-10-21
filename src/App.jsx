@@ -6416,10 +6416,38 @@ function incassatoDi(i) {
 
 // posti massimi effettivi di un'edizione: il numero scelto per la data (o, in mancanza,
 // quello di default del corso) non può mai superare il tetto massimo della sede
-function postiMaxEffettivi(cd, corso, loc) {
-  const base = cd?.posti_max ?? corso?.posti_max ?? 0;
-  if (loc?.posti_max != null) return Math.min(base, loc.posti_max);
-  return base;
+// Quanti posti ha questa edizione. Li decide l'edizione, e se non lo
+// dice il corso: LA SEDE NON ENTRA NEL CONTO (21/10/2026, deciso dal
+// titolare — «la capienza di una sede non chiude il corso, segnala e
+// basta che e' pieno»).
+//
+// Prima la sede entrava con un `Math.min`, e chiudeva l'iscrizione per
+// conto suo: LAMINAZIONE BASE a UDINE il 28/10/2026 era «Completo» con
+// due iscritti su un corso da dieci, e non si riapriva nemmeno alzando
+// i posti dell'edizione — il minore vinceva comunque. In archivio ci
+// sono sedi doppie per la stessa citta' con capienze diverse (ROMA 4 e
+// 12, MILANO 3 e 12, NAPOLI 2 e 10, UDINE 2 e 10): una classe attaccata
+// al gemello piccolo si chiudeva da sola, e chi vendeva non aveva nessuna
+// via d'uscita ne' nessuna spiegazione.
+//
+// La capienza della sede resta scritta e si continua a dire: la dice
+// `avvisoSedePiena`, come avviso, dove si iscrive.
+//
+// Niente parametro `loc`: la regola si vede dalla firma, e nessuno puo'
+// rimetterci una sede per sbaglio.
+function postiMaxEffettivi(cd, corso) {
+  return cd?.posti_max ?? corso?.posti_max ?? 0;
+}
+
+// L'aula e' piena anche se il corso ha ancora posti. Non blocca niente:
+// torna la frase da mostrare, o niente quando non c'e' nulla da dire.
+function avvisoSedePiena(loc, occupati) {
+  const tiene = loc?.posti_max;
+  if (tiene == null || occupati < tiene) return "";
+  const nome = toTitleCase(loc?.nome || loc?.citta || "questa sede");
+  return occupati === tiene
+    ? `${nome} tiene ${tiene} person${tiene === 1 ? "a" : "e"}: l'aula è piena.`
+    : `${nome} tiene ${tiene} person${tiene === 1 ? "a" : "e"} e qui siete ${occupati}: l'aula non basta.`;
 }
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
@@ -19755,8 +19783,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [
     setModDataFine(cd.data_fine);
     setModMasterSel(cd.master_id || "");
     const corsoCd = corsi.find((c) => c.id === cd.corso_id);
-    const locCd = location.find((l) => l.id === cd.location_id);
-    setModPostiData(String(postiMaxEffettivi(cd, corsoCd, locCd)));
+    setModPostiData(String(postiMaxEffettivi(cd, corsoCd)));
   }
   function cambiaModPostiData(delta) {
     const locCd = location.find((l) => l.id === corsiDate.find((cd) => cd.id === dataInModifica)?.location_id);
@@ -25838,7 +25865,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
   // per città, quindi il nome città va scritto nella riga stessa)
   function rigaCorso(cd, mostraCitta, primaDelGruppo, isMobile) {
     const corso = corsoById[cd.corso_id];
-    const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+    const max = postiMaxEffettivi(cd, corso);
     const occupati = iscrittiAttiviDi(iscritti, cd.id).length;
     const liberi = Math.max(0, max - occupati);
     const rigaCittaMaster = (mostraCitta || cd.master_id) && (
@@ -26038,7 +26065,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
                   .slice()
                   .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
                   .map((cd) => {
-                    const max = postiMaxEffettivi(cd, gruppo.corso, locById[cd.location_id]);
+                    const max = postiMaxEffettivi(cd, gruppo.corso);
                     const occupati = iscrittiAttiviDi(iscritti, cd.id).length;
                     const liberi = Math.max(0, max - occupati);
                     const pieno = liberi <= 0;
@@ -26235,7 +26262,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                 const corso = corsoById[ev.corso_id];
                 const loc = locById[ev.location_id];
                 const coloreCorso = corso?.colore || NAVY;
-                const capienza = postiMaxEffettivi(ev, corso, loc);
+                const capienza = postiMaxEffettivi(ev, corso);
                 const numeroAllievi = iscritti ? iscritti.filter((i) => i.corso_data_id === ev.id).length : 0;
                 const occupancy = iscritti && capienza > 0
                   ? Math.min(100, Math.max(0, (numeroAllievi / capienza) * 100))
@@ -27076,7 +27103,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
   });
 
   function postiLiberi(cd) {
-    const max = postiMaxEffettivi(cd, corsoById[cd.corso_id], locById[cd.location_id]);
+    const max = postiMaxEffettivi(cd, corsoById[cd.corso_id]);
     const occupati = iscrittiAttiviDi(iscritti, cd.id).length;
     return Math.max(0, max - occupati);
   }
@@ -30695,8 +30722,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareM
     setModDataFineScheda(corsoData.data_fine);
     setModMasterSelScheda(corsoData.master_id || "");
     const corsoCd = corsi.find((c) => c.id === corsoData.corso_id);
-    const locCd = location.find((l) => l.id === corsoData.location_id);
-    setModPostiDataScheda(String(postiMaxEffettivi(corsoData, corsoCd, locCd)));
+    setModPostiDataScheda(String(postiMaxEffettivi(corsoData, corsoCd)));
     setMsgDateScheda("");
     setModificaDateAperta(true);
   }
@@ -30939,11 +30965,15 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareM
     ? (tipiModella || []).filter((t) => idTipiModellaCorso.includes(t.id)).map((t) => t.nome)
     : (tipiModella || []).map((t) => t.nome);
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
-  const max = postiMaxEffettivi(corsoData, corso, loc);
+  const max = postiMaxEffettivi(corsoData, corso);
   // l'elenco li mostra tutti, anche chi ha receduto — sparire da una
   // classe non e' quello che deve fare un recesso — ma il suo posto e'
   // tornato libero e il conto lo deve dire
-  const liberi = Math.max(0, max - iscrittiAttiviDi(iscritti, corsoData.id).length);
+  const attiviInClasse = iscrittiAttiviDi(iscritti, corsoData.id).length;
+  const liberi = Math.max(0, max - attiviInClasse);
+  // l'aula puo' essere piena mentre il corso ha ancora posti: si dice, e
+  // non si blocca niente (vedi postiMaxEffettivi)
+  const sedePiena = avvisoSedePiena(loc, attiviInClasse);
 
   // "Da avere al corso" e le modelle sono gli unici importi incassati
   // fisicamente il giorno del corso (in contanti o via POS): acconto/pre
@@ -34485,6 +34515,15 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareM
           <div style={{ ...hStyle, fontWeight: 700, marginBottom: 12 }}>
             Iscritti ({listaIscritti.length}) <span style={{ color: liberi === 0 ? "#C0392B" : NAVY }}>— {liberi} post{liberi === 1 ? "o" : "i"} liber{liberi === 1 ? "o" : "i"}</span>
           </div>
+          {/* La capienza della sede: un avviso, non una serratura. Chi
+              iscrive deve saperlo prima di arrivare in aula — ma e' lui
+              a decidere se spostare la classe, aggiungere una postazione
+              o iscrivere comunque. */}
+          {sedePiena && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: "#8A5A00", background: "#FFF6E5", border: `1px solid ${GOLD}`, borderRadius: 12, padding: "9px 12px", marginBottom: 12, lineHeight: 1.5 }}>
+              ⚠ {sedePiena} Puoi iscrivere comunque: il corso ne prevede {max}.
+            </div>
+          )}
           {listaIscritti.length === 0 && (
             <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>
           )}
@@ -37009,7 +37048,7 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   const riempimenti = cdFiltrate
     .map((cd) => {
       const n = iscrittiAttiviDi(iscritti, cd.id).length;
-      const max = postiMaxEffettivi(cd, corsoById[cd.corso_id], locById[cd.location_id]);
+      const max = postiMaxEffettivi(cd, corsoById[cd.corso_id]);
       return max > 0 ? (n / max) * 100 : null;
     })
     .filter((v) => v != null);
@@ -42959,7 +42998,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
   const SOGLIA_RIEMPIMENTO_BASSO_ERP = 60;
   const classiSottoSoglia = kpi.cdFiltrate.filter((cd) => {
     const n = iscrittiAttiviDi(iscritti, cd.id).length;
-    const max = postiMaxEffettivi(cd, corsoById[cd.corso_id], locById[cd.location_id]);
+    const max = postiMaxEffettivi(cd, corsoById[cd.corso_id]);
     return max > 0 && (n / max) * 100 < SOGLIA_RIEMPIMENTO_BASSO_ERP;
   }).length;
 

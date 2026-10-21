@@ -114,13 +114,42 @@ describe("il venditore iscrive", () => {
     expect(p.testo()).toMatch(/0 posti liberi/);
   });
 
-  // E il caso che oggi non ha via d'uscita: il limite è della SEDE, non
-  // del corso. Due iscritti su un corso da dieci, e nemmeno alzando i
-  // posti dell'edizione si riapre — `Math.min` tiene il minore.
-  it("il limite della sede chiude la classe a due su dieci", async () => {
+  // LA CAPIENZA DELLA SEDE SEGNALA, NON CHIUDE (21/10/2026, deciso dal
+  // titolare). Fino a quel giorno `postiMaxEffettivi` teneva il minore
+  // fra corso e sede: LAMINAZIONE BASE a UDINE era «Completo» con due
+  // iscritti su un corso da dieci, e non si riapriva nemmeno alzando i
+  // posti dell'edizione. Ora i posti sono quelli del corso e l'aula
+  // piccola si limita a dirlo.
+  it("l'aula piena non spegne Iscrivi", async () => {
     const due = [allieva(1, CD_PICCOLA.id), allieva(2, CD_PICCOLA.id)];
     const p = await classe({ corsoData: CD_PICCOLA, sedi: [SEDE_PICCOLA], iscritti: due });
-    expect(p.tasto("Completo")?.disabled).toBe(true);
-    expect(p.testo()).toMatch(/0 posti liberi/);
+    expect(p.tasto("Completo")).toBeUndefined();
+    expect(p.tasto("Iscrivi")?.disabled).toBe(false);
+    expect(p.testo()).toMatch(/8 posti liberi/);
+  });
+
+  it("ma lo dice, e dice che si può iscrivere comunque", async () => {
+    const due = [allieva(1, CD_PICCOLA.id), allieva(2, CD_PICCOLA.id)];
+    const p = await classe({ corsoData: CD_PICCOLA, sedi: [SEDE_PICCOLA], iscritti: due });
+    expect(p.testo()).toMatch(/Sede Udine tiene 2 persone: l'aula è piena/);
+    expect(p.testo()).toMatch(/Puoi iscrivere comunque: il corso ne prevede 10/);
+  });
+
+  it("oltre la capienza dell'aula cambia la frase, non il tasto", async () => {
+    const tre = [1, 2, 3].map((k) => allieva(k, CD_PICCOLA.id));
+    const p = await classe({ corsoData: CD_PICCOLA, sedi: [SEDE_PICCOLA], iscritti: tre });
+    expect(p.testo()).toMatch(/qui siete 3: l'aula non basta/);
+    expect(p.tasto("Iscrivi")?.disabled).toBe(false);
+  });
+
+  it("sotto la capienza dell'aula non si dice niente", async () => {
+    const p = await classe({ corsoData: CD_PICCOLA, sedi: [SEDE_PICCOLA], iscritti: [allieva(1, CD_PICCOLA.id)] });
+    expect(p.testo()).not.toMatch(/aula/);
+  });
+
+  // una sede senza capienza scritta non ha niente da segnalare
+  it("una sede senza capienza resta muta", async () => {
+    const p = await classe({ iscritti: [allieva(1, CD.id)] });
+    expect(p.testo()).not.toMatch(/aula/);
   });
 });
