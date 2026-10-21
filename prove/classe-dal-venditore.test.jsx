@@ -45,6 +45,24 @@ describe("il venditore iscrive", () => {
   // La Dashboard non si apre su una pagina vuota da scegliere: si apre
   // già sull'elenco delle date, che è l'unica cosa per cui un venditore
   // ci entra.
+  it("la tessera si chiama Calendario iscrizioni, e il titolo sotto uguale", async () => {
+    const p = await monta(
+      <PaginaDashboardVenditori
+        venditoreBloccato={MARIO} venditori={[MARIO]}
+        corsi={[CORSO]} location={[SEDE]} corsiDate={[CD]} iscritti={[]} master={[]}
+        venditeShop={[]} prodottiShop={[]} targetVenditeProdotti={[]} eventi={[]}
+        onBack={() => {}} ricarica={() => {}} apriData={() => {}}
+      />
+    );
+    // la tessera (le due parole attaccate: fra loro c'è un <br/>)
+    expect(p.tasto("Calendarioiscrizioni")).toBeTruthy();
+    // e il titolo della sezione che la tessera apre, che deve dire lo
+    // stesso nome: il dentino lega le due cose, e due nomi diversi alle
+    // sue estremità rimettono in piedi la confusione che serve a togliere
+    expect(p.testo()).toMatch(/Calendario iscrizioni/);
+    expect(p.testo()).not.toMatch(/Iscrivi allievo/);
+  });
+
   it("entrando, l'elenco delle date c'è già", async () => {
     const p = await monta(
       <PaginaDashboardVenditori
@@ -75,7 +93,7 @@ describe("il venditore iscrive", () => {
         onBack={() => {}} ricarica={() => {}} apriData={() => {}}
       />
     );
-    await clicca(p.tasto("Iscrivi allievo"));
+    await clicca(p.tasto("Calendarioiscrizioni"));
     await new Promise((r) => requestAnimationFrame(r));
     expect(portato).toBeGreaterThan(0);
   });
@@ -109,7 +127,7 @@ describe("il venditore iscrive", () => {
     );
     const accese = [...p.nodo.querySelectorAll('[data-aperto="1"]')];
     expect(accese).toHaveLength(1);
-    expect(accese[0].textContent).toMatch(/Iscrivi allievo/);
+    expect(accese[0].textContent).toMatch(/Calendarioiscrizioni/);
   });
 
   it("e l'acceso si sposta sulla tessera che si preme", async () => {

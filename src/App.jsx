@@ -11627,7 +11627,14 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
                 erano tre colonne larghe e i tasti finivano lontani */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, calc((100% - 3 * 14px) / 4))" : "repeat(4, minmax(0, 1fr))", gap: 14, justifyContent: "center", maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
               {[
-                { chiave: "corsi", testo: "Iscrivi allievo", Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
+                // "Calendario iscrizioni" e non "Iscrivi allievo"
+                // (21/10/2026): la tessera non apre un modulo, apre il
+                // calendario delle date — ed e' proprio il nome vecchio
+                // che faceva aspettare un modulo a chi la premeva. Le due
+                // parole stanno una sull'altra per richiesta, col `<br/>`
+                // invece di affidarsi a dove va a capo: la larghezza della
+                // tessera cambia col telefono e con Aspetto dell'app.
+                { chiave: "corsi", testo: <>Calendario<br />iscrizioni</>, Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
                 { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
                 { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
                 { chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga },
@@ -11899,7 +11906,7 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
             {tabDashboardVenditore === "corsi" && (
               <SezioneDateCorsi
                 eventi={eventi} onApriEvento={onApriEvento}
-                titolo="Iscrivi Allievo"
+                titolo="Calendario iscrizioni"
                 corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
                 ricarica={ricarica} onApriData={apriData}
                 filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
