@@ -58,6 +58,40 @@ describe("il venditore iscrive", () => {
     expect(p.testo()).toMatch(/Laminazione Base/i);
   });
 
+  // IL DIFETTO DEL 21/10/2026, riferito da chi vende: «clicco su iscrivi
+  // allievo, sia da telefono che da pc, e non succede nulla». Era vero
+  // alla lettera: la Dashboard nasce su quella tessera, quindi premerla
+  // riscriveva lo stesso stato e React non ridisegnava niente. Adesso
+  // porta all'elenco — e soprattutto la pagina dice che il gesto dopo
+  // e' scegliere una data, perche' «Iscrivi allievo» non apre un modulo.
+  it("la tessera già aperta porta comunque all'elenco", async () => {
+    let portato = 0;
+    window.HTMLElement.prototype.scrollIntoView = () => { portato += 1; };
+    const p = await monta(
+      <PaginaDashboardVenditori
+        venditoreBloccato={MARIO} venditori={[MARIO]}
+        corsi={[CORSO]} location={[SEDE]} corsiDate={[CD]} iscritti={[]} master={[]}
+        venditeShop={[]} prodottiShop={[]} targetVenditeProdotti={[]} eventi={[]}
+        onBack={() => {}} ricarica={() => {}} apriData={() => {}}
+      />
+    );
+    await clicca(p.tasto("Iscrivi allievo"));
+    await new Promise((r) => requestAnimationFrame(r));
+    expect(portato).toBeGreaterThan(0);
+  });
+
+  it("dice che la data si sceglie prima", async () => {
+    const p = await monta(
+      <PaginaDashboardVenditori
+        venditoreBloccato={MARIO} venditori={[MARIO]}
+        corsi={[CORSO]} location={[SEDE]} corsiDate={[CD]} iscritti={[]} master={[]}
+        venditeShop={[]} prodottiShop={[]} targetVenditeProdotti={[]} eventi={[]}
+        onBack={() => {}} ricarica={() => {}} apriData={() => {}}
+      />
+    );
+    expect(p.testo()).toMatch(/Scegli qui sotto la data del corso/);
+  });
+
   it("nella classe il tasto Iscrivi apre il modulo", async () => {
     const p = await classe({});
     const t = p.tasto("Iscrivi");

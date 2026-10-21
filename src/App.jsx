@@ -11261,6 +11261,12 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
   const [classificaCorsiCompleta, setClassificaCorsiCompleta] = useState(false);
   const [classificaTicketCompleta, setClassificaTicketCompleta] = useState(false);
   const [mostraRiepilogoPos, setMostraRiepilogoPos] = useState(false);
+  // Dove comincia quello che le quattro tessere aprono. Serve perche' la
+  // dashboard nasce gia' su "Iscrivi allievo": premere quella tessera non
+  // cambiava niente — era di nuovo quella aperta — e un tasto che non
+  // reagisce e' un tasto rotto, per chi lo preme. Adesso porta lo sguardo
+  // sull'elenco delle date, che sul telefono sta sotto la piega.
+  const rifSezioneAperta = useRef(null);
 
   const venditoreSel = venditoreBloccato
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
@@ -11550,9 +11556,35 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
                 { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
                 { chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga },
               ].map((t) => (
-                <TileHome key={t.chiave} title={t.testo} Icona={t.Icona} onClick={() => setTabDashboardVenditore(t.chiave)} badge={t.badge} evidenziato={tabDashboardVenditore === t.chiave} etichettaDueRighe />
+                <TileHome
+                  key={t.chiave} title={t.testo} Icona={t.Icona} badge={t.badge}
+                  onClick={() => {
+                    setTabDashboardVenditore(t.chiave);
+                    // dopo il disegno, non prima: il riquadro a cui si
+                    // scorre e' quello che la tessera ha appena aperto
+                    requestAnimationFrame(() => rifSezioneAperta.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+                  }}
+                  evidenziato={tabDashboardVenditore === t.chiave} etichettaDueRighe
+                />
               ))}
             </div>
+
+            {/* Da qui in giu' c'e' quello che le tessere aprono: e' il
+                punto a cui portano, anche quando la tessera premuta era
+                gia' quella aperta. */}
+            <div ref={rifSezioneAperta} style={{ scrollMarginTop: 12 }} />
+
+            {/* IL GESTO SUCCESSIVO, DETTO. "Iscrivi allievo" non apre un
+                modulo: apre l'elenco delle date, e l'allievo si iscrive
+                dentro una classe — una classe va scelta prima, perche'
+                un'iscrizione senza edizione non esiste. Chi non lo sa
+                premeva la tessera aspettando un modulo, e non succedeva
+                niente: era gia' aperta. */}
+            {tabDashboardVenditore === "corsi" && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, textAlign: "center", marginBottom: 14, lineHeight: 1.5 }}>
+                Scegli qui sotto la data del corso: si apre la classe, e da lì il tasto <b style={{ color: NAVY }}>Iscrivi</b>.
+              </div>
+            )}
 
             {/* il titolo della scheda aperta, come per "Iscrivi allievo":
                 quello lo scrive la sezione dei corsi per conto suo, gli
