@@ -11235,7 +11235,7 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
 }
 
 
-function PaginaDashboardVenditori({ eventi = [], onApriEvento,
+export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
   corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData, onApriIscritto, venditoreBloccato,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
@@ -30289,7 +30289,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -39097,7 +39097,7 @@ async function generaPdfNormativa(blocchi, titoloDocumento) {
 // con WhatsApp dentro; sulla pagina interna quel tasto e' un invito a
 // sbagliare, e il PDF si scarica e basta — anche da telefono, dove per il
 // documento era nascosto perche' li' si condivide.
-function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative", perAllievo = true, datiBenvenuto = null }) {
+export function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative", perAllievo = true, datiBenvenuto = null }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const riga = (testi || []).find((t) => t.chiave === chiave) || null;
