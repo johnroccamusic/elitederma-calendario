@@ -22,6 +22,7 @@
 // in attesa di qualcosa che non arrivera'.
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
+import { linkModulo } from "./invio.js";
 import { Button } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, fontBody } from "../ui/stile.js";
 
@@ -63,6 +64,8 @@ export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} 
   const [linkPdf, setLinkPdf] = useState("");
   const [invii, setInvii] = useState(null);
   const [riaperture, setRiaperture] = useState(null);
+  const [copie, setCopie] = useState(null);
+  const [copiato, setCopiato] = useState("");
   const [motivoRiapertura, setMotivoRiapertura] = useState("");
   const [riaprendo, setRiaprendo] = useState(false);
   const [esitoRiapertura, setEsitoRiapertura] = useState("");
@@ -103,6 +106,45 @@ export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} 
       .then(({ data }) => { if (vivo) setRiaperture(data || []); });
     return () => { vivo = false; };
   }, [iscritto?.id]);
+
+  useEffect(() => {
+    let vivo = true;
+    if (!iscritto?.id) return;
+    supabase.from("moduli_link_copiati")
+      .select("*").eq("iscritto_id", iscritto.id)
+      .order("copiato_il", { ascending: false })
+      .then(({ data }) => { if (vivo) setCopie(data || []); });
+    return () => { vivo = false; };
+  }, [iscritto?.id]);
+
+  // IL LINK PASSATO A MANO.
+  //
+  // Il modulo parte per email e basta: il "Copia il link" era stato
+  // tolto il 20/10/2026 perche' di una mail resta scritto cos'e' partito
+  // e a chi, di un link incollato in chat non resta niente. Ma quando la
+  // mail non arriva — consegnata e finita nella posta indesiderata —
+  // l'iscrizione si ferma e non c'e' nient'altro da provare.
+  //
+  // Torna qui dentro, non sulla scheda, e con la sua traccia. NON segna
+  // il modulo come inviato: quello era il peccato di
+  // `segnaInviatoAMano`, che scriveva `modulo_inviato_il` senza che
+  // fosse partito niente.
+  async function copiaLink() {
+    setCopiato("");
+    try {
+      // `clipboard` non c'e' sempre (contesto non sicuro, browser
+      // vecchi): il link resta comunque scritto sotto, da selezionare
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(link);
+      else throw new Error("niente appunti");
+      setCopiato("Copiato: incollalo in chat. Ricordale che deve firmare col dito.");
+    } catch {
+      setCopiato("Non riesco a copiarlo da solo: selezionalo qui sotto e copialo a mano.");
+    }
+    const { data } = await supabase.from("moduli_link_copiati")
+      .insert({ iscritto_id: iscritto.id, copiato_da: chi || null })
+      .select("*");
+    if (data?.length) setCopie((p) => [data[0], ...(p || [])]);
+  }
 
   // RIAPRIRE IL MODULO.
   //
@@ -160,9 +202,47 @@ export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} 
   // la conferma di ricezione del modulo e' quella che conta: si cerca
   // fra gli invii la riga di quella mail
   const conferma = (invii || []).find((x) => x.chiave_modello === "ricezione_modulo");
+  const link = iscritto?.token_modulo ? linkModulo(iscritto.token_modulo) : "";
+  // il link vale finche' il modulo non e' tornato: dopo, chi lo apre
+  // legge "gia' inviato" e passarglielo sarebbe mandarla contro un muro
+  const linkAncoraBuono = !!link && !iscritto?.modulo_ricevuto_il;
 
   return (
     <div>
+      {linkAncoraBuono && (
+        <Riquadro
+          titolo="Il link del modulo"
+          nota="Serve quando la mail non arriva — tipicamente finita nella posta indesiderata. Copiare il link non segna il modulo come inviato: dice solo che è uscito da qui, e resta scritto chi l'ha preso."
+        >
+          <div style={{ ...fontBody, fontSize: 13, color: GRAFITE, lineHeight: 1.55, marginBottom: 10 }}>
+            È lo <b>stesso link</b> che le è già arrivato per email: non ne esiste un altro, e
+            non scade finché non spedisce. Puoi passarglielo in chat.
+          </div>
+          <Button variant="ghost" onClick={copiaLink}>Copia il link</Button>
+          <div style={{
+            ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.5,
+            wordBreak: "break-all", userSelect: "all",
+          }}>
+            {link}
+          </div>
+          {copiato && (
+            <div style={{ ...fontBody, fontSize: 12.5, marginTop: 8, lineHeight: 1.5, color: copiato.startsWith("Copiato") ? VERDE : AMBRA }}>
+              {copiato}
+            </div>
+          )}
+          {(copie || []).length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+                Già passato a mano
+              </div>
+              {(copie || []).map((c) => (
+                <Riga key={c.id} etichetta={quando(c.copiato_il) || "—"}>{c.copiato_da || "— non registrato —"}</Riga>
+              ))}
+            </div>
+          )}
+        </Riquadro>
+      )}
+
       <Riquadro
         titolo="La copia firmata"
         nota={!percorso

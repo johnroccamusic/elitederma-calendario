@@ -92,14 +92,29 @@ describe("il fascicolo di un'iscrizione", () => {
 });
 
 describe("la tessera «Modulo ricevuto»", () => {
-  it("non si preme finche' il modulo non e' arrivato", async () => {
+  // QUESTA PROVA DICEVA IL CONTRARIO fino al 22/10/2026: «non si preme
+  // finche' il modulo non e' arrivato». La regola era giusta quando il
+  // fascicolo conteneva solo la copia firmata — aprire una cartella
+  // vuota e' un guasto. Adesso dentro c'e' il registro delle mail (a
+  // chi, consegnata, rimbalzata) e il link da ripassare a mano: cioe'
+  // le cose che si cercano QUANDO IL MODULO NON TORNA, che era proprio
+  // il momento in cui il fascicolo restava chiuso.
+  it("si preme da quando il modulo e' partito", async () => {
     let aperto = 0;
     const p = await monta(
       <FasciaStato stato="modulo_inviato" onFascicolo={() => { aperto++; }} />,
     );
-    // il pallino del modulo ricevuto non deve essere un tasto
-    const tasti = [...p.nodo.querySelectorAll("button")];
-    for (const b of tasti) await clicca(b);
+    for (const b of [...p.nodo.querySelectorAll("button")]) await clicca(b);
+    expect(aperto).toBe(1);
+    await p.smonta();
+  });
+
+  it("ma prima dell'invio resta chiuso: li' dentro non c'e' nemmeno una mail", async () => {
+    let aperto = 0;
+    const p = await monta(
+      <FasciaStato stato="dati_inseriti" onFascicolo={() => { aperto++; }} />,
+    );
+    for (const b of [...p.nodo.querySelectorAll("button")]) await clicca(b);
     expect(aperto).toBe(0);
     await p.smonta();
   });

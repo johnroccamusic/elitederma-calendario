@@ -85,9 +85,22 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 // tocca: e' il caso delle liste di sola lettura. Un pallino che sembra
 // un tasto e non fa niente e' il guasto peggiore, ed e' gia' successo.
 //
-// Per questo il fascicolo si preme SOLO da quella tappa in poi: prima
-// che il modulo arrivi non c'e' niente dentro, e aprire una cartella
-// vuota e' lo stesso guasto detto in un altro modo.
+// IL FASCICOLO SI PREME DA "MODULO INVIATO" IN POI (22/10/2026).
+//
+// Qui c'era scritto «SOLO da "Modulo ricevuto" in poi: prima che il
+// modulo arrivi non c'e' niente dentro, e aprire una cartella vuota e'
+// lo stesso guasto detto in un altro modo». Era vero quando il fascicolo
+// conteneva solo la copia firmata.
+//
+// Non lo e' piu': adesso dentro c'e' il registro delle mail — a chi e'
+// partita, se e' stata consegnata, se e' rimbalzata — e il link da
+// ripassare a mano. Cioe' esattamente le cose che si cercano QUANDO IL
+// MODULO NON TORNA, che e' il momento in cui il fascicolo era chiuso.
+// Tre mail consegnate a un indirizzo Hotmail e mai aperte, e l'unico
+// posto che lo diceva non si apriva.
+//
+// Prima dell'invio resta chiuso: li' dentro davvero non c'e' niente,
+// nemmeno una mail.
 // IL RIMBALZO: "partita" e "arrivata" non sono la stessa cosa.
 //
 // Il 22/10/2026 un modulo e' partito verso «...@europe.con» — .con invece
@@ -189,7 +202,7 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                 const eInvio = !!onInvia && chiave === "modulo_inviato" && !inviando && !arrivato;
                 const eModifica = !!onModifica && chiave === "dati_inseriti";
                 const eFascicolo = !!onFascicolo && chiave === "modulo_ricevuto"
-                  && indice >= ORDINE.indexOf("modulo_ricevuto");
+                  && indice >= ORDINE.indexOf("modulo_inviato");
                 const siPreme = eInvio || eModifica || eFascicolo;
                 const giaPartito = indice >= ORDINE.indexOf("modulo_inviato");
                 const Palla = siPreme ? "button" : "div";
@@ -202,7 +215,9 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                       : eModifica
                       ? "Riapri la scheda per correggere i dati"
                       : eFascicolo
-                        ? "Apri il fascicolo: copia firmata, invio della conferma, presa visione"
+                        ? (arrivato
+                          ? "Apri il fascicolo: copia firmata, mail mandate, presa visione"
+                          : "Apri il fascicolo: dov'è finita la mail, e il link da ripassare a mano")
                         : eInvio
                           ? (giaPartito ? "Il modulo è già partito: premi per rimandarlo" : "Manda il modulo all'allieva")
                           : (chiave === "modulo_inviato" && arrivato)
