@@ -30580,6 +30580,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // la domanda prima di spedire. Non window.confirm: quello ha solo due
   // tasti, e qui ne servono tre — manda, copia il link, lascia perdere.
   const [chiediInvio, setChiediInvio] = useState(null);   // { rec, giaPartito, salvaPrima }
+  const [linkCopiato, setLinkCopiato] = useState("");
   const [inviandoId, setInviandoId] = useState(null);
   const [esitoModulo, setEsitoModulo] = useState(null);   // { id, ok, testo, link }
   // il fascicolo aperto dalla tessera "Modulo ricevuto": quale iscritta.
@@ -32248,6 +32249,30 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   }
 
   // quello che succede dopo aver risposto "Invia la mail".
+  // IL LINK A MANO, DA QUI DENTRO.
+  //
+  // Sta anche nel fascicolo, ma questo e' il momento in cui serve: si e'
+  // aperta questa finestra perche' si sta rimandando il modulo, e si
+  // rimanda perche' la prima mail non e' arrivata. Mandare a cercare
+  // il link due schermate piu' in la', proprio li', e' mandarlo a
+  // cercare quando non si ha voglia di cercare.
+  //
+  // Come nel fascicolo: NON segna niente come inviato, lascia solo la
+  // riga di chi l'ha preso e quando.
+  async function copiaLinkModulo(rec) {
+    const indirizzo = linkModulo(rec.token_modulo);
+    setLinkCopiato("");
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("niente appunti");
+      await navigator.clipboard.writeText(indirizzo);
+      setLinkCopiato("Copiato. Incollalo in chat — è lo stesso link della mail.");
+    } catch {
+      setLinkCopiato(indirizzo);
+    }
+    await supabase.from("moduli_link_copiati")
+      .insert({ iscritto_id: rec.id, copiato_da: chiOpera || null });
+  }
+
   async function eseguiInvio(rec, { salvaPrima = false } = {}) {
     setChiediInvio(null);
     setInviandoId(rec.id);
@@ -32894,7 +32919,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   const riquadroInvio = chiediInvio && (
                 <Modal
                   title={chiediInvio.giaPartito ? "Inviare di nuovo il modulo?" : "Inviare il modulo?"}
-                  onClose={() => setChiediInvio(null)}
+                  onClose={() => { setChiediInvio(null); setLinkCopiato(""); }}
                   maxWidth={460}
                 >
                   <div style={{ ...fontBody, fontSize: 13.5, color: GRAFITE, lineHeight: 1.6 }}>
@@ -32938,13 +32963,44 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                         sono tutte CONFERMATE, e dal 19/10 il modulo
                         online rifiuta le iscrizioni confermate — quel
                         link non si sarebbe aperto comunque. Loro hanno
-                        il modulo cartaceo. */}
+                        il modulo cartaceo.
+
+                        DAL 22/10/2026 IL LINK SI PUO' COPIARE nei
+                        rinvii — non al primo invio. Il motivo di allora
+                        resta buono: il modulo parte per email, e della
+                        mail si sa tutto. Ma e' arrivato il caso che
+                        mancava: una mail CONSEGNATA e mai aperta,
+                        probabilmente in posta indesiderata, e con un
+                        canale solo l'iscrizione si ferma e non c'e'
+                        nient'altro da provare. Se si sta rimandando, la
+                        prima mail non e' arrivata: e' li' che serve.
+
+                        E NON segna niente come inviato — era il peccato
+                        di `segnaInviatoAMano` — lascia solo la riga di
+                        chi l'ha preso e quando, in
+                        `moduli_link_copiati`. */}
+                    {chiediInvio.giaPartito && chiediInvio.rec.token_modulo && (
+                      <Button variant="ghost" onClick={() => copiaLinkModulo(chiediInvio.rec)}>Copia il link</Button>
+                    )}
                     <Button variant="ghost" onClick={() => setChiediInvio(null)}>Chiudi</Button>
                   </div>
+                  {linkCopiato && (
+                    <div style={{
+                      ...fontBody, fontSize: 12, marginTop: 10, lineHeight: 1.5,
+                      color: linkCopiato.startsWith("Copiato") ? "#2E7D32" : NAVY,
+                      wordBreak: "break-all", userSelect: "all",
+                    }}>
+                      {linkCopiato.startsWith("Copiato")
+                        ? linkCopiato
+                        : <>Non riesco a copiarlo da solo: selezionalo e copialo a mano.<br />{linkCopiato}</>}
+                    </div>
+                  )}
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
-                    {chiediInvio.rec.email
-                      ? <>Il modulo parte per email, e solo per email: così resta scritto che è partito, a chi e quando. Le arriva anche la richiesta di conferma di ricezione.</>
-                      : <>Questa scheda non ha un'email, e senza email il modulo non si manda: scrivila nella scheda e salva.</>}
+                    {!chiediInvio.rec.email
+                      ? <>Questa scheda non ha un&apos;email, e senza email il modulo non si manda: scrivila nella scheda e salva.</>
+                      : chiediInvio.giaPartito
+                        ? <>Il modulo parte per email: così resta scritto che è partito, a chi e quando, e le arriva la richiesta di conferma di ricezione. Se la prima non è arrivata, <b>falle cercare anche nella posta indesiderata</b> — oppure copia il link e passaglielo in chat.</>
+                        : <>Il modulo parte per email, e solo per email: così resta scritto che è partito, a chi e quando. Le arriva anche la richiesta di conferma di ricezione.</>}
                   </div>
                 </Modal>
               );
