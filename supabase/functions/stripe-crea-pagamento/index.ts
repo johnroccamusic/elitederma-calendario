@@ -150,6 +150,21 @@ Deno.serve(async (req) => {
     operatore_nome: corpo?.operatore?.nome || null,
     corso_data_id: corpo?.corsoDataId || null,
     carrello_id: corpo?.carrelloId || null,
+    // QUANDO SI RISCUOTE UN ORDINE GIA' FATTO, il link sa a quale.
+    //
+    // Senza, succede questo (22/10/2026): una vendita al banco non
+    // pagata, il link rimandato dal dettaglio ordine, la cliente paga —
+    // e il pagamento resta senza vendita. Il recupero notturno prova
+    // allora a crearne una NUOVA dalle righe della richiesta, ma li'
+    // dentro c'e' una riga sola che si chiama «Ordine POS-...», che a
+    // catalogo non esiste: fallisce, in silenzio, ogni cinque minuti.
+    // Intanto l'Advisor continua a dire che quell'incasso e' rimasto
+    // indietro, e la vendita vera resta li' come non pagata.
+    //
+    // Con la vendita scritta qui non c'e' niente da creare: il recupero
+    // salta la riga (cerca solo quelle senza vendita) e l'avviso
+    // sparisce da solo.
+    vendita_id: corpo?.venditaId || null,
     stato: "in_attesa",
     richiede_fattura: vuoleFattura,
     stripe_session_id: sessione.id,

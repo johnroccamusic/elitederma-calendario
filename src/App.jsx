@@ -52712,6 +52712,13 @@ export function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate
           nome: vendita?.operatore_nome || null,
         },
         corsoDataId: vendita?.corso_data_id || null,
+        // A QUALE VENDITA APPARTIENE QUESTO INCASSO. Senza, pagato
+        // resta un incasso senza vendita: il recupero prova a crearne
+        // una nuova dalle righe della richiesta — dove c'e' una riga
+        // sola, «Ordine POS-...», che a catalogo non esiste — fallisce
+        // in silenzio, e l'Advisor continua a segnalarlo per sempre.
+        // Successo il 22/10/2026 con l'ordine di Debora Fumagalli.
+        venditaId: vendita?.id || null,
         richiedeFattura: vuoleFattura === true,
         // un link mandato su WhatsApp viene aperto la sera, non entro
         // due ore: qui vale il massimo che Stripe concede
