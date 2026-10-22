@@ -340,32 +340,44 @@ export async function leggiDocumentiEvento(eventoId) {
   return data || [];
 }
 
-export async function caricaDocumentoEvento(eventoId, file, { nome = "", note = "", chi = "" } = {}) {
+// LA SCHEDA NASCE DAL TITOLO, il file arriva dopo. Come in Stampe
+// packaging: si preme «Aggiungi documento», si scrive cos'e', e dentro
+// la scheda si carica il file e si scrivono le note. Quindi una riga
+// puo' esistere senza file, e un file si puo' sostituire.
+export async function creaDocumentoEvento(eventoId, { chi = "" } = {}) {
+  const quante = (await leggiDocumentiEvento(eventoId)).length;
+  const { data, error } = await supabase.from("eventi_documenti").insert({
+    evento_id: eventoId, nome: "", ordine: quante, caricato_da: chi || null,
+  }).select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function caricaFileDocumento(doc, file) {
   if (!file) throw new Error("Nessun file scelto.");
   // il nome del file non finisce nel percorso: ci finiscono caratteri di
   // ogni specie — spazi, accenti, parentesi — e un percorso storto si
   // scopre il giorno che il file non si riapre. Il nome vero sta nella
   // riga, che e' anche quello che si legge e si puo' correggere.
   const estensione = (file.name?.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6);
-  const percorso = `${eventoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${estensione ? "." + estensione : ""}`;
+  const percorso = `${doc.evento_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${estensione ? "." + estensione : ""}`;
   const { error } = await supabase.storage.from("eventi-documenti")
     .upload(percorso, file, { upsert: false, contentType: file.type || undefined });
   if (error) throw new Error(`Non riesco a caricare il file: ${error.message}`);
-
-  const quante = (await leggiDocumentiEvento(eventoId)).length;
-  const { data, error: erroreRiga } = await supabase.from("eventi_documenti").insert({
-    evento_id: eventoId,
-    nome: (nome || file.name || "Documento").trim(),
-    note: (note || "").trim() || null,
+  const { data, error: erroreRiga } = await supabase.from("eventi_documenti").update({
     percorso, tipo: file.type || null, dimensione: file.size || null,
-    ordine: quante, caricato_da: chi || null,
-  }).select().single();
+    nome_file: file.name || null,
+    // un titolo vuoto prende il nome del file: meglio di «Documento senza nome»
+    ...(doc.nome?.trim() ? {} : { nome: file.name || "Documento" }),
+  }).eq("id", doc.id).select().single();
   if (erroreRiga) {
-    // la riga non c'e': il file caricato non lo ritroverebbe nessuno, e
-    // resterebbe a occupare spazio senza che niente lo nomini
+    // la riga non si e' aggiornata: il file caricato non lo ritroverebbe
+    // nessuno, e resterebbe a occupare spazio senza che niente lo nomini
     await supabase.storage.from("eventi-documenti").remove([percorso]);
     throw new Error(`Caricato, ma non registrato: ${erroreRiga.message}`);
   }
+  // il file di prima, se c'era, se ne va: e' stato sostituito
+  if (doc.percorso && doc.percorso !== percorso) await supabase.storage.from("eventi-documenti").remove([doc.percorso]);
   return data;
 }
 

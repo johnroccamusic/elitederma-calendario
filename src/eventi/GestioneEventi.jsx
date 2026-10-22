@@ -14,7 +14,7 @@ import {
   periodoEvento, quantiGiorni, usciteAllEvento,
   impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
   leggiCategoriePrincipali, leggiImmaginiProdotti,
-  leggiDocumentiEvento, caricaDocumentoEvento, eliminaDocumentoEvento, linkDocumentoEvento,
+  leggiDocumentiEvento, creaDocumentoEvento, caricaFileDocumento, eliminaDocumentoEvento, linkDocumentoEvento,
   leggiVenditeEvento, prodottiPiuVenduti, totaliVendite,
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
@@ -1244,145 +1244,156 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
 // una sessione.
 export function SchedaDocumenti({ eventoId }) {
   const [righe, setRighe] = useState(null);
-  const [caricando, setCaricando] = useState(false);
+  const [occupato, setOccupato] = useState("");
   const [guasto, setGuasto] = useState("");
-  // COSA E' E A COSA SERVE, scritti PRIMA di scegliere il file. Il nome
-  // che arriva dal telefono e' «WhatsApp Image 2026-10-22 at 11.04.jpeg»:
-  // correggerlo dopo si puo', ma chi carica lo sa adesso, non fra tre
-  // mesi. Con piu' file e un nome solo, il nome si numera.
-  const [nomeNuovo, setNomeNuovo] = useState("");
-  const [noteNuove, setNoteNuove] = useState("");
+  // CHIUSE DI SERIE, UNA RIGA PER DOCUMENTO, come le schede di Stampe
+  // packaging: chiuse si leggono tutte in un colpo, e si apre quella che
+  // serve. Una scheda nuova nasce aperta, col titolo da scrivere.
+  const [aperte, setAperte] = useState(() => new Set());
+  const apri = (id, acceso) => setAperte((prec) => {
+    const n = new Set(prec);
+    if (acceso) n.add(id); else n.delete(id);
+    return n;
+  });
 
   const ricarica = () => leggiDocumentiEvento(eventoId).then(setRighe).catch(() => setRighe([]));
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
 
-  async function prendi(elenco) {
-    const file = [...(elenco || [])];
-    if (file.length === 0) return;
-    setCaricando(true); setGuasto("");
-    const chi = (await supabase.auth.getUser())?.data?.user?.email || "";
-    // uno alla volta e non in blocco: se il quarto non va su, i primi
-    // tre restano caricati e si vede quale e' mancato
-    const falliti = [];
-    const base = nomeNuovo.trim();
-    for (const [i, f] of file.entries()) {
-      const nome = base ? (file.length > 1 ? `${base} ${i + 1}` : base) : "";
-      try { await caricaDocumentoEvento(eventoId, f, { nome, note: noteNuove, chi }); }
-      catch (e) { falliti.push(`${f.name}: ${e.message}`); }
-    }
-    setCaricando(false);
-    if (falliti.length) setGuasto(falliti.join(" · "));
-    else { setNomeNuovo(""); setNoteNuove(""); }
-    ricarica();
-  }
-
-  async function apri(doc) {
+  async function conErrore(f, dove) {
     setGuasto("");
+    try { await f(); } catch (e) { setGuasto(`${dove}: ${e.message}`); }
+    setOccupato("");
+  }
+  async function nuova() {
+    setOccupato("nuova");
+    await conErrore(async () => {
+      const chi = (await supabase.auth.getUser())?.data?.user?.email || "";
+      const d = await creaDocumentoEvento(eventoId, { chi });
+      await ricarica();
+      apri(d.id, true);
+    }, "Scheda non creata");
+  }
+  async function salva(doc, campi) {
+    await conErrore(() => salvaRiga("eventi_documenti", doc.id, campi).then(ricarica), "Non salvato");
+  }
+  async function carica(doc, file) {
+    if (!file) return;
+    setOccupato(`file:${doc.id}`);
+    await conErrore(() => caricaFileDocumento(doc, file).then(ricarica), "Caricamento non riuscito");
+  }
+  async function apriFile(doc) {
     // la finestra si apre PRIMA della chiamata, dentro il gesto: su
     // iPhone una window.open che arriva dopo un await viene bloccata
     const finestra = window.open("", "_blank", "noopener");
     try {
       const indirizzo = await linkDocumentoEvento(doc.percorso);
-      if (!indirizzo) throw new Error("link non disponibile");
-      if (finestra) finestra.location = indirizzo;
-      else window.location.href = indirizzo;
+      if (finestra) finestra.location = indirizzo; else window.location.href = indirizzo;
     } catch (e) {
       if (finestra) finestra.close();
-      setGuasto(`Non riesco ad aprire «${doc.nome}»: ${e.message}`);
+      setGuasto(`Non riesco ad aprire «${doc.nome || "il documento"}»: ${e.message}`);
     }
   }
-
   async function elimina(doc) {
-    if (!window.confirm(`Eliminare «${doc.nome}»?\n\nIl file viene cancellato, non solo tolto dall'elenco.`)) return;
-    setGuasto("");
-    try { await eliminaDocumentoEvento(doc); } catch (e) { setGuasto(e.message); }
-    ricarica();
+    if (!window.confirm(`Eliminare «${doc.nome || "questo documento"}»?\n\nIl file viene cancellato, non solo tolto dall'elenco.`)) return;
+    await conErrore(() => eliminaDocumentoEvento(doc).then(ricarica), "Non eliminato");
   }
 
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
   return (
     <>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 10 }}>
-        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-          <Field label="Che documento è">
-            <input
-              data-campo="documento_nome"
-              style={inputStyle} value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)}
-              placeholder="es. Regolamento fiera, Certificazione impianto…"
-            />
-          </Field>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5, flex: "1 1 260px" }}>
+          Certificazioni, regolamento della fiera, planimetrie, permessi, assicurazione.
+          Una scheda per documento: il titolo, il file, le note.
         </div>
-        <div style={{ flex: "2 1 260px", minWidth: 0 }}>
-          <Field label="Note">
-            <textarea
-              data-campo="documento_note"
-              rows={2} value={noteNuove} onChange={(e) => setNoteNuove(e.target.value)}
-              placeholder="a cosa serve, scadenze, a chi va mostrato…"
-              style={{ ...inputStyle, resize: "vertical", minHeight: 44 }}
-            />
-          </Field>
-        </div>
+        <Button onClick={nuova} disabled={occupato === "nuova"}>
+          {occupato === "nuova" ? "Creo…" : "+ Aggiungi documento"}
+        </Button>
       </div>
-      {/* IL TASTO E' IL CAMPO, dentro una label: il tocco arriva
-          all'input senza passare da JavaScript, che e' l'unica forma che
-          iOS accetta sempre. Un input nascosto aperto con `.click()` su
-          iPhone funziona una volta sola (vedi il modulo di iscrizione). */}
-      <label style={{
-        display: "inline-flex", alignItems: "center", gap: 8, cursor: caricando ? "default" : "pointer",
-        border: `1px solid ${NAVY}`, borderRadius: 12, padding: "10px 16px", marginBottom: 6,
-        ...fontBody, fontSize: 13.5, fontWeight: 700, color: caricando ? MUTED : NAVY,
-        background: "#fff", opacity: caricando ? 0.6 : 1,
-      }}>
-        {caricando ? "Carico…" : "Aggiungi documenti"}
-        <input
-          type="file" multiple disabled={caricando}
-          onChange={(e) => { prendi(e.target.files); e.target.value = ""; }}
-          style={{ display: "none" }}
-        />
-      </label>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, marginBottom: 14 }}>
-        Certificazioni, regolamento della fiera, planimetrie, permessi, assicurazione.
-        Qualunque formato. Restano qui, legati a questo evento, e si aprono solo da dentro l&apos;app.
-      </div>
-
       {guasto && (
-        <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", lineHeight: 1.5, marginBottom: 12 }}>{guasto}</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", lineHeight: 1.5, margin: "8px 0 12px" }}>{guasto}</div>
       )}
+      {righe.length === 0 && <Vuoto>Nessun documento. Premi <b>Aggiungi documento</b>, scrivi cos'è, e dentro carichi il file.</Vuoto>}
 
-      {righe.length === 0 && <Vuoto>Nessun documento per questo evento.</Vuoto>}
-      {righe.map((r) => (
-        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-            {/* il nome si corregge: quello che arriva dal file e'
-                spesso «WhatsApp Image 2026-10-22 at 11.04.jpeg» */}
-            <input
-              style={{ ...campoRiga, width: "100%", minWidth: 0, fontWeight: 700 }}
-              defaultValue={r.nome}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== r.nome) salvaRiga("eventi_documenti", r.id, { nome: v }).then(ricarica);
-                else e.target.value = r.nome;
-              }}
-            />
-            {/* la nota si corregge sul posto, come il nome: vuota si
-                cancella (null), non resta una stringa di spazi */}
-            <textarea
-              data-campo={`note-${r.id}`}
-              rows={1} defaultValue={r.note || ""} placeholder="note…"
-              style={{ ...campoRiga, width: "100%", minWidth: 0, marginTop: 4, resize: "vertical", fontSize: 12 }}
-              onBlur={(e) => {
-                const v = e.target.value.trim() || null;
-                if (v !== (r.note || null)) salvaRiga("eventi_documenti", r.id, { note: v }).then(ricarica);
-              }}
-            />
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
-              {misuraFile(r.dimensione)}{r.caricato_da ? ` · ${r.caricato_da}` : ""} · {fmtQuando(r.caricato_il)}
+      {righe.map((r) => {
+        const aperta = aperte.has(r.id);
+        return (
+          <div key={r.id} data-documento={r.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: aperta ? 14 : 12, marginTop: 10 }}>
+            {/* LA RIGA CHIUSA: solo il titolo, e il tasto per aprire.
+                Il titolo qui si legge, non si scrive: il campo sta dentro. */}
+            <div onClick={() => apri(r.id, !aperta)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 0 }}>
+              <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                {r.nome?.trim() || "Documento senza nome"}
+              </span>
+              {!aperta && (
+                <span style={{ ...fontBody, fontSize: 11.5, color: r.percorso ? MUTED : "#C0392B", whiteSpace: "nowrap" }}>
+                  {r.percorso ? misuraFile(r.dimensione) : "senza file"}{r.note ? " · nota" : ""}
+                </span>
+              )}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ flexShrink: 0, transform: aperta ? "rotate(180deg)" : "none", transition: "transform .15s" }}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
             </div>
+
+            {aperta && (
+              <div style={{ marginTop: 12 }}>
+                <Field label="Che documento è">
+                  <input
+                    data-campo={`titolo-${r.id}`}
+                    style={inputStyle} defaultValue={r.nome || ""}
+                    placeholder="es. Regolamento fiera, Certificazione impianto…"
+                    onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.nome || "")) salva(r, { nome: v }); }}
+                  />
+                </Field>
+
+                {/* IL FILE. Il tasto E' il campo, dentro una label: su
+                    iPhone un input aperto da codice funziona una volta
+                    sola. Sostituire manda via il file di prima. */}
+                <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 10, margin: "4px 0 12px" }}>
+                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>File</div>
+                  {r.percorso ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <Button variant="ghost" onClick={() => apriFile(r)}>Apri</Button>
+                      <span style={{ ...fontBody, fontSize: 12, color: MUTED, minWidth: 0, wordBreak: "break-all" }}>
+                        {r.nome_file || ""}{r.nome_file ? " · " : ""}{misuraFile(r.dimensione)}{r.caricato_da ? ` · ${r.caricato_da}` : ""} · {fmtQuando(r.caricato_il)}
+                      </span>
+                      <label style={{ cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD }}>
+                        {occupato === `file:${r.id}` ? "Carico…" : "Sostituisci"}
+                        <input type="file" style={{ display: "none" }} onChange={(e) => { carica(r, e.target.files?.[0]); e.target.value = ""; }} />
+                      </label>
+                    </div>
+                  ) : (
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
+                      {occupato === `file:${r.id}` ? "Carico…" : "Carica file"}
+                      <input type="file" style={{ display: "none" }} onChange={(e) => { carica(r, e.target.files?.[0]); e.target.value = ""; }} />
+                    </label>
+                  )}
+                </div>
+
+                <Field label="Note">
+                  <textarea
+                    data-campo={`note-${r.id}`}
+                    rows={3} defaultValue={r.note || ""}
+                    placeholder="a cosa serve, scadenze, a chi va mostrato…"
+                    style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
+                    onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== (r.note || null)) salva(r, { note: v }); }}
+                  />
+                </Field>
+
+                <button
+                  onClick={() => elimina(r)}
+                  title="Elimina il documento e il suo file"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M9 6V4h6v2M7 6l1 14h8l1-14" /></svg>
+                  Elimina
+                </button>
+              </div>
+            )}
           </div>
-          <Button variant="ghost" onClick={() => apri(r)}>Apri</Button>
-          <TastoCestino onClick={() => elimina(r)} />
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
