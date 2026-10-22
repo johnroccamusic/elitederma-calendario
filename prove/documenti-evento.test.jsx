@@ -110,14 +110,24 @@ describe("i documenti di un evento", () => {
 // si cancella, si rinomina, si corregge la nota: tutto sul posto.
 describe("nome e note di un documento", () => {
   const file = () => new File(["x"], "WhatsApp Image 2026-10-22.jpeg", { type: "image/jpeg" });
-  async function conInserimento(docs = []) {
+  async function conInserimento(iniziali = []) {
     const inserite = [];
     const salvate = [];
+    // LA FINTA RICORDA QUELLO CHE SALVA: dopo un salvataggio la scheda
+    // rilegge l'elenco, e se la finta rispondesse sempre con le righe di
+    // partenza la nota appena scritta "sparirebbe" — e l'app, giustamente,
+    // non riscriverebbe un vuoto su un vuoto
+    let docs = iniziali.map((d) => ({ ...d }));
     rispondiCon({
       "/storage/v1/object/eventi-documenti/": {},
       "eventi_documenti": (corpo, url) => {
         if (corpo && !String(url).includes("?id=")) { inserite.push(corpo); return [{ id: "nuovo", ...corpo }]; }
-        if (corpo) { salvate.push({ url: String(url), corpo }); return [{ id: "d1", ...corpo }]; }
+        if (corpo) {
+          salvate.push({ url: String(url), corpo });
+          const id = (String(url).match(/id=eq\.([^&]+)/) || [])[1];
+          docs = docs.map((d) => (d.id === id ? { ...d, ...corpo } : d));
+          return [{ id, ...corpo }];
+        }
         return docs;
       },
       "/auth/v1/user": { id: "u1", email: "elena@elitederma.it" },
