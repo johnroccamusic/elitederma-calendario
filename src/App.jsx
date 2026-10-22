@@ -30399,7 +30399,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = "", puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -35065,7 +35065,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareM
           maxWidth={640}
           scorrevole
         >
-          <Fascicolo iscritto={fascicoloDi} onAggiornato={ricarica} />
+          <Fascicolo iscritto={fascicoloDi} chi={chiOpera} onAggiornato={ricarica} />
         </Modal>
       )}
     </div>
@@ -85221,6 +85221,7 @@ function Gestionale() {
           key={schedaKey}
           ruoloUtente={ruoloUtente}
           venditoreLoggato={venditoreLoggato}
+          chiOpera={operatoreApp?.nome || utenteLoggato?.nome || ""}
           puoAssegnareModelle={puoAprireVista("gestionemodelle")}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
           kitDefinizioni={kitDefinizioni}

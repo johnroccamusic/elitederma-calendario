@@ -59,9 +59,13 @@ function Riga({ etichetta, children, colore = NAVY }) {
   );
 }
 
-export default function Fascicolo({ iscritto, onAggiornato = () => {} }) {
+export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} }) {
   const [linkPdf, setLinkPdf] = useState("");
   const [invii, setInvii] = useState(null);
+  const [riaperture, setRiaperture] = useState(null);
+  const [motivoRiapertura, setMotivoRiapertura] = useState("");
+  const [riaprendo, setRiaprendo] = useState(false);
+  const [esitoRiapertura, setEsitoRiapertura] = useState("");
   const [rigenerando, setRigenerando] = useState(false);
   const [esito, setEsito] = useState("");
   // il percorso del PDF si tiene nello stato: dopo "Rigenera" la riga
@@ -89,6 +93,50 @@ export default function Fascicolo({ iscritto, onAggiornato = () => {} }) {
       .then(({ data }) => { if (vivo) setInvii(data || []); });
     return () => { vivo = false; };
   }, [iscritto?.id]);
+
+  useEffect(() => {
+    let vivo = true;
+    if (!iscritto?.id) return;
+    supabase.from("moduli_riaperture")
+      .select("*").eq("iscritto_id", iscritto.id)
+      .order("riaperto_il", { ascending: false })
+      .then(({ data }) => { if (vivo) setRiaperture(data || []); });
+    return () => { vivo = false; };
+  }, [iscritto?.id]);
+
+  // RIAPRIRE IL MODULO.
+  //
+  // Il link vale una volta sola: appena il modulo torna, non si apre
+  // piu'. E' nata per un motivo vero — una seconda spedizione
+  // sovrascriveva firma e documenti lasciando il contratto della prima —
+  // ma capita che manchi qualcosa e il modulo vada rifatto.
+  //
+  // Non si "sblocca" e basta: `modulo_riapri` mette prima da parte tutto
+  // quello che c'era, e solo dopo toglie la serratura. La prima consegna
+  // non si perde, si archivia.
+  async function riapri() {
+    const nome = [iscritto?.nome, iscritto?.cognome].filter(Boolean).join(" ");
+    if (!window.confirm(
+      `Riaprire il modulo di ${nome}?\n\n`
+      + "Il link che le è già arrivato tornerà a funzionare, e dovrà rifirmare: "
+      + "quello che ha mandato la prima volta resta archiviato qui dentro, non si cancella.\n\n"
+      + "Avvisala, perché la mail non riparte da sola."
+    )) return;
+    setRiaprendo(true); setEsitoRiapertura("");
+    const { data, error } = await supabase.rpc("modulo_riapri", {
+      p_iscritto_id: iscritto.id,
+      p_motivo: motivoRiapertura.trim() || null,
+      p_chi: chi || null,
+    });
+    setRiaprendo(false);
+    if (error || !data?.ok) {
+      setEsitoRiapertura(data?.errore || error?.message || "Non sono riuscito a riaprirlo.");
+      return;
+    }
+    setEsitoRiapertura("Fatto: il link si riapre. Avvisala che deve ricompilarlo e rifirmare.");
+    setMotivoRiapertura("");
+    onAggiornato();
+  }
 
   async function rigenera() {
     setRigenerando(true); setEsito("");
@@ -146,6 +194,54 @@ export default function Fascicolo({ iscritto, onAggiornato = () => {} }) {
         {esito && (
           <div style={{ ...fontBody, fontSize: 12.5, marginTop: 10, lineHeight: 1.5, color: esito.startsWith("Fatto") ? VERDE : ROSSO }}>
             {esito}
+          </div>
+        )}
+      </Riquadro>
+
+      <Riquadro
+        titolo="Riaprire il modulo"
+        nota="Il link che le è arrivato torna a funzionare, e lei deve ricompilarlo e rifirmare. La mail non riparte da sola: avvisala tu. Quello che ha mandato la prima volta non si cancella — resta qui sotto, con la sua data."
+      >
+        <div style={{ ...fontBody, fontSize: 13, color: GRAFITE, lineHeight: 1.55, marginBottom: 10 }}>
+          Serve quando manca qualcosa e il modulo va rifatto. Di suo il link vale una volta sola:
+          senza questo tasto, chi lo riapre legge «già inviato».
+        </div>
+        <input
+          value={motivoRiapertura}
+          onChange={(e) => setMotivoRiapertura(e.target.value)}
+          placeholder="Perché lo riapri (resta scritto)"
+          style={{
+            ...fontBody, fontSize: 13, width: "100%", boxSizing: "border-box", minWidth: 0,
+            border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 11px", marginBottom: 10,
+          }}
+        />
+        <Button variant="ghost" onClick={riapri} disabled={riaprendo || !percorso}>
+          {riaprendo ? "Riapro…" : "Riapri il modulo"}
+        </Button>
+        {!percorso && (
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+            Prima genera la copia firmata qui sopra: riaprire senza averla messa al sicuro
+            vorrebbe dire restare senza nessuna delle due.
+          </div>
+        )}
+        {esitoRiapertura && (
+          <div style={{ ...fontBody, fontSize: 12.5, marginTop: 10, lineHeight: 1.5, color: esitoRiapertura.startsWith("Fatto") ? VERDE : ROSSO }}>
+            {esitoRiapertura}
+          </div>
+        )}
+        {(riaperture || []).length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+              Già riaperto
+            </div>
+            {(riaperture || []).map((r) => (
+              <div key={r.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 8, marginTop: 8 }}>
+                <Riga etichetta="Riaperto il">{quando(r.riaperto_il) || "—"}</Riga>
+                <Riga etichetta="Da">{r.riaperto_da || "— non registrato —"}</Riga>
+                <Riga etichetta="Perché">{r.motivo || "— nessun motivo scritto —"}</Riga>
+                <Riga etichetta="Era arrivato il">{quando(r.modulo_ricevuto_il) || "—"}</Riga>
+              </div>
+            ))}
           </div>
         )}
       </Riquadro>
