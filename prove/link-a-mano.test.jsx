@@ -6,8 +6,10 @@
 // tre mail consegnate a Hotmail e mai aperte, probabilmente in posta
 // indesiderata, e l'iscrizione ferma senza nient'altro da provare.
 //
-// Torna, dentro il fascicolo e con la sua traccia.
-import { describe, it, expect, vi } from "vitest";
+// Torna, con la sua traccia, nella finestra del rinvio — perché è lì che
+// nasce il bisogno: si rimanda proprio perché la prima mail non è
+// arrivata. Nel fascicolo resta solo la traccia di chi l'ha preso.
+import { describe, it, expect } from "vitest";
 import React from "react";
 import Fascicolo from "../src/iscrizioni/Fascicolo.jsx";
 import FasciaStato from "../src/iscrizioni/FasciaStato.jsx";
@@ -36,44 +38,26 @@ async function apri(iscritto = MANDATO, copie = []) {
   return { ...p, scritte };
 }
 
-describe("il link passato a mano", () => {
-  it("c'è, ed è scritto per esteso anche senza copiarlo", async () => {
+// IL TASTO NON STA NEL FASCICOLO, e ci e' stato per mezz'ora prima che
+// il titolare lo dicesse: «non serve nel fascicolo, serve proprio in
+// quel tasto dove si sceglie il tipo di invio». Aveva ragione — il
+// bisogno nasce mentre si rimanda, non due schermate piu' in la'.
+// Nel fascicolo resta la traccia, che e' un fatto da ritrovare.
+describe("nel fascicolo resta solo la traccia", () => {
+  it("niente tasto per copiare", async () => {
     const p = await apri();
-    expect(p.tasto("Copia il link")).toBeTruthy();
-    expect(p.testo()).toMatch(/\?modulo=QHZGNE1G2E824D30/);
-    expect(p.testo()).toMatch(/stesso link/);
-  });
-
-  it("copiandolo finisce negli appunti e resta scritto chi l'ha preso", async () => {
-    const appunti = vi.fn(async () => {});
-    Object.defineProperty(window.navigator, "clipboard", { value: { writeText: appunti }, configurable: true });
-    const p = await apri();
-    await clicca(p.tasto("Copia il link"));
-    expect(appunti).toHaveBeenCalledWith(expect.stringContaining("?modulo=QHZGNE1G2E824D30"));
-    expect(p.scritte[0]).toMatchObject({ iscritto_id: "i1", copiato_da: "TOMMASO GIUMBINI" });
-    expect(p.testo()).toMatch(/Copiato/);
-  });
-
-  it("se gli appunti non ci sono lo dice, invece di fingere", async () => {
-    Object.defineProperty(window.navigator, "clipboard", { value: undefined, configurable: true });
-    const p = await apri();
-    await clicca(p.tasto("Copia il link"));
-    expect(p.testo()).toMatch(/selezionalo qui sotto/);
-    // la traccia si scrive lo stesso: il link è comunque uscito da qui
-    expect(p.scritte).toHaveLength(1);
-  });
-
-  // DOPO NON SERVE PIÙ, E DARLO SAREBBE MANDARLA CONTRO UN MURO: chi lo
-  // apre legge «già inviato».
-  it("a modulo arrivato il link sparisce", async () => {
-    const p = await apri({ ...MANDATO, modulo_ricevuto_il: "2026-10-21T09:00:00Z" });
     expect(p.tasto("Copia il link")).toBeUndefined();
   });
 
-  it("le copie già fatte restano scritte", async () => {
+  it("ma le copie già fatte si leggono", async () => {
     const p = await apri(MANDATO, [{ id: "c1", copiato_il: "2026-10-22T08:00:00Z", copiato_da: "ELENA" }]);
-    expect(p.testo()).toMatch(/Già passato a mano/);
+    expect(p.testo()).toMatch(/Il link passato a mano/);
     expect(p.testo()).toMatch(/ELENA/);
+  });
+
+  it("e senza nessuna copia il riquadro non c'è", async () => {
+    const p = await apri();
+    expect(p.testo()).not.toMatch(/Il link passato a mano/);
   });
 });
 
