@@ -37,6 +37,11 @@ beforeEach(() => {
   window.HTMLCanvasElement.prototype.getContext = () => finto2d;
   window.HTMLCanvasElement.prototype.toBlob = (cb) => cb(null);
   window.confirm = () => true;
+  // jsdom non sposta niente, quindi `scrollIntoView` non ce l'ha: senza
+  // questa finta un componente che porta lo sguardo da qualche parte
+  // esplode, e sembra rotto lui. Trovato il 22/10/2026 facendo il giro
+  // di tutte le sezioni, su "Aggiungi corso".
+  window.Element.prototype.scrollIntoView = window.Element.prototype.scrollIntoView || (() => {});
   window.alert = () => {};
   window.matchMedia = window.matchMedia || ((q) => ({
     matches: false, media: q,
