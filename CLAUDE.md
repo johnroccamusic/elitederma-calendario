@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   42 file, 364 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   43 file, 368 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -697,6 +697,18 @@ risposta storta esce `.../storage/v1undefined` — una stringa vera e un
 indirizzo che non esiste, che aperto sembra un documento rotto invece di
 una risposta sbagliata. L'ha trovato il banco di prova.
 
+### «Assegnazione kit»: senza pacchetto vuol dire senza pacchetto (22/10/2026)
+
+Fino a oggi in quell'elenco finiva anche chi il pacchetto ce l'aveva, se
+al pacchetto mancava il **modello di diploma**: il titolo diceva «senza
+pacchetto», la scheda mostrava il pacchetto, e si salvava tre volte
+cercando l'errore nel posto sbagliato (Gaetana Dicasola, «Kit Individuale
+Soprac. + ike»). Deciso dal titolare: il diploma si carica prima del
+corso, in Tipologie di kit, e non è un motivo per stare lì. Restano i
+casi veri — nessun pacchetto, nome scritto ma non collegato, nome che
+non è un pacchetto del corso, pacchetto collegato che non esiste più — e
+la tessera in home conta con la stessa regola.
+
 ### «Assegnazione kit» è una casella come le altre (22/10/2026)
 
 Era «provvisoria, senza permesso»: la tessera compariva a chiunque finché
@@ -894,7 +906,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 42 file e 364 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 43 file e 368 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

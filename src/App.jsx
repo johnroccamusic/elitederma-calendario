@@ -44505,17 +44505,22 @@ function PannelloDatePagamentoMancanti({ righe, corsoById, fornitoriById, costiC
 // Questa pagina serve a svuotarlo in un pomeriggio e poi a sparire: la
 // tessera in home si mostra solo se c'è ancora qualcuno, quindi quando
 // l'ultimo è a posto se ne va da sola e il codice si può togliere.
-function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefinizioni, onApriIscritto, ricarica, onBack, titolo = "Assegnazione kit" }) {
+//
+// SENZA PACCHETTO VUOL DIRE SENZA PACCHETTO (22/10/2026). Fino a oggi qui
+// finiva anche chi il pacchetto ce l'aveva, se a quel pacchetto mancava
+// il modello di diploma: il titolo diceva «senza pacchetto», la scheda
+// mostrava il pacchetto, e si salvava tre volte cercando l'errore nel
+// posto sbagliato. Il diploma si carica prima del corso, in Tipologie di
+// kit: non e' un motivo per stare in questo elenco.
+export function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefinizioni, onApriIscritto, ricarica, onBack, titolo = "Assegnazione kit" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
 
-  // per ogni corso, i pacchetti che hanno davvero un diploma: sono gli
-  // unici che risolvono il problema, gli altri lascerebbero l'allievo
-  // esattamente dov'era
+  // per ogni corso, i suoi pacchetti: quelli fra cui scegliere
   const pacchettiPerCorso = useMemo(() => {
     const m = {};
     (kitDefinizioni || []).forEach((k) => {
-      if (!k.corso_id || !k.diploma_path || !String(k.nome || "").trim()) return;
+      if (!k.corso_id || !String(k.nome || "").trim()) return;
       (m[k.corso_id] ||= []).push(k.nome);
     });
     Object.values(m).forEach((v) => v.sort((a, b) => a.localeCompare(b)));
@@ -44534,14 +44539,12 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
   // spesso, ed e' anche l'unica che si puo' rimettere a posto da sola.
   const motivoDi = (i, kitPerId, kitPerNomeCorso, corsoId) => {
     const kit = i?.kit_id ? kitPerId[i.kit_id] : null;
-    if (kit?.diploma_path) return null;                       // tutto a posto
-    if (kit) return { chiave: "senzaDiploma", testo: `"${kit.nome}" non ha un diploma caricato` };
+    if (kit) return null;                                     // ha il suo pacchetto: a posto
     if (i?.kit_id) return { chiave: "sparito", testo: "il pacchetto collegato non esiste più" };
     const nome = String(i?.pacchetto_kit || "").trim();
     if (!nome) return { chiave: "niente", testo: "nessun pacchetto" };
     const trovato = kitPerNomeCorso.get(`${corsoId}|${nome.toLowerCase()}`);
-    if (trovato?.diploma_path) return { chiave: "dacollegare", testo: `"${nome}" scritto ma non collegato`, kit: trovato };
-    if (trovato) return { chiave: "senzaDiploma", testo: `"${nome}" non ha un diploma caricato` };
+    if (trovato) return { chiave: "dacollegare", testo: `"${nome}" scritto ma non collegato`, kit: trovato };
     return { chiave: "nomeIgnoto", testo: `"${nome}" non è un pacchetto di questo corso` };
   };
 
@@ -44657,8 +44660,8 @@ function PaginaAssegnazioneKit({ iscritti, corsiDate, corsi, location, kitDefini
                   </div>
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
                     {disponibili.length > 0
-                      ? <>Pacchetti con diploma: {disponibili.join(" · ")}</>
-                      : <b style={{ color: "#C0392B" }}>Nessun pacchetto di questo corso ha un diploma: va caricato prima, in Impostazioni → Tipologie di kit.</b>}
+                      ? <>Pacchetti del corso: {disponibili.join(" · ")}</>
+                      : <b style={{ color: "#C0392B" }}>Questo corso non ha nessun pacchetto definito: va creato prima, in Impostazioni → Tipologie di kit.</b>}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {g.allievi.map((i) => (
@@ -81935,7 +81938,10 @@ function Gestionale() {
           leggiTutte(() => supabase.from("corsi_date").select("id, data_inizio, data_fine").order("id")),
         ]);
         if (!vivo) return;
-        const conDiploma = new Set((kits || []).filter((k) => k.diploma_path).map((k) => k.id));
+        // stessa regola della pagina: conta chi NON ha un pacchetto (o ne
+        // ha uno che non esiste piu'), non chi ha un pacchetto senza
+        // modello di diploma — quello si carica prima del corso
+        const esistenti = new Set((kits || []).map((k) => k.id));
         // le classi gia' finite non si contano: la pagina non le mostra
         // piu', e una tessera che dice un numero piu' grande di quello che
         // si trova aprendola e' una tessera che non si crede piu'
@@ -81944,7 +81950,7 @@ function Gestionale() {
           .filter((d) => (d.data_fine || d.data_inizio) >= oggiStr)
           .map((d) => d.id));
         setAllieviSenzaKit((iscrittiKit || [])
-          .filter((i) => (!i.kit_id || !conDiploma.has(i.kit_id)) && ancoraDaFare.has(i.corso_data_id))
+          .filter((i) => (!i.kit_id || !esistenti.has(i.kit_id)) && ancoraDaFare.has(i.corso_data_id))
           .length);
       } catch (e) {
         // se il conto non si puo' fare, la tessera non si mostra: meglio
