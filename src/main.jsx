@@ -1,4 +1,5 @@
-import React, { Suspense, lazy } from "react";
+import { pezzo } from "./pezzo.js";
+import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import { avviaAggiornamentoAutomatico } from "./aggiornamento.js";
@@ -30,7 +31,7 @@ const CANCELLO_ACCESO = true;
 
 // caricato solo se serve: cosi' con il cancello spento non nasce un secondo
 // client Supabase accanto a quello di App.jsx
-const Accesso = lazy(() => import("./Accesso.jsx"));
+const Accesso = pezzo(() => import("./Accesso.jsx"));
 
 // l'app aperta da giorni si ricarica da sola quando resta ferma o quando
 // esce una versione nuova: vedi aggiornamento.js

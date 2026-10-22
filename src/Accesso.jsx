@@ -12,10 +12,11 @@
 // esattamente com'è: questo livello aggiunge l'identità, non la sostituisce.
 // ---------------------------------------------------------------------------
 
-import React, { useEffect, useState, Suspense, lazy } from "react";
+import { pezzo } from "./pezzo.js";
+import React, { useEffect, useState, Suspense } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const App = lazy(() => import("./App.jsx"));
+const App = pezzo(() => import("./App.jsx"));
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,

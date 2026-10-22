@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase, leggiTutte } from "./supabase.js";
 import { regioneDaCitta, REGIONI } from "./comuni-regioni";
 // I mattoni condivisi vivono fuori di qui: li usa anche il modulo
@@ -32,26 +32,27 @@ import { caricaKitInAula } from "./rientri/pos";
 // quelle le monta `App` prima di tutto, e staccarle non servirebbe a
 // niente finche' il file d'avvio e' uno solo — e' il capitolo dello
 // smontaggio di App.jsx.
-const QuadroSostituzioni = lazy(() => import("./rientri/QuadroSostituzioni.jsx"));
-const StampePackaging = lazy(() => import("./stampe/StampePackaging.jsx"));
-const SchedaRientro = lazy(() => import("./rientri/SchedaRientro.jsx"));
+const QuadroSostituzioni = pezzo(() => import("./rientri/QuadroSostituzioni.jsx"));
+const StampePackaging = pezzo(() => import("./stampe/StampePackaging.jsx"));
+const SchedaRientro = pezzo(() => import("./rientri/SchedaRientro.jsx"));
+import { pezzo } from "./pezzo.js";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
-const MagazzinoGuasti = lazy(() => import("./rientri/MagazzinoGuasti.jsx"));
-const AnalisiConsumi = lazy(() => import("./rientri/AnalisiConsumi.jsx"));
+const MagazzinoGuasti = pezzo(() => import("./rientri/MagazzinoGuasti.jsx"));
+const AnalisiConsumi = pezzo(() => import("./rientri/AnalisiConsumi.jsx"));
 import { analizzaConsumi, consumoRealePerAllievo } from "./rientri/consumi";
-const AnomalieRientri = lazy(() => import("./rientri/AnomalieRientri.jsx"));
+const AnomalieRientri = pezzo(() => import("./rientri/AnomalieRientri.jsx"));
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
 import { accessoriDaElencare } from "./rientri/composizione";
 import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
-const ArchivioConsensi = lazy(() => import("./consensi/ArchivioConsensi.jsx"));
-const ConsensiDelCorso = lazy(() => import("./consensi/ConsensiDelCorso.jsx"));
-const QrConsensi = lazy(() => import("./consensi/QrConsensi.jsx"));
+const ArchivioConsensi = pezzo(() => import("./consensi/ArchivioConsensi.jsx"));
+const ConsensiDelCorso = pezzo(() => import("./consensi/ConsensiDelCorso.jsx"));
+const QrConsensi = pezzo(() => import("./consensi/QrConsensi.jsx"));
 import Ricevuta from "./pos/Ricevuta.jsx";
-const GestioneEventi = lazy(() => import("./eventi/GestioneEventi.jsx"));
+const GestioneEventi = pezzo(() => import("./eventi/GestioneEventi.jsx"));
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
-const PrezziListini = lazy(() => import("./prezzi/PrezziListini.jsx"));
+const PrezziListini = pezzo(() => import("./prezzi/PrezziListini.jsx"));
 // il listino delle master: la quota e il conto del prezzo stanno li', in
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
@@ -63,10 +64,10 @@ import { usePuntiMaster, useCarrelliPuntiMaster } from "./punti/RiquadriPuntiMas
 // punti_master_scarichi.stagione. Due nomi uguali, due cose diverse.
 import PaginaPuntiMaster, { stagioneCorrente as stagionePuntiCorrente } from "./punti/PaginaPuntiMaster.jsx";
 import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
-const PaginaNotifichePush = lazy(() => import("./notifiche/PaginaNotifichePush.jsx"));
+const PaginaNotifichePush = pezzo(() => import("./notifiche/PaginaNotifichePush.jsx"));
 import { creaZip, siPuoCondividere } from "./file/zip.js";
-const ModelliEmail = lazy(() => import("./email/ModelliEmail.jsx"));
-const ModuloIscrizione = lazy(() => import("./iscrizione/ModuloIscrizione.jsx"));
+const ModelliEmail = pezzo(() => import("./email/ModelliEmail.jsx"));
+const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx"));
 import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
