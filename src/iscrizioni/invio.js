@@ -188,6 +188,12 @@ export async function inviaModulo({ iscritto, corso, corsoData, loc, chi = "" })
   // volta, che e' la data che conta per capire da quanto si aspetta.
   const patch = { stato: "modulo_inviato" };
   if (!iscritto.modulo_inviato_il) patch.modulo_inviato_il = new Date().toISOString();
+  // IL RIMBALZO DI PRIMA SI CANCELLA QUI, e solo qui. Se l'indirizzo e'
+  // stato corretto e la mail e' ripartita, la fascia deve tornare a dire
+  // "Modulo inviato" invece di restare rossa per sempre su un guasto gia'
+  // rimediato. Se rimbalza di nuovo, `email-eventi` lo riscrive fra un
+  // secondo — quindi azzerarlo adesso non nasconde niente.
+  patch.modulo_mail_rimbalzata_il = null;
   const { data: righe, error: erroreStato } = await supabase
     .from("iscritti").update(patch).eq("id", iscritto.id).select("id");
   if (erroreStato) return { ok: true, errore: `Mail partita, ma la scheda non si è aggiornata: ${erroreStato.message}`, link };

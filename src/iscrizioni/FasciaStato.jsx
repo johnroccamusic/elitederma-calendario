@@ -88,7 +88,22 @@ const ICONE = { dati_inseriti: IconaMatita, modulo_inviato: IconaAereo, modulo_r
 // Per questo il fascicolo si preme SOLO da quella tappa in poi: prima
 // che il modulo arrivi non c'e' niente dentro, e aprire una cartella
 // vuota e' lo stesso guasto detto in un altro modo.
-export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false, onModifica = null, onFascicolo = null }) {
+// IL RIMBALZO: "partita" e "arrivata" non sono la stessa cosa.
+//
+// Il 22/10/2026 un modulo e' partito verso «...@europe.con» — .con invece
+// di .com — ed e' tornato indietro mezzo secondo dopo. La mail era
+// partita davvero, quindi qui c'era scritto "Modulo inviato", in verde,
+// e chi aveva iscritto la persona e' rimasto ad aspettare.
+//
+// Il rimbalzo era registrato: lo scrive il postino di Resend in
+// `email_inviate`, e il fascicolo lo mostrerebbe. Ma il fascicolo si apre
+// dalla tappa "Modulo ricevuto" in poi — cioe' dalla tappa che non
+// arrivera' mai, proprio perche' la mail e' rimbalzata. Era scritto in un
+// posto raggiungibile solo se il guasto non fosse successo.
+//
+// Adesso il pallino resta rosso e dice "Non arrivata". Si preme ancora:
+// si corregge l'indirizzo nella scheda e si rimanda.
+export default function FasciaStato({ stato, compatto = false, larghezzaMax = 330, onInvia = null, inviando = false, onModifica = null, onFascicolo = null, rimbalzata = false }) {
   const attuale = STATI[stato] ? stato : "dati_inseriti";
 
   // IL RECESSO NON E' UNA TAPPA DELLA SCALA, ed e' per questo che qui
@@ -123,6 +138,12 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
   const indice = ORDINE.indexOf(attuale);
   const palla = compatto ? 24 : 32;
   const icona = compatto ? 12 : 15;
+  // Un rimbalzo conta solo finche' il modulo non e' arrivato: se poi e'
+  // arrivato lo stesso (indirizzo corretto e rimandato, o compilato da
+  // un'altra strada) quella mail tornata indietro non e' piu' una cosa
+  // da fare.
+  const arrivato = indice >= ORDINE.indexOf("modulo_ricevuto");
+  const tornataIndietro = !!rimbalzata && !arrivato;
 
   return (
     <div
@@ -135,7 +156,10 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
       {ORDINE.map((chiave, i) => {
         const acceso = i === indice;          // dove siamo adesso
         const fatto = i <= indice;            // gia' passato (o e' questo)
-        const tinta = fatto ? VERDE : ROSSO;
+        // la mail del modulo tornata indietro: quel passo NON e' fatto,
+        // per quanto sia partito
+        const guasto = tornataIndietro && chiave === "modulo_inviato";
+        const tinta = fatto && !guasto ? VERDE : ROSSO;
         const Icona = ICONE[chiave];
         // la linea che ARRIVA a questo pallino: verde se il passo c'e'
         // gia', rossa se si aspetta ancora
@@ -162,7 +186,6 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                 // con dentro un indirizzo che le dice "gia' inviato". Si
                 // manderebbe a una persona vera una cosa inutile, e chi
                 // l'ha mandata crederebbe di aver rimediato a qualcosa.
-                const arrivato = indice >= ORDINE.indexOf("modulo_ricevuto");
                 const eInvio = !!onInvia && chiave === "modulo_inviato" && !inviando && !arrivato;
                 const eModifica = !!onModifica && chiave === "dati_inseriti";
                 const eFascicolo = !!onFascicolo && chiave === "modulo_ricevuto"
@@ -174,7 +197,9 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                   <Palla
                     type={siPreme ? "button" : undefined}
                     onClick={eModifica ? onModifica : eFascicolo ? onFascicolo : eInvio ? () => onInvia(giaPartito) : undefined}
-                    title={eModifica
+                    title={guasto
+                      ? "La mail è tornata indietro: quell'indirizzo non esiste o l'ha rifiutata. Correggi l'email nella scheda e premi per rimandare."
+                      : eModifica
                       ? "Riapri la scheda per correggere i dati"
                       : eFascicolo
                         ? "Apri il fascicolo: copia firmata, invio della conferma, presa visione"
@@ -192,8 +217,8 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                       // Risultato: i gradini non ancora fatti non si
                       // smorzavano, e la fascia li mostrava tutti uguali.
                       // Le due condizioni ora stanno in una riga sola.
-                      opacity: (inviando && chiave === "modulo_inviato") ? 0.5 : (fatto ? 1 : 0.45),
-                      boxShadow: acceso ? `0 0 0 ${compatto ? 3 : 5}px ${fatto ? VERDE_TENUE : ROSSO_TENUE}` : "none",
+                      opacity: (inviando && chiave === "modulo_inviato") ? 0.5 : (fatto || guasto ? 1 : 0.45),
+                      boxShadow: acceso || guasto ? `0 0 0 ${compatto ? 3 : 5}px ${fatto && !guasto ? VERDE_TENUE : ROSSO_TENUE}` : "none",
                       flex: "0 0 auto",
                       border: siPreme && !fatto ? `2px solid ${ROSSO}` : "none",
                       padding: 0,
@@ -204,22 +229,24 @@ export default function FasciaStato({ stato, compatto = false, larghezzaMax = 33
                   </Palla>
                 );
               })()}
-              {(!compatto || acceso || (onInvia && chiave === "modulo_inviato")) && (
+              {(!compatto || acceso || guasto || (onInvia && chiave === "modulo_inviato")) && (
                 <div
                   style={{
                     fontSize: compatto ? 10.5 : 11.5,
-                    fontWeight: acceso ? 700 : 500,
-                    color: fatto ? VERDE : ROSSO,
-                    opacity: fatto ? 1 : 0.8,
+                    fontWeight: acceso || guasto ? 700 : 500,
+                    color: fatto && !guasto ? VERDE : ROSSO,
+                    opacity: fatto || guasto ? 1 : 0.8,
                     marginTop: 5, whiteSpace: "nowrap", lineHeight: 1.2,
                   }}
                 >
                   {/* finche' il modulo non e' partito quel passo non e'
                       uno stato raggiunto, e' una cosa da fare: lo dice
                       anche negli elenchi, dove non si puo' premere */}
-                  {chiave === "modulo_inviato" && indice < ORDINE.indexOf("modulo_inviato")
-                    ? (inviando ? "Invio…" : "Invia modulo")
-                    : STATI[chiave].etichetta}
+                  {guasto
+                    ? (inviando ? "Invio…" : "Non arrivata")
+                    : chiave === "modulo_inviato" && indice < ORDINE.indexOf("modulo_inviato")
+                      ? (inviando ? "Invio…" : "Invia modulo")
+                      : STATI[chiave].etichetta}
                 </div>
               )}
             </div>

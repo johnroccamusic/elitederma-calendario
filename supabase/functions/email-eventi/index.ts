@@ -125,8 +125,32 @@ Deno.serve(async (req) => {
   const { data, error } = await admin.from("email_inviate")
     .update({ ...campi, ultimo_evento: tipo })
     .eq("resend_id", idMail)
-    .select("id");
+    .select("id, chiave_modello, iscritto_id");
   if (error) return json({ ok: false, errore: error.message }, 500);
+
+  // UN RIMBALZO SUL MODULO VA SULLA SCHEDA DELL'ALLIEVA.
+  //
+  // Qui dentro finiva e qui dentro restava: `email_inviate` la guarda
+  // solo il fascicolo, e il fascicolo si apre dalla tappa "Modulo
+  // ricevuto" in poi — che e' esattamente la tappa che non arrivera' mai,
+  // perche' la mail e' rimbalzata. Il 22/10/2026 un modulo e' partito
+  // verso «...@europe.con» ed e' tornato indietro mezzo secondo dopo:
+  // nella fascia c'era scritto "Modulo inviato", e chi aspettava ha
+  // aspettato.
+  //
+  // Scritto sulla riga dell'iscritta, lo legge la fascia di stato senza
+  // aprire niente.
+  const rimbalzo = tipo === "email.bounced" || tipo === "email.complained";
+  const riga = (data || [])[0];
+  if (rimbalzo && riga?.iscritto_id && riga.chiave_modello === "invio_modulo") {
+    const { error: erroreScheda } = await admin.from("iscritti")
+      .update({ modulo_mail_rimbalzata_il: quando })
+      .eq("id", riga.iscritto_id);
+    // non si risponde 500: l'avviso di Resend e' stato registrato, e
+    // farglielo ripetere all'infinito riscriverebbe solo quello che c'e'
+    // gia'. Resta nei log, che e' dove si va a cercare.
+    if (erroreScheda) console.error("iscritti.modulo_mail_rimbalzata_il —", erroreScheda.message);
+  }
 
   // nessuna riga: la mail non e' partita da noi, o e' di prima del
   // registro. Si risponde 200 lo stesso, o Resend continuerebbe a

@@ -33209,6 +33209,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareM
                 stato={statoDi(rec)} compatto={isMobile} larghezzaMax={isMobile ? 280 : 350}
                 onInvia={(gia) => mandaModulo(rec, gia, { salvaPrima: true })}
                 inviando={inviandoId === rec.id}
+                rimbalzata={!!rec.modulo_mail_rimbalzata_il}
                 onFascicolo={() => setFascicoloDi(rec)}
               />
               {esitoModulo?.id === rec.id && (
@@ -34651,6 +34652,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, puoAssegnareM
                       stato={statoDi(i)} compatto={isMobile} larghezzaMax={isMobile ? 260 : 330}
                       onInvia={soloLettura ? null : (gia) => mandaModulo(i, gia)}
                       inviando={inviandoId === i.id}
+                      rimbalzata={!!i.modulo_mail_rimbalzata_il}
                       onModifica={() => apriModificaCompleta(i)}
                       onFascicolo={() => setFascicoloDi(i)}
                     />

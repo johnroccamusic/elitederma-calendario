@@ -26,6 +26,7 @@
 
 import { avvisoCodiceFiscale, avvisoCoerenza } from "./codice-fiscale.js";
 import { codiceCatastale } from "../comuni-regioni.js";
+import { avvisoEmail } from "./email.js";
 
 export const AREA_ALLIEVO = {
   titolo: "Dati dell'allievo",
@@ -276,6 +277,15 @@ export function avvisoCampo(campo, valore, valori = null) {
       return `«${scritto}» non è nell'elenco dei comuni italiani: sceglilo dai suggerimenti, o il codice fiscale non si può calcolare.`;
     }
     return null;
+  }
+  // UN INDIRIZZO CHE RIMBALZA SI VEDE PRIMA DI MANDARCI IL CONTRATTO.
+  //
+  // «elitederma@europe.con» ha la forma di un'email, quindi passa ogni
+  // controllo: parte, e torna indietro mezzo secondo dopo. Mezz'ora prima
+  // bastava guardarlo. Vedi src/iscrizione/email.js per cosa guarda e
+  // cosa no — e' un avviso, non una serratura.
+  if (campo?.chiave === "email" || campo?.tipo === "email") {
+    return avvisoEmail(valore) || null;
   }
   if (campo?.chiave === "codice_fiscale" || campo?.tipo === "codice_fiscale") {
     // prima la forma, poi il contenuto: un codice malfatto non ha senso
