@@ -27329,7 +27329,7 @@ const CODICE_ROTELLINA = "RCCGLC68H03L719U";
 // la sua chiave: comparirà da sola come nuovo quadratino per tutti gli
 // utenti già esistenti (semplicemente assente dai loro permessi finché
 // non lo si spunta)
-const TASTI_HOME = [
+export const TASTI_HOME = [
   { chiave: "gestionedate", etichetta: "Gestione corsi" },
   { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
   { chiave: "dashboardmaster", etichetta: "Dashboard master" },
@@ -27351,6 +27351,10 @@ const TASTI_HOME = [
   // vederlo sarebbe un modo elegante di non farlo fare a nessuno
   { chiave: "progettiincorso", etichetta: "Progetti in corso" },
   { chiave: "gestionieventi", etichetta: "Gestione eventi" },
+  // Era «provvisoria, senza permesso»: visibile a chiunque finche'
+  // qualcuno era senza pacchetto — quindi anche sulla home delle master,
+  // a cui non spetta. Dal 22/10/2026 e' una casella come le altre.
+  { chiave: "assegnazionekit", etichetta: "Assegnazione kit" },
 ];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
@@ -84230,10 +84234,16 @@ function Gestionale() {
               // L'archivio dei consensi firmati resta dov'e', protetto.
               // (commento con //, non {/* */}: qui siamo dentro un array
               // JavaScript, non dentro il JSX)
-              // Provvisoria: c'è solo finché qualcuno è senza pacchetto.
-              // Niente permesso da assegnare, va usata adesso e poi
-              // sparisce — la tessera e il codice se ne vanno insieme.
-              ...(allieviSenzaKit > 0 ? [{
+              // Compare solo finche' qualcuno e' senza pacchetto: a zero non
+              // c'e' niente da assegnare.
+              //
+              // ERA APERTA A TUTTI (22/10/2026): «provvisoria, niente
+              // permesso da assegnare». Il risultato era che stava anche
+              // sulla home delle master, a cui non spetta, e in Password
+              // Master non c'era nessuna casella per toglierla. Adesso la
+              // vede chi amministra — e' un lavoro d'ufficio — o chi ha la
+              // casella «Assegnazione kit» accesa.
+              ...(allieviSenzaKit > 0 && (ruoloUtente === "programmatore" || ruoloUtente === "amministratore" || tastoAbilitato("assegnazionekit")) ? [{
                 chiave: "assegnazionekit",
                 title: "Assegnazione kit",
                 descrizione: `${allieviSenzaKit} allievi senza pacchetto: senza, a fine corso non esce il diploma`,

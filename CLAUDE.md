@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   41 file, 359 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   42 file, 363 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -694,6 +694,15 @@ risposta storta esce `.../storage/v1undefined` — una stringa vera e un
 indirizzo che non esiste, che aperto sembra un documento rotto invece di
 una risposta sbagliata. L'ha trovato il banco di prova.
 
+### «Assegnazione kit» è una casella come le altre (22/10/2026)
+
+Era «provvisoria, senza permesso»: la tessera compariva a chiunque finché
+qualcuno era senza pacchetto — quindi anche sulla home delle master, a
+cui non spetta, e in Password Master non c'era nessuna casella per
+toglierla. Ora `assegnazionekit` sta in `TASTI_HOME`: la vede chi
+amministra (programmatore, amministratore) o chi ha la casella accesa, e
+sempre solo finché c'è qualcuno senza pacchetto.
+
 ### Una master che vende è un flag, non una seconda riga (22/10/2026)
 
 `master.e_venditore`, acceso da *Password Master* accanto a «Venditore
@@ -882,7 +891,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 41 file e 359 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 42 file e 363 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
