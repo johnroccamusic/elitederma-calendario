@@ -32284,6 +32284,36 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
         });
         return;
       }
+      // NON SI RIMANDA A UN INDIRIZZO CHE HA GIA' RIMBALZATO.
+      //
+      // Il 22/10/2026 lo stesso modulo e' partito QUATTRO volte verso
+      // «...@europe.con» — .con invece di .com — ed e' tornato indietro
+      // tutte e quattro, nel giro di mezzo secondo ogni volta. Il tasto
+      // rimanda a quello che c'e' nella casella Email, e nessuno diceva
+      // che quella casella era il problema: si ripremeva sperando.
+      //
+      // Si blocca solo se l'indirizzo e' ANCORA QUELLO che ha rimbalzato.
+      // Corretto anche di una lettera, il rinvio riparte da solo: un
+      // rimbalzo vecchio non deve diventare una porta chiusa per sempre.
+      if (quella.modulo_mail_rimbalzata_il) {
+        const { data: tornate } = await supabase.from("email_inviate")
+          .select("destinatario")
+          .eq("iscritto_id", quella.id)
+          .eq("chiave_modello", "invio_modulo")
+          .not("rimbalzata_il", "is", null)
+          .order("inviata_il", { ascending: false })
+          .limit(1);
+        const rimbalzato = String(tornate?.[0]?.destinatario || "").trim().toLowerCase();
+        const adesso = String(quella.email || "").trim().toLowerCase();
+        if (rimbalzato && rimbalzato === adesso) {
+          setEsitoModulo({
+            id: rec.id, ok: false,
+            testo: `L'ultima mail a ${rimbalzato} è tornata indietro: quell'indirizzo non esiste o ci ha rifiutati. `
+              + "Rimandarla adesso farebbe lo stesso identico giro. Correggi l'email nella scheda e ripremi.",
+          });
+          return;
+        }
+      }
       // chi sta spedendo: la sessione Supabase, come fa gia' la mail di
       // conferma. `utenteLoggato` in questa scheda non esiste.
       const { data: utenteOra } = await supabase.auth.getUser();
