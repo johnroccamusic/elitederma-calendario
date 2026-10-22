@@ -340,7 +340,7 @@ export async function leggiDocumentiEvento(eventoId) {
   return data || [];
 }
 
-export async function caricaDocumentoEvento(eventoId, file, { nome = "", chi = "" } = {}) {
+export async function caricaDocumentoEvento(eventoId, file, { nome = "", note = "", chi = "" } = {}) {
   if (!file) throw new Error("Nessun file scelto.");
   // il nome del file non finisce nel percorso: ci finiscono caratteri di
   // ogni specie — spazi, accenti, parentesi — e un percorso storto si
@@ -356,6 +356,7 @@ export async function caricaDocumentoEvento(eventoId, file, { nome = "", chi = "
   const { data, error: erroreRiga } = await supabase.from("eventi_documenti").insert({
     evento_id: eventoId,
     nome: (nome || file.name || "Documento").trim(),
+    note: (note || "").trim() || null,
     percorso, tipo: file.type || null, dimensione: file.size || null,
     ordine: quante, caricato_da: chi || null,
   }).select().single();

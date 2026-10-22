@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { SchedaDocumenti } from "../src/eventi/GestioneEventi.jsx";
-import { monta, clicca, attendi } from "./aiuto.js";
+import { monta, clicca, attendi, scrivi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
 const DOC = {
@@ -102,5 +102,64 @@ describe("i documenti di un evento", () => {
     expect(domande[0]).toMatch(/Regolamento fiera 2026/);
     expect(domande[0]).toMatch(/cancellato, non solo tolto/);
     window.confirm = () => true;
+  });
+});
+
+// COSA E' E A COSA SERVE SI SCRIVONO PRIMA (22/10/2026): il nome che
+// arriva dal telefono non dice niente, e chi carica lo sa adesso. E poi
+// si cancella, si rinomina, si corregge la nota: tutto sul posto.
+describe("nome e note di un documento", () => {
+  const file = () => new File(["x"], "WhatsApp Image 2026-10-22.jpeg", { type: "image/jpeg" });
+  async function conInserimento(docs = []) {
+    const inserite = [];
+    const salvate = [];
+    rispondiCon({
+      "/storage/v1/object/eventi-documenti/": {},
+      "eventi_documenti": (corpo, url) => {
+        if (corpo && !String(url).includes("?id=")) { inserite.push(corpo); return [{ id: "nuovo", ...corpo }]; }
+        if (corpo) { salvate.push({ url: String(url), corpo }); return [{ id: "d1", ...corpo }]; }
+        return docs;
+      },
+      "/auth/v1/user": { id: "u1", email: "elena@elitederma.it" },
+    });
+    const p = await monta(<SchedaDocumenti eventoId="e1" />);
+    return { ...p, inserite, salvate };
+  }
+  async function scegliFile(p) {
+    const input = p.nodo.querySelector('input[type="file"]');
+    Object.defineProperty(input, "files", { value: [file()], configurable: true });
+    await clicca(input); // il change parte da qui sotto
+    input.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await attendi(150);
+  }
+
+  it("il nome e la nota scritti prima finiscono sul documento, non il nome del file", async () => {
+    const p = await conInserimento();
+    await scrivi(p.nodo.querySelector('[data-campo="documento_nome"]'), "Regolamento fiera");
+    await scrivi(p.nodo.querySelector('[data-campo="documento_note"]'), "da mostrare all'ingresso");
+    await scegliFile(p);
+    expect(p.inserite).toHaveLength(1);
+    expect(p.inserite[0]).toMatchObject({ nome: "Regolamento fiera", note: "da mostrare all'ingresso" });
+    expect(p.inserite[0].nome).not.toMatch(/WhatsApp/);
+  });
+
+  it("senza nome scritto resta quello del file, e la nota resta vuota", async () => {
+    const p = await conInserimento();
+    await scegliFile(p);
+    expect(p.inserite[0].nome).toBe("WhatsApp Image 2026-10-22.jpeg");
+    expect(p.inserite[0].note).toBe(null);
+  });
+
+  it("la nota di un documento si corregge sul posto, e vuota diventa niente", async () => {
+    const p = await conInserimento([DOC]);
+    const campo = p.nodo.querySelector('[data-campo="note-d1"]');
+    await scrivi(campo, "scade a marzo");
+    campo.dispatchEvent(new window.FocusEvent("focusout", { bubbles: true }));
+    await attendi(100);
+    expect(p.salvate.at(-1).corpo).toMatchObject({ note: "scade a marzo" });
+    await scrivi(campo, "   ");
+    campo.dispatchEvent(new window.FocusEvent("focusout", { bubbles: true }));
+    await attendi(100);
+    expect(p.salvate.at(-1).corpo).toMatchObject({ note: null });
   });
 });

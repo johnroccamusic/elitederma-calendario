@@ -1246,6 +1246,12 @@ export function SchedaDocumenti({ eventoId }) {
   const [righe, setRighe] = useState(null);
   const [caricando, setCaricando] = useState(false);
   const [guasto, setGuasto] = useState("");
+  // COSA E' E A COSA SERVE, scritti PRIMA di scegliere il file. Il nome
+  // che arriva dal telefono e' «WhatsApp Image 2026-10-22 at 11.04.jpeg»:
+  // correggerlo dopo si puo', ma chi carica lo sa adesso, non fra tre
+  // mesi. Con piu' file e un nome solo, il nome si numera.
+  const [nomeNuovo, setNomeNuovo] = useState("");
+  const [noteNuove, setNoteNuove] = useState("");
 
   const ricarica = () => leggiDocumentiEvento(eventoId).then(setRighe).catch(() => setRighe([]));
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
@@ -1258,12 +1264,15 @@ export function SchedaDocumenti({ eventoId }) {
     // uno alla volta e non in blocco: se il quarto non va su, i primi
     // tre restano caricati e si vede quale e' mancato
     const falliti = [];
-    for (const f of file) {
-      try { await caricaDocumentoEvento(eventoId, f, { chi }); }
+    const base = nomeNuovo.trim();
+    for (const [i, f] of file.entries()) {
+      const nome = base ? (file.length > 1 ? `${base} ${i + 1}` : base) : "";
+      try { await caricaDocumentoEvento(eventoId, f, { nome, note: noteNuove, chi }); }
       catch (e) { falliti.push(`${f.name}: ${e.message}`); }
     }
     setCaricando(false);
     if (falliti.length) setGuasto(falliti.join(" · "));
+    else { setNomeNuovo(""); setNoteNuove(""); }
     ricarica();
   }
 
@@ -1293,6 +1302,27 @@ export function SchedaDocumenti({ eventoId }) {
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
   return (
     <>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 10 }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <Field label="Che documento è">
+            <input
+              data-campo="documento_nome"
+              style={inputStyle} value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)}
+              placeholder="es. Regolamento fiera, Certificazione impianto…"
+            />
+          </Field>
+        </div>
+        <div style={{ flex: "2 1 260px", minWidth: 0 }}>
+          <Field label="Note">
+            <textarea
+              data-campo="documento_note"
+              rows={2} value={noteNuove} onChange={(e) => setNoteNuove(e.target.value)}
+              placeholder="a cosa serve, scadenze, a chi va mostrato…"
+              style={{ ...inputStyle, resize: "vertical", minHeight: 44 }}
+            />
+          </Field>
+        </div>
+      </div>
       {/* IL TASTO E' IL CAMPO, dentro una label: il tocco arriva
           all'input senza passare da JavaScript, che e' l'unica forma che
           iOS accetta sempre. Un input nascosto aperto con `.click()` su
@@ -1332,6 +1362,17 @@ export function SchedaDocumenti({ eventoId }) {
                 const v = e.target.value.trim();
                 if (v && v !== r.nome) salvaRiga("eventi_documenti", r.id, { nome: v }).then(ricarica);
                 else e.target.value = r.nome;
+              }}
+            />
+            {/* la nota si corregge sul posto, come il nome: vuota si
+                cancella (null), non resta una stringa di spazi */}
+            <textarea
+              data-campo={`note-${r.id}`}
+              rows={1} defaultValue={r.note || ""} placeholder="note…"
+              style={{ ...campoRiga, width: "100%", minWidth: 0, marginTop: 4, resize: "vertical", fontSize: 12 }}
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v !== (r.note || null)) salvaRiga("eventi_documenti", r.id, { note: v }).then(ricarica);
               }}
             />
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 3 }}>

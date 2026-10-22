@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   42 file, 363 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   42 file, 366 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -675,7 +675,9 @@ Ogni evento ha la sua sezione **Documenti**: certificazioni, regolamento
 della fiera, planimetrie, permessi, assicurazione — la roba che serve
 averla sottomano il giorno che qualcuno la chiede in loco, e che fino a
 oggi stava nelle chat di chi l'aveva ricevuta. Tabella
-`eventi_documenti`, secchio **privato** `eventi-documenti`.
+`eventi_documenti`, secchio **privato** `eventi-documenti`. Dal 22/10 nome e
+nota si scrivono **prima** di scegliere il file (il nome del telefono non dice
+niente), e nome, nota e cancellazione si correggono sul posto.
 
 **Privato, ed è il punto:** dei 22 secchi solo quattro lo sono. Si legge
 con `createSignedUrl` (un'ora), come `moduli-iscrizione` — qui dentro
@@ -891,7 +893,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 42 file e 363 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 42 file e 366 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
