@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   38 file, 337 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   41 file, 359 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -694,6 +694,32 @@ risposta storta esce `.../storage/v1undefined` — una stringa vera e un
 indirizzo che non esiste, che aperto sembra un documento rotto invece di
 una risposta sbagliata. L'ha trovato il banco di prova.
 
+### Una master che vende è un flag, non una seconda riga (22/10/2026)
+
+`master.e_venditore`, acceso da *Password Master* accanto a «Venditore
+collegato». La master entra con la **sua** password e i **suoi**
+permessi; il flag di suo le apre la Dashboard venditori, bloccata su di
+lei; e compare fra i venditori — tendina tutor, Dashboard venditori,
+commissioni — **senza** comparire in Gestione venditori, che si occupa
+solo della tabella.
+
+**Com'è fatto, e dove non mettere le mani:** in `Gestionale` lo stato
+della tabella si chiama `venditoriTabella`; `venditori` — il nome che
+quasi trecento punti leggono — è un `useMemo` che somma la tabella e le
+master flaggate, presentate come venditori con il loro id di master
+(`da_master: true`). Niente doppioni: chi ha già una riga in `venditori`
+(per `venditore_id` o per nome) resta quella riga, che è la sua storia.
+Nel Gate: `e_venditore` senza riga collegata → `venditoreId = master.id`.
+
+**Le dieci che stanno in tutte e due le liste non si toccano**, per
+scelta del titolare: Andrea Paura, Angelica Burelli, Elia Cito, Giulia
+Tamasi, Marianna Silvestri, Martina Mei, Maurè Acosta, Patrizia Savi,
+Stefania Sanna, Tommaso Giumbini. Il «venditore collegato» e
+l'allineamento delle password restano per loro. Nessuna vendita o
+incasso punta a quelle righe per id; i legami sono per nome
+(`iscritti.tutor`, acconti) — e Andrea in `tutor` è «ANDREA», come
+master «ANDREA PAURA».
+
 ### La capienza della sede segnala, non chiude (21/10/2026)
 
 `postiMaxEffettivi(cd, corso)` torna `cd.posti_max ?? corso.posti_max` e **non
@@ -856,7 +882,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 38 file e 337 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 41 file e 359 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

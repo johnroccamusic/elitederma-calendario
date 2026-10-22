@@ -6828,7 +6828,7 @@ function Gate({ onOk }) {
       // aggiunto anche qui: "puo_omaggi" era stato dimenticato, e chi
       // l'aveva spuntato entrava lo stesso senza poter fare omaggi
       supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi"),
-      supabase.from("master").select("id, nome, password, permessi, venditore_id"),
+      supabase.from("master").select("id, nome, password, permessi, venditore_id, e_venditore"),
       supabase.from("venditori").select("id, nome, password, permessi"),
       supabase.from("assistente").select("id, nome, password, permessi, master_id"),
     ]);
@@ -6897,7 +6897,16 @@ function Gate({ onOk }) {
         // niente "dashboardmaster" d'ufficio: adesso e' una casella come
         // le altre in Password Master, e se qualcuno la toglie l'accesso
         // deve davvero chiudersi
-        permessi: [...new Set([...(masterTrovata.permessi || []), ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : [])])],
+        // LA MASTER CHE VENDE (22/10/2026). Un flag sulla master,
+        // `e_venditore`, e nessuna seconda riga: entra con la SUA
+        // password, coi SUOI permessi, e il flag di suo apre la
+        // Dashboard venditori. Il «venditore collegato» resta per le
+        // dieci che gia' stanno in tutte e due le liste.
+        permessi: [...new Set([
+          ...(masterTrovata.permessi || []),
+          ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : []),
+          ...(masterTrovata.e_venditore ? ["dashboardvenditori"] : []),
+        ])],
         chiave_sistema: null, masterId: masterTrovata.id,
         // la stessa persona che in certe classi fa l'assistente: le sue
         // edizioni da assistente entrano nella dashboard che ha gia'
@@ -6905,7 +6914,14 @@ function Gate({ onOk }) {
         // il nome del venditore va tenuto distinto da quello della master:
         // le vendite/iscritti hanno "tutor" valorizzato col nome venditore
         // (es. "ANDREA"), non con quello anagrafico master ("ANDREA PAURA")
-        ...(venditoreDellaMaster ? { venditoreId: venditoreDellaMaster.id, venditoreNome: venditoreDellaMaster.nome } : {}),
+        ...(venditoreDellaMaster
+          ? { venditoreId: venditoreDellaMaster.id, venditoreNome: venditoreDellaMaster.nome }
+          // col flag e senza riga collegata, il venditore E' la master:
+          // stesso id, stesso nome — e' lo stesso id che l'elenco
+          // unificato le da' (vedi `venditori` in Gestionale)
+          : masterTrovata.e_venditore
+            ? { venditoreId: masterTrovata.id, venditoreNome: masterTrovata.nome }
+            : {}),
       };
     }
     else if (venditoreTrovato) {
@@ -17404,6 +17420,25 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
     }
     ricarica(["master", "venditori"]);
   }
+  // E' ANCHE VENDITORE (22/10/2026). Un flag e basta: niente seconda
+  // riga in `venditori`, niente seconda password, niente seconda lista
+  // di permessi. Acceso, la master compare fra i venditori — tendina
+  // tutor, Dashboard venditori, commissioni — con la sua password e i
+  // suoi permessi, e NON compare in Gestione venditori: si gestisce da
+  // qui. Il «venditore collegato» qui sotto resta per chi sta gia' in
+  // tutte e due le liste; per una master nuova si usa il flag.
+  async function salvaEVenditore(acceso) {
+    const { error } = await persist({ e_venditore: !!acceso });
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    ricarica(["master"]);
+  }
+  const flagVenditore = (
+    <label title="Compare fra i venditori con la sua password e i suoi permessi, senza una riga in Gestione venditori"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap", cursor: "pointer" }}>
+      <input type="checkbox" checked={!!masterRec.e_venditore} onChange={(e) => salvaEVenditore(e.target.checked)} />
+      è anche venditore
+    </label>
+  );
   const selVenditoreCollegato = (
     <select
       value={masterRec.venditore_id || ""}
@@ -17430,6 +17465,7 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
           <CellaAccesso tabella="master" riga={masterRec} nome={masterRec.nome} ricarica={ricarica} />
         </div>
         <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 8 }}>{flagVenditore}</div>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
           {selVenditoreCollegato}
         </div>
@@ -17457,7 +17493,10 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
         />
       </td>
       <td style={tdStyle}><CellaAccesso tabella="master" riga={masterRec} nome={masterRec.nome} ricarica={ricarica} /></td>
-      <td style={tdStyle}>{selVenditoreCollegato}</td>
+      <td style={tdStyle}>
+        <div style={{ marginBottom: 6 }}>{flagVenditore}</div>
+        {selVenditoreCollegato}
+      </td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -82063,7 +82102,37 @@ function Gestionale() {
   const [tipiModella, setTipiModella] = useState([]);
   const [corsiTipiModella, setCorsiTipiModella] = useState([]);
   // venditori/tutor selezionabili in fase di iscrizione
-  const [venditori, setVenditori] = useState([]);
+  // LE DUE SORGENTI DEI VENDITORI, E UN ELENCO SOLO.
+  //
+  // `venditoriTabella` e' la tabella `venditori`, quella che si gestisce
+  // in Gestione venditori. `venditori` — il nome che tutta l'app legge,
+  // in quasi trecento punti: tendina tutor, Dashboard venditori,
+  // commissioni, obiettivi — e' quella tabella PIU' le master con
+  // `e_venditore` acceso, presentate come venditori con il loro id e il
+  // loro nome. Cosi' una master che vende sta in una lista sola, con una
+  // password sola, e compare dove deve senza una seconda riga.
+  //
+  // Niente doppioni: chi ha gia' una riga in `venditori` — collegata
+  // (`venditore_id`) o con lo stesso nome — resta quella riga, che e' la
+  // sua storia; il flag non ne aggiunge una seconda.
+  const [venditoriTabella, setVenditoriTabella] = useState([]);
+  const venditori = useMemo(() => {
+    const nomi = new Set(venditoriTabella.map((v) => String(v.nome || "").trim().toUpperCase()));
+    const ids = new Set(venditoriTabella.map((v) => v.id));
+    const dalleMaster = (master || [])
+      .filter((m) => m.e_venditore)
+      .filter((m) => !(m.venditore_id && ids.has(m.venditore_id)))
+      .filter((m) => !nomi.has(String(m.nome || "").trim().toUpperCase()))
+      .map((m) => ({
+        id: m.id, nome: m.nome, cognome: null, ts: m.ts || null,
+        permessi: m.permessi || [], password: m.password || null,
+        email: m.email || null, email_accesso: m.email_accesso || null,
+        fornitore_id: null,
+        // chi legge l'elenco e vuole sapere da dove viene questa riga
+        da_master: true,
+      }));
+    return [...venditoriTabella, ...dalleMaster].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  }, [venditoriTabella, master]);
   const [passwordMenu, setPasswordMenu] = useState([]);
   const [utentiApp, setUtentiApp] = useState([]);
   // "Logistica prodotti": corsiKitProdotti è il template (per corso-tipo,
@@ -82328,7 +82397,7 @@ function Gestionale() {
         if (alt.error) alt = await supabase.from("venditori").select("id, nome, ts").order("nome");
         venditoriData = (alt.data || []).map((v) => ({ permessi: [], password: "0000", ...v }));
       }
-      setVenditori(venditoriData || []);
+      setVenditoriTabella(venditoriData || []);
     },
     password_menu: async () => setPasswordMenu((await supabase.from("password_menu").select("*")).data || []),
     utenti_app: async () => setUtentiApp((await supabase.from("utenti_app").select("*").order("nome")).data || []),
@@ -85232,7 +85301,7 @@ function Gestionale() {
 
       {view === "gestionevenditori" && (
         <PaginaGestioneVenditori
-          venditori={venditori} master={master}
+          venditori={venditoriTabella} master={master}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
