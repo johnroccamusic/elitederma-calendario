@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   34 file, 317 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   36 file, 330 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -638,6 +638,37 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
 
+### Dettaglio vendite di un evento (22/10/2026)
+
+Accanto al **Conto** — che dice se la fiera è andata in pari, in
+imponibile — c'è **Dettaglio vendite**, che dice cosa è passato dal
+banco: incassato, scontrino medio, come hanno pagato, la classifica dei
+più venduti e ogni scontrino con le sue righe (si aprono premendo).
+Vale anche per le fiere passate, che hanno già la loro linguetta
+nell'elenco.
+
+Qui si ragiona in **euro incassati**, non in imponibile: la domanda è
+«quanto è entrato in cassa». Tre regole dentro `prodottiPiuVenduti` e
+`totaliVendite`:
+
+- **si raggruppa per `prodotto_id`, mai per nome** — sulla riga c'è il
+  nome del giorno della vendita, e per nome un prodotto rinominato
+  diventa due righe che sembrano due prodotti. Il nome da mostrare si
+  rilegge dall'anagrafica; quello della riga resta come ripiego per i
+  pezzi venduti a mano, che un id non ce l'hanno;
+- **gli omaggi non sono incasso ma sono pezzi usciti**, contati in una
+  colonna loro: in fiera si regala, e contarli come venduti gonfia il
+  ricavo mentre non contarli fa sparire materiale;
+- **lo scontrino medio sta accanto al totale**, perché distingue «tanta
+  gente che compra poco» da «pochi che comprano tanto» — due fiere
+  diverse da rifare in due modi diversi.
+
+Le prove girano sulle **righe vere** della fiera di Tirana
+(`prove/tirana-righe.json`, 13 scontrini, 798,18 €) e controllano che
+la somma della classifica faccia **esattamente** il totale degli
+scontrini: se non tornasse, i due riquadri direbbero due cose diverse
+sulla stessa fiera.
+
 ### I documenti organizzativi degli eventi (22/10/2026)
 
 Ogni evento ha la sua sezione **Documenti**: certificazioni, regolamento
@@ -809,7 +840,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 34 file e 317 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 36 file e 330 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

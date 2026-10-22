@@ -394,3 +394,91 @@ export async function linkDocumentoEvento(percorso, secondi = 3600) {
   }
   return indirizzo;
 }
+
+// --- il dettaglio delle vendite al banco -----------------------------------
+
+export async function leggiVenditeEvento(eventoId) {
+  const { data, error } = await supabase.from("vendite_shop")
+    .select("id, numero_ordine, data_ordine, totale, totale_imponibile, metodo_pagamento, tipo_movimento, operatore_nome, cliente_nome, prodotti")
+    .eq("evento_id", eventoId)
+    .order("data_ordine");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+/**
+ * Cosa si è venduto, prodotto per prodotto.
+ *
+ * SI RAGGRUPPA PER `prodotto_id`, MAI PER NOME. Il nome sulla riga è
+ * quello che il prodotto aveva il giorno della vendita: se nel frattempo
+ * è stato rinominato, raggruppare per nome spezza la sua storia in due
+ * righe che sembrano due prodotti. Il nome da mostrare si rilegge
+ * dall'anagrafica di adesso, e quello della riga resta solo come
+ * ripiego per i pezzi venduti a mano, che un id non ce l'hanno.
+ *
+ * GLI OMAGGI NON SONO INCASSO, ma sono pezzi usciti dalla scatola: si
+ * contano a parte, in una colonna loro. In fiera si regala, e un
+ * regalato contato come venduto gonfia il ricavo; non contato affatto fa
+ * sparire materiale che non è tornato a casa.
+ */
+export function prodottiPiuVenduti(vendite, prodottiPerId = {}) {
+  const per = new Map();
+  (vendite || []).forEach((v) => {
+    const omaggio = v.tipo_movimento === "omaggio";
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+      const chiave = r.prodotto_id || `nome:${(r.nome || "").trim().toLowerCase()}`;
+      if (!chiave || chiave === "nome:") return;
+      if (!per.has(chiave)) {
+        per.set(chiave, {
+          chiave,
+          prodottoId: r.prodotto_id || null,
+          // il nome di adesso se il prodotto esiste ancora, quello
+          // scritto sulla riga se è stato cancellato o venduto a mano
+          nome: prodottiPerId[r.prodotto_id]?.nome || r.nome || "— senza nome —",
+          pezzi: 0, omaggiati: 0, incasso: 0, vendite: 0,
+        });
+      }
+      const voce = per.get(chiave);
+      const quanti = Number(r.quantita) || 0;
+      if (omaggio) voce.omaggiati += quanti;
+      else {
+        voce.pezzi += quanti;
+        voce.incasso += Number(r.totale_riga) || 0;
+        voce.vendite += 1;
+      }
+    });
+  });
+  return [...per.values()]
+    .map((v) => ({ ...v, incasso: Math.round(v.incasso * 100) / 100 }))
+    // per pezzi, e a parità per incasso: due righe da 10 pezzi si
+    // distinguono da quale ha portato più soldi
+    .sort((a, b) => (b.pezzi - a.pezzi) || (b.incasso - a.incasso) || a.nome.localeCompare(b.nome));
+}
+
+/**
+ * I totali della fiera. In euro incassati, non in imponibile: qui la
+ * domanda è «quanto è entrato nella cassa», non «quanto vale a
+ * bilancio» — di quello si occupa il Conto.
+ */
+export function totaliVendite(vendite) {
+  let incassato = 0, quante = 0, omaggi = 0, pezzi = 0, pezziOmaggio = 0;
+  const perMetodo = new Map();
+  (vendite || []).forEach((v) => {
+    const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
+    const quanti = righe.reduce((s, r) => s + (Number(r.quantita) || 0), 0);
+    if (v.tipo_movimento === "omaggio") { omaggi += 1; pezziOmaggio += quanti; return; }
+    quante += 1;
+    pezzi += quanti;
+    incassato += Number(v.totale) || 0;
+    const m = v.metodo_pagamento || "—";
+    perMetodo.set(m, Math.round(((perMetodo.get(m) || 0) + (Number(v.totale) || 0)) * 100) / 100);
+  });
+  return {
+    quante, omaggi, pezzi, pezziOmaggio,
+    incassato: Math.round(incassato * 100) / 100,
+    // lo scontrino medio: su una fiera dice più del totale, perché
+    // distingue «tanta gente che compra poco» da «pochi che comprano»
+    medio: quante ? Math.round((incassato / quante) * 100) / 100 : 0,
+    perMetodo: [...perMetodo.entries()].sort((a, b) => b[1] - a[1]),
+  };
+}

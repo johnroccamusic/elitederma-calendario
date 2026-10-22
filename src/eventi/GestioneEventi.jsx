@@ -15,6 +15,7 @@ import {
   impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
   leggiCategoriePrincipali, leggiImmaginiProdotti,
   leggiDocumentiEvento, caricaDocumentoEvento, eliminaDocumentoEvento, linkDocumentoEvento,
+  leggiVenditeEvento, prodottiPiuVenduti, totaliVendite,
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
@@ -1345,6 +1346,174 @@ export function SchedaDocumenti({ eventoId }) {
   );
 }
 
+// ---------------------------------------------- il dettaglio delle vendite
+//
+// Quanto si e' venduto a una fiera, vendita per vendita. Il Conto dice
+// se l'evento e' andato in pari — ricavi meno spese, in imponibile —
+// ma non dice COSA e' passato dal banco, e dopo una fiera e' la prima
+// domanda che si fa: quanti scontrini, quanto il piu' grosso, e di cosa
+// portare di piu' la prossima volta.
+//
+// Qui si ragiona in EURO INCASSATI e non in imponibile: la domanda e'
+// «quanto e' entrato in cassa», non «quanto vale a bilancio».
+export function SchedaDettaglioVendite({ eventoId, prodotti }) {
+  const [vendite, setVendite] = useState(null);
+  const [aperta, setAperta] = useState(null);
+  const [guasto, setGuasto] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    leggiVenditeEvento(eventoId)
+      .then((v) => { if (vivo) setVendite(v); })
+      .catch((e) => { if (vivo) { setVendite([]); setGuasto(e.message); } });
+    return () => { vivo = false; };
+  }, [eventoId]);
+
+  const perId = useMemo(() => {
+    const m = {};
+    (prodotti || []).forEach((p) => { m[p.id] = p; });
+    return m;
+  }, [prodotti]);
+  const classifica = useMemo(() => prodottiPiuVenduti(vendite, perId), [vendite, perId]);
+  const t = useMemo(() => totaliVendite(vendite), [vendite]);
+
+  if (vendite === null) return <Vuoto>Carico…</Vuoto>;
+  if (guasto) return <Vuoto>Non riesco a leggere le vendite: {guasto}</Vuoto>;
+  if (vendite.length === 0) {
+    return (
+      <Vuoto>
+        A questo evento non risulta nessuna vendita.
+        <div style={{ marginTop: 6 }}>
+          Al banco si vende dal POS: perché una vendita finisca qui, chi la batte deve aver
+          scelto questo evento nella tendina «Sei a un evento?». Quelle dimenticate si
+          ripescano dal Conto.
+        </div>
+      </Vuoto>
+    );
+  }
+
+  return (
+    <>
+      {/* I NUMERI IN CIMA. Lo scontrino medio sta accanto al totale
+          perche' su una fiera dice piu' del totale: distingue «tanta
+          gente che compra poco» da «pochi che comprano tanto», e sono
+          due fiere diverse da rifare in due modi diversi. */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <Numerino etichetta="Incassato" valore={euro(t.incassato)} grande />
+        <Numerino etichetta={`Vendite`} valore={String(t.quante)} />
+        <Numerino etichetta="Scontrino medio" valore={euro(t.medio)} />
+        <Numerino etichetta="Pezzi venduti" valore={String(t.pezzi)} />
+        {t.omaggi > 0 && (
+          <Numerino etichetta="Omaggi" valore={`${t.omaggi} · ${t.pezziOmaggio} pz`} nota="fuori dall'incasso" />
+        )}
+      </div>
+
+      {t.perMetodo.length > 1 && (
+        <Riquadro titolo="Come hanno pagato">
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            {t.perMetodo.map(([m, v]) => (
+              <span key={m} style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+                {etichettaMetodo(m)} <b>{euro(v)}</b>
+              </span>
+            ))}
+          </div>
+        </Riquadro>
+      )}
+
+      <Riquadro titolo="I più venduti">
+        {classifica.length === 0 && <Vuoto>Nessuna riga prodotto nelle vendite.</Vuoto>}
+        {classifica.map((r, i) => (
+          <div key={r.chiave} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "6px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "0 0 22px" }}>{i + 1}.</span>
+            <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY, fontWeight: 700 }}>
+              {r.nome}
+              {!r.prodottoId && <span style={{ fontWeight: 400, color: MUTED }}> · a mano</span>}
+            </span>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "0 0 auto", whiteSpace: "nowrap" }}>
+              {r.pezzi} pz
+              {r.omaggiati > 0 && <span style={{ color: MUTED }}> + {r.omaggiati} omaggio</span>}
+            </span>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flex: "0 0 auto", whiteSpace: "nowrap" }}>{euro(r.incasso)}</span>
+          </div>
+        ))}
+      </Riquadro>
+
+      <Riquadro titolo={`Le vendite, una per una (${vendite.length})`}>
+        {vendite.map((v) => {
+          const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
+          const omaggio = v.tipo_movimento === "omaggio";
+          const apertaQui = aperta === v.id;
+          return (
+            <div key={v.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "8px 0" }}>
+              <button
+                type="button"
+                onClick={() => setAperta(apertaQui ? null : v.id)}
+                style={{
+                  display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap",
+                  width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",
+                }}
+              >
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, flex: "0 0 auto" }}>{fmtQuando(v.data_ordine)}</span>
+                <span style={{ flex: "1 1 120px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY }}>
+                  {righe.length} {righe.length === 1 ? "prodotto" : "prodotti"}
+                  {v.operatore_nome ? <span style={{ color: MUTED }}> · {toTitolo(v.operatore_nome)}</span> : null}
+                  {v.cliente_nome ? <span style={{ color: MUTED }}> · {v.cliente_nome}</span> : null}
+                </span>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, flex: "0 0 auto" }}>{etichettaMetodo(v.metodo_pagamento)}</span>
+                <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: omaggio ? MUTED : NAVY, flex: "0 0 auto", whiteSpace: "nowrap" }}>
+                  {omaggio ? "omaggio" : euro(v.totale)}
+                </span>
+              </button>
+              {/* le righe si aprono premendo: un elenco di tredici
+                  vendite con dentro tutti i prodotti e' un muro, e si
+                  cerca sempre una vendita sola */}
+              {apertaQui && (
+                <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: `2px solid ${CREAM_BORDER}` }}>
+                  {righe.length === 0 && <Vuoto>Questa vendita non ha righe prodotto.</Vuoto>}
+                  {righe.map((r, i) => (
+                    <div key={`${v.id}-${i}`} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0" }}>
+                      <span style={{ flex: "1 1 140px", minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        {perId[r.prodotto_id]?.nome || r.nome || "— senza nome —"}
+                      </span>
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, flex: "0 0 auto" }}>×{Number(r.quantita) || 0}</span>
+                      {Number(r.sconto_pct) > 0 && (
+                        <span style={{ ...fontBody, fontSize: 11.5, color: GOLD, flex: "0 0 auto" }}>−{Number(r.sconto_pct)}%</span>
+                      )}
+                      <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flex: "0 0 auto", whiteSpace: "nowrap" }}>{euro(r.totale_riga)}</span>
+                    </div>
+                  ))}
+                  {v.numero_ordine && (
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{v.numero_ordine}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </Riquadro>
+    </>
+  );
+}
+
+function Numerino({ etichetta, valore, nota = "", grande = false }) {
+  return (
+    <div style={{
+      flex: grande ? "1 1 150px" : "1 1 110px", minWidth: 0,
+      background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px",
+    }}>
+      <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{etichetta}</div>
+      <div style={{ ...fontDisplay, fontSize: grande ? 20 : 16, fontWeight: 700, color: NAVY, marginTop: 3, lineHeight: 1.2 }}>{valore}</div>
+      {nota && <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 2 }}>{nota}</div>}
+    </div>
+  );
+}
+
+const METODI = { contanti: "Contanti", pos: "POS", carta: "Carta", bonifico: "Bonifico", stripe: "Stripe" };
+const etichettaMetodo = (m) => METODI[m] || (m ? String(m) : "—");
+// "ANDREA PAURA" -> "Andrea Paura": in elenco un nome tutto maiuscolo
+// urla, e qui di nomi ce n'e' uno per riga
+const toTitolo = (t) => String(t || "").toLowerCase().replace(/(^|[\s'-])([a-zà-ù])/g, (_, p, c) => p + c.toUpperCase());
+
 // "184320" -> "180 KB". Senza, in elenco si legge un numero lungo che
 // non dice niente a nessuno.
 function misuraFile(byte) {
@@ -1361,6 +1530,7 @@ const SEZIONI = [
   { v: "trasferimenti", l: "Trasferimenti" },
   { v: "hotel", l: "Hotel" },
   { v: "documenti", l: "Documenti" },
+  { v: "vendite", l: "Dettaglio vendite" },
   { v: "conto", l: "Conto" },
 ];
 
@@ -1428,6 +1598,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
         {sezione === "documenti" && <SchedaDocumenti eventoId={evento.id} />}
+        {sezione === "vendite" && <SchedaDettaglioVendite eventoId={evento.id} prodotti={prodotti} />}
         {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} onCambiato={onCambiato} />}
       </div>
     </>
