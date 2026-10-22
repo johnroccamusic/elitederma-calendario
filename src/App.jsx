@@ -27325,6 +27325,11 @@ const AREA_MADRE_VISTA = {
   modulistica: ["normative"],
   prossimecontabilita: ["gestionedate"],
   amministrazione: ["erp"],
+  // Stampe packaging sta sotto Amministrazione dal 22/10/2026. Era
+  // aperta a chiunque avesse una password — anche a chi non ha nessun
+  // permesso — e dentro ci sono i file per la tipografia, i materiali,
+  // i formati e i FORNITORI: roba di acquisto, non di aula.
+  stampepackaging: ["erp"],
   catalogocategoriecosti: ["erp"],
   riconciliazione: ["erp"],
   anagrafiche: ["erp"],
@@ -84172,7 +84177,18 @@ function Gestionale() {
               // a quali corsi vale ogni consenso, e il codice da far
               // inquadrare in aula sta nella scheda della classe.
               ...(ruoloUtente === "programmatore" ? [{ chiave: "qrconsensi", title: "Consensi modelle, impostazioni", descrizione: "A quali corsi vale ogni consenso, e i codici senza corso", Icona: IconaTileModelle, attivo: true, onClick: () => setView("qrconsensi") }] : []),
-              { chiave: "stampepackaging", title: "Stampe packaging", descrizione: "Cosa si manda in tipografia: file, materiali, formati e fornitori", Icona: IconaTileNormative, attivo: true, onClick: () => setView("stampepackaging") },
+              // CHIUSA A CHI NON AMMINISTRA (22/10/2026). Era `attivo:
+              // true`, cioe' visibile a chiunque fosse entrato, anche a
+              // un account senza un solo permesso — e li' dentro ci
+              // sono i file per la tipografia, i materiali, i formati e
+              // i fornitori. Adesso la vede chi puo' entrare in
+              // Amministrazione: i gradi (programmatore, amministratore)
+              // e chi ha il permesso `erp`.
+              //
+              // E il clic passa da `apriViewProtetta` invece di
+              // scavalcarlo con `setView`: nascondere una tessera non
+              // chiude una porta, la toglie solo dalla vista.
+              { chiave: "stampepackaging", title: "Stampe packaging", descrizione: "Cosa si manda in tipografia: file, materiali, formati e fornitori", Icona: IconaTileNormative, attivo: puoAprireVista("erp"), onClick: () => apriViewProtetta("stampepackaging") },
               // sta in home e non piu' dentro Normative: lo aprono le
               // master e chi vende, ogni volta che iscrivono qualcuno —
               // due tasti di distanza erano due di troppo

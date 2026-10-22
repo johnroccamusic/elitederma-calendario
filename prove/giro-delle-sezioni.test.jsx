@@ -104,6 +104,32 @@ const RUOLI = [
   ["Ruh (solo calendario)",    "user",           ["gestionedate","progettiincorso","prezzicorsi"]],
 ];
 
+// STAMPE PACKAGING È CHIUSA A CHI NON AMMINISTRA (22/10/2026). Dentro
+// ci sono i file per la tipografia, i materiali, i formati e i
+// fornitori: roba di acquisto, non di aula. Era `attivo: true`, cioè
+// visibile a chiunque fosse entrato — anche a un account senza un solo
+// permesso.
+describe("Stampe packaging", () => {
+  const tessere = async (ruolo, permessi) => {
+    const { visitate } = await giro(ruolo, permessi);
+    return visitate.join(" | ");
+  };
+
+  it("la vede chi può entrare in Amministrazione", async () => {
+    expect(await tessere("amministratore", ["erp", "normative"])).toMatch(/Stampe packaging/);
+    expect(await tessere("programmatore", ["normative"])).toMatch(/Stampe packaging/);
+    // e anche chi ha il permesso `erp` senza esserlo di grado — è il
+    // caso di una master che amministra
+    expect(await tessere("user", ["erp", "pos", "normative"])).toMatch(/Stampe packaging/);
+  }, 180000);
+
+  it("non la vede chi vende, né una master, né l'utente generico", async () => {
+    expect(await tessere("user", ["dashboardvenditori", "prezzicorsi", "normative"])).not.toMatch(/Stampe packaging/);
+    expect(await tessere("user", ["pos", "prezzicorsi", "normative", "dashboardmaster"])).not.toMatch(/Stampe packaging/);
+    expect(await tessere("user", ["dashboardvenditori", "logisticaprodotti", "normative"])).not.toMatch(/Stampe packaging/);
+  }, 180000);
+});
+
 describe("il giro di tutte le sezioni", () => {
   for (const [chi, ruolo, permessi] of RUOLI) {
     it(`${chi}: ogni tessera che vede si apre`, async () => {
