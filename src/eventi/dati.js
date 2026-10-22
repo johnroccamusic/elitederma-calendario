@@ -322,3 +322,75 @@ export async function leggiImmaginiProdotti() {
     .forEach((im) => { if (!per[im.prodotto_id]) per[im.prodotto_id] = im.url; });
   return per;
 }
+
+// --- i documenti organizzativi ---------------------------------------------
+//
+// Le certificazioni, il regolamento della fiera, le planimetrie, i
+// permessi. Il secchio `eventi-documenti` e' PRIVATO: niente
+// `getPublicUrl`, si chiede un link a scadenza che vale solo per chi ha
+// una sessione. «Pubblico» e' un'impostazione del secchio — chi conosce
+// l'indirizzo di un file lo scarica, policy o non policy — e qui dentro
+// finiscono certificazioni aziendali e contratti di fiera.
+
+export async function leggiDocumentiEvento(eventoId) {
+  const { data, error } = await supabase.from("eventi_documenti")
+    .select("*").eq("evento_id", eventoId)
+    .order("ordine").order("caricato_il");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function caricaDocumentoEvento(eventoId, file, { nome = "", chi = "" } = {}) {
+  if (!file) throw new Error("Nessun file scelto.");
+  // il nome del file non finisce nel percorso: ci finiscono caratteri di
+  // ogni specie — spazi, accenti, parentesi — e un percorso storto si
+  // scopre il giorno che il file non si riapre. Il nome vero sta nella
+  // riga, che e' anche quello che si legge e si puo' correggere.
+  const estensione = (file.name?.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6);
+  const percorso = `${eventoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${estensione ? "." + estensione : ""}`;
+  const { error } = await supabase.storage.from("eventi-documenti")
+    .upload(percorso, file, { upsert: false, contentType: file.type || undefined });
+  if (error) throw new Error(`Non riesco a caricare il file: ${error.message}`);
+
+  const quante = (await leggiDocumentiEvento(eventoId)).length;
+  const { data, error: erroreRiga } = await supabase.from("eventi_documenti").insert({
+    evento_id: eventoId,
+    nome: (nome || file.name || "Documento").trim(),
+    percorso, tipo: file.type || null, dimensione: file.size || null,
+    ordine: quante, caricato_da: chi || null,
+  }).select().single();
+  if (erroreRiga) {
+    // la riga non c'e': il file caricato non lo ritroverebbe nessuno, e
+    // resterebbe a occupare spazio senza che niente lo nomini
+    await supabase.storage.from("eventi-documenti").remove([percorso]);
+    throw new Error(`Caricato, ma non registrato: ${erroreRiga.message}`);
+  }
+  return data;
+}
+
+// Il file si cancella INSIEME alla riga, e il file per primo: al
+// contrario, se la seconda cancellazione fallisse resterebbe una riga
+// che punta al vuoto — e aprendola si vedrebbe un errore invece di
+// capire che il documento non c'e' piu'.
+export async function eliminaDocumentoEvento(doc) {
+  if (doc?.percorso) await supabase.storage.from("eventi-documenti").remove([doc.percorso]);
+  const { error } = await supabase.from("eventi_documenti").delete().eq("id", doc.id);
+  if (error) throw new Error(error.message);
+}
+
+export async function linkDocumentoEvento(percorso, secondi = 3600) {
+  const { data, error } = await supabase.storage.from("eventi-documenti")
+    .createSignedUrl(percorso, secondi);
+  if (error) throw new Error(error.message);
+  const indirizzo = data?.signedUrl || "";
+  // NON BASTA CHE SIA UNA STRINGA. Il client costruisce il link
+  // incollando la propria base a quello che gli torna: se la risposta
+  // non ha la forma attesa esce «.../storage/v1undefined», che e' una
+  // stringa piena e un indirizzo che non esiste. Aperta in una scheda
+  // nuova da' una pagina di errore del browser, e sembra rotto il
+  // documento invece della risposta. Trovato dal banco di prova.
+  if (!indirizzo.includes("/object/sign/") || indirizzo.includes("undefined")) {
+    throw new Error("il link firmato non è arrivato");
+  }
+  return indirizzo;
+}

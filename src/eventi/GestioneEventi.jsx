@@ -2,8 +2,8 @@
 //
 // Due schermate. L'elenco, in ordine cronologico, e la scheda del
 // singolo evento — che somiglia a quella di un corso perche' chi la usa
-// e' la stessa persona: nome, date e luogo in cima, e sotto le quattro
-// cose da organizzare. Team, materiali, trasferimenti, hotel.
+// e' la stessa persona: nome, date e luogo in cima, e sotto le cose da
+// organizzare. Team, materiali, trasferimenti, hotel, documenti, conto.
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
@@ -14,6 +14,7 @@ import {
   periodoEvento, quantiGiorni, usciteAllEvento,
   impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
   leggiCategoriePrincipali, leggiImmaginiProdotti,
+  leggiDocumentiEvento, caricaDocumentoEvento, eliminaDocumentoEvento, linkDocumentoEvento,
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
@@ -1230,11 +1231,136 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
   );
 }
 
+// ------------------------------------------- i documenti organizzativi
+//
+// Le certificazioni, il regolamento della fiera, le planimetrie, i
+// permessi, l'assicurazione. Cose che oggi stanno nelle chat di chi le
+// ha ricevute, e che servono proprio il giorno in cui qualcuno le
+// chiede in loco — cioe' il giorno in cui nessuno ha voglia di cercare
+// in una conversazione di tre mesi fa.
+//
+// Il secchio e' privato: i link durano un'ora e valgono solo per chi ha
+// una sessione.
+export function SchedaDocumenti({ eventoId }) {
+  const [righe, setRighe] = useState(null);
+  const [caricando, setCaricando] = useState(false);
+  const [guasto, setGuasto] = useState("");
+
+  const ricarica = () => leggiDocumentiEvento(eventoId).then(setRighe).catch(() => setRighe([]));
+  useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
+
+  async function prendi(elenco) {
+    const file = [...(elenco || [])];
+    if (file.length === 0) return;
+    setCaricando(true); setGuasto("");
+    const chi = (await supabase.auth.getUser())?.data?.user?.email || "";
+    // uno alla volta e non in blocco: se il quarto non va su, i primi
+    // tre restano caricati e si vede quale e' mancato
+    const falliti = [];
+    for (const f of file) {
+      try { await caricaDocumentoEvento(eventoId, f, { chi }); }
+      catch (e) { falliti.push(`${f.name}: ${e.message}`); }
+    }
+    setCaricando(false);
+    if (falliti.length) setGuasto(falliti.join(" · "));
+    ricarica();
+  }
+
+  async function apri(doc) {
+    setGuasto("");
+    // la finestra si apre PRIMA della chiamata, dentro il gesto: su
+    // iPhone una window.open che arriva dopo un await viene bloccata
+    const finestra = window.open("", "_blank", "noopener");
+    try {
+      const indirizzo = await linkDocumentoEvento(doc.percorso);
+      if (!indirizzo) throw new Error("link non disponibile");
+      if (finestra) finestra.location = indirizzo;
+      else window.location.href = indirizzo;
+    } catch (e) {
+      if (finestra) finestra.close();
+      setGuasto(`Non riesco ad aprire «${doc.nome}»: ${e.message}`);
+    }
+  }
+
+  async function elimina(doc) {
+    if (!window.confirm(`Eliminare «${doc.nome}»?\n\nIl file viene cancellato, non solo tolto dall'elenco.`)) return;
+    setGuasto("");
+    try { await eliminaDocumentoEvento(doc); } catch (e) { setGuasto(e.message); }
+    ricarica();
+  }
+
+  if (righe === null) return <Vuoto>Carico…</Vuoto>;
+  return (
+    <>
+      {/* IL TASTO E' IL CAMPO, dentro una label: il tocco arriva
+          all'input senza passare da JavaScript, che e' l'unica forma che
+          iOS accetta sempre. Un input nascosto aperto con `.click()` su
+          iPhone funziona una volta sola (vedi il modulo di iscrizione). */}
+      <label style={{
+        display: "inline-flex", alignItems: "center", gap: 8, cursor: caricando ? "default" : "pointer",
+        border: `1px solid ${NAVY}`, borderRadius: 12, padding: "10px 16px", marginBottom: 6,
+        ...fontBody, fontSize: 13.5, fontWeight: 700, color: caricando ? MUTED : NAVY,
+        background: "#fff", opacity: caricando ? 0.6 : 1,
+      }}>
+        {caricando ? "Carico…" : "Aggiungi documenti"}
+        <input
+          type="file" multiple disabled={caricando}
+          onChange={(e) => { prendi(e.target.files); e.target.value = ""; }}
+          style={{ display: "none" }}
+        />
+      </label>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, marginBottom: 14 }}>
+        Certificazioni, regolamento della fiera, planimetrie, permessi, assicurazione.
+        Qualunque formato. Restano qui, legati a questo evento, e si aprono solo da dentro l&apos;app.
+      </div>
+
+      {guasto && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", lineHeight: 1.5, marginBottom: 12 }}>{guasto}</div>
+      )}
+
+      {righe.length === 0 && <Vuoto>Nessun documento per questo evento.</Vuoto>}
+      {righe.map((r) => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+            {/* il nome si corregge: quello che arriva dal file e'
+                spesso «WhatsApp Image 2026-10-22 at 11.04.jpeg» */}
+            <input
+              style={{ ...campoRiga, width: "100%", minWidth: 0, fontWeight: 700 }}
+              defaultValue={r.nome}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== r.nome) salvaRiga("eventi_documenti", r.id, { nome: v }).then(ricarica);
+                else e.target.value = r.nome;
+              }}
+            />
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 3 }}>
+              {misuraFile(r.dimensione)}{r.caricato_da ? ` · ${r.caricato_da}` : ""} · {fmtQuando(r.caricato_il)}
+            </div>
+          </div>
+          <Button variant="ghost" onClick={() => apri(r)}>Apri</Button>
+          <TastoCestino onClick={() => elimina(r)} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+// "184320" -> "180 KB". Senza, in elenco si legge un numero lungo che
+// non dice niente a nessuno.
+function misuraFile(byte) {
+  const n = Number(byte) || 0;
+  if (n <= 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+}
+
 const SEZIONI = [
   { v: "team", l: "Team" },
   { v: "materiali", l: "Materiali" },
   { v: "trasferimenti", l: "Trasferimenti" },
   { v: "hotel", l: "Hotel" },
+  { v: "documenti", l: "Documenti" },
   { v: "conto", l: "Conto" },
 ];
 
@@ -1301,6 +1427,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} evento={evento} prodotti={prodotti} onStockCambiato={onStockCambiato} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
+        {sezione === "documenti" && <SchedaDocumenti eventoId={evento.id} />}
         {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} onCambiato={onCambiato} />}
       </div>
     </>

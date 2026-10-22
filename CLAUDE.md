@@ -16,7 +16,7 @@ contabilità. Nessun utente finale anonimo.
 | UI | React 18.3, nessun router, nessuna libreria di stato |
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
-| Storage | 10 bucket Supabase, **tutti pubblici** |
+| Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
 | Backend | 45 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   33 file, 313 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   34 file, 317 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -638,6 +638,31 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
 
+### I documenti organizzativi degli eventi (22/10/2026)
+
+Ogni evento ha la sua sezione **Documenti**: certificazioni, regolamento
+della fiera, planimetrie, permessi, assicurazione — la roba che serve
+averla sottomano il giorno che qualcuno la chiede in loco, e che fino a
+oggi stava nelle chat di chi l'aveva ricevuta. Tabella
+`eventi_documenti`, secchio **privato** `eventi-documenti`.
+
+**Privato, ed è il punto:** dei 22 secchi solo quattro lo sono. Si legge
+con `createSignedUrl` (un'ora), come `moduli-iscrizione` — qui dentro
+finiscono certificazioni aziendali e contratti di fiera, e «pubblico»
+vuol dire che chi conosce l'indirizzo scarica, policy o non policy.
+
+Tre cose imparate altrove e riapplicate qui: il tasto per caricare **è**
+il campo file dentro una `label` (su iPhone un input aperto con
+`.click()` funziona una volta sola); la finestra per aprire il documento
+si apre **dentro il gesto**, vuota, e solo dopo si riempie; e se la riga
+non si scrive il file caricato viene rimosso, invece di restare orfano.
+
+Il controllo sul link firmato non si accontenta di una stringa piena: il
+client incolla la propria base a quello che gli torna, e con una
+risposta storta esce `.../storage/v1undefined` — una stringa vera e un
+indirizzo che non esiste, che aperto sembra un documento rotto invece di
+una risposta sbagliata. L'ha trovato il banco di prova.
+
 ### La capienza della sede segnala, non chiude (21/10/2026)
 
 `postiMaxEffettivi(cd, corso)` torna `cd.posti_max ?? corso.posti_max` e **non
@@ -784,7 +809,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 33 file e 313 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 34 file e 317 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
