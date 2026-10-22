@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   36 file, 330 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   38 file, 337 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -798,6 +798,22 @@ sh controlla-funzioni.sh     # tipi delle edge function (Deno), prima di pubblic
 **Prima di ogni push: `npm run lint`, `npm test`, `npm run build`.** Tutti e tre
 a zero. Prima di pubblicare una edge function, anche `sh controlla-funzioni.sh`.
 
+**Pubblicare pianta le schede rimaste aperte (22/10/2026).** L'app è divisa in
+pezzi caricati a richiesta, e ognuno ha il nome col codice del contenuto
+(`index-BxhQZihE.js`): a ogni pubblicazione quel codice cambia e il file di
+prima **sparisce dal server** — verificato, un nome della build precedente
+risponde 404. Una scheda aperta tiene il file d'avvio vecchio, chiede un pezzo
+che non c'è più, e resta sulla scritta di attesa per sempre. È il caso peggiore
+per l'app intera, perché `Accesso.jsx` carica `App.jsx` proprio così: un file
+d'avvio vecchio non apre più niente. `src/pezzo.js` sostituisce `lazy` in tutti
+e 16 i punti e trasforma il fallimento in una ricarica (una ogni 30 secondi, e
+l'errore si rilancia sempre).
+
+**Per la diagnosi:** davanti a «non funziona niente» in una pagina, prima di
+cercare nel codice chiedere **da quanto la scheda è aperta** e far provare un
+ricarico forzato. Montare la pagina in jsdom serve a escluderla, ma non vede
+questo guasto: vive nel browser di chi guarda.
+
 **ESLint (dal 18/10/2026).** Configurato stretto in `eslint.config.js`: nessuna
 regola di stile — quelle le decide chi scrive — solo le poche che prendono i
 guasti veri di questo progetto.
@@ -840,7 +856,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 36 file e 330 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 38 file e 337 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
