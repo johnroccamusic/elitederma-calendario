@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   26 file, 266 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   33 file, 313 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -447,6 +447,58 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   stanno in `src/comuni-regioni.js`, generato da `genera-comuni.mjs`:
   non si aggiungono a mano.
 
+  **Quattro mail a un indirizzo inesistente (22/10/2026).** Un modulo è
+  partito quattro volte verso `elitederma@europe.con` — `.con` invece di
+  `.com` — ed è rimbalzato tutte e quattro, in mezzo secondo ogni volta.
+  Resend accettava (la forma è valida), il registro diceva `esito: ok`,
+  la fascia diceva «Modulo inviato» in verde. Il rimbalzo *era* scritto,
+  in `email_inviate.rimbalzata_il`, e il fascicolo lo mostrava — ma il
+  fascicolo si apriva solo da «Modulo ricevuto» in poi, cioè dalla tappa
+  che non arriverà mai proprio perché la mail è rimbalzata. **Era
+  registrato in un posto raggiungibile solo se il guasto non fosse
+  successo.** Quattro difese, una per anello:
+
+  - **Prima**: `src/iscrizione/email.js` (`avvisoEmail`, da `avvisoCampo`)
+    segnala le code che *non esistono* e i fornitori scritti storti. Solo
+    quelli: `.co`, `.cm`, `.ir`, `.lt` sembrano sviste e sono code vere, e
+    una casella che dà torto a un indirizzo buono non la legge più nessuno.
+  - **Dopo**: `iscritti.modulo_mail_rimbalzata_il`, scritta da
+    `email-eventi`, azzerata dal primo invio riuscito. La fascia tiene il
+    pallino rosso e dice «Non arrivata».
+  - **Il rinvio si ferma** se l'indirizzo è *ancora* quello che ha
+    rimbalzato (confronto col destinatario vero dell'ultimo rimbalzo).
+    Corretto anche di una lettera, riparte.
+  - **Il fascicolo si apre da «Modulo inviato» in poi**: dentro ci sono il
+    registro delle mail e il link, cioè quello che si cerca quando il
+    modulo non torna.
+
+  **Quello che nessun controllo può prendere** è un indirizzo ben formato
+  e sbagliato (`maria` per `mario`): lì non rimbalza niente e la mail
+  arriva a qualcun altro. L'unico segnale è che il modulo non torna, e
+  **oggi un modulo consegnato e mai tornato resta invisibile per sempre**
+  — manca l'elenco di chi aspetta da troppo.
+
+  **Riaprire un modulo già arrivato (22/10/2026).** La serratura è
+  `modulo_ricevuto_il`; il gesto per toglierla sta nel fascicolo e chiama
+  `modulo_riapri`, che **prima archivia** in `moduli_riaperture` firma,
+  documenti, contratto, PDF, data e stato, e solo dopo sblocca — così il
+  guasto del 19/10 (seconda spedizione che sovrascriveva) non può
+  tornare. Il tasto è spento finché la copia firmata non è stata
+  generata, `contratto_firmato` torna vuoto apposta (si firma il testo di
+  adesso), e la mail **non riparte da sola**.
+
+  **Senza firma non si spedisce (22/10/2026).** `modulo_salva` non
+  controllava niente: accettava un modulo senza firma, segnava
+  `modulo_ricevuto_il` e faceva partire la conferma col PDF — un
+  contratto non sottoscritto, archiviato. La pagina teneva già spento il
+  tasto, ma **un controllo che vive solo nel browser non è un controllo**.
+
+  **Il link si può ripassare a mano (22/10/2026)**, dal fascicolo, con la
+  traccia in `moduli_link_copiati`: chi l'ha preso e quando. Serve quando
+  la mail è consegnata ma non arriva (posta indesiderata). **Non** segna
+  il modulo come inviato — era il peccato di `segnaInviatoAMano` — e
+  sparisce quando il modulo è tornato.
+
   **Il link del modulo vale una volta sola (19/10/2026).** `modulo_salva`
   si fermava solo davanti a un'iscrizione già *confermata*, ma fra «il
   modulo è arrivato» e «l'iscrizione è confermata» passa l'acconto: in
@@ -573,8 +625,31 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   è una barriera: non c'è. Chiudere le policy non è più un passo di igiene, è
   la cosa che manca.
 
+- **In Home ci si entra tutti (21/10/2026).** Chi entrava con la sola password
+  venditore atterrava dritto sulla Dashboard venditori. Aveva senso quando le
+  password erano poche e i permessi non esistevano; adesso la Home mostra le
+  aree che spettano a quella persona, e saltarla vuol dire non sapere di
+  averle. Premendo «Dashboard venditori» la dashboard resta **bloccata sui
+  propri dati** (`apriLoginVenditore` riconosce `utenteLoggato.venditoreId`), e
+  `operatoreCorrente` sa chi opera anche senza `venditoreLoggato`. Resta un
+  solo salto, voluto: il profilo *kiosk* (Gestione utenti → Solo calendario),
+  che ha Home/Indietro/Avanti nascosti e in Home resterebbe intrappolato.
+
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
+
+### La capienza della sede segnala, non chiude (21/10/2026)
+
+`postiMaxEffettivi(cd, corso)` torna `cd.posti_max ?? corso.posti_max` e **non
+prende più la sede**: il parametro è sparito dalla firma, così nessuno può
+rimettercela per sbaglio. Teneva il *minore* fra i due con un `Math.min`, e la
+sede chiudeva l'iscrizione per conto suo — LAMINAZIONE BASE a UDINE era
+«Completo» con **due iscritti su un corso da dieci**, e non si riapriva nemmeno
+alzando i posti dell'edizione. In `location` ci sono **sedi doppie per la
+stessa città con capienze diverse** (ROMA 4 e 12, MILANO 3 e 12, NAPOLI 2 e 10,
+UDINE 2 e 10): una classe attaccata al gemello piccolo si chiudeva da sola.
+L'aula piena la dice `avvisoSedePiena`, come avviso, nella scheda della classe.
+Le righe doppie **non sono state unite**: va deciso quali tenere.
 
 ### Il magazzino si controlla da solo (19/10/2026)
 
@@ -709,7 +784,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 26 file e 266 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 33 file e 313 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
