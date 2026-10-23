@@ -68614,7 +68614,7 @@ const OMBRA_POS = {
   incassato: "inset 0 1px 3px rgba(14,27,51,0.07)",
 };
 
-function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
+function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile, notte = false }) {
   return (
     <button
       type="button" onClick={onClick} data-niente-ombra
@@ -68625,7 +68625,9 @@ function SceltaPos({ scelto, Icona, titolo, sotto, onClick, isMobile }) {
         textAlign: isMobile ? "center" : "left",
         display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 5 : 10,
         padding: isMobile ? "10px 6px" : "13px 14px",
-        borderRadius: 14, border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`,
+        // sul carrello notte un riquadro scelto blu su fondo blu sparisce:
+        // il filo d'oro e' quello che lo fa vedere (23/10/2026)
+        borderRadius: 14, border: scelto && notte ? `1.5px solid ${GOLD}` : `1px solid ${scelto ? NAVY : CREAM_BORDER}`,
         // anche quello NON scelto sta sopra il foglio: se solo il scelto
         // avesse rilievo, gli altri due sembrerebbero spenti invece che
         // semplicemente non scelti
@@ -68968,7 +68970,9 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const ombraDischiPos = ombraCssTasto(aspettoTastiPos.pulsanti.ombra);
   // sconto vendita, % e coupon dell'amministrazione: tre campi su una riga
   // sola, alti due terzi degli altri e col font tre punti piu' piccolo
-  const campoSconto = { ...inputStyle, padding: "5px 8px", fontSize: 11, borderRadius: 7 };
+  // sfondo esplicito: inputStyle non ne ha, e sul carrello notte un campo
+  // senza sfondo prende il blu di sotto e sembra spento o rotto
+  const campoSconto = { ...inputStyle, padding: "5px 8px", fontSize: 11, borderRadius: 7, background: "#fff" };
   const [spedIscrittoId, setSpedIscrittoId] = useState("");
   const [spedNome, setSpedNome] = useState("");
   const [spedCognome, setSpedCognome] = useState("");
@@ -69930,7 +69934,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input
                     autoFocus={codiceExtraAperto}
-                    style={{ ...inputStyle, padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: acquistoPersonale || (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? 0.5 : 1 }}
+                    style={{ ...inputStyle, background: "#fff", padding: "5px 9px", fontSize: 13, textTransform: "uppercase", opacity: acquistoPersonale || (scontoCorsoAttivo && couponDellEdizione(corsoPosId)) || referralPersonaleInUso ? (isMobile ? 0.8 : 0.5) : 1 }}
                     value={couponCodiceTesto}
                     // in un acquisto personale il codice e' quello suo e
                     // basta: un secondo codice sopra vorrebbe dire due
@@ -69941,7 +69945,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     placeholder={acquistoPersonale ? "Acquisto personale: nessun altro codice" : scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
                   />
                   <button onClick={() => { applicaCodiceCoupon(""); setCodiceExtraAperto(false); }} title="Chiudi il codice extra"
-                    style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
+                    style={{ background: "none", border: "none", color: isMobile ? "#E8DFC9" : MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
                 </div>
                 {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                   couponAttivo ? (
@@ -71342,7 +71346,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               solo un numero che compare nel totale, e chi vende non
               saprebbe se e' quello giusto */}
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: -6, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: (puoAttribuireAllaMaster && masterDelCorso) ? 8 : -6, marginBottom: 12 }}>
               Sconto del corso applicato: −{fmtPctErp2(percentualeErogata)}
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
@@ -71573,14 +71577,14 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <div style={etichettaSconto}>Sconto vendita</div>
-              <select style={{ ...campoSconto, background: BG, opacity: (couponNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoTipo(e.target.value)}>
+              <select style={{ ...campoSconto, background: BG, opacity: (couponNum > 0 || scontoFieraAttivo) ? (isMobile ? 0.8 : 0.5) : 1 }} value={scontoTipo} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoTipo(e.target.value)}>
                 <option value="percentuale">Percentuale</option>
                 <option value="importo">Importo fisso</option>
               </select>
             </div>
             <div style={{ flex: "0 0 58px", minWidth: 0 }}>
               <div style={etichettaSconto}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
-              <input style={{ ...campoSconto, opacity: (couponNum > 0 || scontoFieraAttivo) ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
+              <input style={{ ...campoSconto, opacity: (couponNum > 0 || scontoFieraAttivo) ? (isMobile ? 0.8 : 0.5) : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
             </div>
           </>
         )}
@@ -71685,7 +71689,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       ); })()}
 
       {scontoApplicato > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: isMobile ? "#F2A79B" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
           <span>Sconto applicato</span><span>− {fmtEuroErp2(scontoApplicato)}</span>
         </div>
       )}
@@ -72001,7 +72005,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               { v: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota },
               { v: "buono_amazon", l: "Buono Amazon", sotto: "Codice regalo", Icona: IconaTileOmaggio },
             ].map((m) => (
-              <SceltaPos
+              <SceltaPos notte={isMobile}
                 key={m.v} scelto={metodoPagamento === m.v} Icona={m.Icona}
                 titolo={m.l} sotto={m.sotto} isMobile={isMobile}
                 onClick={() => setMetodoPagamento(m.v)}
@@ -72028,12 +72032,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 <>
                   <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
                   <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
-                    <SceltaPos
+                    <SceltaPos notte={isMobile}
                       scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
                       titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
                       onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
                     />
-                    <SceltaPos
+                    <SceltaPos notte={isMobile}
                       scelto={modoIncassoPos === "qr"} Icona={IconaAnelloLink}
                       titolo="Carta / Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
                       onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}

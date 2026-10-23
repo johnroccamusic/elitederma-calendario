@@ -7,7 +7,7 @@ const [banco, foto] = process.argv.slice(2);
 const browser = await chromium.launch();
 const page = await (await browser.newContext(process.env.VISTA === "scrivania" ? { viewport: { width: 1280, height: 900 } } : { ...devices["iPhone 13"] })).newPage();
 page.on("pageerror", (e) => console.log("ERRORE IN PAGINA:", e.message));
-await page.goto(`http://localhost:4173/prove/banco/${banco}.html`, { waitUntil: "networkidle" });
+await page.goto(`http://localhost:4173/prove/banco/${banco}.html${process.env.QUERY || ""}`, { waitUntil: "networkidle" });
 await page.waitForTimeout(400);
 // CLICCA="testo1|testo2": tocca in sequenza gli elementi con quel testo
 // (il primo che lo contiene), per arrivare alla schermata da fotografare
