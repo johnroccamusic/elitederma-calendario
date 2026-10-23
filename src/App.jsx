@@ -55840,7 +55840,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
               <thead>
                 <tr>
                   {(origine === "pos"
-                    ? [{ c: "ordine", l: "Ordine" }, { c: "data", l: "Data" }, { c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }, { c: "stato", l: "Stato" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }]
+                    ? [{ c: "ordine", l: "Ordine" }, { c: "data", l: "Data" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }, { c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }, { c: "stato", l: "Stato" }]
                     : [{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }]).map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
@@ -55867,6 +55867,21 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                   .map((v) => {
                     const st = STATI_VENDITA_SHOP[v.stato];
                     const etichettaMovimento = { vendita: "Vendita", reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || "Vendita";
+                    const celleImporti = (
+                      <>
+                          {/* "Totale" e' il listino, "Prezzo pagato" quello che e'
+                              entrato in cassa dopo gli sconti; senza sconti i due
+                              numeri coincidono, ed e' giusto che si veda */}
+                          {(() => {
+                            const listino = totaleListinoVendita(v);
+                            const scontata = round2(listino - (Number(v.totale) || 0)) > 0;
+                            return (
+                              <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: scontata ? MUTED : NAVY, whiteSpace: "nowrap", textDecoration: scontata ? "line-through" : "none" }}>{fmtEuroErp2(listino)}</td>
+                            );
+                          })()}
+                          <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
+                      </>
+                    );
                     return (
                       <tr key={v.id}>
                         <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
@@ -55891,6 +55906,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                           </td>
                         )}
                         <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                        {/* al banco gli importi vengono subito dopo la data: e' la
+                            prima cosa che si cerca, prima di chi ha venduto (23/10/2026) */}
+                        {origine === "pos" && celleImporti}
                         {origine === "pos" ? (
                           <>
                             {/* Chi ha venduto. "Vendita al banco" ripetuto su
@@ -56001,17 +56019,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
                           </>
                         )}
-                        {/* "Totale" e' il listino, "Prezzo pagato" quello che e'
-                            entrato in cassa dopo gli sconti; senza sconti i due
-                            numeri coincidono, ed e' giusto che si veda */}
-                        {(() => {
-                          const listino = totaleListinoVendita(v);
-                          const scontata = round2(listino - (Number(v.totale) || 0)) > 0;
-                          return (
-                            <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: scontata ? MUTED : NAVY, whiteSpace: "nowrap", textDecoration: scontata ? "line-through" : "none" }}>{fmtEuroErp2(listino)}</td>
-                          );
-                        })()}
-                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
+                        {origine !== "pos" && celleImporti}
                         {/* il cestino: chiede conferma e non lascia traccia */}
                         <td style={{ padding: "12px 10px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <button
