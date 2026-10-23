@@ -735,6 +735,32 @@ non si toglie più prima che la vendita sia scritta**.
 Contanti e buoni non cambiano: lì l'incasso lo constata chi sta al
 banco.
 
+**E la prova la scrive solo il server (23/10/2026, stesso giorno).** Il
+guardiano leggeva `pagato_il` da una tabella scrivibile da chiunque abbia
+la sessione dell'app (policy `to authenticated`, tutto permesso): nessun
+tasto lo fa, ma dalla console del browser si poteva scrivere «pagato» su
+una richiesta e il database ci avrebbe creduto. Ora un trigger su
+`pagamenti_pos` (`pagamenti_pos_solo_il_server_dice_pagato`) lascia alla
+sessione — anon o authenticated, secondo `auth.role()`, che resta tale
+anche dentro una RPC security definer — solo `cliente`, `note_fattura`,
+`vendita_id`, `aggiornato_il` e `stato` nel solo passo in_attesa →
+annullato; niente insert, niente delete. `pagato_il`, `importo`,
+`codice` e il resto li scrivono le edge function con la service role, le
+migrazioni e il cron. E il guardiano ha imparato due cose: **un
+pagamento vale per una vendita** (stesso codice su un altro numero
+d'ordine → rifiutato) e **per quell'importo** (tolleranza un centesimo;
+sulle 10 vendite col QR in archivio coincidono tutte). Provati tutti e
+quindici i rami in una transazione annullata.
+
+Restano dichiarazioni, non prove: **contanti**, **buono Amazon**
+(chiunque al banco, nessun controllo sul codice né sull'importo) e **POS
+esterno** (solo chi amministra). L'omaggio è incasso zero dichiarato:
+amministratori e chi ha «può fare omaggi» — oggi GianLuca Rocca,
+Raffaele Villanno, Stefano Di Napoli. Il flag `terminale_fisico` il
+database lo accetta da chiunque, perché con un account Supabase per
+tutti nel JWT non c'è il ruolo: è l'altra faccia del punto «UN SOLO
+ACCOUNT» del § 4.
+
 ### «Assegnazione kit»: senza pacchetto vuol dire senza pacchetto (22/10/2026)
 
 Fino a oggi in quell'elenco finiva anche chi il pacchetto ce l'aveva, se
