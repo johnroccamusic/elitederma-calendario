@@ -55830,12 +55830,18 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             {msgElimina && <div style={{ ...fontBody, fontSize: 13, color: msgElimina.startsWith("Vendita #") ? "#2E7D32" : "#C0392B", padding: "10px 8px" }}>{msgElimina}</div>}
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+            {/* Al banco la tabella e' stretta (23/10/2026): niente colonna
+                «Tipo» — sono quasi tutte vendite, e un reso o un cambio si
+                segnala accanto al numero — e niente imponibile e IVA, che
+                stanno nel dettaglio. E non si allarga a riempire la scheda:
+                con otto colonne il 100% metteva un deserto fra Frangente e
+                Incasso. */}
+            <table style={{ width: origine === "pos" ? "auto" : "100%", borderCollapse: "collapse", minWidth: origine === "pos" ? 560 : 720 }}>
               <thead>
                 <tr>
-                  {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, ...(origine === "pos"
-                    ? [{ c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }]
-                    : [{ c: "cliente", l: "Cliente" }]), { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }].map((th) => (
+                  {(origine === "pos"
+                    ? [{ c: "ordine", l: "Ordine" }, { c: "data", l: "Data" }, { c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }, { c: "stato", l: "Stato" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }]
+                    : [{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }]).map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                   <th style={{ width: 44, borderBottom: `1px solid ${CREAM_BORDER}` }} />
@@ -55873,12 +55879,17 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                           >
                             #{v.numero_ordine || v.woo_order_id}
                           </button>
+                          {origine === "pos" && v.tipo_movimento && v.tipo_movimento !== "vendita" && (
+                            <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#3B6FA0", background: "#E7EEF5", borderRadius: 8, padding: "2px 7px", marginLeft: 6 }}>{etichettaMovimento}</span>
+                          )}
                         </td>
-                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#3B6FA0" : MUTED, background: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
-                            {etichettaMovimento}
-                          </span>
-                        </td>
+                        {origine !== "pos" && (
+                          <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#3B6FA0" : MUTED, background: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
+                              {etichettaMovimento}
+                            </span>
+                          </td>
+                        )}
                         <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         {origine === "pos" ? (
                           <>
@@ -55984,8 +55995,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
-                        <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
+                        {origine !== "pos" && (
+                          <>
+                            <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
+                            <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
+                          </>
+                        )}
                         {/* "Totale" e' il listino, "Prezzo pagato" quello che e'
                             entrato in cassa dopo gli sconti; senza sconti i due
                             numeri coincidono, ed e' giusto che si veda */}
