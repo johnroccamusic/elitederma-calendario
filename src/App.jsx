@@ -55435,6 +55435,24 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
       .then(({ count }) => { if (vivo) setContoIncassi(count || 0); });
     return () => { vivo = false; };
   }, [origine]);
+  // LA PASTIGLIA «PAGATO STRIPE» sulla riga (23/10/2026): una vendita con
+  // carta e' provata se il suo codice (o il suo id, per i link di
+  // riscossione) sta in pagamenti_pos con pagato_il. Si legge una volta
+  // per pagina, non per riga.
+  const [incassiStripe, setIncassiStripe] = useState({ perCodice: {}, perVendita: {} });
+  useEffect(() => {
+    if (origine !== "pos") return;
+    let vivo = true;
+    supabase.from("pagamenti_pos").select("codice, vendita_id, pagato_il").not("pagato_il", "is", null)
+      .then(({ data }) => {
+        if (!vivo) return;
+        const perCodice = {}, perVendita = {};
+        for (const r of (data || [])) { if (r.codice) perCodice[r.codice] = r.pagato_il; if (r.vendita_id) perVendita[r.vendita_id] = r.pagato_il; }
+        setIncassiStripe({ perCodice, perVendita });
+      });
+    return () => { vivo = false; };
+  }, [origine, venditeShop]);
+  const pagatoStripeIl = (v) => (v.pagamento_codice && incassiStripe.perCodice[v.pagamento_codice]) || incassiStripe.perVendita[v.id] || null;
   const [ordineAperto, setOrdineAperto] = useState(null);
   const [statoInModifica, setStatoInModifica] = useState(null); // id della vendita con la tendina aperta
   const [cambiandoStato, setCambiandoStato] = useState(null);
@@ -55904,7 +55922,13 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                               <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: scontata ? MUTED : NAVY, whiteSpace: "nowrap", textDecoration: scontata ? "line-through" : "none" }}>{fmtEuroErp2(listino)}</td>
                             );
                           })()}
-                          <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
+                          <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>
+                            {fmtEuroErp2(v.totale)}
+                            {origine === "pos" && pagatoStripeIl(v) && (
+                              <span data-campo="pastiglia-stripe" title={`Incasso Stripe ricevuto il ${new Date(pagatoStripeIl(v)).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}`}
+                                style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 8, padding: "2px 6px", marginLeft: 6 }}>✓ Stripe</span>
+                            )}
+                          </td>
                       </>
                     );
                     return (
