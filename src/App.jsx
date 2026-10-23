@@ -71838,8 +71838,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               : <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />)}
             <div style={{
               display: "flex", flexDirection: righeOpzioni ? "row" : "column", alignItems: "center",
-              gap: righeOpzioni ? 9 : (isMobile ? 5 : 7), flex: "1 1 0", minWidth: 0, minHeight: 44,
-              padding: righeOpzioni ? "8px 10px" : (isMobile ? "8px 4px" : "10px 6px"),
+              gap: righeOpzioni ? 9 : (isMobile ? 4 : 6), flex: "1 1 0", minWidth: 0, minHeight: 44,
+              padding: righeOpzioni ? "8px 10px" : (isMobile ? "6px 4px" : "8px 6px"),
               textAlign: righeOpzioni ? "left" : "center",
             }}>
               {righeOpzioni ? (
@@ -71854,14 +71854,15 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 </>
               ) : (
                 <>
-                  {/* tre colonne affiancate: in orizzontale al nome restava
-                      un terzo di riquadro e "Aggiungi spese spedizione" si
-                      spezzava lettera per lettera. Incolonnati — tondo,
-                      nome, levetta — il nome ha tutta la colonna */}
-                  <span style={{ width: isMobile ? 30 : 38, height: isMobile ? 30 : 38, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
-                    <o.Icona size={isMobile ? 16 : 19} color={GOLD} />
+                  {/* tre colonne affiancate: l'icona sta a sinistra del nome,
+                      sulla stessa riga, e sotto la levetta — cosi' il riquadro
+                      e' alto quanto una riga di testo piu' il tasto, non tre
+                      piani (23/10/2026). Niente tondo: a quella misura era
+                      solo altezza. */}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: isMobile ? 4 : 6, maxWidth: "100%" }}>
+                    <span style={{ display: "inline-flex", flexShrink: 0 }}><o.Icona size={isMobile ? 15 : 18} color={GOLD} /></span>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NAVY, lineHeight: 1.25, minWidth: 0 }}>{o.testo}</span>
                   </span>
-                  <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{o.testo}</span>
                   <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} />
                 </>
               )}
