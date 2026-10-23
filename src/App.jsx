@@ -69257,6 +69257,28 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
   const [mostraStorico, setMostraStorico] = useState(false);
+  // LA CONFERMA DEL PAGAMENTO NELLO STORICO (23/10/2026): la master che
+  // ha fatto inquadrare il QR vuole vedere che i soldi sono arrivati,
+  // non solo che la vendita c'e'. Si leggono gli incassi Stripe quando si
+  // apre lo storico; la pastiglia «✓ Stripe» sta accanto a «POS/Carta».
+  const [incassiStripeStorico, setIncassiStripeStorico] = useState({ perCodice: {}, perVendita: {} });
+  useEffect(() => {
+    if (!mostraStorico) return;
+    let vivo = true;
+    supabase.from("pagamenti_pos").select("codice, vendita_id, pagato_il").not("pagato_il", "is", null)
+      .then(({ data }) => {
+        if (!vivo) return;
+        const perCodice = {}, perVendita = {};
+        for (const r of (data || [])) { if (r.codice) perCodice[r.codice] = r.pagato_il; if (r.vendita_id) perVendita[r.vendita_id] = r.pagato_il; }
+        setIncassiStripeStorico({ perCodice, perVendita });
+      });
+    return () => { vivo = false; };
+  }, [mostraStorico, venditeShop]);
+  const pagatoStripeStorico = (v) => (v.pagamento_codice && incassiStripeStorico.perCodice[v.pagamento_codice]) || incassiStripeStorico.perVendita[v.id] || null;
+  const pastigliaStripe = (v) => pagatoStripeStorico(v) ? (
+    <span data-campo="pastiglia-stripe" title={`Incasso Stripe ricevuto il ${new Date(pagatoStripeStorico(v)).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}`}
+      style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 7, padding: "2px 6px", marginLeft: 6, verticalAlign: "middle" }}>✓ Stripe</span>
+  ) : null;
   const [mostraResiCambio, setMostraResiCambio] = useState(false);
   // Quante schede per riga (impostazione condivisa): un hook, quindi deve
   // stare qui prima dei return anticipati di Resi/Cambio e Storico vendite
@@ -70938,6 +70960,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                       <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0 }}>
                         {v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}
                         <span style={{ fontWeight: 400, color: MUTED }}>{" · "}{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</span>
+                        {pastigliaStripe(v)}
                       </span>
                       {badgeTipo && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: badgeTipo.c, background: badgeTipo.s, borderRadius: 7, padding: "2px 7px", flexShrink: 0 }}>{badgeTipo.l}</span>}
                       <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 800, color: v.totale < 0 ? "#C0392B" : NAVY, flexShrink: 0 }}>{fmtEuroErp2(v.totale)}</span>
@@ -70999,7 +71022,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${nomeVivoDellaRiga(p, indiciNomi)}`).join(", ")}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}{pastigliaStripe(v)}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                       </tr>
                     );
