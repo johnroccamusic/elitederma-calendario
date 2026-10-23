@@ -710,7 +710,12 @@ secondo. E `stripe-webhook` (v11) scrive `vendite_shop.pagamento_codice`
 quando paga una richiesta con `vendita_id`, se la vendita non ne ha già
 uno: da lì Fatture da emettere la toglie dalle «senza codice». Modal:
 spazio in fondo da 96 a 170 px su telefono, perché col dock aperto le
-ultime righe finivano sotto.
+ultime righe finivano sotto — ma **come elemento vuoto dopo la scheda,
+non come padding**: Safari ignora il padding in fondo a un contenitore
+flex che scorre, e i 96 px non erano mai esistiti sul telefono. Finché la
+finestra è aperta il body è chiuso (`overflow: hidden`, rimesso com'era
+alla chiusura) e l'overlay ha `overscroll-behavior: contain`: arrivati in
+fondo il dito non scorre più la pagina dietro.
 
 ### Il civico sta dentro la via (23/10/2026)
 
