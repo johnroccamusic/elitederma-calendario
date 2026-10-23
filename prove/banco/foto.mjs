@@ -15,6 +15,12 @@ for (const t of (process.env.CLICCA || "").split("|").filter(Boolean)) {
   await page.locator(`text=${t}`).first().click();
   await page.waitForTimeout(300);
 }
+// (dopo i clic) SCEGLI="corso-pos=cd1": seleziona un'opzione in una tendina (data-campo=valore)
+for (const coppia of (process.env.SCEGLI || "").split("|").filter(Boolean)) {
+  const [campo, valore] = coppia.split("=");
+  await page.locator(`select[data-campo="${campo}"]`).first().selectOption(valore);
+  await page.waitForTimeout(300);
+}
 const m = await page.evaluate(() => ({ larghezzaPagina: document.documentElement.scrollWidth, schermo: window.innerWidth,
   tabella: (() => { const t = document.querySelector("table"); if (!t) return null; const r = t.getBoundingClientRect(); return { sinistra: Math.round(r.left), destra: Math.round(r.right) }; })() }));
 await page.screenshot({ path: foto, fullPage: true });

@@ -68562,18 +68562,21 @@ function RigaProdottoPos({ prodotto, esaurito, onAggiungi, children }) {
 // L'interruttore delle opzioni al POS: una levetta, non una casella di
 // spunta. Al banco si tocca col pollice mentre si guarda altro, e una
 // casella di 17 pixel e' un bersaglio troppo piccolo.
-function InterruttorePos({ acceso, onCambia, id, piccolo = false }) {
+function InterruttorePos({ acceso, onCambia, id, piccolo = false, notte = false }) {
   const largo = piccolo ? 38 : 46;
   const alto = piccolo ? 23 : 27;
   const pallino = alto - 6;
+  // sul carrello notte una levetta accesa blu su fondo blu non si vedeva:
+  // la' il binario acceso e' oro, e il pallino resta bianco
+  const binarioAcceso = notte ? GOLD : NAVY;
   return (
     <button
       type="button" id={id} role="switch" aria-checked={acceso} data-niente-ombra
       onClick={(e) => { e.preventDefault(); onCambia(!acceso); }}
       style={{
         width: largo, height: alto, borderRadius: 999, flexShrink: 0, cursor: "pointer", padding: 0,
-        border: `1px solid ${acceso ? NAVY : "#D9D4C7"}`,
-        background: acceso ? NAVY : "#EFEAE0",
+        border: `1px solid ${acceso ? binarioAcceso : "#D9D4C7"}`,
+        background: acceso ? binarioAcceso : "#EFEAE0",
         position: "relative", transition: "background 140ms",
       }}
     >
@@ -71121,13 +71124,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               <input
                 type="checkbox" checked={scontoFieraAttivo} disabled={!scontoFieraDisponibile}
                 onChange={(e) => setScontoFiera(e.target.checked)}
-                style={{ width: 18, height: 18, flex: "0 0 auto", marginTop: 1, accentColor: NAVY }}
+                style={{ width: 18, height: 18, flex: "0 0 auto", marginTop: 1, accentColor: isMobile ? GOLD : NAVY }}
               />
               <span style={{ minWidth: 0 }}>
-                <span style={{ ...fontDisplay, display: "block", fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>
+                <span style={{ ...fontDisplay, display: "block", fontSize: 12.5, fontWeight: 700, color: NOTTE.testo, marginBottom: 2 }}>
                   Sconto fiera
                 </span>
-                <span style={{ ...fontBody, display: "block", fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
+                <span style={{ ...fontBody, display: "block", fontSize: 11.5, color: NOTTE.soffuso, lineHeight: 1.5 }}>
                   {omaggioAttivo
                     ? "Questo carrello è un omaggio: non c'è niente da scontare."
                     : (couponAttivo || couponNum > 0)
@@ -71277,13 +71280,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 type="checkbox"
                 checked={attribuisciAllaMaster}
                 onChange={(e) => setAttribuisciAllaMaster(e.target.checked)}
-                style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: NAVY, cursor: "pointer" }}
+                style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: isMobile ? GOLD : NAVY, cursor: "pointer" }}
               />
               <span style={{ minWidth: 0 }}>
-                <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+                <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NOTTE.testo }}>
                   Vendita di {toTitleCase(masterDelCorso.nome)}
                 </span>
-                <span style={{ ...fontBody, fontSize: 12, color: grigioCarrello, display: "block", lineHeight: 1.35, marginTop: 2 }}>
+                <span style={{ ...fontBody, fontSize: 12, color: NOTTE.soffuso, display: "block", lineHeight: 1.35, marginTop: 2 }}>
                   {attribuisciAllaMaster
                     ? "Punti e provvigione vanno a lei; resta scritto che l’hai battuta tu."
                     : "La vendita resta legata al corso, ma non conta come vendita della master."}
@@ -71357,11 +71360,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               per prodotto fa lo stesso lavoro meglio, e questa sparisce.
               Sui corsi senza spedizione registrata resta l'unico modo. */}
           {corsoPosSel && !kitInAula && (
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginTop: -6, marginBottom: 12 }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NOTTE.testo, marginTop: -6, marginBottom: 12 }}>
               <input type="checkbox" checked={prelevatoDaiKit} onChange={(e) => setPrelevatoDaiKit(e.target.checked)} style={{ marginTop: 3 }} />
               <span>
                 Prelevato dai kit in loco
-                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: grigioCarrello, marginTop: 1 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: NOTTE.soffuso, marginTop: 1 }}>
                   Il pezzo è stato preso da un kit presente in aula: il magazzino non si scarica di nuovo, il pezzo esce dall'atteso di rientro.
                 </span>
               </span>
@@ -71376,10 +71379,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 4px" }}>
             <span style={{ flex: 1, height: 1, background: CREAM_BORDER }} />
-            <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Il carrello è vuoto</span>
+            <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NOTTE.testo }}>Il carrello è vuoto</span>
             <span style={{ flex: 1, height: 1, background: CREAM_BORDER }} />
           </div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: grigioCarrello }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: NOTTE.soffuso }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
         </div>
       ) : (
         <div style={{ marginBottom: isMobile ? 8 : 16 }}>
@@ -71648,7 +71651,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               /* Comprando per se' il codice e' quello suo e non si cambia.
                  Il campo del codice extra resterebbe pieno del suo codice
                  e spento: si capisce meglio una riga che lo dice. */
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto", ...fontBody, fontSize: isMobile ? 11.5 : 12, color: MUTED, whiteSpace: "nowrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto", ...fontBody, fontSize: isMobile ? 11.5 : 12, color: NOTTE.soffuso, whiteSpace: "nowrap" }}>
                 Acquisto personale
                 <span style={{ ...fontDisplay, fontSize: isMobile ? 12 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, background: "#F7EEDE", borderRadius: 999, padding: "2px 8px" }}>
                   {String(couponAcquistoPersonale?.codice || "").toUpperCase()}
@@ -71672,7 +71675,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           </div>
         )}
         {(couponNum > 0 || scontoNum > 0 || scontoFieraAttivo) && (
-          <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: grigioCarrello }}>
+          <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: NOTTE.soffuso }}>
             {scontoFieraAttivo
               ? "Sta valendo lo sconto fiera: spegnilo qui sopra per scontare a mano o usare un codice."
               : couponNum > 0 ? "Togli il codice qui sotto per inserire uno sconto a mano." : "Svuota lo sconto vendita per usare un codice."}
@@ -71866,7 +71869,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     <o.Icona size={19} color={GOLD} />
                   </span>
                   <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NOTTE.testo, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
-                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} />
+                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} notte={isMobile} />
                 </>
               ) : (
                 <>
@@ -71879,7 +71882,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     <span style={{ display: "inline-flex", flexShrink: 0 }}><o.Icona size={isMobile ? 15 : 18} color={GOLD} /></span>
                     <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NOTTE.testo, lineHeight: 1.25, minWidth: 0 }}>{o.testo}</span>
                   </span>
-                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} />
+                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} notte={isMobile} />
                 </>
               )}
             </div>
@@ -71957,8 +71960,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               sempre lo stesso della consegna: si copia invece di riscriverlo */}
           {spedizioneAttiva && (
             <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, cursor: "pointer" }}>
-              <input type="checkbox" checked={fattComeSpedizione} onChange={(e) => setFattComeSpedizione(e.target.checked)} style={{ width: 15, height: 15 }} />
-              <span style={{ ...fontBody, fontSize: 11, color: NAVY }}>Stessi dati della spedizione</span>
+              <input type="checkbox" checked={fattComeSpedizione} onChange={(e) => setFattComeSpedizione(e.target.checked)} style={{ width: 15, height: 15, accentColor: isMobile ? GOLD : NAVY }} />
+              <span style={{ ...fontBody, fontSize: 11, color: NOTTE.testo }}>Stessi dati della spedizione</span>
             </label>
           )}
           {!copiaDaSpedizione && (
@@ -71979,11 +71982,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             </>
           )}
           {campiFatturaMancanti.length > 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: isMobile ? NOTTE.oro : "#C0392B", marginTop: 6 }}>
               Per la fattura manca: {campiFatturaMancanti.join(", ")}.
             </div>
           )}
-          <div style={{ ...fontBody, fontSize: 11, color: grigioCarrello, marginTop: 6 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: NOTTE.soffuso, marginTop: 6 }}>
             Alla conferma il cliente finisce in anagrafica: la prossima volta lo scegli dalla tendina qui sopra.
           </div>
         </div>
