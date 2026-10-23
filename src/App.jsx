@@ -24869,6 +24869,16 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
     const overlay = overlayRef.current;
     if (!overlay) return;
 
+    // Finche' la finestra e' aperta la pagina sotto non scorre. Su iPhone,
+    // arrivati in fondo alla finestra, il dito continuava a scorrere la
+    // pagina dietro — e la finestra sembrava bloccata (23/10/2026).
+    // `overscrollBehavior: contain` sull'overlay ferma la catena, e il
+    // body chiuso toglie quello che resta. Si rimette com'era alla
+    // chiusura: con due finestre una sopra l'altra, chiudere quella sopra
+    // non deve riaprire lo scroll sotto quella che resta.
+    const overflowPrima = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     // su iOS la tastiera che si apre riduce il "visual viewport" ma questo
     // overlay (position:fixed) resta alto quanto l'intera pagina: la parte
     // in basso finisce nascosta dietro la tastiera. Restringendo l'altezza
@@ -24896,13 +24906,19 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
     return () => {
       window.visualViewport?.removeEventListener("resize", aggiornaAltezza);
       overlay.removeEventListener("focusin", scrollaCampoInVista);
+      document.body.style.overflow = overflowPrima;
     };
   }, []);
 
+  // LO SPAZIO IN FONDO E' UN ELEMENTO, NON UN PADDING. Safari ignora il
+  // padding in fondo a un contenitore che scorre quando e' un flex: i
+  // 96 px (poi 170) non sono mai esistiti sul telefono, e le ultime righe
+  // finivano sotto il dock lo stesso. Un divisorio vuoto dopo la finestra
+  // lo rispetta chiunque. Per questo l'overlay e' una colonna.
   return (
     <div
       ref={overlayRef}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: `${paddingTop}px 20px ${paddingBasso}`, overflowY: "auto", zIndex: 1000 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", flexDirection: "column", padding: `${paddingTop}px 20px 0`, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", zIndex: 1000 }}
       onClick={onClose}
     >
       {/* "margin: auto" invece dell'allineamento in alto: una finestra
@@ -24912,9 +24928,9 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
           mai tagliata in cima, come succederebbe con align-items: center */}
       <div
         style={{
-          ...cardStyle, maxWidth, width: "100%", margin: "auto",
+          ...cardStyle, maxWidth, width: "100%", margin: "auto", flex: "0 0 auto",
           ...(scorrevole
-            ? { maxHeight: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }
+            ? { maxHeight: `calc(100% - ${paddingBasso})`, display: "flex", flexDirection: "column", overflow: "hidden" }
             : { height: "fit-content" }),
         }}
         onClick={(e) => e.stopPropagation()}
@@ -24936,6 +24952,7 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
           ? <div style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0, paddingTop: 12, marginRight: -6, paddingRight: 6 }}>{children}</div>
           : children}
       </div>
+      <div aria-hidden="true" data-campo="spazio-sotto-la-finestra" style={{ flex: "0 0 auto", width: "100%", height: paddingBasso }} />
     </div>
   );
 }
@@ -85660,5 +85677,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo,
+  PaginaOrdiniInArrivo, Modal,
 };
