@@ -71,6 +71,7 @@ const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx")
 import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
+import { separaCivico, pulisciCitta } from "./iscrizione/indirizzo-pezzi.js";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
@@ -68874,9 +68875,18 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // sta vendendo — sono i campi senza i quali il pacco non parte
       setSpedNome(toTitleCase(isc.nome || ""));
       setSpedCognome(toTitleCase(isc.cognome || ""));
-      setSpedIndirizzo(isc.indirizzo_residenza || isc.fattura_indirizzo || "");
-      setSpedCivico(isc.civico_residenza || isc.fattura_civico || "");
-      setSpedCitta(toTitleCase(isc.citta_residenza || isc.fattura_citta || ""));
+      // IL CIVICO STA SPESSO DENTRO LA VIA: gli indirizzi letti dai
+      // moduli cartacei sono una riga sola («Via monte pasubio 8a»), e
+      // la casella del civico e' vuota in 244 schede su 255. Il banco il
+      // civico lo pretende, e la master si trovava la spedizione bloccata
+      // con l'allieva scelta dall'elenco. Se il civico manca, lo si stacca
+      // dalla via; se c'e' gia', non si tocca niente.
+      const viaGrezza = isc.indirizzo_residenza || isc.fattura_indirizzo || "";
+      const civicoScritto = isc.civico_residenza || isc.fattura_civico || "";
+      const spezzato = civicoScritto ? { via: viaGrezza, civico: civicoScritto } : separaCivico(viaGrezza);
+      setSpedIndirizzo(spezzato.via);
+      setSpedCivico(spezzato.civico);
+      setSpedCitta(toTitleCase(pulisciCitta(isc.citta_residenza || isc.fattura_citta || "")));
       setSpedCap(isc.cap_residenza || isc.fattura_cap || "");
       // LA PROVINCIA DI RESIDENZA PRIMA DI QUELLA DI FATTURAZIONE.
       //

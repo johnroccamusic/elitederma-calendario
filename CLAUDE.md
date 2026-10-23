@@ -697,6 +697,17 @@ risposta storta esce `.../storage/v1undefined` — una stringa vera e un
 indirizzo che non esiste, che aperto sembra un documento rotto invece di
 una risposta sbagliata. L'ha trovato il banco di prova.
 
+### Il civico sta dentro la via (23/10/2026)
+
+Gli indirizzi letti dai moduli cartacei sono una riga sola («Via monte
+pasubio 8a»): su **255 iscritti con una via, 244 non hanno il civico a
+parte** e in 208 il numero sta in fondo alla via; 12 hanno la città
+sporca («, BELLARIA-IGEA MARINA, RN, ITALIA»). Il banco il civico lo
+pretende per spedire, quindi scegliendo l'allieva dall'elenco la
+spedizione risultava «senza dati». `src/iscrizione/indirizzo-pezzi.js`
+(`separaCivico`, `pulisciCitta`) lo stacca al volo quando la casella è
+vuota; **l'archivio non è stato corretto** — è una scelta del titolare.
+
 ### Una vendita con carta vuole la prova del pagamento (23/10/2026)
 
 Il 19/10 una master ha chiuso un carrello con «Carta» mentre il QR non
