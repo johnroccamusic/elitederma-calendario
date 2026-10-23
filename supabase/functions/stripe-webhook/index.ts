@@ -128,6 +128,18 @@ Deno.serve(async (req) => {
   }).eq("id", richiesta.id).eq("stato", "in_attesa");
   if (error) { console.error("Non sono riuscito a segnare il pagamento:", error.message); return new Response("Errore salvataggio", { status: 500 }); }
 
+  // Il link di riscossione paga una vendita che esiste gia' (vendita_id
+  // arriva da stripe-crea-pagamento). Quella vendita deve portare il
+  // codice dell'incasso come le vendite chiuse col QR al banco: e' da li'
+  // che Fatture da emettere e il dettaglio ordine capiscono che e' stata
+  // pagata. Solo se non ne ha gia' uno: un codice scritto non si riscrive.
+  if (richiesta.vendita_id) {
+    const { error: erroreVendita } = await sb.from("vendite_shop")
+      .update({ pagamento_codice: codice })
+      .eq("id", richiesta.vendita_id).is("pagamento_codice", null);
+    if (erroreVendita) console.error("Pagamento segnato, ma il codice non e' finito sulla vendita:", erroreVendita.message);
+  }
+
   // LA VENDITA NON LA SCRIVE QUESTO WEBHOOK, e non e' una svista.
   //
   // La scrive la schermata del POS, che resta in ascolto e registra appena

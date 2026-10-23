@@ -697,6 +697,21 @@ risposta storta esce `.../storage/v1undefined` — una stringa vera e un
 indirizzo che non esiste, che aperto sembra un documento rotto invece di
 una risposta sbagliata. L'ha trovato il banco di prova.
 
+### L'ordine sa se il link è stato pagato (23/10/2026)
+
+La cliente di POS-1792423132290 aveva pagato col link alle 16:37 e il
+dettaglio ordine proponeva ancora «Genera un link»: il pagamento stava
+su `pagamenti_pos`, legato per `vendita_id`, e la scheda non lo guardava.
+Ora `ModaleDettaglioOrdine` legge le richieste della vendita (per
+`vendita_id` o per `pagamento_codice`): pagata → riquadro verde
+**Pagamento ricevuto** con ora, importo e codice al posto del tasto; in
+attesa e non scaduta → si rimostra *quel* link invece di generarne un
+secondo. E `stripe-webhook` (v11) scrive `vendite_shop.pagamento_codice`
+quando paga una richiesta con `vendita_id`, se la vendita non ne ha già
+uno: da lì Fatture da emettere la toglie dalle «senza codice». Modal:
+spazio in fondo da 96 a 170 px su telefono, perché col dock aperto le
+ultime righe finivano sotto.
+
 ### Il civico sta dentro la via (23/10/2026)
 
 Gli indirizzi letti dai moduli cartacei sono una riga sola («Via monte

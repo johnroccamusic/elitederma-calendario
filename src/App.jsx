@@ -24860,7 +24860,10 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
   // finestra che arriva a filo del bordo ci finisce sotto i suoi tasti —
   // "Copia immagine" e "Scarica" della stampa calendario sparivano dietro
   // il dock. Si tiene sempre dello spazio in fondo, oltre alla safe area.
-  const paddingBasso = isMobile ? "calc(env(safe-area-inset-bottom, 0px) + 96px)" : `${paddingTop}px`;
+  // 96px non bastavano: col dock aperto (linguetta + fila di tasti) le
+  // ultime righe del dettaglio ordine finivano sotto, e per leggerle
+  // bisognava richiudere il dock (23/10/2026).
+  const paddingBasso = isMobile ? "calc(env(safe-area-inset-bottom, 0px) + 170px)" : `${paddingTop}px`;
 
   useEffect(() => {
     const overlay = overlayRef.current;
@@ -52799,6 +52802,36 @@ export function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate
     return () => { annullato = true; };
   }, [vendita?.id]);
 
+  // L'INCASSO COL LINK, letto da `pagamenti_pos`. Il 23/10/2026 la cliente
+  // di POS-1792423132290 aveva pagato alle 16:37 e la scheda proponeva
+  // ancora «Genera un link»: il pagamento stava sulla richiesta, legata
+  // alla vendita per `vendita_id`, e la scheda non la guardava. Si
+  // cercano le richieste di questa vendita (per vendita_id o per codice):
+  // se una e' pagata, lo si dice al posto del tasto; se una e' ancora in
+  // attesa e non scaduta, si mostra quella invece di farne una seconda.
+  const [incassoQr, setIncassoQr] = useState(null);
+  useEffect(() => {
+    if (!vendita?.id || vendita?.origine !== "pos") return;
+    let annullato = false;
+    const filtro = vendita.pagamento_codice
+      ? `vendita_id.eq.${vendita.id},codice.eq.${vendita.pagamento_codice}`
+      : `vendita_id.eq.${vendita.id}`;
+    supabase.from("pagamenti_pos")
+      .select("codice, stato, importo, pagato_il, scade_il, stripe_session_url, richiede_fattura, fattura_numero, creato_il")
+      .or(filtro).order("creato_il", { ascending: false })
+      .then(({ data }) => {
+        if (annullato) return;
+        const righe = Array.isArray(data) ? data : [];
+        const pagata = righe.find((r) => r.pagato_il);
+        const inAttesa = righe.find((r) => r.stato === "in_attesa" && (!r.scade_il || new Date(r.scade_il) > new Date()));
+        setIncassoQr(pagata || null);
+        if (!pagata && inAttesa && inAttesa.stripe_session_url) {
+          setLinkPagamento({ codice: inAttesa.codice, indirizzo: inAttesa.stripe_session_url, scadeIl: inAttesa.scade_il, giaMandato: true });
+        }
+      });
+    return () => { annullato = true; };
+  }, [vendita?.id, vendita?.origine, vendita?.pagamento_codice]);
+
   const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
   // Lo sconto di ogni riga. Le vendite dal 12/09/2026 lo portano scritto
   // (sconto_riga, prezzo_listino); quelle prima hanno solo il totale
@@ -53001,15 +53034,31 @@ export function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate
           Solo in amministrazione, solo sulle vendite al banco, e solo su
           una vendita vera con un totale: su un reso o su un omaggio non
           c'e' niente da incassare. */}
+      {/* pagato col link: lo si dice al posto del tasto, con l'ora e il
+          codice, cosi' chi apre l'ordine lo verifica da qui e non deve
+          cercarlo altrove */}
+      {vendita?.origine === "pos" && incassoQr?.pagato_il && (
+        <div data-campo="pagamento-ricevuto" style={{ border: "1px solid #2E7D32", borderRadius: 10, padding: "11px 12px", marginBottom: 14, background: "#E3F3E5" }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Pagamento ricevuto</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
+            <b>{fmtEuroErp2(incassoQr.importo)}</b> con carta tramite il link, il{" "}
+            {new Date(incassoQr.pagato_il).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+            {" "}· codice <b style={{ letterSpacing: 1 }}>{incassoQr.codice}</b>
+            {incassoQr.fattura_numero ? ` · fattura ${incassoQr.fattura_numero}` : incassoQr.richiede_fattura ? " · fattura chiesta: Amministrazione → Fatture da emettere" : ""}
+          </div>
+        </div>
+      )}
       {puoRiscuotere && vendita?.origine === "pos" && (vendita?.tipo_movimento || "vendita") === "vendita"
-        && Number(vendita?.totale) > 0 && (
+        && Number(vendita?.totale) > 0 && !incassoQr?.pagato_il && (
         <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "11px 12px", marginBottom: 14, background: "#FBFAF7" }}>
           <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>Il pagamento non è arrivato?</div>
 
           {linkPagamento ? (
             <div>
               <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
-                Link pronto per <b>{fmtEuroErp2(vendita.totale)}</b>. Mandalo alla persona: vale 24 ore.
+                {linkPagamento.giaMandato
+                  ? <>Un link per <b>{fmtEuroErp2(vendita.totale)}</b> è già stato generato e non è ancora stato pagato{linkPagamento.scadeIl ? ` (vale fino al ${new Date(linkPagamento.scadeIl).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })})` : ""}. Rimandalo, non serve farne un altro.</>
+                  : <>Link pronto per <b>{fmtEuroErp2(vendita.totale)}</b>. Mandalo alla persona: vale 24 ore.</>}
               </div>
               <div style={{ ...fontBody, fontSize: 12, color: NAVY, wordBreak: "break-all", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", marginTop: 7 }}>
                 {linkPagamento.indirizzo}
