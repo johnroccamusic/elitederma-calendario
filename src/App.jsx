@@ -69945,7 +69945,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     placeholder={acquistoPersonale ? "Acquisto personale: nessun altro codice" : scontoCorsoAttivo && couponDellEdizione(corsoPosId) ? "Spegni lo sconto del corso" : referralPersonaleInUso ? "Spegni il tuo referral" : "Codice sconto extra"}
                   />
                   <button onClick={() => { applicaCodiceCoupon(""); setCodiceExtraAperto(false); }} title="Chiudi il codice extra"
-                    style={{ background: "none", border: "none", color: isMobile ? "#E8DFC9" : MUTED, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
+                    style={{ background: "none", border: "none", color: NOTTE.soffuso, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2, flexShrink: 0 }}>✕</button>
                 </div>
                 {!(scontoCorsoAttivo && couponDellEdizione(corsoPosId)) && couponCodiceTesto.trim() !== "" && (
                   couponAttivo ? (
@@ -71061,11 +71061,16 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // sono solo i colori di cio' che poggia direttamente sul blu.
   // Da computer no (deciso subito dopo): il pannello laterale resta
   // chiaro, e la stessa tavolozza vale i colori di sempre.
+  // Il blu notte «era troppo scuro» (stesso giorno): sul telefono il
+  // foglio e' un azzurro molto chiaro, i testi tornano navy e gli accenti
+  // restano oro. La tavolozza e' la stessa, cambiano i valori.
   const NOTTE = isMobile
-    ? { testo: "#F6F1E6", etichetta: "#E8DFC9", soffuso: "rgba(246,241,230,0.72)", oro: "#E4CE9B", pannello: "#16254A", bordo: "rgba(232,223,201,0.35)",
-        avvisoSfondo: "#16254A", avvisoBordo: GOLD, strisciaSfondo: "#16254A", incassoSfondo: "#16254A", incassoBordo: "rgba(232,223,201,0.35)",
-        riquadroSfondo: "transparent", riquadroPadding: "4px 0 0", bordoSconto: GOLD, bordoIncassa: `1.5px solid ${GOLD}`, verde: "#9BD5A3" }
-    : { testo: NAVY, etichetta: MUTED, soffuso: MUTED, oro: "#8A6D1D", pannello: "#F4F6FB", bordo: CREAM_BORDER,
+    ? { scuro: false, sfondo: "#EAF2FB", testo: NAVY, etichetta: "#3E5178", soffuso: "#5B6B8A", oro: "#8A6D1D", errore: "#C0392B", accento: NAVY,
+        pannello: "#DCE7F5", bordo: "#C3D4EA",
+        avvisoSfondo: "#FDF6E6", avvisoBordo: "#EBD9AE", strisciaSfondo: "#FFFFFF", incassoSfondo: "#DCE7F5", incassoBordo: "#C3D4EA",
+        riquadroSfondo: "transparent", riquadroPadding: "4px 0 0", bordoSconto: GOLD, bordoIncassa: `1.5px solid ${GOLD}`, verde: "#2E7D32" }
+    : { scuro: false, sfondo: "#fff", testo: NAVY, etichetta: MUTED, soffuso: MUTED, oro: "#8A6D1D", errore: "#C0392B", accento: NAVY,
+        pannello: "#F4F6FB", bordo: CREAM_BORDER,
         avvisoSfondo: "#FDF6E6", avvisoBordo: "#EBD9AE", strisciaSfondo: "linear-gradient(180deg, #FFFFFF 0%, #FCFAF6 100%)", incassoSfondo: "#F4F6FB", incassoBordo: "#DEE4F0",
         riquadroSfondo: BG, riquadroPadding: 12, bordoSconto: CREAM_BORDER, bordoIncassa: "none", verde: "#2E7D32" };
   const etichettaPos = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 };
@@ -71128,7 +71133,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               <input
                 type="checkbox" checked={scontoFieraAttivo} disabled={!scontoFieraDisponibile}
                 onChange={(e) => setScontoFiera(e.target.checked)}
-                style={{ width: 18, height: 18, flex: "0 0 auto", marginTop: 1, accentColor: isMobile ? GOLD : NAVY }}
+                style={{ width: 18, height: 18, flex: "0 0 auto", marginTop: 1, accentColor: NOTTE.accento }}
               />
               <span style={{ minWidth: 0 }}>
                 <span style={{ ...fontDisplay, display: "block", fontSize: 12.5, fontWeight: 700, color: NOTTE.testo, marginBottom: 2 }}>
@@ -71284,7 +71289,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 type="checkbox"
                 checked={attribuisciAllaMaster}
                 onChange={(e) => setAttribuisciAllaMaster(e.target.checked)}
-                style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: isMobile ? GOLD : NAVY, cursor: "pointer" }}
+                style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: NOTTE.accento, cursor: "pointer" }}
               />
               <span style={{ minWidth: 0 }}>
                 <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NOTTE.testo }}>
@@ -71689,7 +71694,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       ); })()}
 
       {scontoApplicato > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: isMobile ? "#F2A79B" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: NOTTE.errore, marginBottom: isMobile ? 6 : 10 }}>
           <span>Sconto applicato</span><span>− {fmtEuroErp2(scontoApplicato)}</span>
         </div>
       )}
@@ -71873,7 +71878,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     <o.Icona size={19} color={GOLD} />
                   </span>
                   <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NOTTE.testo, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
-                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} notte={isMobile} />
+                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} notte={NOTTE.scuro} />
                 </>
               ) : (
                 <>
@@ -71886,7 +71891,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     <span style={{ display: "inline-flex", flexShrink: 0 }}><o.Icona size={isMobile ? 15 : 18} color={GOLD} /></span>
                     <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NOTTE.testo, lineHeight: 1.25, minWidth: 0 }}>{o.testo}</span>
                   </span>
-                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} notte={isMobile} />
+                  <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} notte={NOTTE.scuro} />
                 </>
               )}
             </div>
@@ -71926,7 +71931,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           </div>
 
           {campiClienteMancanti.length > 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: isMobile ? NOTTE.oro : "#C0392B", marginTop: 6 }}>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NOTTE.errore, marginTop: 6 }}>
               Completare i dati cliente: {campiClienteMancanti.join(", ")}.
             </div>
           )}
@@ -71964,7 +71969,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               sempre lo stesso della consegna: si copia invece di riscriverlo */}
           {spedizioneAttiva && (
             <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, cursor: "pointer" }}>
-              <input type="checkbox" checked={fattComeSpedizione} onChange={(e) => setFattComeSpedizione(e.target.checked)} style={{ width: 15, height: 15, accentColor: isMobile ? GOLD : NAVY }} />
+              <input type="checkbox" checked={fattComeSpedizione} onChange={(e) => setFattComeSpedizione(e.target.checked)} style={{ width: 15, height: 15, accentColor: NOTTE.accento }} />
               <span style={{ ...fontBody, fontSize: 11, color: NOTTE.testo }}>Stessi dati della spedizione</span>
             </label>
           )}
@@ -71986,7 +71991,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             </>
           )}
           {campiFatturaMancanti.length > 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: isMobile ? NOTTE.oro : "#C0392B", marginTop: 6 }}>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NOTTE.errore, marginTop: 6 }}>
               Per la fattura manca: {campiFatturaMancanti.join(", ")}.
             </div>
           )}
@@ -72005,7 +72010,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               { v: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota },
               { v: "buono_amazon", l: "Buono Amazon", sotto: "Codice regalo", Icona: IconaTileOmaggio },
             ].map((m) => (
-              <SceltaPos notte={isMobile}
+              <SceltaPos notte={NOTTE.scuro}
                 key={m.v} scelto={metodoPagamento === m.v} Icona={m.Icona}
                 titolo={m.l} sotto={m.sotto} isMobile={isMobile}
                 onClick={() => setMetodoPagamento(m.v)}
@@ -72032,12 +72037,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 <>
                   <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
                   <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
-                    <SceltaPos notte={isMobile}
+                    <SceltaPos notte={NOTTE.scuro}
                       scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
                       titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
                       onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
                     />
-                    <SceltaPos notte={isMobile}
+                    <SceltaPos notte={NOTTE.scuro}
                       scelto={modoIncassoPos === "qr"} Icona={IconaAnelloLink}
                       titolo="Carta / Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
                       onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}
@@ -72615,7 +72620,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: "absolute", left: 0, right: 0, bottom: 0, top: 52, display: "flex", flexDirection: "column",
-                background: NAVY, borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)",
+                background: NOTTE.sfondo, borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)",
               }}
             >
               {/* la striscia in cima richiude col tocco, ma non lo dice:
@@ -72639,8 +72644,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               </button>
               <div style={{ padding: "4px 16px calc(env(safe-area-inset-bottom, 0px) + 20px)", overflowY: "auto", flex: 1, minHeight: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F6F1E6", color: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <IconaBorsaShop size={17} color={GOLD} />
+                  <span style={{ width: 34, height: 34, borderRadius: 10, background: NAVY, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <IconaBorsaShop size={17} color="#fff" />
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
                     <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NOTTE.testo, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</span>
