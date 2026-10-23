@@ -69361,7 +69361,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       ripristinaCarrello(c);
       setCarrelloSospesoId(c.id);
       setPannelloSospesiAperto(false);
-      if (isMobile) setCarrelloEspanso(true);
+      // NON si spalanca piu' il foglio del carrello (23/10/2026). Sul
+      // telefono copriva tutto il catalogo, e chi riapriva un carrello
+      // salvato per aggiungerci un prodotto non trovava piu' i prodotti:
+      // «quando lo riapri non puoi aggiungere». Il carrello resta nella
+      // barra in fondo, e il catalogo davanti, come per una vendita nuova.
       return;
     }
     // nessun carrello indicato: ne ha piu' d'uno, e la scelta e' sua.
@@ -70314,6 +70318,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // vendita, e il recupero automatico guarda anche qui prima di
       // registrarne un'altra.
       pagamento_codice: richiestaQr?.codice || null,
+      // L'amministrazione ha battuto sul terminale e visto lo scontrino:
+      // e' l'unica carta che si registra senza un pagamento col QR, e il
+      // database (registra_vendita_pos) pretende questo segno per
+      // accettarla. Non e' una colonna: la funzione lo legge e lo toglie.
+      terminale_fisico: !omaggioAttivo && metodoPagamento === "pos" && modoIncassoPos === "esterno",
       cliente_nome: clientePos.trim() || null,
       tipo_movimento: omaggioAttivo ? "omaggio" : "vendita",
       // Chi "ha fatto" la vendita, cioe' a chi contano punti e
@@ -70426,14 +70435,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       caricaClientiFattura();
     }
 
-    // pagato: non e' piu' sospeso
-    if (carrelloSospesoId) {
-      const primaDellaVendita = sospesiAttuali();
-      const senzaQuestoCarrello = primaDellaVendita.filter((c) => c.id !== carrelloSospesoId);
-      segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, primaDellaVendita, senzaQuestoCarrello);
-      salvaCarrelliSospesi(senzaQuestoCarrello);
-      setCarrelloSospesoId(null);
-    }
+    // IL CARRELLO SALVATO NON SI TOGLIE QUI. Si toglieva, prima ancora di
+    // sapere se la vendita si sarebbe scritta: il 19/10/2026 la scrittura
+    // e' fallita, la coda ha preso il tentativo e la master ha trovato il
+    // suo carrello sparito e niente nello storico. Si toglie piu' sotto,
+    // a vendita registrata; fino ad allora resta dov'era, da riaprire.
+    const sospesoDaChiudere = carrelloSospesoId;
+    setCarrelloSospesoId(null);
     // LE PROVVIGIONI SPESE SI SEGNANO COME PAGATE.
     // Scrivere uno scarico "periodici" e' lo stesso gesto che si fa in
     // Amministrazione quando si paga una master: i punti del periodo
@@ -70524,14 +70532,22 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           numero_ordine: datiVendita.numero_ordine || null,
           operatore: nomeOperatore || null,
         });
+        const eraSalvato = sospesoDaChiudere ? "\nIl carrello che avevi salvato è ancora fra i sospesi: non è stato toccato." : "";
         window.alert(chiAmministra
           ? "Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message
-            + "\n\nNon è andata persa: la trovi in Vendite al banco → Advisor, e da lì la registri con un clic."
-          : "Attenzione: l'incasso c'è ma la vendita non è stata registrata."
-            + "\n\nNon è andata persa e non devi rifarla: è stata messa da parte e la registra l'amministrazione."
+            + "\n\nNon è andata persa: la trovi in Vendite al banco → Advisor, e da lì la registri con un clic." + eraSalvato
+          : "Attenzione: la vendita non è stata registrata: " + erroreVendita.message
+            + "\n\nÈ stata messa da parte per l'amministrazione, che la controlla prima di registrarla." + eraSalvato
             + "\nSegnalalo in amministrazione citando l'ora, così la ritrovano subito.");
         ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos_non_riuscite"]);
         return;
+      }
+      // scritta davvero: ADESSO il carrello salvato ha finito il suo lavoro
+      if (sospesoDaChiudere) {
+        const primaDellaVendita = sospesiAttuali();
+        const senzaQuestoCarrello = primaDellaVendita.filter((c) => c.id !== sospesoDaChiudere);
+        segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, primaDellaVendita, senzaQuestoCarrello);
+        salvaCarrelliSospesi(senzaQuestoCarrello);
       }
       const venditaCreata = { id: esito?.vendita_id, numero_ordine: esito?.numero_ordine };
       // La vendita c'e'. Se lo scarico era andato storto lo si dice adesso,
@@ -71946,6 +71962,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
 
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: (msg.startsWith("Vendita registrata") || msg.startsWith("Omaggio registrato")) ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
+      {!omaggioAttivo && metodoPagamento === "pos" && modoIncassoPos !== "esterno" && statoQr !== "pagato" && carrello.length > 0 && (
+        <div data-campo="carta-senza-pagamento" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "5px 10px", marginBottom: 8, lineHeight: 1.45 }}>
+          Con la carta la vendita si chiude da sola quando il pagamento arriva dal QR o dal link: non c'è niente da premere. Se la cliente ha pagato in un altro modo, cambia il metodo qui sopra.
+        </div>
+      )}
       {carrelloSospesoId && (
         <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "5px 10px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ flex: 1, minWidth: 0 }}>Stai lavorando su un carrello sospeso: pagalo o risalvalo per ritrovarlo dopo.</span>
@@ -71957,7 +71978,21 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         // incassa. Scalarne una parte vorrebbe dire tenere un resto, e un
         // resto non ha dove stare — il taglio dello scarico e' uno solo.
         const carrelloTroppoPiccolo = provvigioniDaUsare > 0 && provvigioniScalabili === 0;
-        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim()) || carrelloTroppoPiccolo;
+        // CON LA CARTA, SENZA LA PROVA DEL PAGAMENTO, NON SI INCASSA.
+        //
+        // Il 19/10/2026 una master ha premuto questo tasto con «Carta»
+        // scelta e il QR mai nato: il carrello si e' svuotato, il
+        // magazzino e' sceso, la vendita e' entrata in coda e il
+        // ritentativo l'ha registrata e spedita — 117,13 € mai incassati,
+        // pacco partito il giorno dopo. Per chi non ha il terminale la
+        // carta E' il QR, e il QR chiude la vendita da solo quando i
+        // soldi arrivano: questo tasto, con la carta, serve solo a chi
+        // ha battuto sul POS esterno. Il database rifiuta comunque
+        // (registra_vendita_pos): qui si evita di arrivarci col carrello
+        // gia' svuotato.
+        const cartaSenzaPagamento = !omaggioAttivo && metodoPagamento === "pos"
+          && modoIncassoPos !== "esterno" && statoQr !== "pagato";
+        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim()) || carrelloTroppoPiccolo || cartaSenzaPagamento;
         return (
           <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 10 }}>
           <button
@@ -72310,6 +72345,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)",
               }}
             >
+              {/* la striscia in cima richiude col tocco, ma non lo dice:
+                  chi vuole aggiungere un prodotto deve sapere che i
+                  prodotti stanno sotto questo foglio */}
+              <button type="button" data-niente-ombra onClick={() => setCarrelloEspanso(false)}
+                style={{ alignSelf: "flex-start", margin: "10px 14px 0", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, padding: 0 }}>
+                ← Torna ai prodotti per aggiungerne
+              </button>
               {/* niente gesti da indovinare: un tasto largo quanto il
                   pannello, con la freccia e la parola. Si chiude anche
                   toccando fuori, ma questo si vede */}

@@ -697,6 +697,33 @@ risposta storta esce `.../storage/v1undefined` — una stringa vera e un
 indirizzo che non esiste, che aperto sembra un documento rotto invece di
 una risposta sbagliata. L'ha trovato il banco di prova.
 
+### Una vendita con carta vuole la prova del pagamento (23/10/2026)
+
+Il 19/10 una master ha chiuso un carrello con «Carta» mentre il QR non
+era mai nato (Stripe aveva rifiutato la richiesta). Il banco ha
+**svuotato il carrello e scaricato il magazzino prima di scrivere**,
+`registra_vendita_pos` ha rifiutato la riga per una colonna NOT NULL
+nuova (`fattura_manuale`, aggiunta il 18/10), la vendita è finita nella
+coda dei ritentativi, e alle 16:16 il ritentativo l'ha registrata e ha
+creato l'ordine di spedizione: **117,13 € mai incassati, pacco partito
+il giorno dopo** (POS-1792423132290, Lia Patania). Nessuno dei tre
+pezzi chiedeva «ma i soldi sono arrivati?».
+
+Da oggi lo chiede il **database**, che nessuna strada aggira: una
+vendita `metodo_pagamento = 'pos'` si registra solo se porta un
+`pagamento_codice` che in `pagamenti_pos` risulta **pagato**, oppure se
+è marcata `terminale_fisico` — il POS esterno dell'amministrazione, che
+il banco scrive solo quando chi amministra ha scelto «POS esterno».
+Altrimenti `PAGAMENTO_NON_PROVATO`. Il ritentativo, davanti a quel
+rifiuto, **si ferma** (`arreso`), scrive un avviso
+`vendita_senza_pagamento` e lascia decidere una persona dall'Advisor.
+Il banco non arriva nemmeno lì: con la carta e senza pagamento il tasto
+«Incassa vendita» è spento, con scritto perché. E **il carrello salvato
+non si toglie più prima che la vendita sia scritta**.
+
+Contanti e buoni non cambiano: lì l'incasso lo constata chi sta al
+banco.
+
 ### «Assegnazione kit»: senza pacchetto vuol dire senza pacchetto (22/10/2026)
 
 Fino a oggi in quell'elenco finiva anche chi il pacchetto ce l'aveva, se
