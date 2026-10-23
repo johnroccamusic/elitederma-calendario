@@ -55848,7 +55848,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
               <thead>
                 <tr>
                   {(origine === "pos"
-                    ? [{ c: "ordine", l: "Ordine" }, { c: "data", l: "Data" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }, { c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }, { c: "stato", l: "Stato" }]
+                    ? [{ c: "ordine", l: "Ordine" }, { c: "data", l: "Data" }, { c: "totale", l: "Pagato" }, { c: "venditore", l: "Venditore" }, { c: "frangente", l: "Frangente" }, { c: "metodo", l: "Incasso" }, { c: "stato", l: "Stato" }]
                     : [{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "listino", l: "Totale" }, { c: "totale", l: "Pagato" }]).map((th) => (
                     <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
@@ -55880,7 +55880,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                           {/* "Totale" e' il listino, "Prezzo pagato" quello che e'
                               entrato in cassa dopo gli sconti; senza sconti i due
                               numeri coincidono, ed e' giusto che si veda */}
-                          {(() => {
+                          {/* al banco il listino barrato non serve: conta quello che e' entrato (23/10/2026) */}
+                          {origine !== "pos" && (() => {
                             const listino = totaleListinoVendita(v);
                             const scontata = round2(listino - (Number(v.totale) || 0)) > 0;
                             return (
