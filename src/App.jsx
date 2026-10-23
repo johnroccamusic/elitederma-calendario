@@ -71716,6 +71716,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             // seconda riga e il totale. Il riquadro giallo sopra il
             // carrello lo diceva, ma a parole e tre dita piu' in alto.
             ...(provvigioniScalabili > 0 ? [{ etichetta: "Provvigioni usate", valore: provvigioniScalabili, negativo: true }] : []),
+            // la spedizione e' una riga del conto come le altre, non una
+            // nota piccola sotto il totale (23/10/2026): il subtotale non
+            // la contiene, imponibile e IVA si'
+            ...(speseSpedizione > 0 ? [{ etichetta: "Spedizione", valore: speseSpedizione }] : []),
             // in contanti o buono Amazon senza fattura l'IVA non c'e': le
             // righe Imponibile e IVA non si mostrano proprio
             ...(senzaIva ? [] : [{ etichetta: "Imponibile", valore: imponibile }, { etichetta: "IVA 22%", valore: iva }]),
@@ -71735,7 +71739,6 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: isMobile ? 124 : 190 }}>
               <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
               <span style={{ ...fontDisplay, fontSize: isMobile ? 24 : 34, fontWeight: 700, color: NAVY, marginTop: 4, lineHeight: 1.1 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
-              {speseSpedizione > 0 && <span style={{ ...fontBody, fontSize: 10, color: grigioCarrello }}>di cui spedizione {fmtEuroErp2(speseSpedizione)}</span>}
               {puntiCarrello && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginTop: 3 }}>Punti maturati {fmtPunti(puntiCarrello.maturati)}</span>}
             </div>
           </>
