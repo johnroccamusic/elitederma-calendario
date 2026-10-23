@@ -68950,7 +68950,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // spedizione a domicilio: quando il prodotto venduto non è
   // fisicamente con l'operatore al corso, la vendita resta comunque
   // registrata ma genera un ordine per la sede (spedizioni_pos)
-  const [spedizioneAttiva, setSpedizioneAttiva] = useState(false);
+  // ACCESA DI DEFAULT (23/10/2026, deciso dal titolare): quasi tutto quello
+  // che si vende al banco parte col corriere, e una vendita senza spese di
+  // spedizione dimenticata costa 6,90 € ogni volta. Chi e' a Roma e
+  // consegna a mano la spegne.
+  const [spedizioneAttiva, setSpedizioneAttiva] = useState(true);
   const campoSped = { ...inputStyle, padding: "5px 8px", fontSize: 12, borderRadius: 7 };
   // le stesse ombre del resto dell'app: quella delle aree dati sul
   // riquadro dei conti, quella dei tondi bianchi back/home (che la
@@ -71821,7 +71825,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       }}>
         {[
           ...(puoOmaggiare ? [{ id: "pos-omaggio", Icona: IconaRegalo, testo: "Omaggio", acceso: omaggioAttivo, cambia: setOmaggioAttivo }] : []),
-          { id: "pos-spedizione", Icona: IconaCamionConsegna, testo: "Aggiungi spese spedizione", acceso: spedizioneAttiva, cambia: setSpedizioneAttiva },
+          { id: "pos-spedizione", Icona: IconaCamionConsegna, testo: "Spese di spedizione", acceso: spedizioneAttiva, cambia: setSpedizioneAttiva },
           { id: "pos-richiede-fattura", Icona: IconaCatDocumento, testo: "Richiede fattura", acceso: fattAttiva, cambia: setFattAttiva },
           // L'id resta quello di prima: e' l'identita' con cui il colore
           // dato a mano in Aspetto dell'app e' stato salvato, e cambiarla
@@ -71973,7 +71977,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           <div style={etichettaPos}>Come paga?</div>
           <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap", marginBottom: isMobile ? 10 : 14 }}>
             {[
-              { v: "pos", l: "Carta", sotto: "Bancomat / Carta di credito", Icona: IconaCartaPos },
+              { v: "pos", l: "Carta/Stripe", sotto: "QR code o link", Icona: IconaCartaPos },
               { v: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota },
               { v: "buono_amazon", l: "Buono Amazon", sotto: "Codice regalo", Icona: IconaTileOmaggio },
             ].map((m) => (
