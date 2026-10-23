@@ -52898,6 +52898,13 @@ export function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate
     <Modal title={`Ordine #${vendita?.numero_ordine || vendita?.woo_order_id || ""}`} onClose={onChiudi} maxWidth={720}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
         {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 10, padding: "3px 10px" }}>{st.etichetta}</span>}
+        {/* pagato col link o col QR: si vede dalla prima riga, senza
+            scorrere fino al riquadro in fondo */}
+        {incassoQr?.pagato_il && (
+          <span data-campo="pastiglia-pagato" title={`Codice ${incassoQr.codice}`} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 10, padding: "3px 10px" }}>
+            ✓ Pagato {new Date(incassoQr.pagato_il).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>{etichettaMovimento}</span>
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}</span>
       </div>

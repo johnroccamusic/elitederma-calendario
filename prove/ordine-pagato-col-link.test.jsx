@@ -36,12 +36,17 @@ describe("il dettaglio ordine e il link di pagamento", () => {
     expect(riquadro.textContent).toContain("16:37");
     expect(p.tasto("Genera un link di pagamento")).toBeUndefined();
     expect(p.testo()).not.toContain("Il pagamento non è arrivato?");
+    // e in cima, accanto a «Completato», la pastiglia: si vede senza scorrere
+    const pastiglia = p.nodo.querySelector('[data-campo="pastiglia-pagato"]');
+    expect(pastiglia.textContent).toContain("Pagato");
+    expect(pastiglia.textContent).toContain("16:37");
     await p.smonta();
   });
 
   it("link in attesa: si rimostra quello, senza farne un altro", async () => {
     const p = await apriCon([{ codice: "AB12CD", stato: "in_attesa", importo: 117.13, pagato_il: null, scade_il: "2099-01-01T00:00:00Z", stripe_session_url: "https://stripe/attesa", richiede_fattura: false, fattura_numero: null, creato_il: "2026-10-23T08:20:00Z" }]);
     expect(p.nodo.querySelector('[data-campo="pagamento-ricevuto"]')).toBeNull();
+    expect(p.nodo.querySelector('[data-campo="pastiglia-pagato"]')).toBeNull();
     expect(p.testo()).toContain("già stato generato");
     expect(p.testo()).toContain("AB12CD");
     expect(p.testo()).toContain("https://stripe/attesa");
