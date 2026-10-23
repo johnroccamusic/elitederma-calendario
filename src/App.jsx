@@ -53422,7 +53422,15 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 // quella dello shop, ma i dati del cliente arrivano da quanto scritto al
 // banco (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito —
 // c'è solo da dire se il pacco è partito
-function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, onSegnaConsegnata, onButtaProva, occupato, isMobile, presi = {}, onSegnaRiga }) {
+function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, onSegnaConsegnata, onButtaProva, onVerificaPagamento, occupato, isMobile, presi = {}, onSegnaRiga }) {
+  // IL BUONO AMAZON SI VERIFICA QUI. Al banco nessuno controlla il buono:
+  // e' una dichiarazione come il contante, ma il pacco poi parte. Quindi
+  // l'ordine arriva in logistica con «In attesa di verifica pagamento», e
+  // «Spedita» resta spento finche' qualcuno non preme quel tasto. La
+  // verifica sta sulla vendita (chi e quando), e il database rifiuta
+  // comunque il passaggio a spedito senza di lei.
+  const buonoAmazon = vendita?.metodo_pagamento === "buono_amazon";
+  const pagamentoDaVerificare = buonoAmazon && !vendita?.pagamento_verificato_il;
   const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
   // le righe gia' consegnate in aula non si prendono dallo scaffale: fuori
   // dal conteggio, altrimenti "tutto preso" non arriverebbe mai
@@ -53541,6 +53549,31 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
           i due tasti la farebbero solo sembrare un pacco che non esiste */}
       {!senzaSpedizione && (
         <>
+        {buonoAmazon && (pagamentoDaVerificare ? (!spedita && (
+          <div style={{ margin: "20px 0 4px", maxWidth: 360 }}>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>Pagamento</div>
+            <button
+              type="button" data-campo="verifica-pagamento"
+              onClick={occupato ? undefined : onVerificaPagamento}
+              title="Controlla che il buono Amazon sia stato riscattato e copra l'ordine, poi premi"
+              style={{
+                ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "9px 12px", width: "100%",
+                cursor: occupato ? "default" : "pointer", background: "#FCF3D4", border: "1px solid #E0A72B", color: "#B4621A",
+              }}
+            >
+              In attesa di verifica pagamento
+            </button>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+              Buono Amazon da {Number(vendita?.totale || 0).toFixed(2).replace(".", ",")} €: controlla che sia stato riscattato e che copra l'ordine. Senza verifica il pacco non parte.
+            </div>
+          </div>
+        )) : (
+          <div data-campo="pagamento-verificato" style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #2E7D32", borderRadius: 9, padding: "7px 12px", margin: "20px 0 0", maxWidth: 360 }}>
+            ✓ Pagamento verificato
+            {vendita?.pagamento_verificato_da ? ` da ${vendita.pagamento_verificato_da}` : ""}
+            {vendita?.pagamento_verificato_il ? ` il ${new Date(vendita.pagamento_verificato_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}` : ""}
+          </div>
+        ))}
         <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato della spedizione</div>
         <div style={{ display: "flex", gap: 8, alignItems: "stretch", maxWidth: 360 }}>
           <div style={{
@@ -53552,12 +53585,13 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
             <span>Da spedire</span>
           </div>
           <button
-            onClick={spedita || occupato ? undefined : onSegnaSpedita}
-            title={spedita ? "Già spedita" : "Segna il pacco come partito"}
+            onClick={spedita || occupato || pagamentoDaVerificare ? undefined : onSegnaSpedita}
+            title={spedita ? "Già spedita" : pagamentoDaVerificare ? "Prima verifica il buono Amazon, poi il pacco può partire" : "Segna il pacco come partito"}
+            aria-disabled={pagamentoDaVerificare || undefined}
             style={{
               ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
               lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-              cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
+              cursor: spedita || occupato || pagamentoDaVerificare ? "default" : "pointer", opacity: occupato || pagamentoDaVerificare ? 0.5 : 1,
               background: spedita ? "#E3F3E5" : "#F2F2F4", border: `1px solid ${spedita ? "#2E7D32" : "#E2E2E7"}`, color: spedita ? "#2E7D32" : "#8B8FA3",
             }}
           >
@@ -54043,7 +54077,7 @@ function PannelloAdvisorSpedizioni({ isMobile, ricarica, onCambiaConto }) {
 // state consegnate a mano quando sono state fatte, e nessuno le aveva
 // registrate come consegnate perche' non c'era niente da registrare.
 const INIZIO_PREPARAZIONI_SEDE = "2026-10-05";
-function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, syncEsiti = [], ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
+function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, syncEsiti = [], ruoloUtente, utenteLoggato, ricarica, onBack, titolo = "Ordini in arrivo" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico | advisor
   const [contoAdvisor, setContoAdvisor] = useState(0);
@@ -54327,9 +54361,35 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
     setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[vendita.id]; return nuovo; });
   }
 
+  // IL BUONO AMAZON: al banco nessuno lo controlla, quindi lo controlla
+  // chi spedisce. Premere qui vuol dire «ho verificato che il buono e'
+  // stato riscattato e copre l'ordine»: si scrive sulla vendita chi e
+  // quando, e da quel momento il pacco puo' partire. `.select("id")` e il
+  // conteggio perche' un update senza righe toccate risponde «va bene» lo
+  // stesso; `.is(null)` perche' una verifica fatta non si riscrive.
+  async function verificaPagamento(vendita) {
+    if (!vendita?.id) return;
+    const importo = Number(vendita.totale || 0).toFixed(2).replace(".", ",");
+    if (!window.confirm(`Confermi di aver verificato il buono Amazon dell'ordine ${vendita.numero_ordine || ""} (${importo} €)? Dopo, il pacco si può spedire.`)) return;
+    const chi = utenteLoggato?.nome || ruoloUtente || "logistica";
+    const { data, error } = await supabase.from("vendite_shop")
+      .update({ pagamento_verificato_il: new Date().toISOString(), pagamento_verificato_da: chi })
+      .eq("id", vendita.id).is("pagamento_verificato_il", null).select("id");
+    if (error) { window.alert("Non sono riuscito a registrare la verifica: " + testoErrore(error)); return; }
+    if (!data?.length) { window.alert("La verifica non è stata scritta: forse qualcun altro l'ha già fatta. Ricarico."); }
+    await ricarica(["vendite_shop"]);
+  }
+
   // la spedizione nata dal banco non ha nessuno stato sul sito: è solo un
   // pacco che deve partire, e l'unica cosa da registrare è quando parte
   async function segnaSpeditaPos(sp) {
+    // un ordine con buono Amazon non verificato non parte: lo dice anche
+    // il database (trigger), qui si spiega prima di arrivarci
+    const venditaDelPacco = sp.vendita_id ? venditaPerId[sp.vendita_id] : null;
+    if (venditaDelPacco?.metodo_pagamento === "buono_amazon" && !venditaDelPacco.pagamento_verificato_il) {
+      window.alert("Questo ordine è pagato con buono Amazon e il buono non è ancora stato verificato: prima «In attesa di verifica pagamento», poi la spedizione.");
+      return;
+    }
     if (!window.confirm(`Segnare come spedito il pacco per ${sp.destinatario_nome || "il cliente"}?`)) return;
     setStatiOttimisti((prev) => ({ ...prev, [sp.id]: "spedito" }));
     const { error } = await supabase.from("spedizioni_pos").update({ stato: "spedito", spedito_il: new Date().toISOString() }).eq("id", sp.id);
@@ -54429,6 +54489,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
                   sede={cd ? toTitleCase(locById[cd.location_id]?.nome || "") : null}
                   iscritto={sp.iscritto_id ? iscrittoById[sp.iscritto_id] : null}
                   onSegnaSpedita={() => segnaSpeditaPos(sp)}
+                  onVerificaPagamento={() => verificaPagamento(sp.vendita_id ? venditaPerId[sp.vendita_id] : null)}
                   onSegnaConsegnata={() => segnaConsegnataInSede(sp)}
                   presi={righePrese[voce.chiave] || {}}
                   onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
@@ -78157,7 +78218,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 // coda per Raf: ordini di spedizione a domicilio generati dal POS quando
 // chi vende non ha il prodotto fisicamente con sé al corso (§10) — "Da
 // evadere" e "Evase" sono lo stesso fetch, filtrato solo per stato
-function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, prodottiShop = [], onBack, ricarica }) {
+function PaginaSpedizioniPos({ spedizioniPos, venditeShop = [], corsi, corsiDate, location, prodottiShop = [], onBack, ricarica }) {
   // il nome dei prodotti si rilegge dall'anagrafica: quello salvato sulla
   // riga e' di quando la riga e' nata, e invecchia a ogni rinominata
   const indiciNomi = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
@@ -78173,6 +78234,14 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, prodot
     .sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
 
   async function segnaSpedita(id) {
+    // buono Amazon non verificato: il database rifiuta comunque, ma la
+    // ragione va detta prima, non letta in un errore
+    const sp = (spedizioniPos || []).find((x) => x.id === id);
+    const vendita = sp?.vendita_id ? (venditeShop || []).find((v) => v.id === sp.vendita_id) : null;
+    if (vendita?.metodo_pagamento === "buono_amazon" && !vendita.pagamento_verificato_il) {
+      window.alert("Ordine pagato con buono Amazon non ancora verificato: la verifica si fa da Logistica → Ordini in arrivo, poi il pacco parte.");
+      return;
+    }
     const { error } = await supabase.from("spedizioni_pos").update({ stato: "spedito", spedito_il: new Date().toISOString() }).eq("id", id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["spedizioni_pos"]);
@@ -85293,7 +85362,7 @@ function Gestionale() {
       {view === "ordiniinarrivo" && (
         <PaginaOrdiniInArrivo
           venditeShop={venditeShop} venditeSimulate={venditeSimulate} spedizioniPos={spedizioniPos}
-          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} ruoloUtente={ruoloUtente}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
           syncEsiti={syncShopEsiti}
           titolo={etichettaTasto("logisticaprodotti", "ordiniinarrivo", "Ordini in arrivo")}
@@ -85324,7 +85393,7 @@ function Gestionale() {
 
       {view === "spedizionipos" && (
         <PaginaSpedizioniPos
-          spedizioniPos={spedizioniPos} corsi={corsi} corsiDate={corsiDate} location={location} prodottiShop={prodottiShop}
+          spedizioniPos={spedizioniPos} venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} location={location} prodottiShop={prodottiShop}
           ricarica={fetchDati} onBack={() => setView("spedizionicorsi")}
         />
       )}
@@ -85535,4 +85604,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
+  PaginaOrdiniInArrivo,
 };

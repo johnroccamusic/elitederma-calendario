@@ -752,9 +752,20 @@ d'ordine → rifiutato) e **per quell'importo** (tolleranza un centesimo;
 sulle 10 vendite col QR in archivio coincidono tutte). Provati tutti e
 quindici i rami in una transazione annullata.
 
-Restano dichiarazioni, non prove: **contanti**, **buono Amazon**
-(chiunque al banco, nessun controllo sul codice né sull'importo) e **POS
-esterno** (solo chi amministra). L'omaggio è incasso zero dichiarato:
+Restano dichiarazioni, non prove: **contanti**, **buono Amazon** e **POS
+esterno** (solo chi amministra).
+
+**Il buono Amazon si verifica in logistica (23/10/2026, deciso dal
+titolare).** L'ordine pagato con buono arriva in Ordini in arrivo con il
+tasto **«In attesa di verifica pagamento»**; chi lo preme dichiara di
+aver controllato il buono, compare «Pagamento verificato da X il …», e
+solo allora «Spedita» si accende. La verifica sta sulla **vendita**
+(`vendite_shop.pagamento_verificato_il` / `_da`), non sul pacco: è il
+pagamento che si verifica. La serratura è il trigger
+`spedizioni_pos_spedito_vuole_pagamento_verificato`: senza verifica il
+passaggio a `spedito` è rifiutato da qualunque pagina. Le quattro
+spedizioni con buono già uscite restano com'erano. Prove in
+`prove/buono-amazon-si-verifica-in-logistica.test.jsx`. L'omaggio è incasso zero dichiarato:
 amministratori e chi ha «può fare omaggi» — oggi GianLuca Rocca,
 Raffaele Villanno, Stefano Di Napoli. Il flag `terminale_fisico` il
 database lo accetta da chiunque, perché con un account Supabase per
