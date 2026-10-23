@@ -41,10 +41,10 @@ export function Button({ children, onClick, variant = "primary", style = {}, dis
 // della riga riservano la stessa altezza e i campi tornano allineati
 // "compatto": etichetta e margini ridotti, per le file di filtri che da
 // mobile devono stare tutte su una riga
-export function Field({ label, children, minLabelHeight, compatto = false, etichettaFontSize = null }) {
+export function Field({ label, children, minLabelHeight, compatto = false, etichettaFontSize = null, coloreEtichetta = null }) {
   return (
     <div style={{ marginBottom: compatto ? 8 : 14 }}>
-      <div style={{ ...fontBody, fontSize: etichettaFontSize ?? (compatto ? 8.5 : 12), color: MUTED, marginBottom: compatto ? 3 : 5, textTransform: "uppercase", letterSpacing: compatto ? 0.2 : 0.5, lineHeight: 1.15, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
+      <div style={{ ...fontBody, fontSize: etichettaFontSize ?? (compatto ? 8.5 : 12), color: coloreEtichetta || MUTED, marginBottom: compatto ? 3 : 5, textTransform: "uppercase", letterSpacing: compatto ? 0.2 : 0.5, lineHeight: 1.15, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
       {children}
     </div>
   );

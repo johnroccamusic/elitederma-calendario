@@ -71048,7 +71048,20 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
 
   const numeroPezziCarrello = carrello.reduce((s, r) => s + r.quantita, 0);
   // le etichettine in maiuscoletto sopra i campi del carrello
-  const etichettaPos = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 };
+  // IL CARRELLO E' NOTTE (23/10/2026, dal bozzetto del titolare): fondo
+  // blu, etichette crema, schede e campi chiari, oro negli accenti. Le
+  // cose che stanno DENTRO una scheda chiara restano come prima; qui ci
+  // sono solo i colori di cio' che poggia direttamente sul blu.
+  // Da computer no (deciso subito dopo): il pannello laterale resta
+  // chiaro, e la stessa tavolozza vale i colori di sempre.
+  const NOTTE = isMobile
+    ? { testo: "#F6F1E6", etichetta: "#E8DFC9", soffuso: "rgba(246,241,230,0.72)", oro: "#E4CE9B", pannello: "#16254A", bordo: "rgba(232,223,201,0.35)",
+        avvisoSfondo: "#16254A", avvisoBordo: GOLD, strisciaSfondo: "#16254A", incassoSfondo: "#16254A", incassoBordo: "rgba(232,223,201,0.35)",
+        riquadroSfondo: "transparent", riquadroPadding: "4px 0 0", bordoSconto: GOLD, bordoIncassa: `1.5px solid ${GOLD}`, verde: "#9BD5A3" }
+    : { testo: NAVY, etichetta: MUTED, soffuso: MUTED, oro: "#8A6D1D", pannello: "#F4F6FB", bordo: CREAM_BORDER,
+        avvisoSfondo: "#FDF6E6", avvisoBordo: "#EBD9AE", strisciaSfondo: "linear-gradient(180deg, #FFFFFF 0%, #FCFAF6 100%)", incassoSfondo: "#F4F6FB", incassoBordo: "#DEE4F0",
+        riquadroSfondo: BG, riquadroPadding: 12, bordoSconto: CREAM_BORDER, bordoIncassa: "none", verde: "#2E7D32" };
+  const etichettaPos = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 };
   const etichettaSconto = { ...etichettaPos, fontSize: 9, marginBottom: 3 };
 
   // corpo del carrello (righe, sconto, totali, pagamento, note, conferma):
@@ -71140,7 +71153,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               faceva una cosa sola. Adesso ne fa tre — corso, cliente
               esterna, acquisto personale — e l'etichetta ne annunciava
               una. */}
-          <Field label="Opzioni di vendita">
+          <Field coloreEtichetta={NOTTE.etichetta} label="Opzioni di vendita">
             <select data-campo="corso-pos" style={inputStyle} value={acquistoPersonale ? "__personale" : referralPersonaleInUso ? "__referral" : corsoPosId} onChange={(e) => {
               const nuovoId = e.target.value;
               setSpedIscrittoId("");
@@ -71246,7 +71259,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             const inCorso = corsiEleggibiliPos.filter((cd) => cd.data_fine >= oggiStrPos);
             if (inCorso.length === 0) return null;
             return (
-              <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: "#8A6D1D", background: "#FDF6E6", border: "1px solid #EBD9AE", borderRadius: 12, padding: "9px 12px", marginTop: -6, marginBottom: 12, lineHeight: 1.45 }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: NOTTE.oro, background: NOTTE.avvisoSfondo, border: `1px solid ${NOTTE.avvisoBordo}`, borderRadius: 12, padding: "9px 12px", marginTop: -6, marginBottom: 12, lineHeight: 1.45 }}>
                 {inCorso.length === 1
                   ? `Stai vendendo fuori dai corsi. Se questa vendita è di ${corsoById[inCorso[0].corso_id]?.nome || "quel corso"}, scegli la classe qui sopra o l'allieva paga prezzo pieno.`
                   : "Stai vendendo fuori dai corsi. Se questa vendita è di una delle tue classi, scegliela qui sopra o chi compra paga prezzo pieno."}
@@ -71552,7 +71565,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           sconto di corso da accendere ne' un codice scritto, il link
           resta da solo, senza bordo e senza fondo. */}
       {(() => { const riquadroVuoto = !puoScontare && !couponDellEdizione(corsoPosId) && !acquistoPersonale && !codiceExtraAperto && couponCodiceTesto.trim() === ""; return (
-      <div style={{ border: riquadroVuoto ? "none" : `1px solid ${puoScontare ? CREAM_BORDER : "#D3DCE8"}`, background: riquadroVuoto ? "transparent" : (puoScontare ? undefined : "#EDF2F8"), borderRadius: 14, padding: riquadroVuoto ? 0 : (puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px")), marginBottom: isMobile ? 10 : 14, boxShadow: riquadroVuoto ? "none" : (puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto), display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: "wrap" }}>
+      <div style={{ border: riquadroVuoto ? "none" : `1px solid ${puoScontare ? NOTTE.bordoSconto : "#D3DCE8"}`, background: riquadroVuoto ? "transparent" : (puoScontare ? undefined : "#EDF2F8"), borderRadius: 14, padding: riquadroVuoto ? 0 : (puoScontare ? (isMobile ? "10px 12px" : "12px 14px") : (isMobile ? "7px 10px" : "8px 12px")), marginBottom: isMobile ? 10 : 14, boxShadow: riquadroVuoto ? "none" : (puoScontare ? OMBRA_POS.tessera : OMBRA_POS.tasto), display: "flex", gap: puoScontare ? 8 : (isMobile ? 8 : 10), alignItems: puoScontare ? "flex-end" : "center", flexWrap: "wrap" }}>
         {puoScontare && (
           <>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -71806,13 +71819,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             </div>
           )}
           {spedIscrittoId && mancanzeIscrittoSped.length === 0 && (
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#2E7D32", marginTop: 7 }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NOTTE.verde, marginTop: 7 }}>
               Indirizzo completo, preso dalla sua scheda.
             </div>
           )}
         </div>
       )}
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 }}>Altre opzioni</div>
       <div style={{
         // Su un iPad in verticale il carrello e' largo un terzo di
         // pagina: tre colonne li' dentro spezzavano "Aggiungi spese
@@ -71822,7 +71835,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         // nell'altro.
         display: "flex", alignItems: "stretch",
         flexDirection: righeOpzioni ? "column" : "row", gap: 0, flexWrap: "nowrap",
-        border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, background: "linear-gradient(180deg, #FFFFFF 0%, #FCFAF6 100%)",
+        border: `1px solid ${NOTTE.bordo}`, borderRadius: 16, background: NOTTE.strisciaSfondo,
         boxShadow: OMBRA_POS.tessera,
         padding: isMobile ? "4px 4px" : "6px 8px", marginBottom: (spedizioneAttiva || fattAttiva) ? 8 : (isMobile ? 8 : 14),
       }}>
@@ -71837,8 +71850,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         ].map((o, i) => (
           <React.Fragment key={o.id}>
             {i > 0 && (righeOpzioni
-              ? <span style={{ height: 1, background: CREAM_BORDER, flexShrink: 0, margin: "0 8px" }} />
-              : <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0, margin: "8px 0" }} />)}
+              ? <span style={{ height: 1, background: NOTTE.bordo, flexShrink: 0, margin: "0 8px" }} />
+              : <span style={{ width: 1, background: NOTTE.bordo, flexShrink: 0, margin: "8px 0" }} />)}
             <div style={{
               display: "flex", flexDirection: righeOpzioni ? "row" : "column", alignItems: "center",
               gap: righeOpzioni ? 9 : (isMobile ? 4 : 6), flex: "1 1 0", minWidth: 0, minHeight: 44,
@@ -71852,7 +71865,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                   <span style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(180deg, #FEFAF1 0%, #F7EAD1 100%)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: OMBRA_POS.tondo }}>
                     <o.Icona size={19} color={GOLD} />
                   </span>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NOTTE.testo, flex: 1, minWidth: 0, lineHeight: 1.2 }}>{o.testo}</span>
                   <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} />
                 </>
               ) : (
@@ -71864,7 +71877,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                       solo altezza. */}
                   <span style={{ display: "inline-flex", alignItems: "center", gap: isMobile ? 4 : 6, maxWidth: "100%" }}>
                     <span style={{ display: "inline-flex", flexShrink: 0 }}><o.Icona size={isMobile ? 15 : 18} color={GOLD} /></span>
-                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NAVY, lineHeight: 1.25, minWidth: 0 }}>{o.testo}</span>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NOTTE.testo, lineHeight: 1.25, minWidth: 0 }}>{o.testo}</span>
                   </span>
                   <InterruttorePos id={o.id} acceso={o.acceso} onCambia={o.cambia} piccolo={isMobile} />
                 </>
@@ -71874,7 +71887,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         ))}
       </div>
       {spedizioneAttiva && (
-        <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
+        <div style={{ background: NOTTE.riquadroSfondo, borderRadius: 10, padding: NOTTE.riquadroPadding, marginBottom: isMobile ? 8 : 14 }}>
           {/* Qui c'era un secondo selettore degli iscritti, identico a
               quello della barra «A chi vendi» qui sopra. Due tendine per
               la stessa scelta, una che ne sposta l'altra: si tocca una
@@ -71882,46 +71895,46 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           {/* campi a meta' altezza e spazi dimezzati, etichette due punti
               piu' piccole: sul telefono il modulo stava in due schermate */}
           <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Nome"><input style={campoSped} value={spedNome} onChange={(e) => setSpedNome(e.target.value)} /></Field></div>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Cognome"><input style={campoSped} value={spedCognome} onChange={(e) => setSpedCognome(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Nome"><input style={campoSped} value={spedNome} onChange={(e) => setSpedNome(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Cognome"><input style={campoSped} value={spedCognome} onChange={(e) => setSpedCognome(e.target.value)} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Indirizzo"><input style={campoSped} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field></div>
-            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="Civico"><input style={campoSped} value={spedCivico} onChange={(e) => setSpedCivico(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Indirizzo"><input style={campoSped} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Civico"><input style={campoSped} value={spedCivico} onChange={(e) => setSpedCivico(e.target.value)} /></Field></div>
           </div>
           {/* quello che serve al corriere per consegnare davvero: sul
               citofono c'è spesso un cognome diverso, e senza un numero da
               chiamare il pacco torna indietro */}
           <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Citofono"><input style={campoSped} value={spedCitofono} onChange={(e) => setSpedCitofono(e.target.value)} /></Field></div>
-            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="Interno"><input style={campoSped} value={spedInterno} onChange={(e) => setSpedInterno(e.target.value)} /></Field></div>
-            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="CAP"><input style={campoSped} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Citofono"><input style={campoSped} value={spedCitofono} onChange={(e) => setSpedCitofono(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Interno"><input style={campoSped} value={spedInterno} onChange={(e) => setSpedInterno(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="CAP"><input style={campoSped} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 4, marginBottom: 0 }}>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Città"><input style={campoSped} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
-            <div style={{ width: 74 }}><Field compatto etichettaFontSize={10} label="Prov."><input style={{ ...campoSped, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Città"><input style={campoSped} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
+            <div style={{ width: 74 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Prov."><input style={{ ...campoSped, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
           </div>
           <div style={{ marginBottom: 0 }}>
-            <Field compatto etichettaFontSize={10} label="Cellulare"><input style={campoSped} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
+            <Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Cellulare"><input style={campoSped} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
           </div>
 
           {campiClienteMancanti.length > 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: isMobile ? NOTTE.oro : "#C0392B", marginTop: 6 }}>
               Completare i dati cliente: {campiClienteMancanti.join(", ")}.
             </div>
           )}
-          <div style={{ ...fontBody, fontSize: 11, color: grigioCarrello, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti → Ordini in arrivo.</div>
+          <div style={{ ...fontBody, fontSize: 11, color: NOTTE.soffuso, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti → Ordini in arrivo.</div>
         </div>
       )}
 
       {fattAttiva && (
-        <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
+        <div style={{ background: NOTTE.riquadroSfondo, borderRadius: 10, padding: NOTTE.riquadroPadding, marginBottom: isMobile ? 8 : 14 }}>
           {/* Il modo per non riscrivere cento volte le stesse undici cifre:
               chi ha gia' chiesto una fattura resta in anagrafica e la
               seconda volta si sceglie da qui. */}
           {clientiFattura.length > 0 && (
             <div style={{ marginBottom: 4 }}>
-              <Field compatto etichettaFontSize={10} label="Cliente già in anagrafica">
+              <Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Cliente già in anagrafica">
                 <select style={campoSped} value={fattClienteId} onChange={(e) => (e.target.value ? scegliCliente(e.target.value) : setFattClienteId(""))}>
                   <option value="">— nuovo cliente, compila sotto —</option>
                   {clientiFattura.map((c) => <option key={c.id} value={c.id}>{etichettaCliente(c)}</option>)}
@@ -71930,15 +71943,15 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             </div>
           )}
           <div style={{ marginBottom: 4 }}>
-            <Field compatto etichettaFontSize={10} label="Ditta (vuoto se è un privato)"><input style={campoSped} value={fattDitta} onChange={(e) => setFattDitta(e.target.value)} /></Field>
+            <Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Ditta (vuoto se è un privato)"><input style={campoSped} value={fattDitta} onChange={(e) => setFattDitta(e.target.value)} /></Field>
           </div>
           <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="P. IVA"><input style={campoSped} value={fattPiva} onChange={(e) => setFattPiva(e.target.value)} /></Field></div>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Codice fiscale"><input style={{ ...campoSped, textTransform: "uppercase" }} value={fattCf} onChange={(e) => setFattCf(e.target.value.toUpperCase())} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="P. IVA"><input style={campoSped} value={fattPiva} onChange={(e) => setFattPiva(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Codice fiscale"><input style={{ ...campoSped, textTransform: "uppercase" }} value={fattCf} onChange={(e) => setFattCf(e.target.value.toUpperCase())} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Cod. Dest."><input style={{ ...campoSped, textTransform: "uppercase" }} value={fattCodDest} onChange={(e) => setFattCodDest(e.target.value.toUpperCase())} /></Field></div>
-            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="PEC"><input style={campoSped} inputMode="email" value={fattPec} onChange={(e) => setFattPec(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Cod. Dest."><input style={{ ...campoSped, textTransform: "uppercase" }} value={fattCodDest} onChange={(e) => setFattCodDest(e.target.value.toUpperCase())} /></Field></div>
+            <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="PEC"><input style={campoSped} inputMode="email" value={fattPec} onChange={(e) => setFattPec(e.target.value)} /></Field></div>
           </div>
           {/* con la spedizione attiva l'indirizzo di fatturazione e' quasi
               sempre lo stesso della consegna: si copia invece di riscriverlo */}
@@ -71951,17 +71964,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           {!copiaDaSpedizione && (
             <>
               <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Nome"><input style={campoSped} value={fattNome} onChange={(e) => setFattNome(e.target.value)} /></Field></div>
-                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Cognome"><input style={campoSped} value={fattCognome} onChange={(e) => setFattCognome(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Nome"><input style={campoSped} value={fattNome} onChange={(e) => setFattNome(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Cognome"><input style={campoSped} value={fattCognome} onChange={(e) => setFattCognome(e.target.value)} /></Field></div>
               </div>
               <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Indirizzo"><input style={campoSped} value={fattIndirizzo} onChange={(e) => setFattIndirizzo(e.target.value)} /></Field></div>
-                <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="Civico"><input style={campoSped} value={fattCivico} onChange={(e) => setFattCivico(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Indirizzo"><input style={campoSped} value={fattIndirizzo} onChange={(e) => setFattIndirizzo(e.target.value)} /></Field></div>
+                <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Civico"><input style={campoSped} value={fattCivico} onChange={(e) => setFattCivico(e.target.value)} /></Field></div>
               </div>
               <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} label="CAP"><input style={campoSped} value={fattCap} onChange={(e) => setFattCap(e.target.value)} /></Field></div>
-                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} label="Città"><input style={campoSped} value={fattCitta} onChange={(e) => setFattCitta(e.target.value)} /></Field></div>
-                <div style={{ width: 74 }}><Field compatto etichettaFontSize={10} label="Prov."><input style={{ ...campoSped, textTransform: "uppercase" }} maxLength={2} value={fattProv} onChange={(e) => setFattProv(e.target.value.toUpperCase())} /></Field></div>
+                <div style={{ width: 90 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="CAP"><input style={campoSped} value={fattCap} onChange={(e) => setFattCap(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Città"><input style={campoSped} value={fattCitta} onChange={(e) => setFattCitta(e.target.value)} /></Field></div>
+                <div style={{ width: 74 }}><Field compatto etichettaFontSize={10} coloreEtichetta={NOTTE.etichetta} label="Prov."><input style={{ ...campoSped, textTransform: "uppercase" }} maxLength={2} value={fattProv} onChange={(e) => setFattProv(e.target.value.toUpperCase())} /></Field></div>
               </div>
             </>
           )}
@@ -72002,7 +72015,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           {metodoPagamento === "pos" && (
             // incassato nella pagina e non appoggiato sopra: e' un
             // dettaglio DENTRO "Carta", non una scelta allo stesso livello
-            <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4F6FB", border: `1px solid #DEE4F0`, boxShadow: OMBRA_POS.incassato }}>
+            <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: NOTTE.incassoSfondo, border: `1px solid ${NOTTE.incassoBordo}`, boxShadow: OMBRA_POS.incassato }}>
               {/* La scelta fra terminale e QR esiste solo dove esiste il
                   terminale, cioe' in amministrazione. Per tutti gli altri
                   la carta e' il QR e non c'e' niente da scegliere: due
@@ -72010,7 +72023,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                   dubbio. */}
               {chiAmministra && (
                 <>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
                   <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
                     <SceltaPos
                       scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
@@ -72028,8 +72041,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
 
               {modoIncassoPos === "esterno" ? (
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 10 }}>
-                  <span style={{ display: "inline-flex", flexShrink: 0, marginTop: 1 }}><IconaInfoTondo size={18} color={MUTED} /></span>
-                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, lineHeight: 1.5 }}>
+                  <span style={{ display: "inline-flex", flexShrink: 0, marginTop: 1 }}><IconaInfoTondo size={18} color={NOTTE.soffuso} /></span>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: NOTTE.soffuso, lineHeight: 1.5 }}>
                     Incassa sul terminale, poi conferma la vendita qui sotto come hai sempre fatto. L'app non aspetta nessuna conferma da fuori.
                   </span>
                 </div>
@@ -72038,7 +72051,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                   {/* un tasto spento senza una ragione scritta sembra un
                       tasto rotto: chi sta al banco preme, non succede
                       niente, e non ha modo di capire perche' */}
-                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: (carrello.length === 0 || totaleDaIncassare <= 0) ? "#8A6D1D" : MUTED, flex: "1 1 180px", lineHeight: 1.45 }}>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: (carrello.length === 0 || totaleDaIncassare <= 0) ? NOTTE.oro : NOTTE.soffuso, flex: "1 1 180px", lineHeight: 1.45 }}>
                     {carrello.length === 0
                       ? "Il carrello è vuoto: aggiungi i prodotti e il QR si accende."
                       : totaleDaIncassare <= 0
@@ -72253,7 +72266,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             disabled={bloccato}
             style={{
               flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10,
-              background: `linear-gradient(160deg, #1B3157 0%, ${NAVY} 65%)`, color: "#fff", border: "none", borderRadius: 14,
+              background: `linear-gradient(160deg, #1B3157 0%, ${NAVY} 65%)`, color: "#fff", border: NOTTE.bordoIncassa, borderRadius: 14,
               boxShadow: bloccato ? "none" : "0 3px 6px -3px rgba(14,27,51,0.35), 0 16px 30px -14px rgba(14,27,51,0.70)",
               padding: isMobile ? "12px 14px" : "16px 18px", cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.45 : 1,
               ...fontBody, fontSize: isMobile ? 13.5 : 15, fontWeight: 700,
@@ -72300,8 +72313,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           </div>
         );
       })()}
-      <div style={{ ...fontBody, fontSize: 11.5, color: grigioCarrello, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-        <IconaScudoSicurezza size={14} color={grigioCarrello} />
+      <div style={{ ...fontBody, fontSize: 11.5, color: NOTTE.soffuso, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <IconaScudoSicurezza size={14} color={NOTTE.soffuso} />
         La vendita aggiornerà automaticamente le giacenze di magazzino.
       </div>
     </>
@@ -72595,14 +72608,14 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: "absolute", left: 0, right: 0, bottom: 0, top: 52, display: "flex", flexDirection: "column",
-                background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)",
+                background: NAVY, borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)",
               }}
             >
               {/* la striscia in cima richiude col tocco, ma non lo dice:
                   chi vuole aggiungere un prodotto deve sapere che i
                   prodotti stanno sotto questo foglio */}
               <button type="button" data-niente-ombra onClick={() => setCarrelloEspanso(false)}
-                style={{ alignSelf: "flex-start", margin: "10px 14px 0", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, padding: 0 }}>
+                style={{ alignSelf: "flex-start", margin: "10px 14px 0", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NOTTE.testo, padding: 0 }}>
                 ← Torna ai prodotti per aggiungerne
               </button>
               {/* niente gesti da indovinare: un tasto largo quanto il
@@ -72610,7 +72623,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                   toccando fuori, ma questo si vede */}
               <button
                 onClick={() => setCarrelloEspanso(false)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "14px 0 12px", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "14px 0 12px", background: "none", border: "none", borderBottom: `1px solid ${NOTTE.bordo}`, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NOTTE.testo }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
@@ -72619,18 +72632,18 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               </button>
               <div style={{ padding: "4px 16px calc(env(safe-area-inset-bottom, 0px) + 20px)", overflowY: "auto", flex: 1, minHeight: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <span style={{ width: 34, height: 34, borderRadius: 10, background: NAVY, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <IconaBorsaShop size={17} color="#fff" />
+                  <span style={{ width: 34, height: 34, borderRadius: 10, background: "#F6F1E6", color: GOLD, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <IconaBorsaShop size={17} color={GOLD} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
-                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</span>
-                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span>
+                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NOTTE.testo, textTransform: "uppercase", letterSpacing: 0.6 }}>Carrello vendita</span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: NOTTE.soffuso }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span>
                   </div>
                   {carrello.length > 0 && (
                     <button
                       onClick={() => { if (window.confirm("Vuoi svuotare il carrello?")) svuotaCarrello(); }}
                       aria-label="Svuota il carrello"
-                      style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}
+                      style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${NOTTE.bordo}`, background: "transparent", color: NOTTE.testo, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}
                     >
                       ✕
                     </button>
