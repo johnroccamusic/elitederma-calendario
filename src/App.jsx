@@ -55836,7 +55836,15 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                 stanno nel dettaglio. E non si allarga a riempire la scheda:
                 con otto colonne il 100% metteva un deserto fra Frangente e
                 Incasso. */}
-            <table style={{ width: origine === "pos" ? "auto" : "100%", borderCollapse: "collapse", minWidth: origine === "pos" ? 560 : 720 }}>
+            {/* Sul telefono tutta la riga va scritta come il numero
+                d'ordine, a 10 punti: le celle a 13 e le pastiglie a 11,5
+                sopra un numero a 10 facevano una riga a tre altezze, e la
+                tabella non stava nello schermo (23/10/2026). Una regola
+                sola sulla tabella invece di toccare trenta stili. */}
+            {origine === "pos" && isMobile && (
+              <style>{`.tabella-banco-stretta th, .tabella-banco-stretta td, .tabella-banco-stretta td * { font-size: 10px !important; }`}</style>
+            )}
+            <table className={origine === "pos" && isMobile ? "tabella-banco-stretta" : undefined} style={{ width: origine === "pos" ? "auto" : "100%", borderCollapse: "collapse", minWidth: origine === "pos" ? (isMobile ? 0 : 560) : 720 }}>
               <thead>
                 <tr>
                   {(origine === "pos"
