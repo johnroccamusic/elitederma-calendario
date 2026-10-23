@@ -55842,7 +55842,23 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                 tabella non stava nello schermo (23/10/2026). Una regola
                 sola sulla tabella invece di toccare trenta stili. */}
             {origine === "pos" && isMobile && (
-              <style>{`.tabella-banco-stretta th, .tabella-banco-stretta td, .tabella-banco-stretta td * { font-size: 10px !important; }`}</style>
+              <style>{`
+                .tabella-banco-stretta th, .tabella-banco-stretta td, .tabella-banco-stretta td * { font-size: 10px !important; }
+                /* Ogni vendita su tre righe, tutta dentro lo schermo, senza
+                   scorrere di lato: numero · data · pagato / chi ha venduto ·
+                   frangente / incasso · stato · cestino. Le celle restano
+                   quelle della tabella: cambia solo come si dispongono. */
+                .tabella-banco-stretta { width: 100% !important; min-width: 0 !important; }
+                .tabella-banco-stretta thead { display: none; }
+                .tabella-banco-stretta tbody, .tabella-banco-stretta tr { display: block; }
+                .tabella-banco-stretta tr { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 8px 10px; border-top: 1px solid #E8E2D6; }
+                .tabella-banco-stretta td { display: block; border-top: none !important; padding: 2px 0 !important; white-space: nowrap; }
+                .tabella-banco-stretta td:nth-child(3) { margin-left: auto; }
+                .tabella-banco-stretta td:nth-child(4), .tabella-banco-stretta td:nth-child(5) { flex: 1 0 45%; }
+                .tabella-banco-stretta td:nth-child(5) { text-align: right; }
+                .tabella-banco-stretta td:nth-child(8) { margin-left: auto; }
+                .tabella-banco-stretta td[colspan] { flex: 1 0 100%; text-align: center; }
+              `}</style>
             )}
             <table className={origine === "pos" && isMobile ? "tabella-banco-stretta" : undefined} style={{ width: origine === "pos" ? "auto" : "100%", borderCollapse: "collapse", minWidth: origine === "pos" ? (isMobile ? 0 : 560) : 720 }}>
               <thead>
