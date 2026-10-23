@@ -35,26 +35,31 @@ declare
   base_v jsonb := jsonb_build_object('id', gen_random_uuid(), 'ts_ricevuto', now());
   base_s jsonb := jsonb_build_object('id', gen_random_uuid(), 'ts', now());
   num text := p_vendita->>'numero_ordine';
-  metodo text := p_vendita->>'metodo_pagamento';
-  codice text := nullif(btrim(coalesce(p_vendita->>'pagamento_codice', '')), '');
-  terminale boolean := coalesce((p_vendita->>'terminale_fisico')::boolean, false);
-  pagato timestamptz;
+  -- le variabili NON si chiamano come le colonne che interrogano:
+  -- `codice` contro `pagamenti_pos.codice` e' «column reference is
+  -- ambiguous», e la funzione esplode anche sulla vendita giusta. Trovato
+  -- provando il ramo «codice inesistente» subito dopo averla applicata.
+  v_metodo text := p_vendita->>'metodo_pagamento';
+  v_codice text := nullif(btrim(coalesce(p_vendita->>'pagamento_codice', '')), '');
+  v_terminale boolean := coalesce((p_vendita->>'terminale_fisico')::boolean, false);
+  v_pagato timestamptz;
+  v_trovato boolean;
 begin
   if p_vendita is null or jsonb_typeof(p_vendita) <> 'object' then
     raise exception 'Serve il corpo della vendita';
   end if;
 
   -- LA PROVA DEL PAGAMENTO, prima di tutto il resto
-  if metodo = 'pos' and coalesce(p_vendita->>'tipo_movimento', 'vendita') = 'vendita' and not terminale then
-    if codice is null then
+  if v_metodo = 'pos' and coalesce(p_vendita->>'tipo_movimento', 'vendita') = 'vendita' and not v_terminale then
+    if v_codice is null then
       raise exception 'PAGAMENTO_NON_PROVATO: vendita con carta senza un pagamento col QR collegato. Si registra solo a pagamento ricevuto, o dal POS esterno dell''amministrazione.';
     end if;
-    select pp.pagato_il into pagato from pagamenti_pos pp where pp.codice = codice;
+    select true, pp.pagato_il into v_trovato, v_pagato from pagamenti_pos pp where pp.codice = v_codice;
     if not found then
-      raise exception 'PAGAMENTO_NON_PROVATO: il codice % non corrisponde a nessuna richiesta di pagamento.', codice;
+      raise exception 'PAGAMENTO_NON_PROVATO: il codice % non corrisponde a nessuna richiesta di pagamento.', v_codice;
     end if;
-    if pagato is null then
-      raise exception 'PAGAMENTO_NON_PROVATO: il pagamento % non risulta ancora incassato su Stripe.', codice;
+    if v_pagato is null then
+      raise exception 'PAGAMENTO_NON_PROVATO: il pagamento % non risulta ancora incassato su Stripe.', v_codice;
     end if;
   end if;
 
