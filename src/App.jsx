@@ -24910,6 +24910,9 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
     };
   }, []);
 
+  // Si scorre solo in verticale: con `overflow-y: auto` e basta, Safari
+  // apriva anche l'orizzontale, e la finestra si tirava a destra e a
+  // sinistra «come un videogioco» (23/10/2026). Il dito muove solo su e giu'.
   // LO SPAZIO IN FONDO E' UN ELEMENTO, NON UN PADDING. Safari ignora il
   // padding in fondo a un contenitore che scorre quando e' un flex: i
   // 96 px (poi 170) non sono mai esistiti sul telefono, e le ultime righe
@@ -24918,7 +24921,7 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
   return (
     <div
       ref={overlayRef}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", flexDirection: "column", padding: `${paddingTop}px 20px 0`, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", zIndex: 1000 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", flexDirection: "column", padding: `${paddingTop}px 20px 0`, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", touchAction: "pan-y", WebkitOverflowScrolling: "touch", zIndex: 1000 }}
       onClick={onClose}
     >
       {/* "margin: auto" invece dell'allineamento in alto: una finestra
