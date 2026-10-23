@@ -1013,6 +1013,22 @@ componenti, framework di stili): su un file da 84.000 righe un riformattone
 cancella la storia di `git blame`, che è l'unico modo per capire perché un
 calcolo è scritto così.
 
+**Il banco visivo (23/10/2026): quello che jsdom non vede.** Le prove in
+`prove/` montano i componenti ma **non fanno il layout**: «la scheda
+sborda a destra di 46 px» o «il padding in fondo Safari lo ignora» non
+li prende nessuna di loro, e il 23/10 il titolare ha fatto da tester per
+quattro pubblicazioni di fila. `prove/banco/` monta la **Modal vera** in
+un browser vero (Chromium headless, iPhone da 390 px) e la misura:
+larghezza della scheda, scorrimento orizzontale, spazio sotto l'ultima
+riga, pagina sotto bloccata. Si lancia a mano,
+`PLAYWRIGHT_DIR=<cartella> sh prove/banco/finestra.sh`, e Playwright
+**non sta nel progetto**: vive in una cartella a parte (istruzioni in
+testa allo script), così `package.json` resta a 6 dipendenze. Prima di
+toccare Modal, overlay, dock o qualunque cosa che si vede solo sul
+telefono: **lanciarlo prima, non dopo**. Sulla versione guasta ha
+misurato 26 px di sbordo e 46 px di scorrimento laterale; su quella
+corretta 20 px di margine per lato, zero orizzontale, 170 px in fondo.
+
 **Le edge function invece un controllo ce l'hanno, dal 18/10/2026.**
 `supabase functions deploy` impacchetta e basta: non guarda i tipi e non si
 accorge di una variabile che non esiste. È così che è finita in produzione una

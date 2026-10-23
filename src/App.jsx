@@ -24931,7 +24931,10 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40, scor
           mai tagliata in cima, come succederebbe con align-items: center */}
       <div
         style={{
-          ...cardStyle, maxWidth, width: "100%", margin: "auto", flex: "0 0 auto",
+          // border-box: in una colonna flex la larghezza non si restringe da
+          // sola, e «100% + 22 px di bordo interno» sbordava a destra di
+          // 46 px — la finestra «tutta appiccicata a destra» (23/10/2026)
+          ...cardStyle, maxWidth, width: "100%", boxSizing: "border-box", margin: "auto", flex: "0 0 auto",
           ...(scorrevole
             ? { maxHeight: `calc(100% - ${paddingBasso})`, display: "flex", flexDirection: "column", overflow: "hidden" }
             : { height: "fit-content" }),
