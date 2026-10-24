@@ -2,10 +2,12 @@
 // Dice anche se la pagina scorre di lato, che sul telefono e' il guasto classico.
 import { createRequire } from "node:module";
 import path from "node:path";
-const { chromium, devices } = createRequire(path.join(process.env.PLAYWRIGHT_DIR, "package.json"))("playwright");
+const { chromium, webkit, devices } = createRequire(path.join(process.env.PLAYWRIGHT_DIR, "package.json"))("playwright");
 const [banco, foto] = process.argv.slice(2);
-const browser = await chromium.launch();
-const page = await (await browser.newContext(process.env.VISTA === "scrivania" ? { viewport: { width: 1280, height: 900 } } : { ...devices["iPhone 13"] })).newPage();
+// MOTORE=webkit per guardare con il motore di Safari (iPhone e iPad):
+// certi guasti di layout vivono solo li'
+const browser = await (process.env.MOTORE === "webkit" ? webkit : chromium).launch();
+const page = await (await browser.newContext(process.env.VISTA === "scrivania" ? { viewport: { width: 1280, height: 900 } } : process.env.VISTA === "ipad" ? { ...devices["iPad (gen 7) landscape"] } : process.env.VISTA === "stretta" ? { viewport: { width: 600, height: 900 }, isMobile: true, hasTouch: true } : { ...devices["iPhone 13"] })).newPage();
 page.on("pageerror", (e) => console.log("ERRORE IN PAGINA:", e.message));
 await page.goto(`http://localhost:4173/prove/banco/${banco}.html${process.env.QUERY || ""}`, { waitUntil: "networkidle" });
 await page.waitForTimeout(400);

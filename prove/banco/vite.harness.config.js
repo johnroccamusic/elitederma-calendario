@@ -7,5 +7,5 @@ import { resolve } from "node:path";
 export default defineConfig({
   plugins: [react()],
   base: "./",
-  build: { rollupOptions: { input: { finestra: resolve(process.cwd(), "prove/banco/finestra.html"), vendite: resolve(process.cwd(), "prove/banco/vendite.html"), pos: resolve(process.cwd(), "prove/banco/pos.html") } }, emptyOutDir: true },
+  build: { rollupOptions: { input: { finestra: resolve(process.cwd(), "prove/banco/finestra.html"), vendite: resolve(process.cwd(), "prove/banco/vendite.html"), pos: resolve(process.cwd(), "prove/banco/pos.html"), advisor: resolve(process.cwd(), "prove/banco/advisor.html") } }, emptyOutDir: true },
 });

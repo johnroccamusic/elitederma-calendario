@@ -62626,11 +62626,17 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // spariscono e si va a capo, invece di accavallarsi
               const stretta = isMobile;
               const eti = { ...fontBody, fontSize: 9, fontWeight: 700, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
-              const sep = <span style={{ width: 1, alignSelf: "stretch", background: "#D8D8D4", flexShrink: 0 }} />;
+              // A 600 px (iPad diviso, telefono in orizzontale) la fila non
+              // ci stava e, con «nowrap», le due colonne elastiche si
+              // schiacciavano a 60 px: il nome del prodotto andava a capo
+              // lettera per lettera, la scheda diventava alta uno schermo
+              // e sembrava vuota (24/10/2026, riprodotto nel banco visivo
+              // a 600 px). Stretta, la fila va a capo e i filetti spariscono.
+              const sep = stretta ? null : <span style={{ width: 1, alignSelf: "stretch", background: "#D8D8D4", flexShrink: 0 }} />;
               return (
               <div key={r.prodotto.id} style={{
-                display: "flex", alignItems: "flex-start", columnGap: stretta ? 9 : 18,
-                flexWrap: "nowrap", padding: stretta ? "10px 10px" : "13px 18px", marginBottom: 10,
+                display: "flex", alignItems: "flex-start", columnGap: stretta ? 9 : 18, rowGap: stretta ? 10 : 0,
+                flexWrap: stretta ? "wrap" : "nowrap", padding: stretta ? "10px 10px" : "13px 18px", marginBottom: 10,
                 background: "#F1F1F0", border: "1px solid #E2E2DF", borderRadius: 22,
                 boxShadow: "0 2px 10px -4px rgba(14,27,51,0.10)",
               }}>
@@ -62670,7 +62676,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 </div>
 
                 {/* PRODOTTO DA ORDINARE */}
-                <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
+                <div style={{ flex: stretta ? "1 1 150px" : "1 1 0", minWidth: 0, overflow: "hidden" }}>
                   <div style={eti}>prodotto da ordinare</div>
                   {onApriProdotto ? (
                     <button onClick={() => onApriProdotto(r.prodotto.id)} title="Apri la scheda del prodotto"
@@ -62691,7 +62697,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                 {/* EVENTO SCOPERTO */}
                 {edizione && sep}
                 {edizione && (
-                  <div style={{ flex: "1 1 0", minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ flex: stretta ? "1 1 150px" : "1 1 0", minWidth: 0, overflow: "hidden" }}>
                     <div style={eti}>evento scoperto</div>
                     <div style={{ ...fontDisplay, fontSize: stretta ? 12 : 14, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{edizione}</div>
                     <div style={{ ...fontBody, fontSize: 10, color: NAVY, marginTop: 4, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
@@ -85818,5 +85824,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor,
 };
