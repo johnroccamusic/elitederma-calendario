@@ -55924,10 +55924,6 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                           })()}
                           <td style={{ padding: "11px 8px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>
                             {fmtEuroErp2(v.totale)}
-                            {origine === "pos" && pagatoStripeIl(v) && (
-                              <span data-campo="pastiglia-stripe" title={`Incasso Stripe ricevuto il ${new Date(pagatoStripeIl(v)).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}`}
-                                style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 8, padding: "2px 6px", marginLeft: 6 }}>✓ Stripe</span>
-                            )}
                           </td>
                       </>
                     );
@@ -56047,6 +56043,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                             </button>
                           ) : (
                             <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
+                          )}
+                          {/* la conferma di Stripe sta accanto allo stato: sono
+                              due pastiglie della stessa famiglia, «com'e' andata» */}
+                          {origine === "pos" && pagatoStripeIl(v) && (
+                            <span data-campo="pastiglia-stripe" title={`Incasso Stripe ricevuto il ${new Date(pagatoStripeIl(v)).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}`}
+                              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 8, padding: "3px 9px", marginLeft: 6, whiteSpace: "nowrap" }}>✓ Stripe confermato</span>
                           )}
                           {statoInModifica === v.id && (
                             <div style={{ position: "absolute", top: "100%", left: 10, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 10px 24px -12px rgba(14,27,51,0.35)", padding: 4, minWidth: 190 }}>
@@ -69288,7 +69290,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const pagatoStripeStorico = (v) => (v.pagamento_codice && incassiStripeStorico.perCodice[v.pagamento_codice]) || incassiStripeStorico.perVendita[v.id] || null;
   const pastigliaStripe = (v) => pagatoStripeStorico(v) ? (
     <span data-campo="pastiglia-stripe" title={`Incasso Stripe ricevuto il ${new Date(pagatoStripeStorico(v)).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}`}
-      style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 7, padding: "2px 6px", marginLeft: 6, verticalAlign: "middle" }}>✓ Stripe</span>
+      style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", border: "1px solid #BFE3C6", borderRadius: 7, padding: "2px 6px", marginLeft: 6, verticalAlign: "middle" }}>✓ Stripe confermato</span>
   ) : null;
   const [mostraResiCambio, setMostraResiCambio] = useState(false);
   // Quante schede per riga (impostazione condivisa): un hook, quindi deve
