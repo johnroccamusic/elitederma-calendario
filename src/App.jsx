@@ -47051,10 +47051,18 @@ function RigaPagamentoAppendice({ spesa, onSalva, onElimina, bloccata }) {
 // cassa contanti e le caselle di Gestione magazzino.
 // la riga che li contiene: sul computer vanno a capo se non ci stanno,
 // sul telefono scorrono di lato, sempre a misura piena
+// Sul telefono DUE PER FILA (24/10/2026): prima era una striscia che
+// scorreva di lato, e il terzo riquadro usciva dallo schermo — «devi
+// scrollare a destra». Il riquadro si stringe da solo per starci (vedi
+// RiquadroSegnalatore). La striscia scorrevole resta solo per
+// RigaSegnalatoriInLinea, che la chiede apposta.
 function stileRigaSegnalatori(isMobile, extra = {}) {
   return isMobile
-    ? { display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch", ...extra }
+    ? { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, ...extra }
     : { display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", ...extra };
+}
+function stileStrisciaSegnalatori(extra = {}) {
+  return { display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch", ...extra };
 }
 // "fattore" (dal 16/09/2026): la stessa misura moltiplicata, disco, riga,
 // testi e numero compresi, per quando una riga deve tenere tutti i
@@ -47074,8 +47082,14 @@ function RiquadroSegnalatore({ etichetta, valore, unita, nota, Icona, disco, sfo
   // misura fissa, decisa il 16/09/2026: 225 di base per 95 di altezza,
   // ovunque e su ogni schermo. La larghezza misurata non serve piu' alla
   // misura, resta solo per rifare i calcoli quando cambia il contenitore
-  const w = Math.round(LARGHEZZA_SEGNALATORE * fattore);
-  const h = Math.round(ALTEZZA_SEGNALATORE * fattore);
+  // sul telefono, due per fila: la misura e' quella che ci sta in meta'
+  // schermo, mai piu' grande di quella chiesta (24/10/2026)
+  const mobile = useIsMobile();
+  const fattoreEff = mobile
+    ? Math.min(fattore, Math.max(0.55, (larghezzaUtile() - 44) / 2 / LARGHEZZA_SEGNALATORE))
+    : fattore;
+  const w = Math.round(LARGHEZZA_SEGNALATORE * fattoreEff);
+  const h = Math.round(ALTEZZA_SEGNALATORE * fattoreEff);
   const lato = Math.round(h * 0.80);
   const spazio = Math.round(h * 0.09);
   // Se i testi non ci stanno nell'altezza, si riducono loro — a passi,
@@ -47162,7 +47176,7 @@ function RigaSegnalatoriInLinea({ isMobile, riquadri, gap = 12, style = {}, inLi
   if (scala && perRiga > 1 && fattorePer(perRiga) < 0.5) perRiga = Math.ceil(n / 2);
   const fattore = !scala ? 1 : Math.max(0.3, fattorePer(perRiga));
   return (
-    <div ref={rif} style={!scala ? stileRigaSegnalatori(true, style) : { display: "flex", gap: spazio, flexWrap: perRiga < n ? "wrap" : "nowrap", justifyContent: "center", ...style }}>
+    <div ref={rif} style={!scala ? stileStrisciaSegnalatori(style) : { display: "flex", gap: spazio, flexWrap: perRiga < n ? "wrap" : "nowrap", justifyContent: "center", ...style }}>
       {riquadri.map((r) => (
         <RiquadroSegnalatore key={r.chiave} etichetta={r.etichetta} valore={r.valore} unita={r.unita} nota={r.nota} Icona={r.Icona} disco={r.disco} sfondo={r.sfondo === "#fff" ? "#FFFFFF" : r.sfondo} colore={r.colore} onClick={r.onClick} evidenziato={r.evidenziato} titolo={r.titolo} fattore={fattore} />
       ))}
@@ -85837,5 +85851,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori,
 };
