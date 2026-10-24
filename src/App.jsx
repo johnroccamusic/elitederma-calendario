@@ -9299,6 +9299,9 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
   );
 }
 function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, onApriIscritto, ricarica }) {
+  // sul telefono niente tabella: una pillola per iscrizione, con tutto
+  // dentro e senza scorrere di lato (24/10/2026)
+  const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -9365,6 +9368,39 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
           {righe.length === 0 ? "Nessuna iscrizione ancora." : "Nessun risultato."}
         </div>
       ) : (
+        isMobile ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {ordinate.map((r) => (
+              <div
+                key={r.iscritto.id} data-campo="pillola-iscrizione"
+                onClick={onApriIscritto ? () => onApriIscritto(r.iscritto) : undefined}
+                style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 12px", cursor: onApriIscritto ? "pointer" : undefined }}
+              >
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>{r.allievo}</span>
+                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>iscritta il {r.iscritto.ts ? fmtData(String(r.iscritto.ts).slice(0, 10)) : "—"}</span>
+                </div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 3 }}>
+                  <b>{r.corsoNome}</b> · {r.citta}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6 }}>
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Corso del {r.dataLabel}</span>
+                  {inviatoPerId === r.iscritto.id ? (
+                    <span style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 600 }}>Inviato ✓</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setPagamentoPer(r.iscritto); }}
+                      style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}
+                    >
+                      Aggiungi pagamento
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
@@ -9405,6 +9441,7 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
             </tbody>
           </table>
         </div>
+        )
       )}
       {pagamentoPer && (
         <ModalePagamentoVenditore
