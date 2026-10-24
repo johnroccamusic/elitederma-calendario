@@ -82552,6 +82552,19 @@ function Gestionale() {
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [storicoAllievi, setStoricoAllievi] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
+  // QUANTI PEZZI SERVONO AI CORSI, prodotto per prodotto: lo stesso conto
+  // dell'Advisor (simulaScorte), senza eventi — serve alla scheda
+  // materiali di un evento per dire «in stock 20, di cui 4 per i corsi,
+  // disponibili per l'evento 16» (24/10/2026). Un conto diverso da quello
+  // dell'Advisor darebbe due numeri per la stessa cosa.
+  const fabbisognoCorsiPerProdotto = useMemo(() => {
+    try {
+      const { perProdotto } = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi: dataOggiStr() });
+      const m = {};
+      Object.entries(perProdotto || {}).forEach(([id, r]) => { if (r.fabbisognoCorsi > 0) m[id] = r.fabbisognoCorsi; });
+      return m;
+    } catch { return {}; }
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -85459,7 +85472,7 @@ function Gestionale() {
           key={eventoDaAprire || "elenco"}
           location={location} master={master} assistente={assistente} venditori={venditori}
           prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} hotel={hotel}
-          costiCategorie={costiCategorie}
+          costiCategorie={costiCategorie} fabbisognoCorsi={fabbisognoCorsiPerProdotto}
           eventoIniziale={eventoDaAprire}
           onNuovaSpesa={apriNuovaSpesaEvento}
           // il materiale di un evento esce e rientra dal magazzino: le

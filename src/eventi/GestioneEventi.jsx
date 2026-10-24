@@ -307,7 +307,7 @@ function SchedaTeam({ eventoId, persone }) {
 
 // ----------------------------------------------------------- 2. i materiali
 
-function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
+export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, fabbisognoCorsi = {} }) {
   const [righe, setRighe] = useState(null);
   const [uscite, setUscite] = useState({ venduto: {}, omaggiato: {} });
   const [impegni, setImpegni] = useState({ carrelli: {}, perEvento: {} });
@@ -377,11 +377,16 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
     const p = perId.get(prodottoId);
     if (!tieneGiacenza(p)) return null;
     const impegnato = impegnatoAltrove(prodottoId);
+    // i pezzi che i corsi in calendario chiederanno (kit degli iscritti),
+    // contati dall'Advisor: a una fiera non si porta quello che fra due
+    // settimane va in un kit
+    const perCorsi = Number(fabbisognoCorsi[prodottoId]) || 0;
     return {
       ...impegnato,
+      perCorsi,
       giacenza: Number(p.quantita) || 0,
       soglia: p.soglia_riordino == null ? null : Number(p.soglia_riordino) || 0,
-      libera: Math.max(0, (Number(p.quantita) || 0) - impegnato.totale),
+      libera: Math.max(0, (Number(p.quantita) || 0) - impegnato.totale - perCorsi),
     };
   }
 
@@ -647,8 +652,12 @@ function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato }) {
                     del nome: era un blocco di tre righe sotto */}
                 {d && (
                   <span style={{ display: "block", ...fontBody, fontSize: 10.5, color: scoperti > 0 ? "#C0392B" : MUTED, marginTop: 2, lineHeight: 1.35 }}>
-                    {d.libera} liberi
-                    {d.totale > 0 && ` (${d.giacenza} in casa, −${d.totale} impegnati)`}
+                    {/* come l'ha chiesto il titolare (24/10/2026): stock,
+                        quanti ne vogliono i corsi, quanti restano all'evento */}
+                    In stock {d.giacenza}
+                    {d.perCorsi > 0 && `, di cui ${d.perCorsi} necessari per i corsi`}
+                    {d.totale > 0 && `, ${d.totale} impegnati altrove`}
+                    {"; disponibili per l'evento "}<b style={{ color: d.libera > 0 ? NAVY : "#C0392B" }}>{d.libera}</b>
                     {scoperti > 0 && <b> · ne mancano {scoperti}</b>}
                   </span>
                 )}
@@ -1586,7 +1595,7 @@ const SEZIONI = [
   { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato, fabbisognoCorsi = {} }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -1646,7 +1655,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
       <div style={{ background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16 }}>
         {sezione === "team" && <SchedaTeam eventoId={evento.id} persone={persone} />}
-        {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} evento={evento} prodotti={prodotti} onStockCambiato={onStockCambiato} />}
+        {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} evento={evento} prodotti={prodotti} onStockCambiato={onStockCambiato} fabbisognoCorsi={fabbisognoCorsi} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
         {sezione === "documenti" && <SchedaDocumenti eventoId={evento.id} />}
@@ -1659,7 +1668,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato, fabbisognoCorsi = {} }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -1714,7 +1723,7 @@ export default function GestioneEventi({ location = [], master = [], assistente 
         {!creando && aperto && (
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
-            bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa}
+            bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} fabbisognoCorsi={fabbisognoCorsi}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}
             onStockCambiato={onStockCambiato}
