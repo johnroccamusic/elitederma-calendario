@@ -717,6 +717,25 @@ finestra è aperta il body è chiuso (`overflow: hidden`, rimesso com'era
 alla chiusura) e l'overlay ha `overscroll-behavior: contain`: arrivati in
 fondo il dito non scorre più la pagina dietro.
 
+### Modelle e note si cambiano a contratto firmato, e la firma si ricomincia (24/10/2026)
+
+L'allieva firma senza modelle e due giorni dopo le vuole. La scheda
+confermata è chiusa (prezzo e pacchetto si toccano solo col codice) e il
+venditore vede la **fotografia** dell'iscrizione, non la scheda: ma
+`richiede_modelle`, `numero_modelle`, `prezzo_speciale_modelle` e `note`
+le deve poter cambiare da solo. `PannelloRifirma` (App.jsx) sta in fondo
+alla fotografia del venditore e dentro la scheda in sola lettura, fuori
+dai `fieldset disabled` (lì dentro un campo non si riaccende): scrive
+**solo** quelle quattro colonne con un update mirato. Se il modulo era
+già tornato firmato, chiede se riaprirlo — `modulo_riapri` archivia
+firma, documenti, contratto, PDF e stato in `moduli_riaperture`, poi
+azzera e riporta a `modulo_inviato` — e apre il dialogo di rinvio della
+mail. In fondo c'è **«Ricomincia procedura di firma»**, per chiunque e
+per qualunque motivo (resta scritto): stessa riapertura, stesso rinvio.
+Il dialogo di invio vive nella pagina della classe, quindi dalla
+fotografia prima si torna lì. Prove in
+`prove/modelle-e-note-a-contratto-firmato.test.jsx`.
+
 ### Il civico sta dentro la via (23/10/2026)
 
 Gli indirizzi letti dai moduli cartacei sono una riga sola («Via monte
