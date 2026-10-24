@@ -59427,6 +59427,18 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
           </div>
   );
   const filtriAttivi = [categoriaSel, fornitoreSel, canaleSel].filter(Boolean).length;
+  // sul telefono i prodotti per pagina sono una tendina, non cinque
+  // tasti: cosi' stanno sulla stessa riga di «Aggiorna lo shop»
+  const tendinaPerPaginaProdotti = vistaProdotti === "elenco" ? (
+    <select
+      value={String(perPaginaMagazzino)}
+      onChange={(e) => { const v = e.target.value; setPerPaginaMagazzino(v === "tutti" ? "tutti" : Number(v)); setPaginaMagazzino(0); }}
+      title="Quanti prodotti per pagina"
+      style={{ ...inputStyle, width: "auto", flex: "0 0 auto", padding: "9px 10px", fontSize: 12.5, fontWeight: 600 }}
+    >
+      {PASSI_PER_PAGINA_MAGAZZINO.map((n) => <option key={String(n)} value={String(n)}>{n === "tutti" ? "Tutti" : `${n} per pagina`}</option>)}
+    </select>
+  ) : null;
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       {/* 1.900 e non 1.300 (16/09/2026): con le colonne Sicurezza e Quota
@@ -59699,11 +59711,11 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
           {tastoConfezioniSfusi}
           {tastoRigaContanti}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-          {tastoAggiornaShop}
-          {esitoAggiornaShop}
-          {selettorePerPaginaProdotti}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex" }}>{tastoAggiornaShop}</div>
+          {tendinaPerPaginaProdotti}
         </div>
+        {esitoAggiornaShop && <div style={{ marginBottom: 10 }}>{esitoAggiornaShop}</div>}
         </>) : (<>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           {campoRicercaProdotti}
