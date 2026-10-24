@@ -13044,7 +13044,42 @@ async function riapriModuloIscritto({ id, motivo, chi }) {
 // In fondo, «Ricomincia procedura di firma»: per quando il contratto va
 // rifirmato per qualunque motivo. Azzera firma, documento, «ricevuto» e
 // stato (archiviando tutto) e fa rispedire la mail.
-function PannelloRifirma({ iscritto, chi, ricarica, onRispedisci, conRicomincia = true }) {
+// RICOMINCIA LA PROCEDURA DI FIRMA — IN ALTO (24/10/2026, il titolare):
+// «prima entri, resetti, poi scrivi ovunque e rispedisci». Quindi il
+// tasto sta in cima alla scheda, e dopo il reset la scheda si riapre in
+// modifica, tutta: l'iscrizione riparte da capo, anche nei dati in alto.
+// modulo_riapri archivia firma, documenti, contratto, PDF e stato in
+// moduli_riaperture e riporta a «modulo inviato»; la mail la si rimanda
+// dopo, quando la scheda e' a posto.
+function TastoRicominciaFirma({ iscritto, chi, ricarica, onRiaperto }) {
+  const [occupato, setOccupato] = useState(false);
+  if (!iscritto?.modulo_ricevuto_il) return null;
+  const nome = [iscritto?.nome, iscritto?.cognome].filter(Boolean).join(" ");
+  async function ricomincia() {
+    if (!window.confirm(
+      `Ricominciare la procedura di firma di ${nome}?\n\n`
+      + "Firma, documento e «modulo ricevuto» si azzerano e l'iscrizione torna a «modulo inviato»: "
+      + "quello che aveva firmato resta archiviato, non si cancella. Poi la scheda si riapre: correggi quello che serve e rispedisci il modulo."
+    )) return;
+    const motivo = window.prompt("Perché si ricomincia? (resta scritto)", "") || null;
+    setOccupato(true);
+    const r = await riapriModuloIscritto({ id: iscritto.id, motivo, chi });
+    setOccupato(false);
+    if (!r.ok) { window.alert("Non sono riuscito a ricominciare la procedura: " + r.errore); await ricarica?.(["iscritti"]); return; }
+    await ricarica?.(["iscritti"]);
+    onRiaperto?.({ ...iscritto, modulo_ricevuto_il: null, modulo_ricevuto_da: null, firma_path: null, contratto_firmato: null, stato: "modulo_inviato" });
+  }
+  return (
+    <div data-campo="ricomincia-firma" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "10px 12px", marginBottom: 14, background: "#FFFDF8" }}>
+      <Button variant="ghost" onClick={ricomincia} disabled={occupato}>{occupato ? "Riapro…" : "Ricomincia procedura di firma"}</Button>
+      <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 240px" }}>
+        Il contratto è firmato. Per rifarlo: azzera firma, documento e «modulo ricevuto», l'iscrizione torna a «modulo inviato» e la scheda si riapre tutta. Quello firmato prima resta archiviato nel fascicolo.
+      </span>
+    </div>
+  );
+}
+
+function PannelloRifirma({ iscritto, chi, ricarica, onRiaperto }) {
   const [richiede, setRichiede] = useState(iscritto?.richiede_modelle === true ? "si" : iscritto?.richiede_modelle === false ? "no" : "");
   const [numero, setNumero] = useState(iscritto?.numero_modelle ?? "");
   const [prezzo, setPrezzo] = useState(iscritto?.prezzo_speciale_modelle ?? "");
@@ -13060,7 +13095,7 @@ function PannelloRifirma({ iscritto, chi, ricarica, onRispedisci, conRicomincia 
     setOccupato(false);
     if (!r.ok) { window.alert("Non sono riuscito a ricominciare la procedura: " + r.errore); await ricarica?.(["iscritti"]); return; }
     await ricarica?.(["iscritti"]);
-    onRispedisci?.({ ...iscritto, modulo_ricevuto_il: null, stato: "modulo_inviato" });
+    onRiaperto?.({ ...iscritto, modulo_ricevuto_il: null, modulo_ricevuto_da: null, firma_path: null, contratto_firmato: null, stato: "modulo_inviato" });
   }
   async function salva() {
     if (!iscritto?.id || occupato) return;
@@ -13077,19 +13112,11 @@ function PannelloRifirma({ iscritto, chi, ricarica, onRispedisci, conRicomincia 
     if (!firmato) { setMsg("Modelle e note salvate."); ricarica?.(["iscritti"]); return; }
     if (!window.confirm(
       "Modelle e note sono salvate, ma il contratto che ha firmato non le contiene.\n\n"
-      + "Riapro il modulo (la firma di prima resta archiviata) e ti faccio rispedire la mail per la nuova firma?"
+      + "Riapro il modulo (la firma di prima resta archiviata) e ti riapro la scheda per rispedirlo?"
     )) { setMsg("Salvate. Il contratto firmato resta quello di prima."); ricarica?.(["iscritti"]); return; }
     await ricomincia("Modelle o note cambiate dopo la firma");
   }
-  function chiediRicomincia() {
-    if (!window.confirm(
-      `Ricominciare la procedura di firma di ${nome}?\n\n`
-      + "Firma, documento e «modulo ricevuto» si azzerano e l'iscrizione torna a «modulo inviato»: "
-      + "quello che aveva firmato resta archiviato, non si cancella. Subito dopo ti chiedo di rispedire la mail."
-    )) return;
-    const motivo = window.prompt("Perché si ricomincia? (resta scritto)", "") || null;
-    ricomincia(motivo);
-  }
+
 
   return (
     <div data-campo="modelle-note-sbloccate" style={{ ...fontBody, border: `1px solid ${GOLD}`, borderLeft: `4px solid ${GOLD}`, borderRadius: 14, padding: 12, margin: "14px 0", background: "#FFFDF8" }}>
@@ -13116,23 +13143,15 @@ function PannelloRifirma({ iscritto, chi, ricarica, onRispedisci, conRicomincia 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Button onClick={salva} disabled={occupato}>{occupato ? "Salvo…" : "Salva modelle e note"}</Button>
         <span style={{ fontSize: 11.5, color: MUTED }}>
-          {firmato ? "Il contratto è già firmato: dopo il salvataggio ti chiedo se riaprirlo e rispedirlo per la nuova firma." : "Si salvano solo queste quattro cose."}
+          {firmato ? "Il contratto è già firmato: dopo il salvataggio ti chiedo se riaprirlo per rispedirlo con la nuova firma." : "Si salvano solo queste quattro cose."}
         </span>
       </div>
       {msg && <div style={{ fontSize: 12.5, color: NAVY, marginTop: 8 }}>{msg}</div>}
-      {conRicomincia && firmato && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <Button variant="ghost" onClick={chiediRicomincia} disabled={occupato}>{occupato ? "Riapro…" : "Ricomincia procedura di firma"}</Button>
-          <span style={{ fontSize: 11.5, color: MUTED, flex: "1 1 240px" }}>
-            Azzera firma, documento e «modulo ricevuto», riporta l'iscrizione a «modulo inviato» e fa rispedire il contratto da firmare. Quello firmato prima resta archiviato nel fascicolo.
-          </span>
-        </div>
-      )}
     </div>
   );
 }
 
-function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titoloChiusura = "Torna indietro", inFondo = null }) {
+function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titoloChiusura = "Torna indietro", inCima = null, inFondo = null }) {
   const isMobile = useIsMobile();
   const d = datiRiepilogoIscrizione(iscritto);
   const nomeCompleto = `${d.nome || ""} ${d.cognome || ""}`.trim().toUpperCase() || "—";
@@ -13169,6 +13188,7 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo={titoloChiusura} onClick={onChiudi} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>Riepilogo all'iscrizione</div>
+          {inCima}
         </div>
       )}
 
@@ -31718,7 +31738,11 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // classe, anche iscritto da un collega: quello che si vede e' sempre il
   // riepilogo di com'era al momento dell'iscrizione.
   function apriModificaCompleta(i) {
-    if (venditoreLoggato) { setRiepilogoIscritto(i); window.scrollTo(0, 0); return; }
+    // ...finche' il modulo non e' tornato. Dopo un reset della firma
+    // (24/10/2026) l'iscrizione torna a «modulo inviato» e il venditore
+    // deve poter rifare tutto, anche i dati in alto: la fotografia
+    // tiene fermo solo cio' che e' gia' firmato o confermato.
+    if (venditoreLoggato && (i.modulo_ricevuto_il || i.stato === "confermato")) { setRiepilogoIscritto(i); window.scrollTo(0, 0); return; }
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
     setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || ""); setEmailIscritto(i.email || "");
@@ -32348,30 +32372,6 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // torna al primo microtask e non alla fine della scrittura): un blur che
   // arriva dopo porta dati nuovi e deve salvare.
   const autosalvaGiaChiesto = React.useRef(false);
-  // RICOMINCIA LA PROCEDURA DI FIRMA, dal fondo della scheda: vedi
-  // PannelloRifirma, che fa la stessa cosa dentro la fotografia che vede
-  // il venditore.
-  const [ricominciando, setRicominciando] = useState(false);
-  async function ricominciaFirma(motivo) {
-    if (!modificandoId || ricominciando) return;
-    setRicominciando(true);
-    const r = await riapriModuloIscritto({ id: modificandoId, motivo, chi: chiOpera });
-    setRicominciando(false);
-    if (!r.ok) { window.alert("Non sono riuscito a ricominciare la procedura: " + r.errore); ricarica(["iscritti"]); return; }
-    await ricarica(["iscritti"]);
-    mandaModulo({ ...(iscrittoInModifica || { id: modificandoId }), modulo_ricevuto_il: null, stato: "modulo_inviato" }, true);
-  }
-  function chiediRicominciaFirma() {
-    const nome = [iscrittoInModifica?.nome, iscrittoInModifica?.cognome].filter(Boolean).join(" ");
-    if (!window.confirm(
-      `Ricominciare la procedura di firma di ${nome}?\n\n`
-      + "Firma, documento e «modulo ricevuto» si azzerano e l'iscrizione torna a «modulo inviato»: "
-      + "quello che aveva firmato resta archiviato, non si cancella. Subito dopo ti chiedo di rispedire la mail."
-    )) return;
-    const motivo = window.prompt("Perché si ricomincia? (resta scritto)", "") || null;
-    ricominciaFirma(motivo);
-  }
-
   async function autosalva() {
     if (!modificandoId) return; // un iscritto nuovo va prima creato col pulsante
     if (!nome.trim() || !cognome.trim()) return; // non salvare stati incompleti
@@ -33159,11 +33159,15 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
         corsoData={corsoData}
         onChiudi={() => { setRiepilogoIscritto(null); window.scrollTo(0, 0); }}
         titoloChiusura={venditoreLoggato ? "Classe" : "Scheda allievo"}
+        inCima={(() => {
+          const vivo = (iscritti || []).find((x) => x.id === riepilogoIscritto.id) || riepilogoIscritto;
+          // dopo il reset la fotografia si chiude e la scheda si apre in
+          // modifica, tutta: si corregge e poi si rispedisce da li'
+          return <TastoRicominciaFirma key={vivo.id} iscritto={vivo} chi={chiOpera} ricarica={ricarica} onRiaperto={(rec) => { setRiepilogoIscritto(null); apriModificaCompleta(rec); window.scrollTo(0, 0); }} />;
+        })()}
         inFondo={(() => {
           const vivo = (iscritti || []).find((x) => x.id === riepilogoIscritto.id) || riepilogoIscritto;
-          // il dialogo di invio vive nella pagina della classe: si chiude
-          // la fotografia e si apre li'
-          return <PannelloRifirma key={vivo.id} iscritto={vivo} chi={chiOpera} ricarica={ricarica} onRispedisci={(rec) => { setRiepilogoIscritto(null); window.scrollTo(0, 0); mandaModulo(rec, true); }} />;
+          return <PannelloRifirma key={vivo.id} iscritto={vivo} chi={chiOpera} ricarica={ricarica} onRiaperto={(rec) => { setRiepilogoIscritto(null); apriModificaCompleta(rec); window.scrollTo(0, 0); }} />;
         })()}
       />
     );
@@ -33634,6 +33638,10 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
               </label>
             )}
           </div>
+          {/* IN ALTO, prima di tutto: si resetta, poi si scrive ovunque, poi
+              si rispedisce. Dopo il reset lo stato torna a «modulo inviato»
+              e la scheda si sblocca da sola. */}
+          {modificandoId && <TastoRicominciaFirma iscritto={iscrittoInModifica} chi={chiOpera} ricarica={ricarica} onRiaperto={() => ricarica(["iscritti"])} />}
           {soloLettura ? (
             <>
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
@@ -33641,7 +33649,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
               </div>
               {/* il riquadro sta FUORI dai fieldset spenti: dentro un
                   fieldset disabled non c'e' modo di riaccendere un campo */}
-              <PannelloRifirma iscritto={iscrittoInModifica} chi={chiOpera} ricarica={ricarica} onRispedisci={(rec) => mandaModulo(rec, true)} conRicomincia={false} />
+              <PannelloRifirma iscritto={iscrittoInModifica} chi={chiOpera} ricarica={ricarica} onRiaperto={() => ricarica(["iscritti"])} />
             </>
           ) : modificandoId && (
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
@@ -34565,17 +34573,6 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
             )}
           </div>
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
-          {/* in fondo, per chiunque: quando il contratto firmato non vale piu' */}
-          {modificandoId && iscrittoInModifica?.modulo_ricevuto_il && (
-            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <Button variant="ghost" onClick={chiediRicominciaFirma} disabled={ricominciando} data-campo="ricomincia-firma">
-                {ricominciando ? "Riapro…" : "Ricomincia procedura di firma"}
-              </Button>
-              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 240px" }}>
-                Azzera firma, documento e «modulo ricevuto», riporta l'iscrizione a «modulo inviato» e fa rispedire il contratto da firmare. Quello firmato prima resta archiviato nel fascicolo.
-              </span>
-            </div>
-          )}
           {/* QUELLO CHE MANCA, senza impedire di salvare. Prima queste
               cose bloccavano il salvataggio di un'iscrizione nuova, e una
               scheda presa in fiera a meta' restava fuori dall'app. Ora si

@@ -794,6 +794,19 @@ export default function PaginaModulo({ token }) {
           </div>
         )}
 
+        {/* MODULO RIAPERTO (24/10/2026): i campi sono precompilati con quello
+            che aveva scritto la prima volta, e si possono correggere tutti.
+            Va detto, o si pensa che «non si possa toccare». */}
+        {dati.riaperto && (
+          <div data-campo="avviso-riaperto" style={{
+            ...fontBody, fontSize: 12.5, lineHeight: 1.6, color: "#6B4E00",
+            background: "#FFF8E6", border: "1px solid #E6CF8C", borderRadius: 10,
+            padding: "10px 12px", marginBottom: 16,
+          }}>
+            Il modulo è stato riaperto: trovi i dati che avevi scritto la prima volta. Correggi quello che serve, poi rifirma e invia.
+          </div>
+        )}
+
         <div style={pannello}>
           <IntestazioneArea>Il tuo corso</IntestazioneArea>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>

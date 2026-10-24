@@ -61,31 +61,38 @@ describe("contratto già firmato", () => {
     expect(patch).toBeTruthy();
     expect(Object.keys(patch.corpo).sort()).toEqual(["note", "numero_modelle", "prezzo_speciale_modelle", "richiede_modelle"]);
     expect(patch.corpo.note).toBe("VUOLE DUE MODELLE");
-    // confermato (window.confirm vale true nel banco): il modulo si riapre e si chiede di rispedire
+    // confermato (window.confirm vale true nel banco): il modulo si riapre e la scheda si apre in modifica
     expect(rpc).toHaveLength(1);
     expect(rpc[0].p_iscritto_id).toBe("i1");
     expect(rpc[0].p_chi).toBe("MARIO");
-    expect(p.testo()).toContain("Inviare di nuovo il modulo?");
+    expect(p.tasto("Leggi dati dal modulo"), "la scheda aperta").toBeTruthy();
     await p.smonta();
   });
 
-  it("in fondo c'è «Ricomincia procedura di firma», che riapre e fa rispedire", async () => {
+  it("in cima c'è «Ricomincia procedura di firma»: riapre e apre la scheda in modifica, tutta", async () => {
     const { rpc } = banco(FIRMATA);
     const p = await apri(FIRMATA);
     const tasto = p.tasto("Ricomincia procedura di firma");
-    expect(tasto, "il tasto in fondo").toBeTruthy();
+    expect(tasto, "il tasto in cima").toBeTruthy();
+    // sta prima del riepilogo dei dati, non in fondo
+    const testo = p.testo();
+    expect(testo.indexOf("Ricomincia procedura di firma")).toBeLessThan(testo.indexOf("Dati dell'allievo"));
     await clicca(tasto); await attendi(150);
     expect(rpc).toHaveLength(1);
     expect(rpc[0].p_motivo).toBe("Vuole le modelle");
-    expect(p.testo()).toContain("Inviare di nuovo il modulo?");
+    // la fotografia si chiude e la scheda si apre in modifica: i dati in alto si possono rifare
+    expect(p.tasto("Leggi dati dal modulo"), "la scheda aperta").toBeTruthy();
+    expect(p.campi().some((c) => c.value === "LIA")).toBe(true);
     await p.smonta();
   });
 
-  it("senza modulo ricevuto il tasto non c'è", async () => {
+  it("senza modulo ricevuto il tasto non c'è, e il venditore apre la scheda vera", async () => {
     const aperta = { ...FIRMATA, stato: "modulo_inviato", modulo_ricevuto_il: null, acconto_pagato: false };
     banco(aperta);
     const p = await apri(aperta);
     expect(p.tasto("Ricomincia procedura di firma")).toBeUndefined();
+
+    expect(p.tasto("Leggi dati dal modulo"), "la scheda aperta").toBeTruthy();
     await p.smonta();
   });
 });

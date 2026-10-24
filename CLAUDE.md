@@ -717,6 +717,19 @@ finestra è aperta il body è chiuso (`overflow: hidden`, rimesso com'era
 alla chiusura) e l'overlay ha `overscroll-behavior: contain`: arrivati in
 fondo il dito non scorre più la pagina dietro.
 
+### Il modulo riaperto si ricompila (24/10/2026)
+
+Riaperto il modulo, l'allieva non riusciva a correggere la data di
+nascita: `modulo_vista` marcava **bloccato** ogni campo già pieno in
+scheda e `modulo_salva` non riscriveva un campo già pieno — due regole
+giuste al *primo* invio (proteggono quello che ha scritto il venditore),
+ma dopo il primo invio la scheda è piena di quello che ha scritto **lei**.
+Ora `modulo_riaperto(iscritto)` (riga in `moduli_riaperture` e modulo non
+ancora tornato) sblocca i campi dell'allieva, precompilati, e `modulo_salva`
+sovrascrive con quello che manda; i campi del corso restano fissi. La
+pagina lo dice in testa («Il modulo è stato riaperto…»). Verificato sul
+link di Elena Petrone: `riaperto = true`, data di nascita sbloccata.
+
 ### Modelle e note si cambiano a contratto firmato, e la firma si ricomincia (24/10/2026)
 
 L'allieva firma senza modelle e due giorni dopo le vuole. La scheda
@@ -730,10 +743,13 @@ dai `fieldset disabled` (lì dentro un campo non si riaccende): scrive
 già tornato firmato, chiede se riaprirlo — `modulo_riapri` archivia
 firma, documenti, contratto, PDF e stato in `moduli_riaperture`, poi
 azzera e riporta a `modulo_inviato` — e apre il dialogo di rinvio della
-mail. In fondo c'è **«Ricomincia procedura di firma»**, per chiunque e
-per qualunque motivo (resta scritto): stessa riapertura, stesso rinvio.
-Il dialogo di invio vive nella pagina della classe, quindi dalla
-fotografia prima si torna lì. Prove in
+mail. **«Ricomincia procedura di firma» sta IN ALTO** (il titolare: «prima
+entri, resetti, poi scrivi ovunque e rispedisci»), per chiunque e per
+qualunque motivo (resta scritto). Dopo il reset lo stato torna a
+`modulo_inviato` e **la scheda si riapre tutta, anche i dati in alto**:
+dalla fotografia si passa alla scheda in modifica, e il venditore vede la
+fotografia solo a modulo ricevuto o iscrizione confermata. La mail si
+rimanda dopo, dalla fascia di stato, quando la scheda è a posto. Prove in
 `prove/modelle-e-note-a-contratto-firmato.test.jsx`.
 
 ### Il civico sta dentro la via (23/10/2026)
