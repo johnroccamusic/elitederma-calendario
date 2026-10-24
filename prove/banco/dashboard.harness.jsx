@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { PaginaDashboardVenditori } from "../../src/App.jsx";
 
 const MARIO = { id: "v1", nome: "MARIO", permessi: ["dashboardvenditori"] };
-const corsi = [{ id: "c1", nome: "NEEDLING" }, { id: "c2", nome: "EXTENSION BASE" }, { id: "c3", nome: "PMU BASE" }];
+const corsi = [{ id: "c1", nome: "NEEDLING", colore: "#2E7D32" }, { id: "c2", nome: "EXTENSION BASE", colore: "#8A6A1B" }, { id: "c3", nome: "PMU BASE" }];
 const location = [{ id: "l1", nome: "MILANO", citta: "MILANO" }, { id: "l2", nome: "ROMA", citta: "ROMA" }];
 const corsiDate = [
   { id: "cd1", corso_id: "c1", location_id: "l1", data_inizio: "2026-11-14", data_fine: "2026-11-15" },

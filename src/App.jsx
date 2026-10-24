@@ -9323,6 +9323,7 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
         iscritto: i,
         citta: loc?.nome?.toUpperCase() || "?",
         corsoNome: corso?.nome?.toUpperCase() || "?",
+        corsoColore: corso?.colore || null,
         dataIso: cd?.data_inizio || "",
         dataLabel: cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—",
         allievo: `${i.nome} ${i.cognome}`,
@@ -9380,8 +9381,13 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
                   <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>{r.allievo}</span>
                   <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>iscritta il {r.iscritto.ts ? fmtData(String(r.iscritto.ts).slice(0, 10)) : "—"}</span>
                 </div>
-                <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 3 }}>
-                  <b>{r.corsoNome}</b> · {r.citta}
+                {/* il corso come pastiglia, col SUO colore (quello del
+                    calendario) se ce l'ha, altrimenti la pastiglia delle
+                    vendite al banco */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "3px 9px",
+                    color: r.corsoColore ? "#fff" : "#3D4A94", background: r.corsoColore || "#ECEDFA" }}>{r.corsoNome}</span>
+                  <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{r.citta}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6 }}>
                   <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Corso del {r.dataLabel}</span>
