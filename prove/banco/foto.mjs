@@ -10,7 +10,7 @@ const browser = await (process.env.MOTORE === "webkit" ? webkit : chromium).laun
 const page = await (await browser.newContext(process.env.VISTA === "scrivania" ? { viewport: { width: 1280, height: 900 } } : process.env.VISTA === "ipad" ? { ...devices["iPad (gen 7) landscape"] } : process.env.VISTA === "stretta" ? { viewport: { width: 600, height: 900 }, isMobile: true, hasTouch: true } : { ...devices["iPhone 13"] })).newPage();
 page.on("pageerror", (e) => console.log("ERRORE IN PAGINA:", e.message));
 await page.goto(`http://localhost:4173/prove/banco/${banco}.html${process.env.QUERY || ""}`, { waitUntil: "networkidle" });
-await page.waitForTimeout(400);
+await page.waitForTimeout(900);
 // CLICCA="testo1|testo2": tocca in sequenza gli elementi con quel testo
 // (il primo che lo contiene), per arrivare alla schermata da fotografare
 for (const t of (process.env.CLICCA || "").split("|").filter(Boolean)) {

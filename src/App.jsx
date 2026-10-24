@@ -61884,6 +61884,38 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
+// UNA SCHEDA DISEGNATA LARGA E RIMPICCIOLITA TUTTA INSIEME.
+// `zoom` sembrava la via breve, ma WebKit (iPhone, iPad) lo applica a
+// meta': la larghezza restava quella piena e le colonne si schiacciavano
+// lo stesso — trovato nel banco visivo, non sul telefono del titolare.
+// `transform: scale` lo rispettano tutti; in cambio non fa spazio da solo,
+// quindi si misura l'altezza vera e la si riserva gia' ridotta.
+function SchedaScalata({ fattore, larghezza, children }) {
+  const rif = useRef(null);
+  const [altezza, setAltezza] = useState(0);
+  useLayoutEffect(() => {
+    const el = rif.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setAltezza(el.offsetHeight || 0);
+    misura();
+    const oss = new ResizeObserver(misura);
+    oss.observe(el);
+    return () => oss.disconnect();
+  }, []);
+  // l'involucro c'e' sempre, anche a scala 1: se comparisse solo quando
+  // serve, il ref nascerebbe dopo l'effetto che lo misura, l'altezza
+  // resterebbe zero e sotto la scheda si aprirebbe un vuoto grande
+  // quanto la scheda intera (visto nel banco a 390 px)
+  const ridotta = fattore < 1;
+  return (
+    <div style={{ height: ridotta && altezza ? Math.ceil(altezza * fattore) : undefined, overflow: ridotta ? "hidden" : undefined }}>
+      <div ref={rif} style={ridotta ? { width: larghezza, transform: `scale(${fattore})`, transformOrigin: "top left" } : undefined}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, eventi = [], eventiMateriali = [], riordiniInCorso = [], ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
@@ -61932,6 +61964,25 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
     return m;
   }, [riordiniInCorso]);
   const [salvandoRiordino, setSalvandoRiordino] = useState(null);
+  // LA SCHEDA DA ORDINARE E' UNA SOLA, A OGNI LARGHEZZA (24/10/2026, il
+  // titolare dopo due giri a vuoto: «uguale a quella del computer, anche
+  // se diventa tutto piu' piccolo»). Si disegna sempre a 900 px, in fila,
+  // e dove la colonna e' piu' stretta — telefono, iPad diviso, scrivania
+  // con l'attesa di ricezione a fianco — si rimpicciolisce tutta insieme
+  // con SchedaScalata. Niente che vada a capo, niente colonne schiacciate.
+  const LARGHEZZA_SCHEDA_ORDINE = 900;
+  const rifColonnaOrdini = useRef(null);
+  const [larghezzaColonnaOrdini, setLarghezzaColonnaOrdini] = useState(0);
+  useLayoutEffect(() => {
+    const el = rifColonnaOrdini.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const misura = () => setLarghezzaColonnaOrdini(el.clientWidth || 0);
+    misura();
+    const oss = new ResizeObserver(misura);
+    oss.observe(el);
+    return () => oss.disconnect();
+  });
+  const fattoreSchedaOrdine = larghezzaColonnaOrdini > 0 ? Math.min(1, larghezzaColonnaOrdini / LARGHEZZA_SCHEDA_ORDINE) : 1;
   const [ricezioneAperta, setRicezioneAperta] = useState(null); // { riordino, prodotto }
   const [quantitaRicevuta, setQuantitaRicevuta] = useState("");
 
@@ -62649,7 +62700,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
             due: a sinistra resta l'elenco da cui si è partiti, a destra
             compare il suo ordine — così si vede da dove viene */}
         <div style={{ display: "grid", gridTemplateColumns: (!isMobile && fornitoreOrdineId) ? "minmax(0,1fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, alignItems: "start" }}>
-        <div>
+        <div ref={rifColonnaOrdini} style={{ minWidth: 0 }}>
         {perFornitore.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Niente da ordinare: nessun prodotto è in ritardo, in scadenza d'ordine o sotto scorta minima.</div>
         ) : perFornitore.map(([fornitoreId, righe]) => (
@@ -62694,7 +62745,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // in mezza pagina — quando a destra c'e' l'attesa di
               // ricezione — i blocchi non ci stanno in fila: le righine
               // spariscono e si va a capo, invece di accavallarsi
-              const stretta = isMobile;
+              const stretta = false; // la scheda non si stringe: si rimpicciolisce (zoom), vedi fattoreSchedaOrdine
               const eti = { ...fontBody, fontSize: 9, fontWeight: 700, color: "#9A9A9A", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
               // A 600 px (iPad diviso, telefono in orizzontale) la fila non
               // ci stava e, con «nowrap», le due colonne elastiche si
@@ -62704,7 +62755,9 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
               // a 600 px). Stretta, la fila va a capo e i filetti spariscono.
               const sep = stretta ? null : <span style={{ width: 1, alignSelf: "stretch", background: "#D8D8D4", flexShrink: 0 }} />;
               return (
-              <div key={r.prodotto.id} style={{
+              <SchedaScalata key={r.prodotto.id} fattore={fattoreSchedaOrdine} larghezza={LARGHEZZA_SCHEDA_ORDINE}>
+              <div style={{
+                boxSizing: "border-box",
                 display: "flex", alignItems: "flex-start", columnGap: stretta ? 9 : 18, rowGap: stretta ? 10 : 0,
                 flexWrap: stretta ? "wrap" : "nowrap", padding: stretta ? "10px 10px" : "13px 18px", marginBottom: 10,
                 background: "#F1F1F0", border: "1px solid #E2E2DF", borderRadius: 22,
@@ -62849,6 +62902,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                   </button>
                 )}
               </div>
+              </SchedaScalata>
               );
             })}
             {fornitoreId !== "__nessuno" && !fornitoriChiusi[fornitoreId] && (
