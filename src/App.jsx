@@ -58632,6 +58632,8 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
   // nel suo browser (vedi useLayoutCondiviso)
   const [larghezze, setLarghezze] = useLayoutCondiviso(CHIAVE_LARGHEZZE_MAGAZZINO, {});
   const [etichetteColonne, setEtichetteColonne] = useLayoutCondiviso(CHIAVE_ETICHETTE_MAGAZZINO, {});
+  // da telefono le tre tendine stanno in un riquadro che si apre e si chiude
+  const [filtriAperti, setFiltriAperti] = useState(false);
   // l'ordine delle colonne, come l'ha lasciato chi le ha spostate. Si
   // parte sempre dall'elenco vero: quello salvato dice solo la sequenza,
   // e una colonna aggiunta dopo (o tolta dal codice) non puo' rompere la
@@ -59255,6 +59257,176 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
   const paginaMagazzinoClamp = Math.min(paginaMagazzino, totalePagineMagazzino - 1);
   const prodottiPaginaMagazzino = prodottiOrdinati.slice(paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO, paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO + PER_PAGINA_MAGAZZINO);
 
+  // I PEZZI DELLA TESTATA, uno per uno, cosi' da computer e da telefono
+  // si dispongono in due ordini diversi senza scriverli due volte
+  // (24/10/2026, l'ordine del telefono e' quello chiesto dal titolare).
+  const campoRicercaProdotti = (
+          <CampoRicerca
+            value={ricercaProdotto}
+            onChange={(e) => setRicercaProdotto(e.target.value)}
+            placeholder="Cerca prodotto…"
+            style={{ flex: "1 1 180px", minWidth: 150, maxWidth: isMobile ? "100%" : "28%" }}
+          />
+  );
+  const tendineFiltriProdotti = (
+    <>
+            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+              <option value="">Tutte le categorie</option>
+              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <TendinaCercabile
+              style={{ flex: "1 1 0", minWidth: 0 }}
+              valore={fornitoreSel}
+              onCambia={setFornitoreSel}
+              placeholder="Tutti i fornitori"
+              titolo="Scrivi le prime lettere del fornitore per trovarlo"
+              voci={[
+                { valore: "", etichetta: "Tutti i fornitori" },
+                ...[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => ({ valore: f.id, etichetta: f.nome || "(senza nome)" })),
+                { valore: "__nessuno", etichetta: "— senza fornitore —" },
+              ]}
+            />
+            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={canaleSel} onChange={(e) => setCanaleSel(e.target.value)}
+              title="Filtra per dove il prodotto e' in vendita">
+              <option value="">Ovunque in vendita e non</option>
+              <option value="invendita">In vendita (POS o shop online)</option>
+              <option value="pos">Sul POS</option>
+              <option value="shop">Sullo shop online</option>
+              <option value="posshop">Su POS e shop</option>
+              <option value="nonvendita">Non in vendita</option>
+            </select>
+    </>
+  );
+  const pillolaVistaProdotti = (
+            <PillolaSegmentata
+              compatto={isMobile}
+              valore={vistaProdotti}
+              onCambia={cambiaVistaAMano}
+              voci={[
+                { chiave: "elenco", testo: isMobile ? "Elenco" : "Vista a elenco", Icona: IconaElencoRighe },
+                { chiave: "categorie", testo: isMobile ? "Categorie" : "Vista a categorie", Icona: IconaGriglia },
+              ]}
+            />
+  );
+  const selettorePerPaginaProdotti = (
+    <>
+            {vistaProdotti === "elenco" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>Per pagina</span>
+                <div style={{ display: "flex", background: BG, borderRadius: isMobile ? 12 : 20, padding: 4, gap: 2, boxSizing: "border-box" }}>
+                  {PASSI_PER_PAGINA_MAGAZZINO.map((n) => {
+                    const scelto = perPaginaMagazzino === n;
+                    return (
+                      <button
+                        key={String(n)}
+                        onClick={() => { setPerPaginaMagazzino(n); setPaginaMagazzino(0); }}
+                        title={n === "tutti" ? "Tutti i prodotti in una pagina sola" : `${n} prodotti per pagina`}
+                        style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "6px 7px" : "7px 12px", borderRadius: isMobile ? 9 : 16, border: "none", minWidth: 0, whiteSpace: "nowrap", background: scelto ? NAVY : "transparent", color: scelto ? "#fff" : NAVY, cursor: "pointer" }}
+                      >
+                        {n === "tutti" ? "Tutti" : n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+    </>
+  );
+  const tastoConfezioniSfusi = (
+    <>
+            {vistaProdotti === "elenco" && (() => {
+              const quante = prodottiConStato.filter(generaSingoli).length;
+              if (quante === 0) return null;
+              const acceso = filtroRapido === "confezioni";
+              return (
+                <button
+                  onClick={() => setFiltroRapido(acceso ? "tutti" : "confezioni")}
+                  aria-pressed={acceso}
+                  title={acceso ? "Torna a vedere tutti i prodotti" : "Mostra solo le confezioni da aprire e i pezzi singoli che ne escono"}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600,
+                    color: acceso ? "#fff" : ARANCIO_SFUSI,
+                    background: acceso ? ARANCIO_SFUSI : "#fff",
+                    border: `1px solid ${acceso ? ARANCIO_SFUSI : "#E3C9AC"}`,
+                    borderRadius: 18, padding: "8px 13px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  }}
+                >
+                  {/* la scatola che si apre */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9Z" />
+                    <path d="M2 5h9l1 4H3L2 5Z" /><path d="M22 5h-9l-1 4h9l1-4Z" />
+                  </svg>
+                  Confezioni e sfusi{acceso ? "" : ` (${quante})`}
+                </button>
+              );
+            })()}
+    </>
+  );
+  const tastoAzzeraFiltri = (
+    <>
+            {(ricercaProdotto.trim() || categoriaSel || fornitoreSel || canaleSel || filtroRapido !== "tutti") && (
+              <button
+                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFornitoreSel(""); setCanaleSel(""); setFiltroRapido("tutti"); }}
+                title="Togli ricerca, categoria, fornitore, canale di vendita e filtro di stato"
+                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                Azzera filtri
+              </button>
+            )}
+    </>
+  );
+  const tastoAggiornaShop = (
+            <button
+              onClick={aggiornaLoShop}
+              disabled={allineandoShop}
+              title="Riscrive su WooCommerce le giacenze di tutti i prodotti, tolti i pezzi promessi nei carrelli sospesi, e toglie dal negozio quelli con la spunta Non sullo shop"
+              style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "8px 14px", cursor: allineandoShop ? "default" : "pointer", whiteSpace: "nowrap", opacity: allineandoShop ? 0.6 : 1 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4" /><path d="M21 3v6h-6" /></svg>
+              {allineandoShop ? "Scrivo sul sito…" : "Aggiorna lo shop"}
+            </button>
+  );
+  const tastoRigaContanti = (
+    <>
+            {vistaProdotti === "elenco" && (
+              <button
+                onClick={cambiaRigaContanti}
+                aria-pressed={mostraRigaContanti}
+                title={mostraRigaContanti ? "Nascondi la riga dei contanti sotto ogni prodotto" : "Mostra sotto ogni prodotto margine, cedibile e punti per chi paga in contanti"}
+                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: mostraRigaContanti ? "#fff" : "#8A6A1B", background: mostraRigaContanti ? "#8A6A1B" : "#FBF7EE", border: `1px solid ${mostraRigaContanti ? "#8A6A1B" : "#E8D4B0"}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <IconaBanconota size={14} />
+                {mostraRigaContanti ? "Contanti: attivi" : "Contanti"}
+              </button>
+            )}
+    </>
+  );
+  const esitoAggiornaShop = (
+    <>
+          {esitoAllineaShop && (
+            <div style={{ ...fontBody, fontSize: 12.5, lineHeight: 1.45, padding: "9px 13px", borderRadius: 12,
+              color: esitoAllineaShop.startsWith("Non riuscito") ? "#C0392B" : "#2E7D32",
+              background: esitoAllineaShop.startsWith("Non riuscito") ? "#FBEBE9" : "#E9F6EC",
+              border: `1px solid ${esitoAllineaShop.startsWith("Non riuscito") ? "#F0C8C2" : "#CFE8D5"}` }}>
+              {esitoAllineaShop}
+            </div>
+          )}
+    </>
+  );
+  const barraFiltriRapidi = (
+          <div style={{ display: "flex", background: BG, borderRadius: isMobile ? 12 : 20, padding: 4, gap: 2, flexWrap: isMobile ? "nowrap" : "wrap", overflowX: isMobile ? "auto" : undefined, width: isMobile ? "100%" : undefined, boxSizing: "border-box" }}>
+            {/* questi filtri leggono lo stato del magazzino, cosa che solo
+                la tabella sa mostrare: sceglierne uno riporta all'elenco
+                invece di restare un tasto che non fa niente */}
+            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
+              <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "7px 10px" : "7px 13px", borderRadius: isMobile ? 9 : 16, border: "none", flex: isMobile ? "1 1 0" : undefined, minWidth: 0, whiteSpace: "nowrap", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+  );
+  const filtriAttivi = [categoriaSel, fornitoreSel, canaleSel].filter(Boolean).length;
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       {/* 1.900 e non 1.300 (16/09/2026): con le colonne Sicurezza e Quota
@@ -59498,188 +59670,60 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
             della vista con i filtri di stato all'altro capo. Prima stavano
             tutti in fila e, appena la finestra si stringeva, andavano a
             capo dove capitava */}
+        {isMobile ? (<>
+        {/* Da telefono, nell'ordine deciso dal titolare: ricerca, filtri
+            rapidi, «Filtri» richiudibile accanto alla scelta della vista,
+            le tre tendine dentro il riquadro, Confezioni e Contanti
+            affiancati, Aggiorna lo shop per largo. */}
+        <div style={{ marginBottom: 10 }}>{campoRicercaProdotti}</div>
+        <div style={{ marginBottom: 10 }}>{barraFiltriRapidi}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+          <button type="button" onClick={() => setFiltriAperti((v) => !v)} aria-expanded={filtriAperti} data-campo="apri-filtri"
+            style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "10px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            <IconaFiltroImbuto size={16} />
+            Filtri{filtriAttivi > 0 ? ` (${filtriAttivi})` : ""}
+            <span style={{ fontSize: 11 }}>{filtriAperti ? "▲" : "▼"}</span>
+          </button>
+          {pillolaVistaProdotti}
+        </div>
+        {filtriAperti && (
+          <div data-campo="pannello-filtri" style={{ ...cardStyle, padding: "12px 14px", marginBottom: 10 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Filtri</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {tendineFiltriProdotti}
+            </div>
+            <div style={{ marginTop: 8 }}>{tastoAzzeraFiltri}</div>
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 8 }}>
+          {tastoConfezioniSfusi}
+          {tastoRigaContanti}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+          {tastoAggiornaShop}
+          {esitoAggiornaShop}
+          {selettorePerPaginaProdotti}
+        </div>
+        </>) : (<>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          {/* categoria, fornitore e ricerca valgono per tutte e due le
-              viste: nella vista a categorie pilotano l'albero e il suo elenco */}
-          <CampoRicerca
-            value={ricercaProdotto}
-            onChange={(e) => setRicercaProdotto(e.target.value)}
-            placeholder="Cerca prodotto…"
-            style={{ flex: "1 1 180px", minWidth: 150, maxWidth: isMobile ? "100%" : "28%" }}
-          />
-          {/* categorie e fornitori dividono la riga a meta': impilati uno
-              sopra l'altro si prendevano due fasce intere per due tendine
-              quasi sempre ferme su "tutte" e "tutti" */}
+          {campoRicercaProdotti}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 320px", minWidth: 0 }}>
-            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
-              <option value="">Tutte le categorie</option>
-              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-            {/* i fornitori sono decine: qui si scrive e l'elenco si
-                stringe, invece di scorrerlo tutto a occhio */}
-            <TendinaCercabile
-              style={{ flex: "1 1 0", minWidth: 0 }}
-              valore={fornitoreSel}
-              onCambia={setFornitoreSel}
-              placeholder="Tutti i fornitori"
-              titolo="Scrivi le prime lettere del fornitore per trovarlo"
-              voci={[
-                { valore: "", etichetta: "Tutti i fornitori" },
-                ...[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => ({ valore: f.id, etichetta: f.nome || "(senza nome)" })),
-                { valore: "__nessuno", etichetta: "— senza fornitore —" },
-              ]}
-            />
-            {/* dove si vende: al banco, sul sito, tutti e due o da
-                nessuna parte. Sta in fila con gli altri due, e la
-                ricerca si e' stretta per fargli posto */}
-            <select style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, width: "100%" }} value={canaleSel} onChange={(e) => setCanaleSel(e.target.value)}
-              title="Filtra per dove il prodotto e' in vendita">
-              <option value="">Ovunque in vendita e non</option>
-              <option value="invendita">In vendita (POS o shop online)</option>
-              <option value="pos">Sul POS</option>
-              <option value="shop">Sullo shop online</option>
-              <option value="posshop">Su POS e shop</option>
-              <option value="nonvendita">Non in vendita</option>
-            </select>
+            {tendineFiltriProdotti}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            {/* la scelta della vista sta qui, appoggiata all'elenco che
-                governa, e non più in cima alla pagina fra i comandi */}
-            {/* la stessa pillola segmentata di Elenco/Calendario e delle
-                altre schede dell'app: era un paio di tasti attaccati col
-                bordo tondo, e in mezzo a schermate che avevano gia' preso
-                questa forma sembrava un pezzo rimasto indietro */}
-            <PillolaSegmentata
-              compatto={isMobile}
-              valore={vistaProdotti}
-              onCambia={cambiaVistaAMano}
-              voci={[
-                { chiave: "elenco", testo: isMobile ? "Elenco" : "Vista a elenco", Icona: IconaElencoRighe },
-                { chiave: "categorie", testo: isMobile ? "Categorie" : "Vista a categorie", Icona: IconaGriglia },
-              ]}
-            />
-            {/* Quanti prodotti per pagina, subito accanto alle due viste:
-                e' una scelta su come si guarda l'elenco, e sta dove si
-                sceglie come guardarlo — non in fondo alla tabella, dove
-                si troverebbe solo dopo aver scorso tutte le righe che si
-                voleva evitare di scorrere.
-                Compare solo con la vista a elenco: la vista a categorie
-                non ha pagine, e un comando che non governa niente e'
-                peggio di un comando che manca. */}
-            {vistaProdotti === "elenco" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>Per pagina</span>
-                <div style={{ display: "flex", background: BG, borderRadius: isMobile ? 12 : 20, padding: 4, gap: 2, boxSizing: "border-box" }}>
-                  {PASSI_PER_PAGINA_MAGAZZINO.map((n) => {
-                    const scelto = perPaginaMagazzino === n;
-                    return (
-                      <button
-                        key={String(n)}
-                        onClick={() => { setPerPaginaMagazzino(n); setPaginaMagazzino(0); }}
-                        title={n === "tutti" ? "Tutti i prodotti in una pagina sola" : `${n} prodotti per pagina`}
-                        style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "6px 7px" : "7px 12px", borderRadius: isMobile ? 9 : 16, border: "none", minWidth: 0, whiteSpace: "nowrap", background: scelto ? NAVY : "transparent", color: scelto ? "#fff" : NAVY, cursor: "pointer" }}
-                      >
-                        {n === "tutti" ? "Tutti" : n}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {/* "Confezioni e sfusi": mostra solo i pacchi che si aprono e i
-                pezzi che ne escono. Il colore del tasto e' lo stesso
-                arancio con cui nella lista si scrivono i loro nomi —
-                si preme quello e restano quelli. */}
-            {vistaProdotti === "elenco" && (() => {
-              const quante = prodottiConStato.filter(generaSingoli).length;
-              if (quante === 0) return null;
-              const acceso = filtroRapido === "confezioni";
-              return (
-                <button
-                  onClick={() => setFiltroRapido(acceso ? "tutti" : "confezioni")}
-                  aria-pressed={acceso}
-                  title={acceso ? "Torna a vedere tutti i prodotti" : "Mostra solo le confezioni da aprire e i pezzi singoli che ne escono"}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600,
-                    color: acceso ? "#fff" : ARANCIO_SFUSI,
-                    background: acceso ? ARANCIO_SFUSI : "#fff",
-                    border: `1px solid ${acceso ? ARANCIO_SFUSI : "#E3C9AC"}`,
-                    borderRadius: 18, padding: "8px 13px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                  }}
-                >
-                  {/* la scatola che si apre */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9Z" />
-                    <path d="M2 5h9l1 4H3L2 5Z" /><path d="M22 5h-9l-1 4h9l1-4Z" />
-                  </svg>
-                  Confezioni e sfusi{acceso ? "" : ` (${quante})`}
-                </button>
-              );
-            })()}
-            {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
-                sempre presente e quasi sempre inutile è solo rumore. Toglie
-                in un colpo ricerca, categoria, fornitore e filtro di stato —
-                capita di non vedere un prodotto e non ricordare quale dei
-                filtri lo stava nascondendo */}
-            {(ricercaProdotto.trim() || categoriaSel || fornitoreSel || canaleSel || filtroRapido !== "tutti") && (
-              <button
-                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFornitoreSel(""); setCanaleSel(""); setFiltroRapido("tutti"); }}
-                title="Togli ricerca, categoria, fornitore, canale di vendita e filtro di stato"
-                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                Azzera filtri
-              </button>
-            )}
-            <button
-              onClick={aggiornaLoShop}
-              disabled={allineandoShop}
-              title="Riscrive su WooCommerce le giacenze di tutti i prodotti, tolti i pezzi promessi nei carrelli sospesi, e toglie dal negozio quelli con la spunta Non sullo shop"
-              style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "8px 14px", cursor: allineandoShop ? "default" : "pointer", whiteSpace: "nowrap", opacity: allineandoShop ? 0.6 : 1 }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4" /><path d="M21 3v6h-6" /></svg>
-              {allineandoShop ? "Scrivo sul sito…" : "Aggiorna lo shop"}
-            </button>
-            {/* la seconda riga di conto: cedibile e punti di chi paga in
-                contanti, sotto ogni prodotto. Un tasto solo per tutti */}
-            {vistaProdotti === "elenco" && (
-              <button
-                onClick={cambiaRigaContanti}
-                aria-pressed={mostraRigaContanti}
-                title={mostraRigaContanti ? "Nascondi la riga dei contanti sotto ogni prodotto" : "Mostra sotto ogni prodotto margine, cedibile e punti per chi paga in contanti"}
-                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: mostraRigaContanti ? "#fff" : "#8A6A1B", background: mostraRigaContanti ? "#8A6A1B" : "#FBF7EE", border: `1px solid ${mostraRigaContanti ? "#8A6A1B" : "#E8D4B0"}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                <IconaBanconota size={14} />
-                {mostraRigaContanti ? "Contanti: attivi" : "Contanti"}
-              </button>
-            )}
+            {pillolaVistaProdotti}
+            {selettorePerPaginaProdotti}
+            {tastoConfezioniSfusi}
+            {tastoAzzeraFiltri}
+            {tastoAggiornaShop}
+            {tastoRigaContanti}
           </div>
-          {esitoAllineaShop && (
-            <div style={{ ...fontBody, fontSize: 12.5, lineHeight: 1.45, padding: "9px 13px", borderRadius: 12,
-              color: esitoAllineaShop.startsWith("Non riuscito") ? "#C0392B" : "#2E7D32",
-              background: esitoAllineaShop.startsWith("Non riuscito") ? "#FBEBE9" : "#E9F6EC",
-              border: `1px solid ${esitoAllineaShop.startsWith("Non riuscito") ? "#F0C8C2" : "#CFE8D5"}` }}>
-              {esitoAllineaShop}
-            </div>
-          )}
-          {/* da telefono la barra e' larga quanto l'elenco che filtra e i
-              cinque si dividono lo spazio: sporgeva oltre la tabella, e una
-              barra piu' larga di cio' che governa sembra appartenere a
-              un'altra pagina. Gli angoli si stringono per la stessa
-              ragione — accanto a una tabella squadrata, ovali */}
-          <div style={{ display: "flex", background: BG, borderRadius: isMobile ? 12 : 20, padding: 4, gap: 2, flexWrap: "wrap", width: isMobile ? "100%" : undefined, boxSizing: "border-box" }}>
-            {/* questi filtri leggono lo stato del magazzino, cosa che solo
-                la tabella sa mostrare: sceglierne uno riporta all'elenco
-                invece di restare un tasto che non fa niente */}
-            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-              <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "7px 4px" : "7px 13px", borderRadius: isMobile ? 9 : 16, border: "none", flex: isMobile ? "1 1 0" : undefined, minWidth: 0, whiteSpace: "nowrap", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                {f.l}
-              </button>
-            ))}
-          </div>
+          {esitoAggiornaShop}
+          {barraFiltriRapidi}
         </div>
+        </>)}
 
         {/* la vista a categorie prende il posto della tabella nella stessa
             cornice bianca, sotto gli stessi comandi: è un altro modo di
@@ -85851,5 +85895,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino,
 };
