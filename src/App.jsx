@@ -55876,6 +55876,11 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                 .tabella-banco-stretta td:nth-child(5) { text-align: right; }
                 .tabella-banco-stretta td:nth-child(8) { margin-left: auto; }
                 .tabella-banco-stretta td[colspan] { flex: 1 0 100%; text-align: center; }
+                /* data, chi ha venduto e importo due punti piu' grandi: sono le
+                   tre cose che si leggono scorrendo l'elenco (24/10/2026) */
+                .tabella-banco-stretta td:nth-child(2), .tabella-banco-stretta td:nth-child(2) *,
+                .tabella-banco-stretta td:nth-child(3), .tabella-banco-stretta td:nth-child(3) *,
+                .tabella-banco-stretta td:nth-child(4), .tabella-banco-stretta td:nth-child(4) * { font-size: 12px !important; }
               `}</style>
             )}
             <table className={origine === "pos" && isMobile ? "tabella-banco-stretta" : undefined} style={{ width: origine === "pos" ? "auto" : "100%", borderCollapse: "collapse", minWidth: origine === "pos" ? (isMobile ? 0 : 560) : 720 }}>
