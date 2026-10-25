@@ -89,3 +89,26 @@ describe("Dettatura", () => {
     delete window.webkitSpeechRecognition;
   });
 });
+
+describe("Sistema il testo", () => {
+  it("manda il testo al correttore e sostituisce solo se si preme «Usa questo testo»", async () => {
+    const chiamate = [];
+    rispondiCon({
+      "rest/v1/regolamenti": [],
+      "functions/v1/sistema-testo": (corpo) => { chiamate.push(corpo); return { ok: true, testo: "In aula lo sconto è dell'**8,5%** con carta.", note: "Aggiunta la punteggiatura." }; },
+    });
+    const p = await monta(<PaginaRegolamenti puoScrivere chi="Admin" />);
+    await clicca(p.tasto("Aggiungi regola"));
+    await scrivi(p.nodo.querySelector('[data-campo="testo"]'), "in aula lo sconto e dell otto e mezzo per cento con carta");
+    await clicca(p.nodo.querySelector('[data-campo="sistema-testo"]')); await attendi(80);
+    expect(chiamate[0].testo).toContain("otto e mezzo");
+    const prop = p.nodo.querySelector('[data-campo="proposta-testo"]');
+    expect(prop.textContent).toContain("Aggiunta la punteggiatura");
+    // il testo scritto non e' stato toccato finche' non si sceglie
+    expect(p.nodo.querySelector('[data-campo="testo"]').value).toContain("otto e mezzo");
+    await clicca(p.tasto("Usa questo testo"));
+    expect(p.nodo.querySelector('[data-campo="testo"]').value).toBe("In aula lo sconto è dell'**8,5%** con carta.");
+    expect(p.nodo.querySelector('[data-campo="proposta-testo"]')).toBeFalsy();
+    await p.smonta();
+  });
+});

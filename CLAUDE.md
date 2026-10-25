@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
-| Backend | 47 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Backend | 48 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   57 file, 416 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   57 file, 418 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -670,6 +670,13 @@ al testo, con il riconoscimento vocale **del browser** (Web Speech API,
 `it-IT`): niente server, niente costi, e dove il browser non lo ha il tasto
 non compare. La frase si **accoda** al testo quando il browser la dà per
 definitiva, così si detta, ci si ferma, si corregge a mano e si riprende.
+
+**E si sistemano** («✨ Sistema il testo», edge function `sistema-testo`,
+Haiku, `getUser`): corregge ortografia e punteggiatura e rende la frase
+chiara **senza cambiare cifre, percentuali, date e senso** — se un passaggio
+è ambiguo lo lascia e lo dice nelle note. La proposta compare sotto, e si
+sceglie «Usa questo testo» o «Tieni il mio»: niente si sostituisce da solo,
+sono regole che altri applicheranno alla lettera.
 
 ### Chiedi ai dati (25/10/2026)
 

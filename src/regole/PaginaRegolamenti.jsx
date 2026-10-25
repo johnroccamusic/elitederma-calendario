@@ -39,6 +39,19 @@ function Testo({ testo }) {
 
 function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
   const [s, setS] = useState({ ...VUOTA, ...iniziale, decisa_il: iniziale?.decisa_il || "", argomento: iniziale?.argomento || "" });
+  // la proposta del correttore: si legge e si sceglie, non sostituisce da sola
+  const [proposta, setProposta] = useState(null); // { testo, note } | { errore }
+  const [sistemando, setSistemando] = useState(false);
+  async function sistema() {
+    if (s.testo.trim().length < 10 || sistemando) return;
+    setSistemando(true); setProposta(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("sistema-testo", { body: { testo: s.testo, titolo: s.titolo } });
+      if (error || !data?.ok) setProposta({ errore: data?.errore || error?.message || "Nessuna proposta." });
+      else setProposta({ testo: data.testo, note: data.note || "" });
+    } catch (e) { setProposta({ errore: String(e?.message || e) }); }
+    finally { setSistemando(false); }
+  }
   const toggle = (k) => setS((x) => {
     if (k === "tutti") return { ...x, visibile_a: ["tutti"] };
     const senza = x.visibile_a.filter((v) => v !== "tutti");
@@ -57,10 +70,29 @@ function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
       <Field label="La regola, come la spiegheresti a chi la deve applicare">
         <textarea data-campo="testo" value={s.testo} onChange={(e) => setS({ ...s, testo: e.target.value })} rows={6}
           style={{ ...inputStyle, minHeight: 120, resize: "vertical", lineHeight: 1.5 }} placeholder="Cosa si fa, con quali cifre, e cosa NON si fa. Oppure premi «Detta» e parla." />
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {/* la frase dettata si accoda a quello che c'e', con uno spazio */}
           <TastoDettatura onTesto={(frase) => setS((x) => ({ ...x, testo: (x.testo ? x.testo.replace(/\s+$/, "") + " " : "") + frase }))} />
+          <button type="button" data-campo="sistema-testo" onClick={sistema} disabled={sistemando || s.testo.trim().length < 10} title="Corregge ortografia e punteggiatura e rende il testo più chiaro, senza cambiare cifre e senso"
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, opacity: sistemando || s.testo.trim().length < 10 ? 0.5 : 1 }}>
+            {sistemando ? "Sistemo…" : "✨ Sistema il testo"}
+          </button>
         </div>
+        {proposta && (
+          <div data-campo="proposta-testo" style={{ marginTop: 10, border: `1px solid ${GOLD}`, borderRadius: 12, padding: 12, background: "#fff" }}>
+            {proposta.errore
+              ? <div style={{ ...fontBody, fontSize: 13, color: "#B3261E" }}>{proposta.errore}</div>
+              : <>
+                  <div style={{ ...fontDisplay, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Proposta del correttore</div>
+                  <Testo testo={proposta.testo} />
+                  {proposta.note && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, fontStyle: "italic" }}>{proposta.note}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <Button onClick={() => { setS((x) => ({ ...x, testo: proposta.testo })); setProposta(null); }}>Usa questo testo</Button>
+                    <Button variant="ghost" onClick={() => setProposta(null)}>Tieni il mio</Button>
+                  </div>
+                </>}
+          </div>
+        )}
       </Field>
       <Field label="Vale per">
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
