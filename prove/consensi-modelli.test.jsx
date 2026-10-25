@@ -307,7 +307,7 @@ describe("i consensi gia' firmati non cambiano sotto i piedi a nessuno", () => {
     // l'areola si pigmenta spesso dopo una mastectomia: il modulo deve
     // pretendere cicatrici guarite e il nulla osta di chi la ha in cura
     expect(c.testo).toContain("nulla osta scritto del medico");
-    expect(c.testo).toContain("dodici mesi");
+    expect(c.testo).toContain("sei mesi");
     // e dire che e' una zona intima, con cosa ne consegue
     expect(c.testo).toContain("può chiedere di essere accompagnata");
     expect(c.testo).toContain("può interrompere il trattamento in qualsiasi momento");

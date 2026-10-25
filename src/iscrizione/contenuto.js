@@ -12,9 +12,10 @@
 // il confronto automatico riesaminato da una persona (art. 22), il
 // fornitore Anthropic negli Stati Uniti con le clausole standard (art.
 // 46). E' l'unica parte NON trascritta da un cartaceo: l'ho scritta io,
-// e la approva il titolare, che e' l'unico responsabile della privacy e
-// dei contratti (non c'e' un consulente, 25/10/2026). Si legge e si
-// corregge da Setting -> Modulo di iscrizione -> Il contratto. Chi ha
+// e l'ha APPROVATA IL TITOLARE IL 25/10/2026, letta per intero in chat
+// (e' l'unico responsabile di privacy e contratti; non c'e' un
+// consulente). Si corregge da Setting -> Modulo di iscrizione -> Il
+// contratto. Chi ha
 // firmato prima ha firmato il testo di prima (contratto_firmato).
 // IL TESTO E' TRASCRITTO, NON RISCRITTO. Regolamento, informativa e
 // consensi sono stati presi parola per parola dall'HTML della pagina e

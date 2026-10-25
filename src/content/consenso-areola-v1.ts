@@ -3,7 +3,11 @@
 // Il consenso informato per la DERMOPIGMENTAZIONE DELL'AREOLA,
 // 19/10/2026. Quinto modello.
 //
-// ATTENZIONE, DA FAR LEGGERE E APPROVARE AL TITOLARE — PIU' DEGLI ALTRI.
+// APPROVATO DAL TITOLARE IL 25/10/2026, letto per intero in chat. Unica
+// correzione sua: la soglia e' SEI mesi dall'intervento e dalla
+// radioterapia, non dodici come avevo scritto io. Nessuna modella aveva
+// ancora firmato questa versione, quindi il testo e' stato corretto sul
+// posto senza aprire una v2.
 //
 // Come quello della tricopigmentazione, questo non nasce da un cartaceo
 // fornito: l'ho scritto io. Ma qui la posta e' piu' alta, e va detto
@@ -23,10 +27,9 @@
 // irradiata il pigmento si comporta in modo imprevedibile, e dal lato di
 // un'ascella svuotata un trauma cutaneo ha un rischio suo.
 //
-// PRIMA DI USARLO IN AULA va letto da chi segue la parte legale e da chi
-// insegna il corso. Le soglie temporali che ho scritto (dodici mesi) sono
-// la prassi che si legge in giro, non una norma: vanno confermate o
-// corrette da chi risponde di quello che c'e' scritto.
+// La soglia temporale (sei mesi) l'ha fissata il titolare, che risponde
+// di quello che c'e' scritto: io avevo messo dodici, prassi letta in
+// giro e non norma.
 //
 // E' UNA ZONA INTIMA, e il modulo lo dice. Chi firma deve sapere che
 // potra' farsi accompagnare, che la zona resta scoperta per il tempo
@@ -74,7 +77,7 @@ export const consensoAreolaV1 = {
   // Adesso e' un campo, ed e' obbligatorio: la data dell'intervento e'
   // la cosa da cui dipende se il trattamento si puo' fare, perche' le
   // cicatrici devono essere guarite e di norma devono essere passati
-  // dodici mesi.
+  // sei mesi.
   campiExtra: [
     {
       chiave: "intervento",
@@ -200,7 +203,7 @@ SE LA ZONA È STATA OPERATA O IRRADIATA
 
 Questa è la parte che riguarda chi arriva dopo una mastectomia, una ricostruzione o un altro intervento al seno. La sottoscritta dichiara di essere stata informata che:
 
-• il trattamento si esegue solo su cicatrici completamente guarite, e di norma non prima di dodici mesi dall'intervento o dalla conclusione della radioterapia;
+• il trattamento si esegue solo su cicatrici completamente guarite, e di norma non prima di sei mesi dall'intervento o dalla conclusione della radioterapia;
 
 • se la zona è stata operata o irradiata è necessario il nulla osta scritto del medico, del chirurgo o dell'oncologo che la ha in cura, e senza quel documento il trattamento non viene eseguito;
 

@@ -3,7 +3,8 @@
 // Il consenso informato per la TRICOPIGMENTAZIONE, 19/10/2026. Quarto
 // modello, e il primo che NON nasce da un cartaceo fornito.
 //
-// ATTENZIONE, DA FAR LEGGERE E APPROVARE AL TITOLARE. Gli altri tre sono trascrizioni di moduli
+// APPROVATO DAL TITOLARE IL 25/10/2026, letto per intero in chat, senza
+// correzioni. Gli altri tre sono trascrizioni di moduli
 // esistenti; questo l'ho scritto io, partendo dal corpo del consenso PMU
 // — che e' neutro e vale ovunque si depositi pigmento — e aggiungendo
 // cio' che riguarda il cuoio capelluto: come funziona il trattamento,
