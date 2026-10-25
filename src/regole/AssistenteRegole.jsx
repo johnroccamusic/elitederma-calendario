@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay } from "../ui/stile.js";
 import { voceDisponibile, leggi, leggiNaturale, zittisci, ascoltaUnaFrase } from "./voce.js";
+import { DESTINATARI } from "./PaginaRegolamenti.jsx";
 
 function Testo({ testo }) {
   const righe = String(testo || "").split("\n");
@@ -20,6 +21,30 @@ function Testo({ testo }) {
 
 export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile = false, onApriRegolamenti = null }) {
   const [aperto, setAperto] = useState(false);
+  // LA SCHEDA PROPOSTA: quando chi amministra da' una disposizione in
+  // dialogo, l'assistente la rimanda gia' scritta come regola. Resta qui,
+  // modificabile, finche' non la si salva o la si scarta. A voce basta
+  // dire «si'» / «salva».
+  const [proposta, setProposta] = useState(null); // { titolo, argomento, testo, vale_per, sostituisce }
+  const [salvandoRegola, setSalvandoRegola] = useState(false);
+  const propostaRef = useRef(null);
+  useEffect(() => { propostaRef.current = proposta; }, [proposta]);
+  async function salvaProposta() {
+    const pr = propostaRef.current; if (!pr || salvandoRegola) return null;
+    setSalvandoRegola(true);
+    const riga = { titolo: pr.titolo.trim(), argomento: pr.argomento?.trim() || null, testo: pr.testo.trim(), visibile_a: pr.vale_per?.length ? pr.vale_per : ["tutti"], decisa_il: new Date().toISOString().slice(0, 10), attivo: true, creato_da: chi || null, aggiornato_da: chi || null };
+    const { data, error } = await supabase.from("regolamenti").insert(riga).select("id");
+    let esito;
+    if (error || !data?.length) esito = `Non sono riuscito a salvare la regola: ${error?.message || "nessuna riga scritta"}.`;
+    else {
+      // la scheda che contraddiceva si spegne, non si cancella: resta la storia
+      if (pr.sostituisce?.id) await supabase.from("regolamenti").update({ attivo: false, aggiornato_da: chi || null, aggiornato_il: new Date().toISOString() }).eq("id", pr.sostituisce.id);
+      esito = `Regola salvata: «${riga.titolo}».${pr.sostituisce ? ` La vecchia «${pr.sostituisce.titolo}» è stata spenta.` : ""}`;
+    }
+    setScambi((s) => [...s, { domanda: "(salva la regola)", risposta: esito, citati: [], registro: "conversazione" }]);
+    setProposta(null); setSalvandoRegola(false);
+    return esito;
+  }
   const [domanda, setDomanda] = useState("");
   const [occupato, setOccupato] = useState(false);
   const [scambi, setScambi] = useState([]); // { domanda, risposta, citati, senza, errore }
@@ -48,6 +73,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
         setScambi((s) => [...s, { domanda: d, errore }]); return errore;
       }
       setScambi((s) => [...s, { domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta, registro: data.registro || (data.citati?.length ? "regole" : "ragionamento") }]);
+      if (data.proposta_regola) setProposta(data.proposta_regola);
       return data.risposta;
     } catch (err) {
       const errore = String(err?.message || err);
@@ -72,7 +98,10 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
       suFrase: async (frase) => {
         if (!voceAccesa.current) return;
         setVoce("penso"); setParziale("");
-        const testo = await rispondi(frase);
+        let testo;
+        if (propostaRef.current && /^\s*(s[iì]|ok|va bene|salva|salvala|confermo|esatto|certo)\b/i.test(frase)) testo = await salvaProposta();
+        else if (propostaRef.current && /^\s*(no|non salvare|lascia|annulla|scarta)\b/i.test(frase)) { setProposta(null); testo = "Va bene, non la salvo."; setScambi((s) => [...s, { domanda: frase, risposta: testo, citati: [], registro: "conversazione" }]); }
+        else testo = await rispondi(frase);
         if (!voceAccesa.current) return;
         setVoce("parlo");
         // prima la voce naturale; se non c'e', quella del telefono
@@ -173,6 +202,26 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
             )}
             <div ref={fondo} />
           </div>
+          {proposta && (
+            <div data-campo="proposta-regola" style={{ borderTop: `2px solid ${GOLD}`, background: "#FFFDF8", padding: 10, display: "grid", gap: 6, maxHeight: "45%", overflowY: "auto" }}>
+              <div style={{ ...fontDisplay, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Scheda proposta: la salvo così?</div>
+              <input value={proposta.titolo} onChange={(e) => setProposta({ ...proposta, titolo: e.target.value })} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, padding: "6px 8px", borderRadius: 8, border: `1px solid ${CREAM_BORDER}` }} />
+              <input value={proposta.argomento || ""} onChange={(e) => setProposta({ ...proposta, argomento: e.target.value })} placeholder="Argomento" style={{ ...fontBody, fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: `1px solid ${CREAM_BORDER}` }} />
+              <textarea value={proposta.testo} onChange={(e) => setProposta({ ...proposta, testo: e.target.value })} rows={4} style={{ ...fontBody, fontSize: 13, padding: "6px 8px", borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, resize: "vertical", lineHeight: 1.45 }} />
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {DESTINATARI.map((d) => { const on = proposta.vale_per?.includes(d.chiave); return (
+                  <button key={d.chiave} type="button" onClick={() => setProposta((p) => { const senza = (p.vale_per || []).filter((v) => v !== "tutti"); const nuovo = d.chiave === "tutti" ? ["tutti"] : (senza.includes(d.chiave) ? senza.filter((v) => v !== d.chiave) : [...senza, d.chiave]); return { ...p, vale_per: nuovo.length ? nuovo : ["tutti"] }; })}
+                    style={{ ...fontBody, fontSize: 11, padding: "3px 9px", borderRadius: 999, cursor: "pointer", border: `1px solid ${on ? NAVY : CREAM_BORDER}`, background: on ? NAVY : "#fff", color: on ? "#fff" : GRAFITE }}>{d.etichetta}</button>
+                ); })}
+              </div>
+              {proposta.sostituisce && <div style={{ ...fontBody, fontSize: 11.5, color: "#B3261E" }}>Sostituisce «{proposta.sostituisce.titolo}», che verrà spenta.</div>}
+              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setProposta(null)} style={{ ...fontBody, fontSize: 12.5, padding: "6px 12px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: GRAFITE, cursor: "pointer" }}>Non salvare</button>
+                <button type="button" data-campo="salva-proposta" onClick={salvaProposta} disabled={salvandoRegola || proposta.titolo.trim().length < 3 || proposta.testo.trim().length < 10}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 10, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}>{salvandoRegola ? "Salvo…" : "Salva come regola"}</button>
+              </div>
+            </div>
+          )}
           <form onSubmit={chiedi} style={{ display: "flex", gap: 6, padding: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
             {voceDisponibile() && (
               <button type="button" data-campo="voce" onClick={voce ? spegniVoce : accendiVoce} title={voce ? "Chiudi la conversazione a voce" : "Parla con l'assistente"} aria-pressed={!!voce}

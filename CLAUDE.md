@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   58 file, 422 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   58 file, 423 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -675,6 +675,16 @@ agire va sentito chi amministra. L'etichetta nel pannello lo distingue
 oro). La cronologia va al modello come veri turni. `senza_risposta` resta
 vero per ogni domanda di regola non coperta, anche se ha ragionato: è così
 che l'elenco delle regole mancanti continua a riempirsi.
+
+**Le disposizioni dette in dialogo diventano schede** (25/10/2026 sera).
+Quando chi amministra dà una disposizione all'assistente («da oggi in aula
+lo sconto è il 10% con carta»), la funzione rimanda `proposta_regola`:
+titolo, argomento, testo scritto come regola, per chi vale, e la scheda
+esistente che contraddice (`sostituisce`). Il pannello la mostra
+modificabile con «Salva come regola»; a voce basta «sì» / «salva». Niente
+si scrive da solo: la decide il titolare, l'assistente la mette in bella.
+Salvata, la scheda sostituita si **spegne**, non si cancella. In fondo a
+Regolamenti, accanto a «Fatto», c'è il **cestino** per le domande di prova.
 
 **E si parla con l'assistente** (`src/regole/voce.js`, 25/10/2026 sera):
 il microfono nel pannello apre una conversazione a mani libere come quella

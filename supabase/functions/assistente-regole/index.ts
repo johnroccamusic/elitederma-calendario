@@ -41,7 +41,9 @@ HAI DUE REGISTRI, E DICI SEMPRE QUALE STAI USANDO.
 
 Puoi anche conversare: rispondere a un «grazie», chiedere cosa intendeva, riprendere la domanda precedente. Resta sui temi del lavoro in accademia; se la domanda non c'entra con l'accademia, dillo con garbo e riporta il discorso li'.
 
-Rispondi SOLO con un JSON: {"risposta": "...", "schede": [numeri delle schede usate], "senza_risposta": true|false, "registro": "regole"|"ragionamento"|"misto"|"conversazione"}.
+${ruolo === "amministrazione" ? `3. DISPOSIZIONI DA SCRIVERE. Chi ti parla e' chi decide le regole. Se nel messaggio da' una disposizione — «da oggi…», «la regola e'…», «voglio che…», «lo sconto in aula e'…» — oltre a rispondere PROPONI la scheda da salvare in "proposta_regola": titolo breve, argomento (Prezzi, Sconti, Modelle, Kit, Spedizioni, Pagamenti, Iscrizioni, Procedure…), testo scritto come una regola che altri applicheranno alla lettera (completo, con cifre e condizioni dette; niente che non sia stato detto), e vale_per fra "tutti","venditori","master","assistenti","amministrazione". Se una scheda esistente dice il contrario, dillo e metti in "sostituisce" il suo numero. Nella risposta chiedi conferma in una riga («La salvo cosi'?»). Se la disposizione e' incompleta (manca una cifra, non si capisce a chi vale) chiedi quello che manca invece di proporre. Non proporre niente per semplici domande.
+
+` : ""}Rispondi SOLO con un JSON: {"risposta": "...", "schede": [numeri delle schede usate], "senza_risposta": true|false, "registro": "regole"|"ragionamento"|"misto"|"conversazione"${ruolo === "amministrazione" ? `, "proposta_regola": null | {"titolo": "...", "argomento": "...", "testo": "...", "vale_per": ["..."], "sostituisce": null | numero}` : ""}}.
 - senza_risposta = true quando la domanda chiedeva una regola e nessuna scheda la copre (anche se hai ragionato): e' cosi' che chi scrive le regole scopre cosa manca.
 - registro = "conversazione" per saluti, chiarimenti e domande che non chiedono una regola: li' senza_risposta = false.
 Nel testo usa al massimo elenchi con «- » e grassetto con **. In italiano, tono diretto e cordiale.
@@ -111,6 +113,18 @@ Deno.serve(async (req) => {
   // «senza risposta» lo decide il modello, ma una risposta che cita una
   // scheda non puo' esserlo, e una chiacchiera non e' una regola mancante
   const senza = registro === "conversazione" ? false : (!!piano.senza_risposta && citati.length === 0) || (registro === "ragionamento");
-  await registra(piano.risposta, citati.map((s) => s.id), senza, esito?.usage || null);
-  return json({ ok: true, risposta: piano.risposta, citati: citati.map((s) => ({ id: s.id, titolo: s.titolo })), senza_risposta: senza, registro });
+  // la scheda proposta, solo a chi amministra e solo se ha tutto
+  const VALE = ["tutti", "venditori", "master", "assistenti", "amministrazione"];
+  let proposta: Record<string, unknown> | null = null;
+  const pr = piano.proposta_regola;
+  if (ruolo === "amministrazione" && pr && typeof pr === "object" && typeof pr.titolo === "string" && typeof pr.testo === "string" && pr.titolo.trim().length >= 3 && pr.testo.trim().length >= 10) {
+    const vale = Array.isArray(pr.vale_per) ? pr.vale_per.map(String).filter((v: string) => VALE.includes(v)) : [];
+    const nSost = Number(pr.sostituisce);
+    const sostituisce = nSost >= 1 && nSost <= schede.length ? schede[nSost - 1] : null;
+    proposta = { titolo: pr.titolo.trim().slice(0, 120), argomento: String(pr.argomento || "").trim().slice(0, 60) || null, testo: pr.testo.trim().slice(0, 4000), vale_per: vale.length ? vale : ["tutti"], sostituisce: sostituisce ? { id: sostituisce.id, titolo: sostituisce.titolo } : null };
+  }
+  // una disposizione che diventa scheda non e' una domanda rimasta senza risposta
+  const senzaDefinitivo = proposta ? false : senza;
+  await registra(piano.risposta, citati.map((s) => s.id), senzaDefinitivo, esito?.usage || null);
+  return json({ ok: true, risposta: piano.risposta, citati: citati.map((s) => ({ id: s.id, titolo: s.titolo })), senza_risposta: senzaDefinitivo, registro, proposta_regola: proposta });
 });

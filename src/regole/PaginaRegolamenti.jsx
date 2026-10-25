@@ -259,7 +259,15 @@ export default function PaginaRegolamenti({ puoScrivere = false, chi = "", onBac
                 <div style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>
                   «{d.domanda}» <span style={{ color: MUTED, fontSize: 11.5 }}>· {d.chi || d.ruolo || "qualcuno"}, {dataIt(d.ts)}</span>
                 </div>
-                <Button variant="ghost" onClick={() => archiviaDomanda(d)}>Fatto</Button>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                  <Button variant="ghost" onClick={() => archiviaDomanda(d)} title="La regola è stata scritta: togli la domanda dall'elenco">Fatto</Button>
+                  {/* il cestino: una domanda di prova, o che non merita una
+                      regola, si butta senza passare per «Fatto» */}
+                  <button type="button" data-campo="cestina-domanda" onClick={() => archiviaDomanda(d)} title="Cancella la domanda (era una prova, o non serve una regola)" aria-label="Cancella la domanda"
+                    style={{ width: 34, height: 34, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#B3261E", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /></svg>
+                  </button>
+                </div>
               </div>
             ))}
           </div>

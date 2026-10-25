@@ -177,3 +177,27 @@ describe("Due registri", () => {
     await p.smonta();
   });
 });
+
+describe("Disposizioni che diventano regole", () => {
+  it("la scheda proposta si vede, si corregge e si salva solo premendo Salva", async () => {
+    const scritture = [];
+    rispondiCon({
+      "functions/v1/assistente-regole": { ok: true, risposta: "Capito. La salvo così?", citati: [], senza_risposta: false, registro: "conversazione",
+        proposta_regola: { titolo: "Sconto in aula", argomento: "Sconti", testo: "In aula lo sconto massimo è il 10% con carta e il 12% in contanti.", vale_per: ["venditori", "master"], sostituisce: null } },
+      "rest/v1/regolamenti": (corpo) => { if (corpo) scritture.push(corpo); return corpo ? [{ id: "r-nuova" }] : []; },
+    });
+    const p = await monta(<AssistenteRegole ruolo="amministrazione" chi="Titolare" />);
+    await clicca(p.nodo.querySelector('[data-campo="assistente-regole"]'));
+    await scrivi(p.nodo.querySelector('[data-campo="domanda-regole"]'), "da oggi in aula lo sconto massimo è 10% con carta e 12% in contanti");
+    await clicca(p.tasto("Chiedi")); await attendi(80);
+    const box = p.nodo.querySelector('[data-campo="proposta-regola"]');
+    expect(box.textContent).toContain("la salvo così");
+    expect(scritture.length).toBe(0);
+    await scrivi(box.querySelector("input"), "Sconto massimo in aula");
+    await clicca(p.nodo.querySelector('[data-campo="salva-proposta"]')); await attendi(80);
+    expect(scritture[0]).toMatchObject({ titolo: "Sconto massimo in aula", argomento: "Sconti", visibile_a: ["venditori", "master"], creato_da: "Titolare", attivo: true });
+    expect(p.nodo.querySelector('[data-campo="proposta-regola"]')).toBeFalsy();
+    expect(p.testo()).toContain("Regola salvata");
+    await p.smonta();
+  });
+});
