@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   58 file, 420 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   58 file, 421 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -664,6 +664,18 @@ in `regolamenti_domande` e compaiono in fondo alla pagina per chi scrive,
 con un «Fatto» quando la scheda è stata scritta. È da lì che le FAQ si
 costruiscono dalle domande vere. Il registro lo scrive solo la funzione;
 l'app lo legge e cancella. Prove in `prove/regolamenti.test.jsx`.
+
+**E si parla con l'assistente** (`src/regole/voce.js`, 25/10/2026 sera):
+il microfono nel pannello apre una conversazione a mani libere come quella
+dell'app di Claude — ascolta, manda la frase, **legge la risposta** con la
+voce italiana di sistema, torna in ascolto; un tocco mentre parla lo
+interrompe, il tasto la chiude. Il modello legge e scrive testo: la voce
+sono le due cose che il browser sa già fare (Web Speech API e
+`speechSynthesis`), zero fornitori e zero voce verso terzi. Il limite è lo
+stesso del tasto «Detta»: su iPhone il riconoscimento del browser è
+capriccioso. Per la qualità della voce di Claude su iPhone servirebbe una
+trascrizione esterna (Whisper, Deepgram): fornitore in più, costo, privacy —
+**decisione del titolare, non presa**.
 
 **Le regole si dettano** (`src/regole/Dettatura.jsx`): un microfono accanto
 al testo, con il riconoscimento vocale **del browser** (Web Speech API,

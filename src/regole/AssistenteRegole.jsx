@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay } from "../ui/stile.js";
+import { voceDisponibile, leggi, zittisci, ascoltaUnaFrase } from "./voce.js";
 
 function Testo({ testo }) {
   const righe = String(testo || "").split("\n");
@@ -23,24 +24,83 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
   const [occupato, setOccupato] = useState(false);
   const [scambi, setScambi] = useState([]); // { domanda, risposta, citati, senza, errore }
   const fondo = useRef(null);
+  // LA CONVERSAZIONE A VOCE: "ascolto" | "penso" | "parlo" | null (spenta).
+  // Un giro solo, che si ripete finche' chi parla non lo chiude.
+  const [voce, setVoce] = useState(null);
+  const [parziale, setParziale] = useState("");
+  const voceAccesa = useRef(false);
+  const fermaAscolto = useRef(null);
+  const scambiRef = useRef(scambi);
+  useEffect(() => { scambiRef.current = scambi; }, [scambi]);
+  useEffect(() => () => { voceAccesa.current = false; fermaAscolto.current?.(); zittisci(); }, []);
 
   useEffect(() => { if (aperto) fondo.current?.scrollIntoView?.({ block: "end" }); }, [scambi, aperto]);
 
+  // manda una domanda e torna il testo della risposta (o dell'errore):
+  // lo usano sia il tasto «Chiedi» sia la conversazione a voce
+  async function rispondi(d) {
+    setOccupato(true);
+    const cronologia = scambiRef.current.filter((s) => s.risposta).slice(-3).map((s) => ({ domanda: s.domanda, risposta: s.risposta }));
+    try {
+      const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, cronologia } });
+      if (error || !data?.ok) {
+        const errore = data?.errore || error?.message || "Nessuna risposta.";
+        setScambi((s) => [...s, { domanda: d, errore }]); return errore;
+      }
+      setScambi((s) => [...s, { domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta }]);
+      return data.risposta;
+    } catch (err) {
+      const errore = String(err?.message || err);
+      setScambi((s) => [...s, { domanda: d, errore }]); return errore;
+    } finally { setOccupato(false); }
+  }
   async function chiedi(e) {
     e?.preventDefault?.();
     const d = domanda.trim();
     if (d.length < 3 || occupato) return;
-    setOccupato(true);
-    const cronologia = scambi.filter((s) => s.risposta).slice(-3).map((s) => ({ domanda: s.domanda, risposta: s.risposta }));
-    try {
-      const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, cronologia } });
-      if (error || !data?.ok) setScambi((s) => [...s, { domanda: d, errore: data?.errore || error?.message || "Nessuna risposta." }]);
-      else setScambi((s) => [...s, { domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta }]);
-      setDomanda("");
-    } catch (err) {
-      setScambi((s) => [...s, { domanda: d, errore: String(err?.message || err) }]);
-    } finally { setOccupato(false); }
+    setDomanda("");
+    await rispondi(d);
   }
+
+  // IL GIRO A VOCE. Ogni passo controlla `voceAccesa`: un tocco su «chiudi»
+  // in qualunque momento spegne tutto, anche a meta' di una risposta.
+  function giroAscolto() {
+    if (!voceAccesa.current) return;
+    setVoce("ascolto"); setParziale("");
+    fermaAscolto.current = ascoltaUnaFrase({
+      suParziale: setParziale,
+      suFrase: async (frase) => {
+        if (!voceAccesa.current) return;
+        setVoce("penso"); setParziale("");
+        const testo = await rispondi(frase);
+        if (!voceAccesa.current) return;
+        setVoce("parlo");
+        await leggi(testo);
+        giroAscolto();
+      },
+      suErrore: (err) => {
+        if (!voceAccesa.current) return;
+        if (err === "not-allowed" || err === "service-not-allowed") { spegniVoce(); setScambi((s) => [...s, { domanda: "(voce)", errore: "Il microfono non è permesso qui. Su iPhone scrivi la domanda, o usa il microfono della tastiera." }]); }
+      },
+      // finita senza una frase (silenzio): si riascolta
+      suFine: (consegnata) => { if (!consegnata && voceAccesa.current) setTimeout(giroAscolto, 150); },
+    });
+  }
+  function accendiVoce() {
+    if (!voceDisponibile()) return;
+    voceAccesa.current = true;
+    // sbloccare la sintesi vocale su iPhone richiede un primo speak dentro
+    // il gesto dell'utente: una frase corta che dice cosa sta succedendo
+    leggi("Ti ascolto.").then(() => giroAscolto());
+    setVoce("parlo");
+  }
+  function spegniVoce() {
+    voceAccesa.current = false;
+    fermaAscolto.current?.(); fermaAscolto.current = null;
+    zittisci(); setVoce(null); setParziale("");
+  }
+  // mentre l'assistente parla, un tocco lo interrompe e torna ad ascoltare
+  function interrompi() { if (voce === "parlo") { zittisci(); giroAscolto(); } }
 
   // Sul telefono il dock e' una barra in basso a tutta larghezza, e la sua
   // altezza cambia col rullo dei preferiti: messo in basso, il tondo ci
@@ -72,7 +132,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
               <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700 }}>Chiedi ai regolamenti</div>
               <div style={{ ...fontBody, fontSize: 11, opacity: 0.75 }}>Risponde solo con le regole scritte</div>
             </div>
-            <button type="button" onClick={() => setAperto(false)} aria-label="Chiudi" style={{ all: "unset", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+            <button type="button" onClick={() => { spegniVoce(); setAperto(false); }} aria-label="Chiudi" style={{ all: "unset", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "grid", gap: 10, alignContent: "start" }}>
             {scambi.length === 0 && (
@@ -96,9 +156,22 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
                     </div>}
               </div>
             ))}
+            {voce && (
+              <div data-campo="stato-voce" onClick={interrompi} style={{ ...fontBody, fontSize: 12.5, color: voce === "ascolto" ? "#B3261E" : GRAFITE, fontStyle: "italic", cursor: voce === "parlo" ? "pointer" : "default" }}>
+                {voce === "ascolto" ? (parziale ? `«${parziale}»` : "Ti ascolto…") : voce === "penso" ? "Cerco nelle regole…" : "Sto rispondendo… tocca per interrompere"}
+              </div>
+            )}
             <div ref={fondo} />
           </div>
           <form onSubmit={chiedi} style={{ display: "flex", gap: 6, padding: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            {voceDisponibile() && (
+              <button type="button" data-campo="voce" onClick={voce ? spegniVoce : accendiVoce} title={voce ? "Chiudi la conversazione a voce" : "Parla con l'assistente"} aria-pressed={!!voce}
+                style={{ width: 40, height: 40, borderRadius: 20, border: `1px solid ${voce ? "#B3261E" : CREAM_BORDER}`, background: voce ? "#FDECEC" : "#fff", color: voce ? "#B3261E" : NAVY, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, padding: 0 }}>
+                {voce
+                  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
+                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0" /><path d="M12 17v4M8 21h8" /></svg>}
+              </button>
+            )}
             <input data-campo="domanda-regole" value={domanda} onChange={(e) => setDomanda(e.target.value)} disabled={occupato} placeholder="Scrivi la domanda…"
               style={{ ...fontBody, flex: 1, minWidth: 0, fontSize: 14, padding: "9px 12px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}` }} />
             <button type="submit" disabled={occupato || domanda.trim().length < 3}

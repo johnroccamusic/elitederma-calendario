@@ -135,3 +135,32 @@ describe("Indietro e Avanti sul testo", () => {
     await p.smonta();
   });
 });
+
+describe("Conversazione a voce", () => {
+  it("ascolta, manda la frase, legge la risposta e torna in ascolto; il tasto la chiude", async () => {
+    const parlate = [];
+    let istanze = [];
+    window.webkitSpeechRecognition = class { constructor() { istanze.push(this); } start() {} stop() { this.onend?.(); } };
+    window.speechSynthesis = { cancel() {}, getVoices: () => [{ lang: "it-IT", name: "Alice" }], speak(u) { parlate.push(u.text); setTimeout(() => u.onend?.(), 5); } };
+    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+    rispondiCon({ "functions/v1/assistente-regole": { ok: true, risposta: "In aula fai **8,5%** con carta.\n- e 12% in contanti", citati: [{ id: "r1", titolo: "Sconti d'aula" }], senza_risposta: false } });
+    const p = await monta(<AssistenteRegole ruolo="venditori" chi="Olga" />);
+    await clicca(p.nodo.querySelector('[data-campo="assistente-regole"]'));
+    await clicca(p.nodo.querySelector('[data-campo="voce"]'));
+    await attendi(60);
+    expect(parlate[0]).toBe("Ti ascolto.");
+    expect(istanze.length).toBe(1);
+    expect(p.testo()).toContain("Ti ascolto");
+    const { act } = await import("react");
+    await act(async () => { istanze[0].onresult({ resultIndex: 0, results: [Object.assign([{ transcript: "quanto sconto in aula" }], { isFinal: true })] }); });
+    await attendi(120);
+    // la risposta e' stata letta senza asterischi ne' trattini, e si riascolta
+    expect(parlate[1]).toBe("In aula fai 8,5% con carta. e 12% in contanti");
+    expect(istanze.length).toBe(2);
+    expect(p.nodo.querySelector('[data-campo="scambio"]').textContent).toContain("Sconti d'aula");
+    await clicca(p.nodo.querySelector('[data-campo="voce"]'));
+    expect(p.nodo.querySelector('[data-campo="stato-voce"]')).toBeFalsy();
+    await p.smonta();
+    delete window.webkitSpeechRecognition; delete window.speechSynthesis; delete window.SpeechSynthesisUtterance;
+  });
+});
