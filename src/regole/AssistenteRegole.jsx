@@ -48,7 +48,9 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
   // sta in ALTO a destra, sotto la tacca; da scrivania in basso a destra,
   // lontano dal dock che sta al centro.
   const base = isMobile
-    ? { position: "fixed", right: 12, top: "calc(env(safe-area-inset-top, 0px) + 10px)", zIndex: 1900 }
+    // in alto a destra, all'angolo, c'e' gia' il tastino che forza la
+    // vista scrivania (34 px, top 8): il tondo sta sotto di lui
+    ? { position: "fixed", right: 10, top: "calc(env(safe-area-inset-top, 0px) + 54px)", zIndex: 1900 }
     : { position: "fixed", right: 20, bottom: 24, zIndex: 1900 };
 
   return (
@@ -62,7 +64,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
         </button>
       )}
       {aperto && (
-        <div data-campo="pannello-assistente" style={{ ...base, width: "min(380px, calc(100vw - 32px))", maxHeight: isMobile ? "calc(100dvh - 110px)" : "min(560px, calc(100dvh - 48px))", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 16px 48px rgba(14,27,51,0.28)", overflow: "hidden" }}>
+        <div data-campo="pannello-assistente" style={{ ...base, width: "min(380px, calc(100vw - 32px))", maxHeight: isMobile ? "calc(100dvh - 150px)" : "min(560px, calc(100dvh - 48px))", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 16px 48px rgba(14,27,51,0.28)", overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: NAVY, color: "#fff" }}>
             <div>
               <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700 }}>Chiedi ai regolamenti</div>
