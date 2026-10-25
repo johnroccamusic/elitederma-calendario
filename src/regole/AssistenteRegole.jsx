@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay } from "../ui/stile.js";
-import { voceDisponibile, leggi, zittisci, ascoltaUnaFrase } from "./voce.js";
+import { voceDisponibile, leggi, zittisci, ascoltaUnaFrase, vociItaliane, voceScelta, scegliVoce } from "./voce.js";
 
 function Testo({ testo }) {
   const righe = String(testo || "").split("\n");
@@ -28,6 +28,16 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
   // Un giro solo, che si ripete finche' chi parla non lo chiude.
   const [voce, setVoce] = useState(null);
   const [parziale, setParziale] = useState("");
+  // le voci arrivano in ritardo su alcuni browser: si rilegge l'elenco
+  // quando il browser lo annuncia
+  const [voci, setVoci] = useState(() => (voceDisponibile() ? vociItaliane() : []));
+  const [nomeVoce, setNomeVoce] = useState(() => voceScelta()?.name || "");
+  useEffect(() => {
+    if (!voceDisponibile()) return;
+    const aggiorna = () => { setVoci(vociItaliane()); setNomeVoce((n) => n || voceScelta()?.name || ""); };
+    window.speechSynthesis.addEventListener?.("voiceschanged", aggiorna);
+    return () => window.speechSynthesis.removeEventListener?.("voiceschanged", aggiorna);
+  }, []);
   const voceAccesa = useRef(false);
   const fermaAscolto = useRef(null);
   const scambiRef = useRef(scambi);
@@ -163,6 +173,15 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
                     </div>}
               </div>
             ))}
+            {voce && voci.length > 1 && (
+              <label style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "flex", gap: 6, alignItems: "center" }}>
+                Voce
+                <select data-campo="scelta-voce" value={nomeVoce} onChange={(e) => { setNomeVoce(e.target.value); scegliVoce(e.target.value); leggi("Ecco, questa è la mia voce."); }}
+                  style={{ ...fontBody, fontSize: 12, padding: "3px 6px", borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, maxWidth: 220 }}>
+                  {voci.map((v) => <option key={v.name} value={v.name}>{v.name.replace(/\(.*?\)/g, "").trim()}{/enhanced|premium/i.test(v.name) ? " (migliorata)" : ""}</option>)}
+                </select>
+              </label>
+            )}
             {voce && (
               <div data-campo="stato-voce" onClick={interrompi} style={{ ...fontBody, fontSize: 12.5, color: voce === "ascolto" ? "#B3261E" : GRAFITE, fontStyle: "italic", cursor: voce === "parlo" ? "pointer" : "default" }}>
                 {voce === "ascolto" ? (parziale ? `«${parziale}»` : "Ti ascolto…") : voce === "penso" ? "Cerco nelle regole…" : "Sto rispondendo… tocca per interrompere"}

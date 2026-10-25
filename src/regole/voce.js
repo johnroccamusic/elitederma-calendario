@@ -26,9 +26,29 @@ export function testoDaLeggere(testo) {
     .trim();
 }
 
+// LE VOCI ITALIANE DEL DISPOSITIVO, dalla migliore. Safari su iPhone
+// espone «Alice» (compatta, metallica) e, se scaricate nelle impostazioni
+// di Accessibilita', le versioni «Enhanced»/«Premium» e Federica, Emma,
+// Paola: la differenza di naturalezza e' tutta li'. Chrome ha le voci di
+// Google. Si preferiscono le migliorate, poi le altre; la scelta si puo'
+// cambiare dal pannello e resta sul dispositivo.
+const CHIAVE_VOCE = "assistente-voce";
+export function vociItaliane() {
+  const voci = window.speechSynthesis?.getVoices?.() || [];
+  const punteggio = (v) => (/enhanced|premium|migliorat|neural|natural/i.test(v.name) ? 3 : 0)
+    + (/siri|google|microsoft/i.test(v.name) ? 2 : 0) + (/federica|emma|paola|luca|elsa|isabella/i.test(v.name) ? 1 : 0)
+    + (v.localService ? 0.5 : 0);
+  return voci.filter((v) => /^it[-_]/i.test(v.lang)).sort((a, b) => punteggio(b) - punteggio(a));
+}
+export function voceScelta() {
+  let nome = null; try { nome = localStorage.getItem(CHIAVE_VOCE); } catch { /* niente memoria */ }
+  const voci = vociItaliane();
+  return voci.find((v) => v.name === nome) || voci[0] || null;
+}
+export function scegliVoce(nome) { try { localStorage.setItem(CHIAVE_VOCE, nome); } catch { /* niente memoria */ } }
+
 // Legge un testo in italiano. Torna una promessa che si risolve quando ha
-// finito (o quando viene zittita). Si preferisce una voce italiana di
-// sistema, se ce n'e' una.
+// finito (o quando viene zittita).
 export function leggi(testo, { suFine } = {}) {
   return new Promise((risolvi) => {
     const s = window.speechSynthesis;
@@ -36,10 +56,11 @@ export function leggi(testo, { suFine } = {}) {
     s.cancel();
     const u = new window.SpeechSynthesisUtterance(testoDaLeggere(testo));
     u.lang = "it-IT";
-    const voci = s.getVoices?.() || [];
-    const it = voci.find((v) => /^it[-_]/i.test(v.lang) && /siri|alice|federica|paola|luca|google/i.test(v.name)) || voci.find((v) => /^it[-_]/i.test(v.lang));
-    if (it) u.voice = it;
-    u.rate = 1.02;
+    const v = voceScelta();
+    if (v) u.voice = v;
+    // un filo piu' lenta del massimo e col tono naturale: le voci di
+    // sistema accelerate suonano piu' metalliche, non piu' sveglie
+    u.rate = 0.98; u.pitch = 1;
     u.onend = () => { suFine?.(); risolvi(); };
     u.onerror = () => { suFine?.(); risolvi(); };
     s.speak(u);

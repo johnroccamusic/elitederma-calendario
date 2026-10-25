@@ -688,6 +688,15 @@ capriccioso. Per la qualità della voce di Claude su iPhone servirebbe una
 trascrizione esterna (Whisper, Deepgram): fornitore in più, costo, privacy —
 **decisione del titolare, non presa**.
 
+**La voce la sceglie chi ascolta** (25/10/2026 sera): `vociItaliane()` ordina
+le voci italiane del dispositivo dalla migliore (Enhanced/Premium, poi
+Siri/Google, poi le altre) e il pannello ha una tendina «Voce» con la scelta
+salvata in `localStorage`. Su iPhone la differenza la fa scaricare la voce
+migliorata da Impostazioni → Accessibilità → Contenuto letto → Voci →
+Italiano. Per una voce davvero naturale servirebbe una sintesi esterna
+(OpenAI, ElevenLabs): esce solo il testo della risposta, ma è un fornitore
+con chiave e costo — **decisione del titolare, non presa**.
+
 **Le regole si dettano** (`src/regole/Dettatura.jsx`): un microfono accanto
 al testo, con il riconoscimento vocale **del browser** (Web Speech API,
 `it-IT`): niente server, niente costi, e dove il browser non lo ha il tasto
