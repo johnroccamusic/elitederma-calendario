@@ -358,9 +358,9 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
         style={{
           ...fontBody, display: "flex", flexDirection: "column", justifyContent: "center",
           width: "100%", boxSizing: "border-box", minHeight: 96,
-          border: `1px dashed ${file ? "#2E7D32" : GOLD}`, borderRadius: 12, padding: "16px 12px",
-          background: file ? "#F2F9F3" : "#FFFDF8", cursor: "pointer", textAlign: "center",
-          fontSize: 13, color: file ? "#2E7D32" : NAVY, fontWeight: file ? 700 : 400, lineHeight: 1.5,
+          border: `1px dashed ${file?.illeggibile ? "#B3261E" : file ? "#2E7D32" : GOLD}`, borderRadius: 12, padding: "16px 12px",
+          background: file?.illeggibile ? "#FDECEC" : file ? "#F2F9F3" : "#FFFDF8", cursor: "pointer", textAlign: "center",
+          fontSize: 13, color: file?.illeggibile ? "#B3261E" : file ? "#2E7D32" : NAVY, fontWeight: file ? 700 : 400, lineHeight: 1.5,
         }}
       >
         <input
@@ -376,7 +376,7 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
           // `display:none` alcuni browser smettono di aprirlo dalla label.
           style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
         />
-        <span>{file ? "✓ pronta da mandare" : "Scegli o scatta"}</span>
+        <span>{file?.illeggibile ? "✗ non si legge: scatta di nuovo" : file ? "✓ pronta da mandare" : "Scegli o scatta"}</span>
         {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>va bene anche con il tavolo intorno</span>}
         {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>foto JPG o PNG</span>}
       </label>
@@ -461,8 +461,37 @@ export default function PaginaModulo({ token }) {
   // parte da sola; il risultato si mostra sotto le foto e si confronta
   // con quello che c'e' nel modulo. Se fallisce non ferma niente.
   const [letturaDoc, setLetturaDoc] = useState(null);
+  // IL RITAGLIO LO FA IL LETTORE (25/10/2026): il modello dice anche dove
+  // sta il documento nella foto e di quanto va girato; la pagina lo
+  // ritaglia e lo raddrizza da sola, e quello che parte e' il documento
+  // e non il tavolo. La foto ritagliata porta il segno `giaLetta` cosi'
+  // non si rilegge: la lettura e' quella appena fatta.
+  async function ritagliaDaLettura(file, letto) {
+    const r = letto?.riquadro;
+    const giri = { 0: 0, 90: 1, 180: 2, 270: 3 }[Number(letto?.rotazione) || 0] || 0;
+    const boxValido = r && [r.x, r.y, r.w, r.h].every((n) => typeof n === "number" && n >= 0 && n <= 1) && r.w >= 0.2 && r.h >= 0.2 && (r.w < 0.97 || r.h < 0.97);
+    if (!boxValido && giri === 0) return null;
+    try {
+      const url = URL.createObjectURL(file);
+      const immagine = new Image();
+      immagine.src = url;
+      await immagine.decode();
+      // un filo di margine intorno al riquadro: un bordo tagliato e' peggio di un po' di tavolo
+      const m = 0.02;
+      const box = boxValido
+        ? { x: Math.max(0, r.x - m), y: Math.max(0, r.y - m), w: Math.min(1 - Math.max(0, r.x - m), r.w + 2 * m), h: Math.min(1 - Math.max(0, r.y - m), r.h + 2 * m) }
+        : { x: 0, y: 0, w: 1, h: 1 };
+      const pronta = await ritaglia(immagine, { giri, box });
+      URL.revokeObjectURL(url);
+      if (!pronta) return null;
+      const nuova = new File([pronta], file.name || "fronte.jpg", { type: "image/jpeg" });
+      nuova.giaLetta = true;
+      return nuova;
+    } catch { return null; }
+  }
   useEffect(() => {
     if (!docFronte) { setLetturaDoc(null); return; }
+    if (docFronte.giaLetta) return; // e' il ritaglio della foto gia' letta
     let vivo = true;
     setLetturaDoc({ stato: "leggo" });
     const lettore = new FileReader();
@@ -470,8 +499,20 @@ export default function PaginaModulo({ token }) {
       try {
         const { data, error } = await supabase.functions.invoke("leggi-documento", { body: { token, lato: "fronte", immagine: String(lettore.result) } });
         if (!vivo) return;
-        if (error || !data?.ok) setLetturaDoc({ stato: "errore", errore: data?.errore || error?.message || "nessuna risposta" });
-        else setLetturaDoc({ stato: "ok", letto: data.letto });
+        if (error || !data?.ok) { setLetturaDoc({ stato: "errore", errore: data?.errore || error?.message || "nessuna risposta" }); return; }
+        setLetturaDoc({ stato: "ok", letto: data.letto });
+        // ILLEGGIBILE: la foto resta nel campo per mostrare il perche', ma
+        // porta il segno `illeggibile` e il modulo non parte finche' non
+        // la si rifa' (vedi `mancanti`)
+        if (data.letto?.leggibile === false || data.letto?.qualita === "illeggibile") {
+          const bocciata = new File([docFronte], docFronte.name || "fronte.jpg", { type: docFronte.type || "image/jpeg" });
+          bocciata.giaLetta = true; bocciata.illeggibile = true;
+          if (vivo) setDocFronte(bocciata);
+          return;
+        }
+        // letto: si ritaglia e si raddrizza da soli, senza rileggere
+        const ritagliata = await ritagliaDaLettura(docFronte, data.letto);
+        if (vivo && ritagliata) setDocFronte(ritagliata);
       } catch (e) {
         if (vivo) setLetturaDoc({ stato: "errore", errore: String(e?.message || e) });
       }
@@ -651,6 +692,7 @@ export default function PaginaModulo({ token }) {
   if (c("doc_tipo"))   serve({ chiave: "doc_tipo" }, false);
   if (c("doc_numero")) serve({ chiave: "doc_numero" }, false);
   if (c("doc_fronte")?.obbligatorio && !c("doc_fronte")?.bloccato && !docFronte) mancanti.push("Foto del documento — fronte");
+  if (docFronte?.illeggibile) mancanti.push("Foto del documento — fronte: non si legge, va rifatta");
   if (c("doc_retro")?.obbligatorio  && !c("doc_retro")?.bloccato  && !docRetro)  mancanti.push("Foto del documento — retro");
   if (!regolamentoLetto) mancanti.push("Aprire il regolamento e richiuderlo");
   if (!firma) mancanti.push("La firma");

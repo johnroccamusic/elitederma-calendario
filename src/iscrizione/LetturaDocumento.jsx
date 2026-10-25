@@ -23,8 +23,19 @@ export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa
     return <div data-campo="lettura-documento" style={{ ...scatola, color: "#8A6D1D", background: "#FFF8E6", border: "1px solid #E6CF8C" }}>Non sono riuscito a leggere il documento ({lettura.errore}). Puoi mandare il modulo lo stesso: lo controlla chi ti ha iscritto.</div>;
   }
   const letto = lettura.letto || {};
-  if (letto.leggibile === false) {
-    return <div data-campo="lettura-documento" style={{ ...scatola, color: "#8A6D1D", background: "#FFF8E6", border: "1px solid #E6CF8C" }}>La foto non sembra leggibile{letto.note ? ` (${letto.note})` : ""}: prova a rifarla con più luce, oppure manda il modulo lo stesso.</div>;
+  const problemi = Array.isArray(letto.problemi) ? letto.problemi.filter(Boolean) : [];
+  // ILLEGGIBILE: la foto non va bene e non si manda. Si dice cosa non va
+  // e si chiede di rifarla — con piu' luce, dritta, tutto il documento
+  // dentro. E' l'unico caso in cui la lettura ferma qualcosa.
+  if (letto.leggibile === false || letto.qualita === "illeggibile") {
+    return (
+      <div data-campo="lettura-documento" data-esito="illeggibile" style={{ ...scatola, color: "#B3261E", background: "#FDECEC", border: "1px solid #F0C0BC" }}>
+        <b>Questa foto non si legge: va rifatta.</b>
+        {problemi.length > 0 && <div style={{ marginTop: 4 }}>Cosa non va: {problemi.join(", ")}.</div>}
+        {!problemi.length && letto.note && <div style={{ marginTop: 4 }}>{letto.note}</div>}
+        <div style={{ marginTop: 4 }}>Scatta di nuovo con più luce, senza riflessi, con tutto il documento dentro l'inquadratura: tocca «Scegli o scatta» qui sopra.</div>
+      </div>
+    );
   }
   const righe = confrontaDocumento(letto, valori);
   const diverse = righe.filter((r) => !r.uguale);
@@ -37,6 +48,11 @@ export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa
   }
   return (
     <div data-campo="lettura-documento" style={{ ...scatola, color: NAVY, background: "#FFFDF8", border: `1px solid ${GOLD}` }}>
+      {letto.qualita === "scarsa" && (
+        <div data-esito="scarsa" style={{ color: "#8A6D1D", background: "#FFF8E6", border: "1px solid #E6CF8C", borderRadius: 8, padding: "6px 10px", marginBottom: 8 }}>
+          La foto si legge, ma a fatica{problemi.length ? ` (${problemi.join(", ")})` : ""}: se puoi, rifalla con più luce. Altrimenti va bene così.
+        </div>
+      )}
       <div style={{ fontWeight: 700, marginBottom: 4 }}>Dal tuo documento leggiamo:</div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 10, rowGap: 2 }}>
         {righe.map((r) => (

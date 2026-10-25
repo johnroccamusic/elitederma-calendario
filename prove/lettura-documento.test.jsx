@@ -33,9 +33,18 @@ describe("il riquadro della lettura", () => {
     expect(q.testo()).toContain("Puoi mandare il modulo lo stesso");
     await q.smonta();
   });
-  it("foto illeggibile: lo dice", async () => {
-    const p = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { leggibile: false, note: "sfocata" } }} valori={{}} />);
-    expect(p.testo()).toContain("non sembra leggibile");
+  it("foto illeggibile: va rifatta, e dice perché", async () => {
+    const p = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { leggibile: false, qualita: "illeggibile", problemi: ["poca luce", "documento tagliato a destra"] } }} valori={{}} />);
+    expect(p.nodo.querySelector('[data-esito="illeggibile"]')).toBeTruthy();
+    expect(p.testo()).toContain("va rifatta");
+    expect(p.testo()).toContain("poca luce, documento tagliato a destra");
+    expect(p.tasto("Usa i dati del documento")).toBeUndefined();
+    await p.smonta();
+  });
+  it("foto scarsa ma leggibile: avvisa e lascia proseguire", async () => {
+    const p = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { ...LETTO, qualita: "scarsa", problemi: ["riflesso"] } }} valori={{ nome: "ELENA" }} />);
+    expect(p.nodo.querySelector('[data-esito="scarsa"]').textContent).toContain("riflesso");
+    expect(p.testo()).toContain("Dal tuo documento leggiamo");
     await p.smonta();
   });
 });
