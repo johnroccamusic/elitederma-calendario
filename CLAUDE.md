@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
-| Backend | 45 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Backend | 46 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   43 file, 368 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   56 file, 412 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -637,6 +637,38 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
+
+### Chiedi ai dati (25/10/2026)
+
+In cima a **Statistiche**, solo per programmatore e amministratore, una
+barra dove si scrive una domanda in italiano — «i 10 prodotti più venduti
+a maggio», «quale master vende di più», «ricavi da settembre a oggi»,
+«quale spesa possiamo abbassare» — e si riceve la risposta coi numeri.
+Sotto ogni risposta ci sono **I numeri** (le righe) e **Come l'ho
+calcolato** (la query): chi legge controlla, e un conto che non si può
+controllare non è un conto. Componente `src/statistiche/ChiediAiDati.jsx`.
+
+**Il modello compone e commenta; i numeri li fa Postgres.** La edge
+function `analisi-domanda` fa due passi: Claude (`claude-sonnet-5-5`,
+chiave nel secret `ANTHROPIC_API_KEY`, mai in una `VITE_*`) traduce la
+domanda in **una** SELECT sulle sei viste `analisi_*` (vendite, righe,
+iscrizioni, incassi, spese, edizioni — catalogo in
+`_shared/analisi.js`); la SELECT passa da `controllaSql` e poi da
+`analisi_esegui`, una `security definer` eseguibile **solo da
+`service_role`** che accetta solo quelle viste, una sola istruzione,
+niente scritture, 8 secondi, 300 righe; se Postgres rifiuta, l'errore
+torna al modello che riprova una volta. Poi il modello scrive la
+risposta **dalle righe restituite**, con l'ordine di non inventare
+cifre. Le viste **non contengono dati degli allievi**: nomi, residenze,
+email non arrivano al modello (artt. 5 e 22 GDPR: aggregati, nessuna
+decisione automatizzata). Ogni domanda lascia una riga in
+`analisi_domande` (domanda, query, quante righe, token): niente righe.
+
+**`verify_jwt` non basta.** Al primo giro la funzione ha risposto alla
+sola chiave pubblicabile del bundle, che è un JWT valido (`anon`). Ora
+chiede `auth.getUser` sul gettone ricevuto: senza una sessione, 401.
+Il ruolo resta deciso dalla pagina, finché l'account è uno per tutti.
+Le prove in `prove/analisi-sql.test.js` e `prove/chiedi-ai-dati.test.jsx`.
 
 ### Dettaglio vendite di un evento (22/10/2026)
 

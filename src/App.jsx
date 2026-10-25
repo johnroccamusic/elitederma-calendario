@@ -73,6 +73,7 @@ import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { separaCivico, pulisciCitta } from "./iscrizione/indirizzo-pezzi.js";
 import { confrontaDocumento, scadenzaDocumento } from "./iscrizione/documento.js";
+import ChiediAiDati from "./statistiche/ChiediAiDati.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
@@ -8821,6 +8822,9 @@ function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriP
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Analisi, report e KPI della tua Academy.</div>
+        {/* solo per chi amministra: la funzione dietro chiede una sessione,
+            e con un account solo per tutti il ruolo lo sa solo la pagina */}
+        {(ruoloUtente === "programmatore" || ruoloUtente === "amministratore") && <ChiediAiDati chi={ruoloUtente} />}
         <GrigliaTasti
           pagina="statistiche" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
