@@ -38,7 +38,7 @@ import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
-import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI } from "./RitaglioFoto.jsx";
+import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI, ritaglia } from "./RitaglioFoto.jsx";
 import LetturaDocumento from "./LetturaDocumento.jsx";
 import { CAMPI_DOCUMENTO } from "./documento.js";
 import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
@@ -310,12 +310,30 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
   const [daRitagliare, setDaRitagliare] = useState(null);
   const [rifiutato, setRifiutato] = useState("");
 
+  // IL RITAGLIO E' FACOLTATIVO (25/10/2026). Scelta la foto, la si
+  // rimpicciolisce e comprime da sola (1600 px, JPEG) e la si da' per
+  // pronta: cosi' la lettura automatica parte subito, e all'allieva non si
+  // chiede un passaggio che serviva a noi e non a lei. Il tavolo intorno
+  // al documento non disturba chi legge. «Guarda, gira o ritaglia» resta
+  // un tasto, per chi vuole. Se la preparazione fallisce (immagine che
+  // non si apre), si torna alla schermata del ritaglio di prima.
   async function scelto(grezzo) {
     setRifiutato("");
     if (!grezzo) { onCambia(null); return; }
     const tipo = await tipoVero(grezzo);
     if (!FORMATI.includes(tipo)) { setRifiutato(perchePuoiNonMandarlo(tipo)); return; }
-    setDaRitagliare(grezzo);
+    try {
+      const url = URL.createObjectURL(grezzo);
+      const immagine = new Image();
+      immagine.src = url;
+      await immagine.decode();
+      const pronta = await ritaglia(immagine, { giri: 0, box: { x: 0, y: 0, w: 1, h: 1 } });
+      URL.revokeObjectURL(url);
+      if (!pronta) throw new Error("tela vuota");
+      onCambia(new File([pronta], `${etichetta.toLowerCase()}.jpg`, { type: "image/jpeg" }));
+    } catch {
+      setDaRitagliare(grezzo);
+    }
   }
 
   if (daRitagliare) {
@@ -359,6 +377,7 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
           style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
         />
         <span>{file ? "✓ pronta da mandare" : "Scegli o scatta"}</span>
+        {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>va bene anche con il tavolo intorno</span>}
         {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>foto JPG o PNG</span>}
       </label>
       {file && (
