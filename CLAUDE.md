@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
-| Backend | 48 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Backend | 49 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -688,14 +688,17 @@ capriccioso. Per la qualità della voce di Claude su iPhone servirebbe una
 trascrizione esterna (Whisper, Deepgram): fornitore in più, costo, privacy —
 **decisione del titolare, non presa**.
 
-**La voce la sceglie chi ascolta** (25/10/2026 sera): `vociItaliane()` ordina
-le voci italiane del dispositivo dalla migliore (Enhanced/Premium, poi
-Siri/Google, poi le altre) e il pannello ha una tendina «Voce» con la scelta
-salvata in `localStorage`. Su iPhone la differenza la fa scaricare la voce
-migliorata da Impostazioni → Accessibilità → Contenuto letto → Voci →
-Italiano. Per una voce davvero naturale servirebbe una sintesi esterna
-(OpenAI, ElevenLabs): esce solo il testo della risposta, ma è un fornitore
-con chiave e costo — **decisione del titolare, non presa**.
+**La voce naturale** (25/10/2026 sera, chiesta dal titolare: «non mi
+interessa poter scegliere la voce ma solo la voce naturale»). Il telefono
+non ce l'ha: la edge function `leggi-voce` manda il **testo** della
+risposta a OpenAI (`gpt-4o-mini-tts`, voce «nova», secret
+`OPENAI_API_KEY`) e restituisce l'audio, che il pannello suona
+(`leggiNaturale` in `voce.js`). Esce solo il testo, mai la voce di chi
+parla. **Senza chiave la funzione risponde 503 e si torna alla voce del
+telefono**: la conversazione non si ferma per una voce. La tendina di
+scelta della voce è stata tolta; resta l'ordinamento che preferisce le
+voci italiane migliorate per il ripiego. La chiave la crea il titolare su
+platform.openai.com e la mette nei secret di Supabase, mai in chat.
 
 **Le regole si dettano** (`src/regole/Dettatura.jsx`): un microfono accanto
 al testo, con il riconoscimento vocale **del browser** (Web Speech API,

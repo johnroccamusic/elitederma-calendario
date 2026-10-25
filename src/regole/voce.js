@@ -47,8 +47,41 @@ export function voceScelta() {
 }
 export function scegliVoce(nome) { try { localStorage.setItem(CHIAVE_VOCE, nome); } catch { /* niente memoria */ } }
 
-// Legge un testo in italiano. Torna una promessa che si risolve quando ha
-// finito (o quando viene zittita).
+// LA VOCE NATURALE: la risposta si fa leggere dalla funzione `leggi-voce`
+// (sintesi esterna, solo testo in uscita) e si suona qui. Se la funzione
+// non e' configurata o fallisce, si torna alla voce del telefono: la
+// conversazione non deve fermarsi per una voce.
+let audioInCorso = null;
+export async function leggiNaturale(testo, supabase) {
+  const pulito = testoDaLeggere(testo);
+  if (!pulito) return true;
+  try {
+    const sessione = await supabase.auth.getSession();
+    const gettone = sessione?.data?.session?.access_token;
+    if (!gettone) return false;
+    const base = supabase.functionsUrl || `${supabase.supabaseUrl}/functions/v1`;
+    const r = await fetch(`${base}/leggi-voce`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${gettone}`, apikey: supabase.supabaseKey, "content-type": "application/json" },
+      body: JSON.stringify({ testo: pulito }),
+    });
+    if (!r.ok || !(r.headers.get("content-type") || "").startsWith("audio/")) return false;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    await new Promise((risolvi) => {
+      const a = new Audio(url);
+      audioInCorso = a;
+      a.onended = () => { URL.revokeObjectURL(url); if (audioInCorso === a) audioInCorso = null; risolvi(); };
+      a.onerror = () => { URL.revokeObjectURL(url); if (audioInCorso === a) audioInCorso = null; risolvi(); };
+      a.play().catch(() => risolvi());
+    });
+    return true;
+  } catch { return false; }
+}
+export function zittisciNaturale() { try { audioInCorso?.pause(); audioInCorso = null; } catch { /* niente */ } }
+
+// Legge un testo in italiano con la voce del telefono. Torna una promessa
+// che si risolve quando ha finito (o quando viene zittita).
 export function leggi(testo, { suFine } = {}) {
   return new Promise((risolvi) => {
     const s = window.speechSynthesis;
@@ -67,7 +100,7 @@ export function leggi(testo, { suFine } = {}) {
   });
 }
 
-export function zittisci() { try { window.speechSynthesis?.cancel(); } catch { /* niente da zittire */ } }
+export function zittisci() { zittisciNaturale(); try { window.speechSynthesis?.cancel(); } catch { /* niente da zittire */ } }
 
 // Ascolta UNA frase e la consegna. Torna una funzione per smettere.
 export function ascoltaUnaFrase({ suParziale, suFrase, suErrore, suFine }) {
