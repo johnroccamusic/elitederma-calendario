@@ -709,6 +709,19 @@ email non arrivano al modello (artt. 5 e 22 GDPR: aggregati, nessuna
 decisione automatizzata). Ogni domanda lascia una riga in
 `analisi_domande` (domanda, query, quante righe, token): niente righe.
 
+**Si vende il pacco, non i pezzi dentro (25/10/2026, sera).** Quando il
+sito vende un kit scrive la riga del kit col prezzo **e** una riga per ogni
+pezzo contenuto, a 0 €: la pelle da 3 diventa «3 pz» più «1pz» ×6 a zero,
+un kit di pigmenti diventa il kit più i tre pigmenti a zero. L'assistente
+dava «Pelle sintetica 1pz, 26 pezzi» come più venduto di settembre: era
+il componente, e il titolare ha chiesto come avrebbe mai saputo se
+l'offerta da tre funziona. La vista `analisi_vendite_righe` ora esclude i
+prodotti con `conta_incassi = false` e **ogni riga a 0 € in un ordine che
+contiene un pacco** (se non è lei il pacco). Le righe a 0 € in ordini
+senza pacco restano: sono omaggi e sconti al 100%, e la pagina Analisi
+dell'app li conta come pezzi usciti. È una regola nella vista, non nel
+prompt: una regola che il modello deve ricordare non è una regola.
+
 **`verify_jwt` non basta.** Al primo giro la funzione ha risposto alla
 sola chiave pubblicabile del bundle, che è un JWT valido (`anon`). Ora
 chiede `auth.getUser` sul gettone ricevuto: senza una sessione, 401.

@@ -3,8 +3,8 @@
 -- un componente (conta_incassi = false): nelle righe entra 26 volte a
 -- settembre per 17,44 € in tutto, e l'assistente lo dava come il piu'
 -- venduto del mese. La pagina Analisi prodotti dell'app lo esclude da
--- sempre; adesso la vista porta il flag e il catalogo dice al modello di
--- escluderlo, cosi' i due conti partono dalla stessa regola.
+-- sempre; adesso lo esclude la vista stessa: quelle righe non esistono
+-- per chi interroga.
 -- Le due colonne si aggiungono IN CODA: create or replace su una vista
 -- accetta solo questo.
 create or replace view public.analisi_vendite_righe as
@@ -42,4 +42,27 @@ left join lateral (
   select cp.nome from prodotti_categorie pc join categorie_prodotti cp on cp.id = pc.categoria_id
   where pc.prodotto_id = p.id order by pc.ordine limit 1
 ) cat on true
-where coalesce(v.simulazione, false) = false;
+where coalesce(v.simulazione, false) = false
+  -- SI VENDE IL PACCO, NON I PEZZI DENTRO (25/10/2026, sera). Quando il
+  -- sito vende un kit scrive la riga del kit col prezzo E una riga per
+  -- ogni pezzo che contiene, a 0 €: una pelle da 3 diventa «3 pz» a
+  -- 16,39 € piu' «1pz» x6 a zero; un kit di pigmenti diventa il kit piu' i
+  -- tre pigmenti a zero. Contare quelle righe vuol dire dire «ho venduto
+  -- pelli singole» quando sta funzionando l'offerta da tre. Quindi fuori:
+  --   1. i prodotti che non contano come incasso (componenti puri);
+  --   2. ogni riga a 0 € che sta in un ordine dove c'e' un pacco, e che
+  --      non e' lei stessa il pacco — il pezzo dentro il kit, anche se e'
+  --      un prodotto che da solo si vende.
+  -- Le righe a 0 € in ordini SENZA pacco restano: sono omaggi e sconti al
+  -- 100%, e la pagina Analisi dell'app le conta come pezzi usciti.
+  and coalesce(p.conta_incassi, true) = true
+  and not (
+    coalesce((r->>'totale_riga')::numeric, (r->>'prezzo_unitario')::numeric * coalesce((r->>'quantita')::numeric, 1), 0) = 0
+    and coalesce(p.tipo_prodotto, '') <> 'bundle'
+    and exists (
+      select 1 from jsonb_array_elements(coalesce(v.prodotti, '[]'::jsonb)) r2
+      join prodotti_shop pb on (nullif(r2->>'prodotto_id','') is not null and pb.id = (r2->>'prodotto_id')::uuid)
+                            or (nullif(r2->>'woo_product_id','') is not null and pb.woo_product_id = (r2->>'woo_product_id')::int)
+      where pb.tipo_prodotto = 'bundle'
+    )
+  );
