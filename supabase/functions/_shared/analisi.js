@@ -21,8 +21,9 @@ analisi_vendite — una riga per ordine, banco e shop online.
   REGOLA: per i ricavi veri usare stato in ('completed','processing') and tipo_movimento = 'vendita'.
 
 analisi_vendite_righe — una riga per prodotto venduto (stesse colonne di contesto di analisi_vendite: vendita_id, numero_ordine, data, anno, mese, canale, stato, tipo_movimento, metodo_pagamento, operatore, corso, citta, evento) piu':
-  prodotto (nome), sku, categoria (categoria del prodotto, puo' essere null), quantita, totale_riga (incasso della riga), sconto_riga, costo_acquisto (unitario, puo' essere null), margine_stimato (totale_riga - costo*quantita, null se il costo manca).
-  REGOLA: i «prodotti piu' venduti» si contano qui, con la stessa regola su stato e tipo_movimento.
+  prodotto (nome), sku, categoria (categoria del prodotto, puo' essere null), quantita, totale_riga (incasso della riga), sconto_riga, costo_acquisto (unitario, puo' essere null), margine_stimato (totale_riga - costo*quantita, null se il costo manca), conta_incassi (bool: false = componente o voce di servizio che NON conta come prodotto venduto), tipo_prodotto ('semplice','bundle','componente', null).
+  REGOLA: i «prodotti piu' venduti» si contano qui, con la stessa regola su stato e tipo_movimento, E con conta_incassi = true: e' la stessa regola della pagina Analisi prodotti dell'app, e senza, un componente da pochi centesimi finisce in cima. Salvo richiesta esplicita escludere anche le righe di servizio come «Spedizione» (prodotto ilike 'spedizione%').
+  ATTENZIONE: «1pz», «3 pz», «Box 20 pz» nel NOME del prodotto sono il formato della confezione, non la quantita' venduta: la quantita' e' la colonna quantita.
 
 analisi_iscrizioni — una riga per iscrizione a un corso (NESSUN dato dell'allievo).
   colonne: id, data_iscrizione, anno, mese, corso, citta, data_inizio, data_fine (del corso), master (chi tiene il corso), venditore (chi ha iscritto), stato ('dati_inseriti','modulo_inviato','modulo_ricevuto','confermato'), totale_pattuito (prezzo concordato del corso), quota_venditore, acconto_totale, acconto_pagato (bool), acconto_pagato_il, precorso_totale, precorso_pagato, precorso_pagato_il, saldo_totale, saldo_incassato_il, tipo_offerta, pacchetto_kit, richiede_modelle, numero_modelle, vecchia_iscrizione.
