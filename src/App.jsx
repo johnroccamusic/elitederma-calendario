@@ -56786,20 +56786,43 @@ function TabellaOperatoriVenditeProdotti({ righe, isMobile, messaggioVuoto }) {
     </div>
   );
 }
-function TabellaProdottiVenditeProdotti({ righe, isMobile, messaggioVuoto, piePagina }) {
+export function TabellaProdottiVenditeProdotti({ righe, isMobile, messaggioVuoto, piePagina }) {
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   return (
     <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
       {isMobile ? (
         righe.length === 0 ? (
           <div style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{messaggioVuoto}</div>
-        ) : righe.map((p) => (
-          <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</span>
-            <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>{p.pezzi} pz</span>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, flexShrink: 0, minWidth: 62, textAlign: "right" }}>{fmtEuroErp2(p.ricavo)}</span>
-          </div>
-        ))
+        ) : (
+          <>
+            {/* Sul telefono l'elenco non aveva intestazioni, quindi non si
+                poteva riordinare: da computer si premeva la colonna, qui
+                l'ordine era quello fisso per ricavo (25/10/2026). Stesse
+                tre voci della tabella, premibili allo stesso modo. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: BG, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              {[{ c: "prodotto", l: "Prodotto", stile: { flex: 1, textAlign: "left" } }, { c: "pezzi", l: "Pezzi", stile: { flexShrink: 0 } }, { c: "ricavo", l: "Ricavo", stile: { flexShrink: 0, minWidth: 62, textAlign: "right" } }].map((th) => {
+                const attiva = ordine?.campo === th.c;
+                return (
+                  <button key={th.c} type="button" data-campo={`ordina-${th.c}`} onClick={() => cambiaOrdine(th.c)} title="Ordina per questa colonna"
+                    style={{ all: "unset", cursor: "pointer", ...fontBody, fontSize: 10.5, fontWeight: 700, color: attiva ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", ...th.stile }}>
+                    {th.l}{attiva && <span style={{ marginLeft: 3 }}>{ordine.direzione === "asc" ? "▲" : "▼"}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {ordina(righe, {
+              prodotto: (pr) => pr.nome || "",
+              pezzi: (pr) => pr.pezzi ?? null,
+              ricavo: (pr) => pr.ricavo ?? null,
+            }).map((p) => (
+              <div key={p.nome} data-campo="riga-prodotto" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</span>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>{p.pezzi} pz</span>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, flexShrink: 0, minWidth: 62, textAlign: "right" }}>{fmtEuroErp2(p.ricavo)}</span>
+              </div>
+            ))}
+          </>
+        )
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
