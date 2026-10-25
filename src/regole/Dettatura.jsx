@@ -18,19 +18,31 @@ export default function TastoDettatura({ onTesto, compatto = false }) {
   const [attivo, setAttivo] = useState(false);
   const [parziale, setParziale] = useState("");
   const [errore, setErrore] = useState("");
+  const [avviso, setAvviso] = useState("");
   const ric = useRef(null);
+  const voluto = useRef(false);     // true finche' chi detta non preme «ferma»
+  const sentito = useRef(false);    // almeno un risultato in questa sessione
+  const guardia = useRef(null);
 
-  useEffect(() => () => { try { ric.current?.stop(); } catch { /* gia' fermo */ } }, []);
+  useEffect(() => () => { voluto.current = false; clearTimeout(guardia.current); try { ric.current?.stop(); } catch { /* gia' fermo */ } }, []);
 
   if (!dettaturaDisponibile()) return null;
 
-  function avvia() {
+  // iPhone e iPad: Safari ha il riconoscimento, ma `continuous` lo
+  // rispetta male — si ferma alla prima pausa e a volte non consegna
+  // niente. Si lavora a frasi: una sessione corta per volta, riavviata
+  // finche' chi detta non preme «ferma». Trovato il 25/10/2026: il
+  // titolare ha parlato e non e' comparso nulla.
+  const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  function avviaSessione() {
     const Riconoscitore = window.SpeechRecognition || window.webkitSpeechRecognition;
     const r = new Riconoscitore();
     r.lang = "it-IT";
-    r.continuous = true;
+    r.continuous = !iOS;
     r.interimResults = true;
     r.onresult = (e) => {
+      sentito.current = true; setAvviso("");
       let definitivo = ""; let provvisorio = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0]?.transcript || "";
@@ -41,15 +53,37 @@ export default function TastoDettatura({ onTesto, compatto = false }) {
     };
     r.onerror = (e) => {
       // «no-speech» e «aborted» sono silenzi, non guasti
-      if (e.error === "not-allowed") setErrore("Il browser non permette il microfono: controlla i permessi del sito.");
-      else if (e.error !== "no-speech" && e.error !== "aborted") setErrore(`Dettatura interrotta (${e.error}).`);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        voluto.current = false;
+        setErrore(iOS
+          ? "Qui il microfono dell'app non è permesso. Usa quello della tastiera: tocca la casella e premi il microfono in basso a destra della tastiera."
+          : "Il browser non permette il microfono: controlla i permessi del sito.");
+      } else if (e.error !== "no-speech" && e.error !== "aborted") setErrore(`Dettatura interrotta (${e.error}).`);
     };
-    r.onend = () => { setAttivo(false); setParziale(""); ric.current = null; };
+    r.onend = () => {
+      ric.current = null; setParziale("");
+      // iOS chiude la sessione a ogni pausa: se non e' stato premuto
+      // «ferma», se ne apre un'altra
+      if (voluto.current) { try { avviaSessione(); return; } catch { /* si ferma sotto */ } }
+      setAttivo(false); voluto.current = false;
+    };
     ric.current = r;
-    setErrore("");
-    try { r.start(); setAttivo(true); } catch { setErrore("Non riesco ad avviare il microfono."); }
+    r.start();
   }
-  function ferma() { try { ric.current?.stop(); } catch { /* gia' fermo */ } }
+
+  function avvia() {
+    setErrore(""); setAvviso(""); sentito.current = false; voluto.current = true;
+    try { avviaSessione(); setAttivo(true); } catch { voluto.current = false; setErrore("Non riesco ad avviare il microfono."); return; }
+    // se dopo otto secondi non e' arrivato niente, non e' chi detta che
+    // sbaglia: si spiega l'alternativa invece di lasciare il tasto rosso
+    clearTimeout(guardia.current);
+    guardia.current = setTimeout(() => {
+      if (!sentito.current && voluto.current) setAvviso(iOS
+        ? "Non sento niente. Su iPhone funziona sempre il microfono della tastiera: tocca la casella e premi il microfono in basso a destra."
+        : "Non sento niente: controlla che il microfono sia permesso per questo sito.");
+    }, 8000);
+  }
+  function ferma() { voluto.current = false; clearTimeout(guardia.current); try { ric.current?.stop(); } catch { /* gia' fermo */ } setAttivo(false); }
 
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -62,6 +96,7 @@ export default function TastoDettatura({ onTesto, compatto = false }) {
         {attivo ? "Sto ascoltando… ferma" : "Detta"}
       </button>
       {attivo && parziale && <span style={{ ...fontBody, fontSize: 12, color: GRAFITE, fontStyle: "italic" }}>{parziale}</span>}
+      {avviso && !errore && <span data-campo="dettatura-avviso" style={{ ...fontBody, fontSize: 12, color: GRAFITE }}>{avviso}</span>}
       {errore && <span style={{ ...fontBody, fontSize: 12, color: "#B3261E" }}>{errore}</span>}
     </div>
   );
