@@ -42,23 +42,27 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
     } finally { setOccupato(false); }
   }
 
-  // sotto il dock del telefono (che sta di lato) e sopra quello da
-  // scrivania (in basso al centro): a destra non da' fastidio a nessuno
-  const base = { position: "fixed", right: 16, bottom: isMobile ? 84 : 24, zIndex: 1900 };
+  // Sul telefono il dock e' una barra in basso a tutta larghezza, e la sua
+  // altezza cambia col rullo dei preferiti: messo in basso, il tondo ci
+  // finiva sotto (trovato dal titolare il 25/10/2026). Quindi sul telefono
+  // sta in ALTO a destra, sotto la tacca; da scrivania in basso a destra,
+  // lontano dal dock che sta al centro.
+  const base = isMobile
+    ? { position: "fixed", right: 12, top: "calc(env(safe-area-inset-top, 0px) + 10px)", zIndex: 1900 }
+    : { position: "fixed", right: 20, bottom: 24, zIndex: 1900 };
 
   return (
     <>
       {!aperto && (
         <button type="button" data-campo="assistente-regole" onClick={() => setAperto(true)} title="Chiedi ai regolamenti" aria-label="Chiedi ai regolamenti"
-          style={{ ...base, width: 52, height: 52, borderRadius: 26, border: "none", cursor: "pointer", background: NAVY, color: "#fff", boxShadow: "0 8px 24px rgba(14,27,51,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            <path d="M12 7v4" /><circle cx="12" cy="13.5" r="0.6" fill="currentColor" />
-          </svg>
+          style={{ ...base, width: 48, height: 48, borderRadius: "50%", border: "2px solid #fff", cursor: "pointer", background: NAVY, color: "#fff", boxShadow: "0 6px 20px rgba(14,27,51,0.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+          {/* un punto interrogativo bianco, grande e tondo: e' quello che
+              il titolare ha chiesto, e si capisce da lontano */}
+          <span aria-hidden="true" style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, lineHeight: 1, color: "#fff", transform: "translateY(-1px)" }}>?</span>
         </button>
       )}
       {aperto && (
-        <div data-campo="pannello-assistente" style={{ ...base, width: "min(380px, calc(100vw - 32px))", maxHeight: isMobile ? "calc(100dvh - 120px)" : "min(560px, calc(100dvh - 48px))", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 16px 48px rgba(14,27,51,0.28)", overflow: "hidden" }}>
+        <div data-campo="pannello-assistente" style={{ ...base, width: "min(380px, calc(100vw - 32px))", maxHeight: isMobile ? "calc(100dvh - 110px)" : "min(560px, calc(100dvh - 48px))", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 16px 48px rgba(14,27,51,0.28)", overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: NAVY, color: "#fff" }}>
             <div>
               <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700 }}>Chiedi ai regolamenti</div>
