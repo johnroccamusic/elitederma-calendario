@@ -665,6 +665,12 @@ con un «Fatto» quando la scheda è stata scritta. È da lì che le FAQ si
 costruiscono dalle domande vere. Il registro lo scrive solo la funzione;
 l'app lo legge e cancella. Prove in `prove/regolamenti.test.jsx`.
 
+**Le regole si dettano** (`src/regole/Dettatura.jsx`): un microfono accanto
+al testo, con il riconoscimento vocale **del browser** (Web Speech API,
+`it-IT`): niente server, niente costi, e dove il browser non lo ha il tasto
+non compare. La frase si **accoda** al testo quando il browser la dà per
+definitiva, così si detta, ci si ferma, si corregge a mano e si riprende.
+
 ### Chiedi ai dati (25/10/2026)
 
 In cima a **Statistiche**, solo per programmatore e amministratore, una

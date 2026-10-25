@@ -11,6 +11,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
+import TastoDettatura from "./Dettatura.jsx";
 
 export const DESTINATARI = [
   { chiave: "tutti", etichetta: "Tutti" },
@@ -55,7 +56,11 @@ function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
       </div>
       <Field label="La regola, come la spiegheresti a chi la deve applicare">
         <textarea data-campo="testo" value={s.testo} onChange={(e) => setS({ ...s, testo: e.target.value })} rows={6}
-          style={{ ...inputStyle, minHeight: 120, resize: "vertical", lineHeight: 1.5 }} placeholder="Cosa si fa, con quali cifre, e cosa NON si fa." />
+          style={{ ...inputStyle, minHeight: 120, resize: "vertical", lineHeight: 1.5 }} placeholder="Cosa si fa, con quali cifre, e cosa NON si fa. Oppure premi «Detta» e parla." />
+        <div style={{ marginTop: 6 }}>
+          {/* la frase dettata si accoda a quello che c'e', con uno spazio */}
+          <TastoDettatura onTesto={(frase) => setS((x) => ({ ...x, testo: (x.testo ? x.testo.replace(/\s+$/, "") + " " : "") + frase }))} />
+        </div>
       </Field>
       <Field label="Vale per">
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

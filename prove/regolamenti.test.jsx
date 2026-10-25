@@ -58,3 +58,34 @@ describe("Assistente regolamenti", () => {
     await p.smonta();
   });
 });
+
+describe("Dettatura", () => {
+  it("il microfono accoda al testo le frasi definitive, e non compare dove il browser non lo ha", async () => {
+    const { default: PaginaRegolamentiRic } = await import("../src/regole/PaginaRegolamenti.jsx");
+    // senza riconoscitore: niente tasto
+    delete window.SpeechRecognition; delete window.webkitSpeechRecognition;
+    rispondiCon({ "rest/v1/regolamenti": [] });
+    let p = await monta(<PaginaRegolamentiRic puoScrivere chi="Admin" />);
+    await clicca(p.tasto("Aggiungi regola"));
+    expect(p.nodo.querySelector('[data-campo="dettatura"]')).toBeFalsy();
+    await p.smonta();
+
+    // con un riconoscitore finto: la frase finisce nella casella
+    let istanza = null;
+    window.webkitSpeechRecognition = class { constructor() { istanza = this; } start() {} stop() { this.onend?.(); } };
+    p = await monta(<PaginaRegolamentiRic puoScrivere chi="Admin" />);
+    await clicca(p.tasto("Aggiungi regola"));
+    await scrivi(p.nodo.querySelector('[data-campo="testo"]'), "In aula");
+    await clicca(p.nodo.querySelector('[data-campo="dettatura"]'));
+    expect(p.testo()).toContain("Sto ascoltando");
+    const { act } = await import("react");
+    await act(async () => {
+      istanza.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: "lo sconto è dell'otto e mezzo per cento" }], { isFinal: true })] });
+    });
+    expect(p.nodo.querySelector('[data-campo="testo"]').value).toBe("In aula lo sconto è dell'otto e mezzo per cento");
+    await clicca(p.nodo.querySelector('[data-campo="dettatura"]'));
+    expect(p.testo()).not.toContain("Sto ascoltando");
+    await p.smonta();
+    delete window.webkitSpeechRecognition;
+  });
+});
