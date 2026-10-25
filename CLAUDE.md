@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
-| Backend | 46 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Backend | 47 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   56 file, 412 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   57 file, 416 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -641,6 +641,29 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 
 Regola operativa: dati di allievi (nome, residenza, email, pagamenti) sono materia
 GDPR. Ogni modifica che li tocca passa da una verifica delle policy prima del merge.
+
+### Regolamenti e l'assistente flottante (25/10/2026)
+
+Le decisioni prese nel tempo — prezzi, sconti, procedure, cosa fare
+quando — vivevano nelle chat. Ora stanno in **Regolamenti**, tessera in
+Home con la sua casella nei permessi (`regolamenti` in `TASTI_HOME`;
+programmatore e amministratore la vedono comunque). Chi amministra
+**scrive** le schede (`src/regole/PaginaRegolamenti.jsx`, tabella
+`regolamenti`: titolo, argomento, testo, `visibile_a`, `decisa_il`,
+`attivo`); gli altri le leggono. **Nasce vuota, per scelta del titolare**:
+la riempie lui, scheda per scheda.
+
+L'**icona flottante** in basso a destra (`AssistenteRegole.jsx`) c'è per
+chiunque abbia fatto accesso, tranne il profilo kiosk. La edge function
+`assistente-regole` (Haiku, `getUser` obbligatorio: senza sessione 401,
+verificato) passa al modello **solo** le schede attive visibili a quel
+ruolo e la domanda — niente dati di allievi né di vendite — e gli impone di
+rispondere **solo** con quello che c'è scritto, citando le schede. Se
+nessuna risponde lo dice e segna `senza_risposta`: quelle domande finiscono
+in `regolamenti_domande` e compaiono in fondo alla pagina per chi scrive,
+con un «Fatto» quando la scheda è stata scritta. È da lì che le FAQ si
+costruiscono dalle domande vere. Il registro lo scrive solo la funzione;
+l'app lo legge e cancella. Prove in `prove/regolamenti.test.jsx`.
 
 ### Chiedi ai dati (25/10/2026)
 

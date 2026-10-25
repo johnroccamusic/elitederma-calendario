@@ -67,6 +67,8 @@ import PannelloNotifiche from "./notifiche/PannelloNotifiche.jsx";
 const PaginaNotifichePush = pezzo(() => import("./notifiche/PaginaNotifichePush.jsx"));
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 const ModelliEmail = pezzo(() => import("./email/ModelliEmail.jsx"));
+const PaginaRegolamenti = pezzo(() => import("./regole/PaginaRegolamenti.jsx"));
+const AssistenteRegole = pezzo(() => import("./regole/AssistenteRegole.jsx"));
 const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx"));
 import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
@@ -27601,6 +27603,9 @@ export const TASTI_HOME = [
   // qualcuno era senza pacchetto — quindi anche sulla home delle master,
   // a cui non spetta. Dal 22/10/2026 e' una casella come le altre.
   { chiave: "assegnazionekit", etichetta: "Assegnazione kit" },
+  // le decisioni prese (prezzi, sconti, procedure), da leggere; chi
+  // amministra le scrive. E' anche la fonte dell'assistente flottante
+  { chiave: "regolamenti", etichetta: "Regolamenti" },
 ];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
@@ -83402,6 +83407,7 @@ function Gestionale() {
     // la tessera in home contava sessantotto — le viste che non stanno
     // in questo elenco non caricano niente
     assegnazionekit: ["iscritti", "corsi_date", "corsi", "location", "kit_definizioni"],
+    regolamenti: [],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
@@ -84652,6 +84658,21 @@ function Gestionale() {
           onTogli={preferitiRisolti[slotPreferitoInScelta] ? () => { togliPreferito(slotPreferitoInScelta); setSlotPreferitoInScelta(null); } : null}
         />
       )}
+      {/* l'assistente dei regolamenti: per chiunque abbia fatto accesso,
+          tranne il profilo kiosk. Il ruolo decide quali regole gli
+          valgono; chi amministra le vede tutte */}
+      {utenteLoggato && !utenteLoggato.soloCalendarioLettura && (
+        <Suspense fallback={null}>
+          <AssistenteRegole
+            isMobile={isMobile}
+            chi={operatoreApp?.nome || ""}
+            ruolo={ruoloUtente === "programmatore" || ruoloUtente === "amministratore" ? "amministrazione"
+              : utenteLoggato.masterId ? "master" : utenteLoggato.assistenteId ? "assistenti"
+              : (venditoreLoggato || utenteLoggato.venditoreId) ? "venditori" : "tutti"}
+            onApriRegolamenti={() => setView("regolamenti")}
+          />
+        </Suspense>
+      )}
       {!isMobile && (
         // Il dock da scrivania. Prima era una barra in cima, sopra il
         // contenuto: la si guardava per forza anche quando non serviva, e
@@ -85011,6 +85032,7 @@ function Gestionale() {
               { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
+              { chiave: "regolamenti", title: "Regolamenti", descrizione: "Prezzi, sconti, procedure: le decisioni prese, da consultare", Icona: IconaClipboardErp, attivo: tastoAbilitato("regolamenti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("regolamenti") },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
               { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
               { chiave: "normative", title: "Normative", descrizione: "Le regole da rispettare e i documenti che le accompagnano", Icona: IconaTileNormative, attivo: tastoAbilitato("normative"), onClick: apriNormative },
@@ -85817,6 +85839,15 @@ function Gestionale() {
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "regolamenti" && (
+        <PaginaRegolamenti
+          puoScrivere={ruoloUtente === "programmatore" || ruoloUtente === "amministratore"}
+          chi={operatoreCorrente(utenteLoggato, venditoreLoggato)?.nome || ""}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "regolamenti", "Regolamenti")}
         />
       )}
 
