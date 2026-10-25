@@ -717,6 +717,26 @@ finestra è aperta il body è chiuso (`overflow: hidden`, rimesso com'era
 alla chiusura) e l'overlay ha `overscroll-behavior: contain`: arrivati in
 fondo il dito non scorre più la pagina dietro.
 
+### Il documento si legge da solo (25/10/2026)
+
+Gli allievi scrivono dati sbagliati; il documento che allegano dice il
+vero. Appena la foto del **fronte** è pronta nel modulo, la pagina la
+manda alla edge function **`leggi-documento`** (`--no-verify-jwt`, porta
+= `token_modulo` di un'iscrizione non ancora tornata; secret
+`ANTHROPIC_API_KEY`; modello `claude-haiku-5-5`), che restituisce i soli
+dati anagrafici in JSON e li salva in `iscritti.documento_letto`
+(`{fronte:{…}, retro:{…}}`, con modello, ora e token usati; **mai la
+foto**). `src/iscrizione/documento.js` confronta letto e modulo
+(maiuscole, accenti, province e formati di data non contano);
+`LetturaDocumento.jsx` lo mostra all'allieva riga per riga — «Usa i dati
+del documento» scrive solo nei campi che può toccare, quelli del venditore
+si segnalano — e `DocumentoLetto` (App.jsx) lo mostra al venditore in
+cima alla scheda e alla fotografia, con «N dati non tornano — da
+verificare». **Niente decide niente** (art. 22): si può spedire anche con
+differenze, e corregge una persona. Se il lettore è giù, il modulo si
+manda lo stesso. L'informativa che lo copre è il Punto 9 (lettere d,
+e, e-bis). Prove: `documento-confronto`, `lettura-documento`.
+
 ### Il modulo riaperto si ricompila (24/10/2026)
 
 Riaperto il modulo, l'allieva non riusciva a correggere la data di

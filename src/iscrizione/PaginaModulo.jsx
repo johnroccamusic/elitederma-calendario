@@ -39,6 +39,8 @@ import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
 import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI } from "./RitaglioFoto.jsx";
+import LetturaDocumento from "./LetturaDocumento.jsx";
+import { CAMPI_DOCUMENTO } from "./documento.js";
 import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
 // lo stesso confronto della cascata della scheda: "PATERNO" e
 // "Paternò" sono lo stesso posto, e due copie di questa regola
@@ -436,6 +438,29 @@ export default function PaginaModulo({ token }) {
   const [spunte, setSpunte] = useState({});
   const [spedendo, setSpedendo] = useState(false);
   const [spedito, setSpedito] = useState(false);
+  // LA LETTURA DEL DOCUMENTO (25/10/2026): appena il fronte e' pronto
+  // parte da sola; il risultato si mostra sotto le foto e si confronta
+  // con quello che c'e' nel modulo. Se fallisce non ferma niente.
+  const [letturaDoc, setLetturaDoc] = useState(null);
+  useEffect(() => {
+    if (!docFronte) { setLetturaDoc(null); return; }
+    let vivo = true;
+    setLetturaDoc({ stato: "leggo" });
+    const lettore = new FileReader();
+    lettore.onload = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("leggi-documento", { body: { token, lato: "fronte", immagine: String(lettore.result) } });
+        if (!vivo) return;
+        if (error || !data?.ok) setLetturaDoc({ stato: "errore", errore: data?.errore || error?.message || "nessuna risposta" });
+        else setLetturaDoc({ stato: "ok", letto: data.letto });
+      } catch (e) {
+        if (vivo) setLetturaDoc({ stato: "errore", errore: String(e?.message || e) });
+      }
+    };
+    lettore.onerror = () => { if (vivo) setLetturaDoc({ stato: "errore", errore: "foto non leggibile" }); };
+    lettore.readAsDataURL(docFronte);
+    return () => { vivo = false; };
+  }, [docFronte, token]);
   // il regolamento parte chiuso: vedi il blocco piu' sotto
   const [regolamentoAperto, setRegolamentoAperto] = useState(false);
   // APERTO E RICHIUSO ALMENO UNA VOLTA.
@@ -845,6 +870,12 @@ export default function PaginaModulo({ token }) {
             {c("doc_fronte") && <Foto etichetta="Fronte" file={docFronte} onCambia={setDocFronte} obbligatorio={c("doc_fronte").obbligatorio} />}
             {c("doc_retro")  && <Foto etichetta="Retro"  file={docRetro}  onCambia={setDocRetro}  obbligatorio={c("doc_retro").obbligatorio} />}
           </div>
+          <LetturaDocumento
+            lettura={letturaDoc}
+            valori={Object.fromEntries(CAMPI_DOCUMENTO.map((k) => [k.chiave, valoreDi(k.chiave)]))}
+            bloccati={Object.fromEntries(CAMPI_DOCUMENTO.map((k) => [k.chiave, !!c(k.chiave)?.bloccato]))}
+            onUsa={(nuovi) => { for (const [k, v] of Object.entries(nuovi)) scrivi(k, v); }}
+          />
         </div>
 
         {/* I riquadri commerciali: li ha decisi il venditore, lei li legge.

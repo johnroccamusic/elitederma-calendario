@@ -1,0 +1,34 @@
+// IL CONFRONTO FRA DOCUMENTO E MODULO: dice cosa non torna, non decide.
+import { describe, it, expect } from "vitest";
+import { confrontaDocumento, differenzeDocumento, normalizzaValore, dataIso } from "../src/iscrizione/documento.js";
+
+describe("normalizzare prima di confrontare", () => {
+  it("maiuscole, accenti, spazi e province non contano", () => {
+    expect(normalizzaValore("  Petroné ", undefined)).toBe("PETRONE");
+    expect(normalizzaValore("Roma (RM)", "comune")).toBe("ROMA");
+    expect(normalizzaValore("23/10/1983", "data")).toBe("1983-10-23");
+    expect(normalizzaValore("1983-10-23", "data")).toBe("1983-10-23");
+    expect(normalizzaValore("ptr lne 83t67 e063m", "codice")).toBe("PTRLNE83T67E063M");
+    expect(dataIso("23.10.1983")).toBe("1983-10-23");
+  });
+});
+
+describe("confrontare", () => {
+  const letto = { nome: "ELENA", cognome: "PETRONE", sesso: "F", data_nascita: "1983-10-27", comune_nascita: "GAETA", codice_fiscale: "PTRLNE83T67E063M" };
+  it("trova la data sbagliata e lascia in pace il resto", () => {
+    const scheda = { nome: "Elena", cognome: "PETRONE", sesso: "F", data_nascita: "1983-10-23", comune_nascita: "Gaeta (LT)", codice_fiscale: "ptrlne83t67e063m" };
+    const d = differenzeDocumento(letto, scheda);
+    expect(d.map((r) => r.chiave)).toEqual(["data_nascita"]);
+    expect(d[0].documento).toBe("1983-10-27");
+    expect(d[0].modulo).toBe("1983-10-23");
+  });
+  it("un campo vuoto nel modulo è «mancante», non «diverso»", () => {
+    const r = confrontaDocumento(letto, { nome: "ELENA" });
+    expect(r.find((x) => x.chiave === "cognome").mancante).toBe(true);
+    expect(differenzeDocumento(letto, { nome: "ELENA" })).toHaveLength(0);
+  });
+  it("i campi che il modello non ha letto non compaiono", () => {
+    expect(confrontaDocumento({ nome: "ELENA", doc_numero: null }, {}).map((r) => r.chiave)).toEqual(["nome"]);
+    expect(confrontaDocumento(null, {})).toEqual([]);
+  });
+});

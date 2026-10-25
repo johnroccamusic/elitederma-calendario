@@ -1,0 +1,41 @@
+// «DAL TUO DOCUMENTO LEGGIAMO…»: il riquadro nel modulo dell'allieva.
+import { describe, it, expect, vi } from "vitest";
+import React from "react";
+import LetturaDocumento from "../src/iscrizione/LetturaDocumento.jsx";
+import { monta, clicca } from "./aiuto.js";
+
+const LETTO = { leggibile: true, nome: "ELENA", cognome: "PETRONE", data_nascita: "1983-10-27", codice_fiscale: "PTRLNE83T67E063M" };
+
+describe("il riquadro della lettura", () => {
+  it("mostra le righe, segna quelle diverse e porta nel modulo solo i campi liberi", async () => {
+    const onUsa = vi.fn();
+    const p = await monta(
+      <LetturaDocumento lettura={{ stato: "ok", letto: LETTO }}
+        valori={{ nome: "Elena", cognome: "PETRONI", data_nascita: "1983-10-23", codice_fiscale: "PTRLNE83T67E063M" }}
+        bloccati={{ cognome: true }} onUsa={onUsa} />
+    );
+    expect(p.nodo.querySelector('[data-riga="nome"]').dataset.uguale).toBe("si");
+    expect(p.nodo.querySelector('[data-riga="data_nascita"]').dataset.uguale).toBe("no");
+    expect(p.testo()).toContain("nel modulo: 1983-10-23");
+    // il cognome lo ha scritto il venditore: si segnala, non si tocca
+    expect(p.testo()).toContain("Cognome: nel documento è diverso");
+    const usa = p.tasto("Usa i dati del documento");
+    expect(usa.textContent).toContain("(1)");
+    await clicca(usa);
+    expect(onUsa).toHaveBeenCalledWith({ data_nascita: "1983-10-27" });
+    await p.smonta();
+  });
+  it("mentre legge lo dice, e un errore non blocca", async () => {
+    const p = await monta(<LetturaDocumento lettura={{ stato: "leggo" }} valori={{}} />);
+    expect(p.testo()).toContain("Sto leggendo");
+    await p.smonta();
+    const q = await monta(<LetturaDocumento lettura={{ stato: "errore", errore: "lettore giù" }} valori={{}} />);
+    expect(q.testo()).toContain("Puoi mandare il modulo lo stesso");
+    await q.smonta();
+  });
+  it("foto illeggibile: lo dice", async () => {
+    const p = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { leggibile: false, note: "sfocata" } }} valori={{}} />);
+    expect(p.testo()).toContain("non sembra leggibile");
+    await p.smonta();
+  });
+});

@@ -72,6 +72,7 @@ import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { separaCivico, pulisciCitta } from "./iscrizione/indirizzo-pezzi.js";
+import { confrontaDocumento } from "./iscrizione/documento.js";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
@@ -13075,6 +13076,40 @@ function TastoRicominciaFirma({ iscritto, chi, ricarica, onRiaperto }) {
       <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 240px" }}>
         Il contratto è firmato. Per rifarlo: azzera firma, documento e «modulo ricevuto», l'iscrizione torna a «modulo inviato» e la scheda si riapre tutta. Quello firmato prima resta archiviato nel fascicolo.
       </span>
+    </div>
+  );
+}
+
+// COSA C'E' SCRITTO SUL DOCUMENTO, accanto a cosa c'e' in scheda (25/10/2026).
+// `leggi-documento` ha letto la foto del fronte quando l'allieva l'ha
+// allegata; qui il venditore vede le righe che non tornano. Non decide
+// niente: segnala, e corregge lui.
+function DocumentoLetto({ iscritto }) {
+  const letto = iscritto?.documento_letto?.fronte;
+  if (!letto || typeof letto !== "object") return null;
+  const righe = confrontaDocumento(letto, iscritto);
+  const diverse = righe.filter((r) => !r.uguale && !r.mancante);
+  const quando = letto.letto_il ? new Date(letto.letto_il).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+  return (
+    <div data-campo="documento-letto" style={{ ...fontBody, fontSize: 12.5, lineHeight: 1.5, border: `1px solid ${diverse.length ? "#E0A72B" : CREAM_BORDER}`, borderLeft: `4px solid ${diverse.length ? "#E0A72B" : "#2E7D32"}`, borderRadius: 12, padding: "9px 12px", marginBottom: 14, background: diverse.length ? "#FFF8E6" : "#F2F9F3" }}>
+      <div style={{ fontWeight: 700, color: NAVY }}>
+        {letto.leggibile === false ? "Documento non leggibile automaticamente" : diverse.length ? `Documento: ${diverse.length} ${diverse.length === 1 ? "dato non torna" : "dati non tornano"} — da verificare` : "Documento: i dati corrispondono"}
+        <span style={{ fontWeight: 400, color: MUTED }}>{quando ? ` · letto il ${quando}` : ""}</span>
+      </div>
+      {righe.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 10, rowGap: 1, marginTop: 4 }}>
+          {righe.map((r) => (
+            <React.Fragment key={r.chiave}>
+              <span style={{ color: MUTED }}>{r.etichetta}</span>
+              <span data-riga={r.chiave}>
+                <b>{r.documento}</b>
+                {r.uguale ? <span style={{ color: "#2E7D32" }}> ✓</span> : r.mancante ? <span style={{ color: MUTED }}> — in scheda manca</span> : <span style={{ color: "#B3261E" }}> — in scheda: {r.modulo}</span>}
+              </span>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+      {letto.note && <div style={{ color: MUTED, marginTop: 4 }}>{letto.note}</div>}
     </div>
   );
 }
@@ -33163,7 +33198,10 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
           const vivo = (iscritti || []).find((x) => x.id === riepilogoIscritto.id) || riepilogoIscritto;
           // dopo il reset la fotografia si chiude e la scheda si apre in
           // modifica, tutta: si corregge e poi si rispedisce da li'
-          return <TastoRicominciaFirma key={vivo.id} iscritto={vivo} chi={chiOpera} ricarica={ricarica} onRiaperto={(rec) => { setRiepilogoIscritto(null); apriModificaCompleta(rec); window.scrollTo(0, 0); }} />;
+          return (<>
+            <TastoRicominciaFirma key={vivo.id} iscritto={vivo} chi={chiOpera} ricarica={ricarica} onRiaperto={(rec) => { setRiepilogoIscritto(null); apriModificaCompleta(rec); window.scrollTo(0, 0); }} />
+            <DocumentoLetto iscritto={vivo} />
+          </>);
         })()}
         inFondo={(() => {
           const vivo = (iscritti || []).find((x) => x.id === riepilogoIscritto.id) || riepilogoIscritto;
@@ -33642,6 +33680,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
               si rispedisce. Dopo il reset lo stato torna a «modulo inviato»
               e la scheda si sblocca da sola. */}
           {modificandoId && <TastoRicominciaFirma iscritto={iscrittoInModifica} chi={chiOpera} ricarica={ricarica} onRiaperto={() => ricarica(["iscritti"])} />}
+          {modificandoId && <DocumentoLetto iscritto={iscrittoInModifica} />}
           {soloLettura ? (
             <>
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
