@@ -54,7 +54,7 @@ describe("Assistente regolamenti", () => {
     expect(chiamate[0]).toMatchObject({ domanda: "quanto sconto in aula?", ruolo: "venditori", chi: "Olga" });
     const sc = p.nodo.querySelector('[data-campo="scambio"]');
     expect(sc.querySelector("b").textContent).toBe("8,5%");
-    expect(sc.textContent).toContain("Da: Sconti d'aula");
+    expect(sc.textContent).toContain("Dalle regole: Sconti d'aula");
     await p.smonta();
   });
 });
@@ -162,5 +162,18 @@ describe("Conversazione a voce", () => {
     expect(p.nodo.querySelector('[data-campo="stato-voce"]')).toBeFalsy();
     await p.smonta();
     delete window.webkitSpeechRecognition; delete window.speechSynthesis; delete window.SpeechSynthesisUtterance;
+  });
+});
+
+describe("Due registri", () => {
+  it("un ragionamento si distingue da una regola scritta", async () => {
+    rispondiCon({ "functions/v1/assistente-regole": { ok: true, risposta: "Non c'è una regola scritta. Io farei così: **chiedi a chi amministra** prima di confermare.", citati: [], senza_risposta: true, registro: "ragionamento" } });
+    const p = await monta(<AssistenteRegole ruolo="venditori" chi="Olga" />);
+    await clicca(p.nodo.querySelector('[data-campo="assistente-regole"]'));
+    await scrivi(p.nodo.querySelector('[data-campo="domanda-regole"]'), "posso regalare un kit a una cliente storica?");
+    await clicca(p.tasto("Chiedi")); await attendi(80);
+    expect(p.nodo.querySelector('[data-campo="etichetta-ragionamento"]').textContent).toContain("non una regola scritta");
+    expect(p.testo()).not.toContain("Dalle regole:");
+    await p.smonta();
   });
 });

@@ -47,7 +47,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
         const errore = data?.errore || error?.message || "Nessuna risposta.";
         setScambi((s) => [...s, { domanda: d, errore }]); return errore;
       }
-      setScambi((s) => [...s, { domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta }]);
+      setScambi((s) => [...s, { domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta, registro: data.registro || (data.citati?.length ? "regole" : "ragionamento") }]);
       return data.risposta;
     } catch (err) {
       const errore = String(err?.message || err);
@@ -137,7 +137,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
           <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "grid", gap: 10, alignContent: "start" }}>
             {scambi.length === 0 && (
               <div style={{ ...fontBody, fontSize: 13, color: GRAFITE, lineHeight: 1.5 }}>
-                Esempi: «quanto sconto posso fare in aula?», «cosa faccio se l'allieva vuole le modelle dopo aver firmato?», «chi verifica un buono Amazon?».
+                Chiedi come ci si comporta: «quanto sconto posso fare in aula?», «l'allieva vuole le modelle dopo aver firmato, cosa faccio?». Quello che è deciso te lo dice dalle regole; sul resto ragiona con te, e ti dice che è un ragionamento.
                 {onApriRegolamenti && <div style={{ marginTop: 8 }}><button type="button" onClick={() => { setAperto(false); onApriRegolamenti(); }} style={{ all: "unset", cursor: "pointer", color: NAVY, textDecoration: "underline", fontSize: 12.5 }}>Leggi tutte le regole</button></div>}
               </div>
             )}
@@ -146,11 +146,18 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
                 <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Tu: {s.domanda}</div>
                 {s.errore
                   ? <div style={{ ...fontBody, fontSize: 13, color: "#B3261E" }}>{s.errore}</div>
-                  : <div style={{ borderLeft: `3px solid ${s.senza ? CREAM_BORDER : GOLD}`, paddingLeft: 10 }}>
+                  : <div style={{ borderLeft: `3px solid ${s.registro === "regole" || s.registro === "misto" ? GOLD : s.registro === "conversazione" ? CREAM_BORDER : "#8FA3C9"}`, paddingLeft: 10 }}>
+                      {/* due registri, sempre distinti: quello che e' deciso e
+                          quello che e' un aiuto a ragionare */}
+                      {(s.registro === "ragionamento" || s.registro === "misto") && (
+                        <div data-campo="etichetta-ragionamento" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#4C6A9A", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                          {s.registro === "misto" ? "In parte dalle regole, in parte un ragionamento" : "Un ragionamento, non una regola scritta"}
+                        </div>
+                      )}
                       <Testo testo={s.risposta} />
                       {s.citati?.length > 0 && (
                         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>
-                          Da: {s.citati.map((c) => c.titolo).join(" · ")}
+                          Dalle regole: {s.citati.map((c) => c.titolo).join(" · ")}
                         </div>
                       )}
                     </div>}

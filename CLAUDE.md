@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   58 file, 421 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   58 file, 422 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -664,6 +664,17 @@ in `regolamenti_domande` e compaiono in fondo alla pagina per chi scrive,
 con un «Fatto» quando la scheda è stata scritta. È da lì che le FAQ si
 costruiscono dalle domande vere. Il registro lo scrive solo la funzione;
 l'app lo legge e cancella. Prove in `prove/regolamenti.test.jsx`.
+
+**Due registri, dal 25/10/2026 sera.** Il titolare ha chiesto «un po' più
+di intelligenza, non solo una cosa macchinosa»: l'assistente (ora Sonnet)
+risponde **dalle regole** quando una scheda copre la domanda, e quando non
+c'è **ragiona** col venditore sul caso — domande di chiarimento, come lo
+gestirebbe, i rischi — dicendo sempre che è un ragionamento e che prima di
+agire va sentito chi amministra. L'etichetta nel pannello lo distingue
+(«Un ragionamento, non una regola scritta», bordo blu; dalle regole, bordo
+oro). La cronologia va al modello come veri turni. `senza_risposta` resta
+vero per ogni domanda di regola non coperta, anche se ha ragionato: è così
+che l'elenco delle regole mancanti continua a riempirsi.
 
 **E si parla con l'assistente** (`src/regole/voce.js`, 25/10/2026 sera):
 il microfono nel pannello apre una conversazione a mani libere come quella

@@ -14,8 +14,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-// Haiku: il lavoro e' ritrovare e citare, non ragionare. Costa un decimo.
-const MODELLO = "claude-haiku-5-5";
+// Sonnet, dal 25/10/2026 sera: il titolare ha chiesto «un po' piu' di
+// intelligenza» — non solo ritrovare e citare, ma aiutare a ragionare sul
+// caso quando una regola scritta non c'e', dicendo pero' sempre quale
+// delle due cose sta facendo.
+const MODELLO = "claude-sonnet-5-5";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,18 +31,22 @@ const RUOLI = ["tutti", "venditori", "master", "assistenti", "amministrazione"];
 
 type Scheda = { id: string; titolo: string; argomento: string | null; testo: string; decisa_il: string | null; visibile_a: string[] };
 
-const SISTEMA = (schede: Scheda[]) => `Sei l'assistente interno di Elitederma, un'accademia di formazione estetica. Chi ti scrive lavora nell'accademia (venditori, master, assistenti) e ti chiede come ci si comporta: prezzi, sconti, regole, procedure.
-Rispondi SOLO con quello che sta scritto nelle schede qui sotto. Sono le decisioni prese dal titolare e sono l'unica fonte ammessa.
-Regole ferree:
-- se una o piu' schede rispondono, scrivi la risposta in italiano, breve e pratica, e indica i numeri delle schede usate;
-- se nessuna scheda risponde, o la risposta richiederebbe di interpretare o inventare, NON rispondere nel merito: scrivi che su questo punto non c'e' una decisione scritta e che va chiesto a chi amministra, e segna senza_risposta = true;
-- non inventare cifre, percentuali, date o procedure che non stanno nelle schede; non dedurre una regola da un'altra;
-- se la domanda e' solo in parte coperta, rispondi alla parte coperta e di' chiaramente quale parte non lo e';
-- cita la scheda per titolo nel testo quando serve («come dice la regola "Sconti d'aula"…»).
-Rispondi SOLO con un JSON: {"risposta": "...", "schede": [numeri], "senza_risposta": true|false}. Nel testo usa al massimo elenchi con «- » e grassetto con **.
+const SISTEMA = (schede: Scheda[], ruolo: string) => `Sei l'assistente interno di Elitederma, un'accademia di formazione estetica (trucco permanente, microblading, microneedling, laminazione ciglia, tricopigmentazione, dermopigmentazione dell'areola) che vende corsi a calendario in varie citta' italiane e prodotti professionali: al banco durante i corsi, in fiera e sullo shop online. Chi ti scrive e' ${ruolo === "tutti" ? "una persona dello staff" : ruolo === "amministrazione" ? "chi amministra" : "un/una " + ruolo.replace(/i$/, "e")} e ti chiede come comportarsi nel lavoro: prezzi, sconti, iscrizioni, modelle, kit, spedizioni, pagamenti, cosa fare in una situazione.
 
-SCHEDE (${schede.length}):
-${schede.map((s, i) => `[${i + 1}] ${s.titolo}${s.argomento ? ` — ${s.argomento}` : ""}${s.decisa_il ? ` (decisa il ${s.decisa_il})` : ""}\n${s.testo}`).join("\n\n")}`;
+HAI DUE REGISTRI, E DICI SEMPRE QUALE STAI USANDO.
+
+1. DALLE REGOLE. Se una o piu' schede qui sotto rispondono, la risposta e' quella: precisa, breve, con i numeri delle schede usate. Non aggiungere condizioni, cifre o eccezioni che le schede non dicono. Se una scheda copre solo una parte, di' quale parte resta scoperta.
+
+2. UN RAGIONAMENTO. Se nessuna scheda risponde, NON inventare una regola e NON dire cifre o percentuali come se fossero decise. Pero' aiuta davvero: ragiona sul caso con chi ti scrive, fai una domanda di chiarimento se serve, proponi come lo gestiresti e quali sono i rischi, e di' chiaramente che su questo punto non c'e' una decisione scritta e che prima di agire va sentito chi amministra. Un collega esperto che pensa insieme a te, non un centralino che dice «non e' previsto».
+
+Puoi anche conversare: rispondere a un «grazie», chiedere cosa intendeva, riprendere la domanda precedente. Resta sui temi del lavoro in accademia; se la domanda non c'entra con l'accademia, dillo con garbo e riporta il discorso li'.
+
+Rispondi SOLO con un JSON: {"risposta": "...", "schede": [numeri delle schede usate], "senza_risposta": true|false, "registro": "regole"|"ragionamento"|"misto"|"conversazione"}.
+- senza_risposta = true quando la domanda chiedeva una regola e nessuna scheda la copre (anche se hai ragionato): e' cosi' che chi scrive le regole scopre cosa manca.
+- registro = "conversazione" per saluti, chiarimenti e domande che non chiedono una regola: li' senza_risposta = false.
+Nel testo usa al massimo elenchi con «- » e grassetto con **. In italiano, tono diretto e cordiale.
+
+${schede.length === 0 ? "SCHEDE: nessuna ancora scritta. Ogni domanda di regola va in registro «ragionamento»." : `SCHEDE (${schede.length}):\n${schede.map((s, i) => `[${i + 1}] ${s.titolo}${s.argomento ? ` — ${s.argomento}` : ""}${s.decisa_il ? ` (decisa il ${s.decisa_il})` : ""}\n${s.testo}`).join("\n\n")}`}`;
 
 function estraiJson(testo: string) {
   const a = testo.indexOf("{"); const b = testo.lastIndexOf("}");
@@ -56,7 +63,7 @@ Deno.serve(async (req) => {
   if (domanda.length < 3) return json({ ok: false, errore: "Scrivi una domanda." }, 400);
   const ruolo = RUOLI.includes(String(corpo.ruolo)) ? String(corpo.ruolo) : "tutti";
   const chi = String(corpo.chi || "").slice(0, 80) || null;
-  const cronologia = Array.isArray(corpo.cronologia) ? corpo.cronologia.slice(-4) : [];
+  const cronologia = Array.isArray(corpo.cronologia) ? corpo.cronologia.slice(-6) : [];
 
   const gettone = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   const { data: utente } = await admin.auth.getUser(gettone);
@@ -75,23 +82,22 @@ Deno.serve(async (req) => {
     try { await admin.from("regolamenti_domande").insert({ chi, ruolo, domanda, risposta, citati, senza_risposta: senza, modello: MODELLO, uso }); } catch { /* il registro non ferma la risposta */ }
   };
 
-  if (schede.length === 0) {
-    const risposta = "Non c'è ancora nessun regolamento scritto per il tuo ruolo: su questo punto chiedi a chi amministra. La tua domanda è stata registrata.";
-    await registra(risposta, [], true, null);
-    return json({ ok: true, risposta, citati: [], senza_risposta: true });
-  }
-
   const chiave = Deno.env.get("ANTHROPIC_API_KEY");
   if (!chiave) return json({ ok: false, errore: "Assistente non disponibile: manca la chiave." }, 503);
 
-  const prima = cronologia.map((c: any) => `Domanda precedente: ${String(c?.domanda || "").slice(0, 300)}\nRisposta data: ${String(c?.risposta || "").slice(0, 400)}`).join("\n\n");
+  // la conversazione precedente come veri turni, cosi' «e se invece
+  // paga in contanti?» si attacca alla domanda di prima
+  const messaggi: { role: string; content: string }[] = [];
+  for (const c of cronologia) {
+    if (c?.domanda && c?.risposta) {
+      messaggi.push({ role: "user", content: String(c.domanda).slice(0, 600) }, { role: "assistant", content: String(c.risposta).slice(0, 1200) });
+    }
+  }
+  messaggi.push({ role: "user", content: domanda });
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": chiave, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model: MODELLO, max_tokens: 900, system: SISTEMA(schede),
-      messages: [{ role: "user", content: (prima ? prima + "\n\n" : "") + `Domanda: ${domanda}` }],
-    }),
+    body: JSON.stringify({ model: MODELLO, max_tokens: 1200, system: SISTEMA(schede, ruolo), messages: messaggi }),
   });
   if (!r.ok) return json({ ok: false, errore: `Il modello ha risposto ${r.status}: ${(await r.text()).slice(0, 200)}` }, 502);
   const esito = await r.json();
@@ -101,7 +107,10 @@ Deno.serve(async (req) => {
 
   const numeri: number[] = Array.isArray(piano.schede) ? piano.schede.map((n: unknown) => Number(n)).filter((n: number) => n >= 1 && n <= schede.length) : [];
   const citati = [...new Set(numeri)].map((n) => schede[n - 1]);
-  const senza = !!piano.senza_risposta || citati.length === 0;
+  const registro = ["regole", "ragionamento", "misto", "conversazione"].includes(piano.registro) ? piano.registro : (citati.length ? "regole" : "ragionamento");
+  // «senza risposta» lo decide il modello, ma una risposta che cita una
+  // scheda non puo' esserlo, e una chiacchiera non e' una regola mancante
+  const senza = registro === "conversazione" ? false : (!!piano.senza_risposta && citati.length === 0) || (registro === "ragionamento");
   await registra(piano.risposta, citati.map((s) => s.id), senza, esito?.usage || null);
-  return json({ ok: true, risposta: piano.risposta, citati: citati.map((s) => ({ id: s.id, titolo: s.titolo })), senza_risposta: senza });
+  return json({ ok: true, risposta: piano.risposta, citati: citati.map((s) => ({ id: s.id, titolo: s.titolo })), senza_risposta: senza, registro });
 });
