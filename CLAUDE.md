@@ -746,7 +746,11 @@ Giudica anche la foto: `qualita` «illeggibile» (buio, sfocata, tagliata,
 non è un documento) **ferma il modulo** e chiede di rifarla dicendo i
 `problemi` — l'unico caso in cui la lettura ferma qualcosa; «scarsa»
 avvisa e lascia andare. Al modello è detto di non indovinare: meglio
-`null`.
+`null`. **Il tipo di documento si confronta per primo**: dichiarato
+«Passaporto» e caricata una patente → contestazione in rosso («Hai
+indicato…, ma la foto sembra una patente»), e «Usa i dati» corregge
+`doc_tipo` con il valore di `TIPI_DOCUMENTO`; `tipoDocumentoCanonico`
+riduce a un nome solo i modi in cui un tipo può essere scritto.
 
 ### Il modulo riaperto si ricompila (24/10/2026)
 

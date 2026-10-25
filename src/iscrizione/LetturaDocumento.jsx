@@ -10,7 +10,7 @@
 // Non blocca niente: si puo' spedire anche con differenze. Il venditore
 // le vede nella scheda e verifica lui.
 import React from "react";
-import { confrontaDocumento, dataIso } from "./documento.js";
+import { confrontaDocumento, dataIso, tipoDocumentoDelModulo } from "./documento.js";
 import { fontBody, NAVY, MUTED, GOLD } from "../ui/stile.js";
 
 export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa }) {
@@ -43,7 +43,10 @@ export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa
   const bloccate = diverse.filter((r) => bloccati[r.chiave]);
   function usa() {
     const nuovi = {};
-    for (const r of correggibili) nuovi[r.chiave] = r.chiave === "data_nascita" ? (dataIso(r.documento) || r.documento) : r.documento;
+    for (const r of correggibili) {
+      if (r.chiave === "doc_tipo") { const t = tipoDocumentoDelModulo(r.documento); if (t) nuovi.doc_tipo = t; continue; }
+      nuovi[r.chiave] = r.chiave === "data_nascita" ? (dataIso(r.documento) || r.documento) : r.documento;
+    }
     onUsa?.(nuovi);
   }
   return (
@@ -51,6 +54,11 @@ export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa
       {letto.qualita === "scarsa" && (
         <div data-esito="scarsa" style={{ color: "#8A6D1D", background: "#FFF8E6", border: "1px solid #E6CF8C", borderRadius: 8, padding: "6px 10px", marginBottom: 8 }}>
           La foto si legge, ma a fatica{problemi.length ? ` (${problemi.join(", ")})` : ""}: se puoi, rifalla con più luce. Altrimenti va bene così.
+        </div>
+      )}
+      {righe.some((r) => r.chiave === "doc_tipo" && !r.uguale && !r.mancante) && (
+        <div data-esito="tipo-diverso" style={{ color: "#B3261E", fontWeight: 700, marginBottom: 6 }}>
+          Hai indicato «{righe.find((r) => r.chiave === "doc_tipo").modulo}», ma la foto sembra {righe.find((r) => r.chiave === "doc_tipo").documento === "Carta d'identità" ? "una carta d'identità" : `un${/^[AEIOU]/i.test(righe.find((r) => r.chiave === "doc_tipo").documento) ? "'" : "a "}${righe.find((r) => r.chiave === "doc_tipo").documento.toLowerCase()}`}: correggi il tipo, oppure carica il documento giusto.
         </div>
       )}
       <div style={{ fontWeight: 700, marginBottom: 4 }}>Dal tuo documento leggiamo:</div>

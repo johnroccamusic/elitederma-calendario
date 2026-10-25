@@ -1,6 +1,6 @@
 // IL CONFRONTO FRA DOCUMENTO E MODULO: dice cosa non torna, non decide.
 import { describe, it, expect } from "vitest";
-import { confrontaDocumento, differenzeDocumento, normalizzaValore, dataIso } from "../src/iscrizione/documento.js";
+import { confrontaDocumento, differenzeDocumento, normalizzaValore, dataIso, tipoDocumentoCanonico, tipoDocumentoDelModulo } from "../src/iscrizione/documento.js";
 
 describe("normalizzare prima di confrontare", () => {
   it("maiuscole, accenti, spazi e province non contano", () => {
@@ -30,5 +30,23 @@ describe("confrontare", () => {
   it("i campi che il modello non ha letto non compaiono", () => {
     expect(confrontaDocumento({ nome: "ELENA", doc_numero: null }, {}).map((r) => r.chiave)).toEqual(["nome"]);
     expect(confrontaDocumento(null, {})).toEqual([]);
+  });
+});
+
+describe("il tipo di documento", () => {
+  it("riconosce lo stesso tipo scritto in modi diversi", () => {
+    expect(tipoDocumentoCanonico("carta_identita")).toBe("CARTA_IDENTITA");
+    expect(tipoDocumentoCanonico("Carta d'identità")).toBe("CARTA_IDENTITA");
+    expect(tipoDocumentoCanonico("CIE")).toBe("CARTA_IDENTITA");
+    expect(tipoDocumentoCanonico("patente")).toBe("PATENTE");
+    expect(tipoDocumentoDelModulo("passaporto")).toBe("Passaporto");
+    expect(tipoDocumentoDelModulo("permesso_soggiorno")).toBe("");
+  });
+  it("contesta: dichiarato passaporto, caricata una patente", () => {
+    const d = differenzeDocumento({ tipo_documento: "patente", nome: "ELENA" }, { doc_tipo: "Passaporto", nome: "ELENA" });
+    expect(d.map((r) => r.chiave)).toEqual(["doc_tipo"]);
+    expect(d[0].documento).toBe("Patente");
+    expect(d[0].modulo).toBe("Passaporto");
+    expect(differenzeDocumento({ tipo_documento: "carta_identita" }, { doc_tipo: "Carta d'identità" })).toHaveLength(0);
   });
 });

@@ -47,4 +47,12 @@ describe("il riquadro della lettura", () => {
     expect(p.testo()).toContain("Dal tuo documento leggiamo");
     await p.smonta();
   });
+  it("dichiarato passaporto, caricata una patente: lo contesta e «Usa i dati» corregge il tipo", async () => {
+    const onUsa = vi.fn();
+    const p = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { ...LETTO, tipo_documento: "patente" } }} valori={{ doc_tipo: "Passaporto", nome: "ELENA", cognome: "PETRONE", data_nascita: "1983-10-27", codice_fiscale: "PTRLNE83T67E063M" }} onUsa={onUsa} />);
+    expect(p.nodo.querySelector('[data-esito="tipo-diverso"]').textContent).toContain("Hai indicato «Passaporto», ma la foto sembra una patente");
+    await clicca(p.tasto("Usa i dati del documento"));
+    expect(onUsa).toHaveBeenCalledWith({ doc_tipo: "Patente" });
+    await p.smonta();
+  });
 });
