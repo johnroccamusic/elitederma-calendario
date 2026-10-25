@@ -737,6 +737,17 @@ differenze, e corregge una persona. Se il lettore è giù, il modulo si
 manda lo stesso. L'informativa che lo copre è il Punto 9 (lettere d,
 e, e-bis). Prove: `documento-confronto`, `lettura-documento`.
 
+**Il ritaglio è facoltativo, e lo fa il lettore** (stesso giorno). Scelta
+o scattata la foto, la si rimpicciolisce e comprime da sola (1600 px,
+JPEG) e la lettura parte subito; il modello restituisce anche `riquadro`
+(dov'è il documento, in frazioni) e `rotazione`, e la pagina ritaglia e
+raddrizza da sola — la foto ritagliata porta `giaLetta` e non si rilegge.
+Giudica anche la foto: `qualita` «illeggibile» (buio, sfocata, tagliata,
+non è un documento) **ferma il modulo** e chiede di rifarla dicendo i
+`problemi` — l'unico caso in cui la lettura ferma qualcosa; «scarsa»
+avvisa e lascia andare. Al modello è detto di non indovinare: meglio
+`null`.
+
 ### Il modulo riaperto si ricompila (24/10/2026)
 
 Riaperto il modulo, l'allieva non riusciva a correggere la data di
