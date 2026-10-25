@@ -144,9 +144,12 @@ Verificato interrogando il database e Vercel, non leggendo i file:
 
   `consenso-trico-v1.ts` e `consenso-areola-v1.ts` sono gli unici **non
   trascritti da un cartaceo**: li ho scritti partendo dal corpo neutro del PMU,
-  e sono segnati in testa al file come **da far validare** — quello dell'areola
-  con più insistenza, perché le soglie temporali che contiene (dodici mesi
-  dall'intervento) sono prassi corrente, non norma.
+  e sono segnati in testa al file come **da far leggere e approvare al
+  titolare** — quello dell'areola con più insistenza, perché le soglie
+  temporali che contiene (dodici mesi dall'intervento) sono prassi corrente,
+  non norma. **Non c'è un consulente**: il titolare è l'unico responsabile
+  della privacy e dei contratti, e li firma lui (detto il 25/10/2026). Vale
+  anche per il Punto 9 dell'informativa.
 
   Una stessa condizione deve chiamarsi allo stesso modo in tutti i moduli: la
   chiave `diabete` non può essere «Diabete» in un modello e «Diabete mellito»

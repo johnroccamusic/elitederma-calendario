@@ -11,9 +11,11 @@
 // firma fra i dati trattati, la verifica dell'identita' come finalita',
 // il confronto automatico riesaminato da una persona (art. 22), il
 // fornitore Anthropic negli Stati Uniti con le clausole standard (art.
-// 46). E' l'unica parte NON trascritta da un cartaceo: scritta qui, da
-// far validare dal consulente prima di accendere il controllo AI. Chi
-// ha firmato prima ha firmato il testo di prima (contratto_firmato).
+// 46). E' l'unica parte NON trascritta da un cartaceo: l'ho scritta io,
+// e la approva il titolare, che e' l'unico responsabile della privacy e
+// dei contratti (non c'e' un consulente, 25/10/2026). Si legge e si
+// corregge da Setting -> Modulo di iscrizione -> Il contratto. Chi ha
+// firmato prima ha firmato il testo di prima (contratto_firmato).
 // IL TESTO E' TRASCRITTO, NON RISCRITTO. Regolamento, informativa e
 // consensi sono stati presi parola per parola dall'HTML della pagina e
 // non riassunti: sono clausole contrattuali e un "quasi uguale" qui

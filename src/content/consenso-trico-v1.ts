@@ -3,14 +3,14 @@
 // Il consenso informato per la TRICOPIGMENTAZIONE, 19/10/2026. Quarto
 // modello, e il primo che NON nasce da un cartaceo fornito.
 //
-// ATTENZIONE, DA FAR VALIDARE. Gli altri tre sono trascrizioni di moduli
+// ATTENZIONE, DA FAR LEGGERE E APPROVARE AL TITOLARE. Gli altri tre sono trascrizioni di moduli
 // esistenti; questo l'ho scritto io, partendo dal corpo del consenso PMU
 // — che e' neutro e vale ovunque si depositi pigmento — e aggiungendo
 // cio' che riguarda il cuoio capelluto: come funziona il trattamento,
 // cosa non e', le condizioni che lo sconsigliano, e cosa fare nei giorni
-// dopo. Prima di usarlo in aula va letto da chi segue la parte legale e
-// da chi insegna il corso: le parole di un consenso informato le valida
-// qualcuno che risponde di quello che ci sta scritto.
+// dopo. Prima di usarlo in aula va letto dal titolare — che risponde
+// di quello che ci sta scritto ed e' l'unico responsabile di privacy e
+// contratti — e da chi insegna il corso, per la parte tecnica.
 //
 // PERCHE' UN MODULO SUO E NON QUELLO DEL PMU.
 //

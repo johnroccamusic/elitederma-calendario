@@ -3,7 +3,7 @@
 // Il consenso informato per la DERMOPIGMENTAZIONE DELL'AREOLA,
 // 19/10/2026. Quinto modello.
 //
-// ATTENZIONE, DA FAR VALIDARE — PIU' DEGLI ALTRI.
+// ATTENZIONE, DA FAR LEGGERE E APPROVARE AL TITOLARE — PIU' DEGLI ALTRI.
 //
 // Come quello della tricopigmentazione, questo non nasce da un cartaceo
 // fornito: l'ho scritto io. Ma qui la posta e' piu' alta, e va detto
