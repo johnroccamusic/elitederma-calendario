@@ -112,3 +112,26 @@ describe("Sistema il testo", () => {
     await p.smonta();
   });
 });
+
+describe("Indietro e Avanti sul testo", () => {
+  it("una cancellazione sbagliata si annulla, e si puo' rifare", async () => {
+    rispondiCon({ "rest/v1/regolamenti": [] });
+    const p = await monta(<PaginaRegolamenti puoScrivere chi="Admin" />);
+    await clicca(p.tasto("Aggiungi regola"));
+    const area = () => p.nodo.querySelector('[data-campo="testo"]');
+    const indietro = () => p.nodo.querySelector('[data-campo="testo-indietro"]');
+    expect(indietro().disabled).toBe(true);
+    await scrivi(area(), "In aula lo sconto è dell'8,5% con carta e del 12% in contanti.");
+    // passa piu' di un secondo: la cancellazione e' un passo a parte
+    await new Promise((r) => setTimeout(r, 1100));
+    await scrivi(area(), "In aula lo sconto");
+    expect(area().value).toBe("In aula lo sconto");
+    await clicca(indietro());
+    expect(area().value).toBe("In aula lo sconto è dell'8,5% con carta e del 12% in contanti.");
+    await clicca(p.nodo.querySelector('[data-campo="testo-avanti"]'));
+    expect(area().value).toBe("In aula lo sconto");
+    await clicca(indietro()); await clicca(indietro());
+    expect(area().value).toBe("");
+    await p.smonta();
+  });
+});

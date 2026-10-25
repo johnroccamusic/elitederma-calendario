@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   57 file, 418 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   57 file, 419 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -677,6 +677,11 @@ chiara **senza cambiare cifre, percentuali, date e senso** — se un passaggio
 è ambiguo lo lascia e lo dice nelle note. La proposta compare sotto, e si
 sceglie «Usa questo testo» o «Tieni il mio»: niente si sostituisce da solo,
 sono regole che altri applicheranno alla lettera.
+
+**E hanno «↶ Indietro» e «↷ Avanti»**: ogni cambiamento del testo — battuto,
+dettato, sistemato — entra in una pila, e i tasti battuti di seguito entro
+un secondo contano come un passo solo. Nato perché una cancellazione
+sbagliata in un testo dettato per dieci minuti non si rifà a voce.
 
 ### Chiedi ai dati (25/10/2026)
 

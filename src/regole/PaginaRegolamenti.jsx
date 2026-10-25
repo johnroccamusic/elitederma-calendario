@@ -7,7 +7,7 @@
 // Nasce vuota per scelta del titolare: la riempie lui, scheda per scheda.
 // In fondo, per chi scrive, l'elenco delle domande rimaste senza risposta:
 // e' da li' che si capisce quale scheda manca.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
@@ -39,6 +39,27 @@ function Testo({ testo }) {
 
 function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
   const [s, setS] = useState({ ...VUOTA, ...iniziale, decisa_il: iniziale?.decisa_il || "", argomento: iniziale?.argomento || "" });
+  // LA STORIA DEL TESTO: «Indietro» e «Avanti». Una cancellazione sbagliata
+  // in un testo dettato per dieci minuti non si puo' rifare a voce. Ogni
+  // cambiamento del testo — battuto, dettato, sistemato — entra in una
+  // pila; i tasti battuti di seguito entro un secondo contano come un
+  // passo solo, o «Indietro» tornerebbe lettera per lettera.
+  const storia = useRef({ passi: [s.testo], indice: 0, ultimo: 0 });
+  const [, forzaRidisegno] = useState(0);
+  function cambiaTesto(nuovo, { unisci = false } = {}) {
+    const st = storia.current; const ora = Date.now();
+    if (st.passi[st.indice] !== nuovo) {
+      st.passi = st.passi.slice(0, st.indice + 1);
+      if (unisci && ora - st.ultimo < 1000 && st.indice > 0) st.passi[st.indice] = nuovo;
+      else { st.passi.push(nuovo); st.indice = st.passi.length - 1; }
+      st.ultimo = ora;
+    }
+    setS((x) => ({ ...x, testo: nuovo }));
+  }
+  function indietro() { const st = storia.current; if (st.indice === 0) return; st.indice -= 1; st.ultimo = 0; setS((x) => ({ ...x, testo: st.passi[st.indice] })); forzaRidisegno((n) => n + 1); }
+  function avanti() { const st = storia.current; if (st.indice >= st.passi.length - 1) return; st.indice += 1; st.ultimo = 0; setS((x) => ({ ...x, testo: st.passi[st.indice] })); forzaRidisegno((n) => n + 1); }
+  const puoIndietro = storia.current.indice > 0;
+  const puoAvanti = storia.current.indice < storia.current.passi.length - 1;
   // la proposta del correttore: si legge e si sceglie, non sostituisce da sola
   const [proposta, setProposta] = useState(null); // { testo, note } | { errore }
   const [sistemando, setSistemando] = useState(false);
@@ -68,11 +89,17 @@ function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
         <Field label="Decisa il"><input type="date" value={s.decisa_il} onChange={(e) => setS({ ...s, decisa_il: e.target.value })} style={inputStyle} /></Field>
       </div>
       <Field label="La regola, come la spiegheresti a chi la deve applicare">
-        <textarea data-campo="testo" value={s.testo} onChange={(e) => setS({ ...s, testo: e.target.value })} rows={6}
+        <textarea data-campo="testo" value={s.testo} onChange={(e) => cambiaTesto(e.target.value, { unisci: true })} rows={6}
           style={{ ...inputStyle, minHeight: 120, resize: "vertical", lineHeight: 1.5 }} placeholder="Cosa si fa, con quali cifre, e cosa NON si fa. Oppure premi «Detta» e parla." />
         <div style={{ marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {/* la frase dettata si accoda a quello che c'e', con uno spazio */}
-          <TastoDettatura onTesto={(frase) => setS((x) => ({ ...x, testo: (x.testo ? x.testo.replace(/\s+$/, "") + " " : "") + frase }))} />
+          <TastoDettatura onTesto={(frase) => cambiaTesto((s.testo ? s.testo.replace(/\s+$/, "") + " " : "") + frase)} />
+          <span style={{ display: "inline-flex", gap: 4 }}>
+            <button type="button" data-campo="testo-indietro" onClick={indietro} disabled={!puoIndietro} title="Annulla l'ultima modifica al testo"
+              style={{ ...fontBody, fontSize: 13, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, opacity: puoIndietro ? 1 : 0.4 }}>↶ Indietro</button>
+            <button type="button" data-campo="testo-avanti" onClick={avanti} disabled={!puoAvanti} title="Ripristina la modifica annullata"
+              style={{ ...fontBody, fontSize: 13, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, opacity: puoAvanti ? 1 : 0.4 }}>↷ Avanti</button>
+          </span>
           <button type="button" data-campo="sistema-testo" onClick={sistema} disabled={sistemando || s.testo.trim().length < 10} title="Corregge ortografia e punteggiatura e rende il testo più chiaro, senza cambiare cifre e senso"
             style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, opacity: sistemando || s.testo.trim().length < 10 ? 0.5 : 1 }}>
             {sistemando ? "Sistemo…" : "✨ Sistema il testo"}
@@ -87,7 +114,7 @@ function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
                   <Testo testo={proposta.testo} />
                   {proposta.note && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, fontStyle: "italic" }}>{proposta.note}</div>}
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <Button onClick={() => { setS((x) => ({ ...x, testo: proposta.testo })); setProposta(null); }}>Usa questo testo</Button>
+                    <Button onClick={() => { cambiaTesto(proposta.testo); setProposta(null); }}>Usa questo testo</Button>
                     <Button variant="ghost" onClick={() => setProposta(null)}>Tieni il mio</Button>
                   </div>
                 </>}
