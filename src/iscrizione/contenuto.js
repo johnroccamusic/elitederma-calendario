@@ -6,6 +6,14 @@
 // facoltativo su immagini e video, il Punto 11 foro e legge applicabile.
 // Prima veniva dal modulo in rete su elitederma.eu/modulo-iscrizione-corsi.
 //
+// IL PUNTO 9 DAL 25/10/2026 DICE ANCHE LA LETTURA AUTOMATICA DEL
+// DOCUMENTO (lettere b, c, d, e, e-bis, f): fotografia del documento e
+// firma fra i dati trattati, la verifica dell'identita' come finalita',
+// il confronto automatico riesaminato da una persona (art. 22), il
+// fornitore Anthropic negli Stati Uniti con le clausole standard (art.
+// 46). E' l'unica parte NON trascritta da un cartaceo: scritta qui, da
+// far validare dal consulente prima di accendere il controllo AI. Chi
+// ha firmato prima ha firmato il testo di prima (contratto_firmato).
 // IL TESTO E' TRASCRITTO, NON RISCRITTO. Regolamento, informativa e
 // consensi sono stati presi parola per parola dall'HTML della pagina e
 // non riassunti: sono clausole contrattuali e un "quasi uguale" qui
@@ -158,17 +166,19 @@ export const SEZIONI = [
           "titolo": "PUNTO 9 – TRATTAMENTO DEI DATI PERSONALI (ART. 13 REG. UE 2016/679)",
           "punti": [
             "a) Titolare del trattamento è Elitederma S.r.l., con sede legale in Via Terni 90/a, 00182 Roma, P. IVA 16179891003, in persona del legale rappresentante.",
-            "b) Dati trattati. Dati anagrafici e di contatto, codice fiscale, dati di fatturazione, copia del documento di identità, dati relativi ai pagamenti e alla frequenza del corso.",
+            "b) Dati trattati. Dati anagrafici e di contatto, data e luogo di nascita, codice fiscale, dati di fatturazione, fotografia del documento di identità, firma apposta sul modulo, dati relativi ai pagamenti e alla frequenza del corso.",
             "c) Finalità e base giuridica. I dati sono trattati per:",
             "• organizzare e gestire il corso, l'iscrizione e i pagamenti: base giuridica l'esecuzione del contratto (art. 6, par. 1, lett. b);",
             "• adempiere agli obblighi fiscali e contabili: base giuridica l'obbligo di legge (art. 6, par. 1, lett. c);",
+            "• verificare l'identità dell'allievo/a e la correttezza dei dati scritti nel modulo, confrontandoli con il documento di identità, anche tramite lettura automatica del documento: base giuridica l'esecuzione del contratto (art. 6, par. 1, lett. b) e il legittimo interesse a prevenire errori e usi impropri (art. 6, par. 1, lett. f);",
             "• inviare comunicazioni legate al corso e al percorso di studio (materiali didattici, Web Academy e livelli online, aggiornamenti tecnici, supporto post-corso): base giuridica l'esecuzione del contratto (art. 6, par. 1, lett. b); non serve un consenso;",
             "• inviare via e-mail informazioni su corsi, masterclass e prodotti Elitederma analoghi a quelli acquistati: base giuridica il legittimo interesse (art. 6, par. 1, lett. f e art. 130, comma 4 D.Lgs. 196/2003); l'allievo/a può opporsi in ogni momento, anche con il link presente in ogni e-mail;",
             "• inviare, via e-mail, WhatsApp o SMS, anteprime su nuovi corsi e masterclass, novità tecniche, eventi, offerte e vantaggi riservati agli allievi: solo con il consenso facoltativo dell'interessato (art. 6, par. 1, lett. a), revocabile in ogni momento.",
             "Il conferimento dei dati per le prime due finalità è necessario: senza di essi non è possibile iscriversi al corso.",
-            "d) Modalità. I dati sono trattati da personale autorizzato, con strumenti cartacei ed elettronici e con misure di sicurezza adeguate (artt. 5 e 32 GDPR).",
-            "e) Destinatari. I dati possono essere comunicati, nella misura necessaria, a docenti e master incaricati, consulenti fiscali e legali, fornitori di servizi tecnici e informatici (hosting, invio di e-mail, pagamenti) nominati responsabili del trattamento, e alle autorità competenti.",
-            "f) Conservazione. I dati sono conservati per la durata del rapporto e successivamente per il tempo previsto dagli obblighi di legge (dati contabili: 10 anni). I dati usati per le comunicazioni promozionali sono conservati fino alla revoca del consenso.",
+            "d) Modalità. I dati sono trattati da personale autorizzato, con strumenti cartacei ed elettronici e con misure di sicurezza adeguate (artt. 5 e 32 GDPR). La fotografia del documento di identità può essere letta da un sistema automatico che ne estrae i soli dati anagrafici per confrontarli con quelli scritti nel modulo; il confronto è sempre riesaminato da una persona e non produce alcuna decisione basata unicamente sul trattamento automatizzato (art. 22 GDPR).",
+            "e) Destinatari. I dati possono essere comunicati, nella misura necessaria, a docenti e master incaricati, consulenti fiscali e legali, fornitori di servizi tecnici e informatici (hosting, invio di e-mail, pagamenti, lettura automatica dei documenti) nominati responsabili del trattamento, e alle autorità competenti. I dati sono conservati su server situati nell'Unione Europea.",
+            "e-bis) Trasferimenti extra-UE. La lettura automatica del documento di identità è svolta tramite Anthropic, PBC, con sede negli Stati Uniti d'America; la fotografia del documento è trasmessa al solo fine dell'estrazione dei dati, non è utilizzata dal fornitore per altri scopi né per addestrare i propri sistemi, e il trasferimento avviene sulla base delle clausole contrattuali standard approvate dalla Commissione Europea (art. 46, par. 2, lett. c GDPR).",
+            "f) Conservazione. I dati sono conservati per la durata del rapporto e successivamente per il tempo previsto dagli obblighi di legge (dati contabili: 10 anni). La fotografia del documento di identità e la firma sono conservate, in archivi ad accesso riservato, insieme al contratto sottoscritto e per lo stesso periodo. I dati usati per le comunicazioni promozionali sono conservati fino alla revoca del consenso.",
             "g) Diritti dell'interessato (artt. 15–22 GDPR): accesso, rettifica, cancellazione, limitazione, portabilità, opposizione e revoca del consenso, senza pregiudizio per i trattamenti già effettuati. L'interessato può proporre reclamo al Garante per la protezione dei dati personali (art. 77 GDPR). Per esercitare i diritti: elitedermasrl.pec@legalmail.it"
           ]
         },
