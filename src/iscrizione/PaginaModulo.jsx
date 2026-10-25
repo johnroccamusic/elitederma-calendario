@@ -40,7 +40,7 @@ import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
 import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI, ritaglia } from "./RitaglioFoto.jsx";
 import LetturaDocumento from "./LetturaDocumento.jsx";
-import { CAMPI_DOCUMENTO } from "./documento.js";
+import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
 import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
 // lo stesso confronto della cascata della scheda: "PATERNO" e
 // "Paternò" sono lo stesso posto, e due copie di questa regola
@@ -358,9 +358,9 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
         style={{
           ...fontBody, display: "flex", flexDirection: "column", justifyContent: "center",
           width: "100%", boxSizing: "border-box", minHeight: 96,
-          border: `1px dashed ${file?.illeggibile ? "#B3261E" : file ? "#2E7D32" : GOLD}`, borderRadius: 12, padding: "16px 12px",
-          background: file?.illeggibile ? "#FDECEC" : file ? "#F2F9F3" : "#FFFDF8", cursor: "pointer", textAlign: "center",
-          fontSize: 13, color: file?.illeggibile ? "#B3261E" : file ? "#2E7D32" : NAVY, fontWeight: file ? 700 : 400, lineHeight: 1.5,
+          border: `1px dashed ${(file?.illeggibile || file?.scaduto) ? "#B3261E" : file ? "#2E7D32" : GOLD}`, borderRadius: 12, padding: "16px 12px",
+          background: (file?.illeggibile || file?.scaduto) ? "#FDECEC" : file ? "#F2F9F3" : "#FFFDF8", cursor: "pointer", textAlign: "center",
+          fontSize: 13, color: (file?.illeggibile || file?.scaduto) ? "#B3261E" : file ? "#2E7D32" : NAVY, fontWeight: file ? 700 : 400, lineHeight: 1.5,
         }}
       >
         <input
@@ -376,7 +376,7 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
           // `display:none` alcuni browser smettono di aprirlo dalla label.
           style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
         />
-        <span>{file?.illeggibile ? "✗ non si legge: scatta di nuovo" : file ? "✓ pronta da mandare" : "Scegli o scatta"}</span>
+        <span>{file?.scaduto ? "✗ documento scaduto: caricane uno valido" : file?.illeggibile ? "✗ non si legge: scatta di nuovo" : file ? "✓ pronta da mandare" : "Scegli o scatta"}</span>
         {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>va bene anche con il tavolo intorno</span>}
         {!file && <span style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>foto JPG o PNG</span>}
       </label>
@@ -504,9 +504,11 @@ export default function PaginaModulo({ token }) {
         // ILLEGGIBILE: la foto resta nel campo per mostrare il perche', ma
         // porta il segno `illeggibile` e il modulo non parte finche' non
         // la si rifa' (vedi `mancanti`)
-        if (data.letto?.leggibile === false || data.letto?.qualita === "illeggibile") {
+        const scaduto = scadenzaDocumento(data.letto).scaduto;
+        if (data.letto?.leggibile === false || data.letto?.qualita === "illeggibile" || scaduto) {
           const bocciata = new File([docFronte], docFronte.name || "fronte.jpg", { type: docFronte.type || "image/jpeg" });
-          bocciata.giaLetta = true; bocciata.illeggibile = true;
+          bocciata.giaLetta = true;
+          if (scaduto) bocciata.scaduto = true; else bocciata.illeggibile = true;
           if (vivo) setDocFronte(bocciata);
           return;
         }
@@ -693,6 +695,7 @@ export default function PaginaModulo({ token }) {
   if (c("doc_numero")) serve({ chiave: "doc_numero" }, false);
   if (c("doc_fronte")?.obbligatorio && !c("doc_fronte")?.bloccato && !docFronte) mancanti.push("Foto del documento — fronte");
   if (docFronte?.illeggibile) mancanti.push("Foto del documento — fronte: non si legge, va rifatta");
+  if (docFronte?.scaduto) mancanti.push("Documento scaduto: serve un documento valido");
   if (c("doc_retro")?.obbligatorio  && !c("doc_retro")?.bloccato  && !docRetro)  mancanti.push("Foto del documento — retro");
   if (!regolamentoLetto) mancanti.push("Aprire il regolamento e richiuderlo");
   if (!firma) mancanti.push("La firma");

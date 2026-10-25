@@ -55,4 +55,14 @@ describe("il riquadro della lettura", () => {
     expect(onUsa).toHaveBeenCalledWith({ doc_tipo: "Patente" });
     await p.smonta();
   });
+  it("documento scaduto: non vale, va caricato uno valido", async () => {
+    const p = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { ...LETTO, scadenza: "2024-03-01" } }} valori={{ nome: "ELENA" }} />);
+    expect(p.nodo.querySelector('[data-esito="scaduto"]').textContent).toContain("scaduto");
+    expect(p.testo()).toContain("01/03/2024");
+    expect(p.tasto("Usa i dati del documento")).toBeUndefined();
+    await p.smonta();
+    const q = await monta(<LetturaDocumento lettura={{ stato: "ok", letto: { ...LETTO, scadenza: "2031-03-01" } }} valori={{ nome: "ELENA" }} />);
+    expect(q.testo()).toContain("Scadenza del documento: 01/03/2031");
+    await q.smonta();
+  });
 });

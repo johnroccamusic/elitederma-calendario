@@ -10,7 +10,7 @@
 // Non blocca niente: si puo' spedire anche con differenze. Il venditore
 // le vede nella scheda e verifica lui.
 import React from "react";
-import { confrontaDocumento, dataIso, tipoDocumentoDelModulo } from "./documento.js";
+import { confrontaDocumento, dataIso, tipoDocumentoDelModulo, scadenzaDocumento } from "./documento.js";
 import { fontBody, NAVY, MUTED, GOLD } from "../ui/stile.js";
 
 export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa }) {
@@ -34,6 +34,17 @@ export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa
         {problemi.length > 0 && <div style={{ marginTop: 4 }}>Cosa non va: {problemi.join(", ")}.</div>}
         {!problemi.length && letto.note && <div style={{ marginTop: 4 }}>{letto.note}</div>}
         <div style={{ marginTop: 4 }}>Scatta di nuovo con più luce, senza riflessi, con tutto il documento dentro l'inquadratura: tocca «Scegli o scatta» qui sopra.</div>
+      </div>
+    );
+  }
+  // SCADUTO: non vale come documento, e il modulo non parte finche' non se
+  // ne carica uno valido. Si dice la data, cosi' non sembra un capriccio.
+  const scadenza = scadenzaDocumento(letto);
+  if (scadenza.scaduto) {
+    return (
+      <div data-campo="lettura-documento" data-esito="scaduto" style={{ ...scatola, color: "#B3261E", background: "#FDECEC", border: "1px solid #F0C0BC" }}>
+        <b>Questo documento è scaduto</b> (scadenza {scadenza.data.split("-").reverse().join("/")}): non vale come documento d'identità.
+        <div style={{ marginTop: 4 }}>Carica un documento valido — un altro, oppure quello rinnovato — toccando «Scegli o scatta» qui sopra.</div>
       </div>
     );
   }
@@ -75,7 +86,7 @@ export default function LetturaDocumento({ lettura, valori, bloccati = {}, onUsa
           </React.Fragment>
         ))}
       </div>
-      {letto.scadenza && <div style={{ color: MUTED, marginTop: 6 }}>Scadenza del documento: {letto.scadenza}{letto.scadenza < new Date().toISOString().slice(0, 10) ? " — sembra scaduto" : ""}</div>}
+      {scadenza.data && <div style={{ color: MUTED, marginTop: 6 }}>Scadenza del documento: {scadenza.data.split("-").reverse().join("/")} ✓</div>}
       {correggibili.length > 0 && (
         <button type="button" onClick={usa} data-campo="usa-dati-documento"
           style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "8px 12px", marginTop: 10, cursor: "pointer" }}>

@@ -106,3 +106,12 @@ export function dataIso(valore) {
   const n = normalizzaValore(valore, "data");
   return /^\d{4}-\d{2}-\d{2}$/.test(n) ? n : "";
 }
+
+// IL DOCUMENTO SCADUTO NON VALE (25/10/2026). Si guarda la scadenza letta
+// dal modello: scaduto = la data e' passata, oggi compreso no. Una data
+// che non si capisce non e' «scaduto»: e' «non so», e non ferma nessuno.
+export function scadenzaDocumento(letto, oggi = new Date().toISOString().slice(0, 10)) {
+  const iso = dataIso(letto?.scadenza);
+  if (!iso) return { data: "", scaduto: false };
+  return { data: iso, scaduto: iso < oggi };
+}

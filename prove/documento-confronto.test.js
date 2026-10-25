@@ -1,6 +1,6 @@
 // IL CONFRONTO FRA DOCUMENTO E MODULO: dice cosa non torna, non decide.
 import { describe, it, expect } from "vitest";
-import { confrontaDocumento, differenzeDocumento, normalizzaValore, dataIso, tipoDocumentoCanonico, tipoDocumentoDelModulo } from "../src/iscrizione/documento.js";
+import { confrontaDocumento, differenzeDocumento, normalizzaValore, dataIso, tipoDocumentoCanonico, tipoDocumentoDelModulo, scadenzaDocumento } from "../src/iscrizione/documento.js";
 
 describe("normalizzare prima di confrontare", () => {
   it("maiuscole, accenti, spazi e province non contano", () => {
@@ -48,5 +48,15 @@ describe("il tipo di documento", () => {
     expect(d[0].documento).toBe("Patente");
     expect(d[0].modulo).toBe("Passaporto");
     expect(differenzeDocumento({ tipo_documento: "carta_identita" }, { doc_tipo: "Carta d'identità" })).toHaveLength(0);
+  });
+});
+
+describe("la scadenza", () => {
+  it("scaduto ieri sì, oggi no, data illeggibile non ferma", () => {
+    expect(scadenzaDocumento({ scadenza: "2026-10-24" }, "2026-10-25").scaduto).toBe(true);
+    expect(scadenzaDocumento({ scadenza: "2026-10-25" }, "2026-10-25").scaduto).toBe(false);
+    expect(scadenzaDocumento({ scadenza: "25/10/2031" }, "2026-10-25")).toEqual({ data: "2031-10-25", scaduto: false });
+    expect(scadenzaDocumento({ scadenza: "boh" }, "2026-10-25")).toEqual({ data: "", scaduto: false });
+    expect(scadenzaDocumento(null)).toEqual({ data: "", scaduto: false });
   });
 });

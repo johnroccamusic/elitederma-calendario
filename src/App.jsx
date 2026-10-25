@@ -72,7 +72,7 @@ import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { separaCivico, pulisciCitta } from "./iscrizione/indirizzo-pezzi.js";
-import { confrontaDocumento } from "./iscrizione/documento.js";
+import { confrontaDocumento, scadenzaDocumento } from "./iscrizione/documento.js";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
@@ -13089,6 +13089,7 @@ function DocumentoLetto({ iscritto }) {
   if (!letto || typeof letto !== "object") return null;
   const righe = confrontaDocumento(letto, iscritto);
   const diverse = righe.filter((r) => !r.uguale && !r.mancante);
+  const scadenza = scadenzaDocumento(letto);
   const quando = letto.letto_il ? new Date(letto.letto_il).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
   return (
     <div data-campo="documento-letto" style={{ ...fontBody, fontSize: 12.5, lineHeight: 1.5, border: `1px solid ${diverse.length ? "#E0A72B" : CREAM_BORDER}`, borderLeft: `4px solid ${diverse.length ? "#E0A72B" : "#2E7D32"}`, borderRadius: 12, padding: "9px 12px", marginBottom: 14, background: diverse.length ? "#FFF8E6" : "#F2F9F3" }}>
@@ -13107,6 +13108,11 @@ function DocumentoLetto({ iscritto }) {
               </span>
             </React.Fragment>
           ))}
+        </div>
+      )}
+      {scadenza.data && (
+        <div data-campo="documento-scadenza" style={{ color: scadenza.scaduto ? "#B3261E" : MUTED, fontWeight: scadenza.scaduto ? 700 : 400, marginTop: 4 }}>
+          {scadenza.scaduto ? "Documento SCADUTO il " : "Scadenza "}{scadenza.data.split("-").reverse().join("/")}
         </div>
       )}
       {letto.note && <div style={{ color: MUTED, marginTop: 4 }}>{letto.note}</div>}
