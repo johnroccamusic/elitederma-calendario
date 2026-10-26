@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   60 file, 432 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   61 file, 434 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -741,6 +741,28 @@ sono regole che altri applicheranno alla lettera.
 dettato, sistemato — entra in una pila, e i tasti battuti di seguito entro
 un secondo contano come un passo solo. Nato perché una cancellazione
 sbagliata in un testo dettato per dieci minuti non si rifà a voce.
+
+### Il cestino delle vendite (26/10/2026)
+
+**Il 26/10 alle 11:18 tre vendite incassate di Elia Cito** (PMU Napoli,
+8-9/10, contanti, 763,02 € in tutto) sono sparite da Vendite al banco con
+il cestino: nessuna copia e nessun nome di chi aveva premuto. L'unica
+traccia era il magazzino, dove i pezzi erano rientrati con la nota
+«Vendita cancellata». Deciso dal titolare: **una vendita non si cancella,
+si mette nel cestino**, da cui si ripristina per sei mesi.
+
+Com'è fatto: `vendita_cestina(id, chi)` copia la riga intera di
+`vendite_shop` in **`vendite_cestino`** (con spedizione, righe preparate
+e movimenti collegati, in jsonb) e cancella, nella stessa transazione;
+`vendita_ripristina(id)` rimette tutto com'era. Lo stock resta affare
+dell'app: lo rimette `eliminaVendita` prima di cestinare, e lo riscarica
+`CestinoVendite` dopo il ripristino, con `muoviStock` e la nota
+«ripristinata dal cestino». Il tasto **Cestino (N)** sta in cima a Vendite
+al banco e Vendite shop. Un cron (`vendite-cestino-svuota`, 04:20) cancella
+quello che ha più di sei mesi. Le tre vendite di Elia sono state
+**ricostruite dai rientri di magazzino e messe nel cestino** con il motivo
+scritto: i prezzi riga per riga sono ripartiti dal listino in proporzione
+al totale, che è quello vero. Il titolare le ripristina se servono.
 
 ### Progetti: allegati e l'area «Progetti Ruh» (26/10/2026)
 

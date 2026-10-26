@@ -55566,7 +55566,83 @@ function SemaforoSyncShop({ esiti = [], isMobile }) {
   );
 }
 
-function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], syncEsiti = [], origine, ricarica, onBack, ruoloUtente = "", titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+// IL CESTINO DELLE VENDITE (26/10/2026). Quello che si cancella da
+// Vendite al banco e da Vendite shop finisce qui, con chi l'ha cestinato
+// e quando, e da qui si ripristina per sei mesi: la riga torna com'era
+// (spedizione e movimenti collegati compresi) e il magazzino viene
+// riscaricato dei pezzi che la cancellazione aveva rimesso dentro.
+function CestinoVendite({ origine, prodottiShop = [], bundleComponenti = [], ricarica, onChiudi }) {
+  const [righe, setRighe] = useState(null);
+  const [occupato, setOccupato] = useState("");
+  const [msg, setMsg] = useState("");
+  const carica = async () => {
+    const { data } = await supabase.from("vendite_cestino").select("id, numero_ordine, data_ordine, operatore_nome, totale, metodo_pagamento, origine, riga, cestinata_il, cestinata_da, motivo").eq("origine", origine).order("cestinata_il", { ascending: false });
+    setRighe(data || []);
+  };
+  useEffect(() => { carica(); }, [origine]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function ripristina(c) {
+    setOccupato(c.id); setMsg("");
+    const { data: riga, error } = await supabase.rpc("vendita_ripristina", { p_id: c.id });
+    if (error) { setOccupato(""); setMsg(`Non ripristinata: ${testoErrore(error)}`); return; }
+    // lo scarico del magazzino: l'inverso esatto di quello che la
+    // cancellazione aveva rimesso dentro
+    const v = riga || c.riga || {};
+    const prodotti = Array.isArray(v.prodotti) ? v.prodotti : [];
+    const mancati = [];
+    if (!v.prelevato_dai_kit && (v.tipo_movimento || "vendita") === "vendita") {
+      const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+      const perNome = Object.fromEntries((prodottiShop || []).map((p) => [String(p.nome || "").trim().toLowerCase(), p]));
+      for (const r of prodotti) {
+        if (!(r.quantita > 0)) continue;
+        const prodotto = (r.prodotto_id && perId[r.prodotto_id]) || perNome[String(r.nome || "").trim().toLowerCase()];
+        if (!prodotto) continue;
+        const pezzi = bundleVirtuale(prodotto)
+          ? righeBundleCon(prodotto.id, bundleComponenti, perId).map((b) => ({ prodotto: b.prodotto, quantita: r.quantita * b.quantitaPerBundle }))
+          : [{ prodotto, quantita: r.quantita }];
+        for (const m of pezzi) {
+          const errore = await muoviStock(m.prodotto, -m.quantita, { origine: "vendita", nota: `Vendita #${v.numero_ordine} ripristinata dal cestino` });
+          if (errore) mancati.push(errore);
+        }
+      }
+    }
+    setOccupato("");
+    setMsg(mancati.length ? `Vendita ripristinata, ma il magazzino non è stato scaricato per: ${mancati.join(" · ")}` : `Vendita #${v.numero_ordine} ripristinata.`);
+    await carica();
+    ricarica?.(["vendite_shop", "prodotti_shop"]);
+  }
+
+  return (
+    <div data-campo="cestino-vendite" style={{ ...cardStyle, marginBottom: 20, borderLeft: "4px solid #C0392B" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, flex: 1 }}>Cestino{righe ? ` (${righe.length})` : ""}</div>
+        {onChiudi && <Button variant="ghost" onClick={onChiudi}>Chiudi</Button>}
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+        Le vendite cancellate restano qui sei mesi e si possono rimettere a posto: la riga torna com'era e il magazzino viene riscaricato.
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Non") || msg.includes("non è stato") ? "#C0392B" : "#2E7D32", marginBottom: 10 }}>{msg}</div>}
+      {righe === null ? <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>
+        : righe.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Il cestino è vuoto.</div>
+        : righe.map((c) => (
+          <div key={c.id} data-campo="vendita-cestinata" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ flex: "1 1 260px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY }}>
+              <b>#{c.numero_ordine}</b> · {c.data_ordine ? fmtData(String(c.data_ordine).slice(0, 10)) : "—"} · {c.operatore_nome || "—"} · <b>{fmtEuroErp2(c.totale)}</b> · {c.metodo_pagamento || "—"}
+              <div style={{ fontSize: 11.5, color: MUTED }}>
+                {(Array.isArray(c.riga?.prodotti) ? c.riga.prodotti : []).map((r) => `${r.quantita}× ${r.nome}`).join(", ")}
+              </div>
+              <div style={{ fontSize: 11.5, color: MUTED }}>
+                Cestinata {c.cestinata_il ? fmtData(String(c.cestinata_il).slice(0, 10)) : ""}{c.cestinata_da ? ` da ${c.cestinata_da}` : ""}{c.motivo ? ` · ${c.motivo}` : ""}
+              </div>
+            </div>
+            <Button onClick={() => ripristina(c)} disabled={occupato === c.id}>{occupato === c.id ? "Ripristino…" : "Ripristina"}</Button>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiShop = [], bundleComponenti = [], syncEsiti = [], origine, ricarica, onBack, ruoloUtente = "", chi = "", titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
   // riscuotere un ordine rimasto non pagato e' un gesto
   // dell'amministrazione: chi vende al banco non manda link di
   // pagamento su vendite gia' chiuse
@@ -55580,6 +55656,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // annullamento li avesse gia' rimessi. Annullamenti, resi e cambi non si
   // cancellano da soli: si cancella la vendita a cui appartengono.
   const [eliminandoVendita, setEliminandoVendita] = useState(null);
+  const [cestinoAperto, setCestinoAperto] = useState(false);
+  const [nelCestino, setNelCestino] = useState(0);
+  useEffect(() => {
+    supabase.from("vendite_cestino").select("id", { count: "exact", head: true }).eq("origine", origine)
+      .then(({ count }) => setNelCestino(count || 0));
+  }, [origine, cestinoAperto, venditeShop]);
   const [msgElimina, setMsgElimina] = useState("");
   // La conferma e' una finestra dell'app, non window.confirm.
   //
@@ -55611,7 +55693,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
     const rimetteStock = !v.prelevato_dai_kit && !giaAnnullata && righe.some((r) => r.quantita > 0);
     return [
-      "Non ne resterà traccia: sparisce da prima nota, cassa contanti, provvigioni e statistiche.",
+      "Finisce nel cestino: sparisce da prima nota, cassa contanti, provvigioni e statistiche, e si può ripristinare entro sei mesi dal tasto «Cestino» in cima alla pagina.",
       collegate.length > 0 ? `Spariscono anche ${collegate.length} movimenti collegati (annullamenti, resi o cambi).` : null,
       rimetteStock ? "I pezzi venduti tornano in magazzino." : (v.prelevato_dai_kit ? "I pezzi erano usciti dai kit del corso: il magazzino non cambia." : giaAnnullata ? "Era già annullata: il magazzino non cambia." : null),
       v.metodo_pagamento === "contanti" && (Number(v.totale) || 0) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(Number(v.totale))} in contanti non sono mai stati incassati: se la busta del corso era già in cassa, si riapre e torna da approvare.` : null,
@@ -55655,15 +55737,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
       }
       setAvanzamento(null);
     }
-    // la spedizione al banco e le sue righe preparate, poi i movimenti
-    // collegati, poi la vendita
-    const { data: spedizioni } = await supabase.from("spedizioni_pos").select("id").eq("vendita_id", v.id);
-    for (const sp of spedizioni || []) {
-      await supabase.from("righe_preparate_spedizione").delete().eq("spedizione_pos_id", sp.id);
-      await supabase.from("spedizioni_pos").delete().eq("id", sp.id);
-    }
-    if (collegate.length > 0) await supabase.from("vendite_shop").delete().in("id", collegate.map((x) => x.id));
-    const { error } = await supabase.from("vendite_shop").delete().eq("id", v.id);
+    // NEL CESTINO, NON NEL VUOTO (26/10/2026). Il 26/10 alle 11:18 tre
+    // vendite incassate sono sparite da qui senza copia e senza il nome di
+    // chi aveva premuto. Ora `vendita_cestina` mette da parte la riga
+    // intera — con spedizione e movimenti collegati — e scrive chi l'ha
+    // cestinata; da «Cestino» si ripristina per sei mesi.
+    const { error } = await supabase.rpc("vendita_cestina", { p_id: v.id, p_chi: chi || null });
     setEliminandoVendita(null);
     if (error) { setVenditaDaEliminare(null); setAvanzamento(null); setMsgElimina("Vendita non cancellata: " + testoErrore(error)); return; }
     // Il contante di quella vendita non e' mai stato incassato. Per una
@@ -56033,6 +56112,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginTop: 4 }}>{origine === "pos" ? "Vendite fatte al banco con il POS interno." : "Ordini arrivati dallo shop online WooCommerce."}</div>
           </div>
+          <Button variant="ghost" onClick={() => setCestinoAperto((v) => !v)} title="Le vendite cancellate negli ultimi sei mesi, da ripristinare">
+            {cestinoAperto ? "Chiudi il cestino" : `Cestino${nelCestino ? ` (${nelCestino})` : ""}`}
+          </Button>
           {origine === "woocommerce" && (
             <div style={{ textAlign: "right" }}>
               <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
@@ -56040,6 +56122,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             </div>
           )}
         </div>
+
+        {cestinoAperto && <CestinoVendite origine={origine} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} ricarica={ricarica} onChiudi={() => setCestinoAperto(false)} />}
 
         {origine === "woocommerce" && <SemaforoSyncShop esiti={syncEsiti} isMobile={isMobile} />}
 
@@ -56372,12 +56456,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                           </>
                         )}
                         {origine !== "pos" && celleImporti}
-                        {/* il cestino: chiede conferma e non lascia traccia */}
+                        {/* il cestino: chiede conferma, e dal 26/10/2026 la vendita finisce nel cestino, da cui si ripristina per sei mesi */}
                         <td style={{ padding: "12px 10px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <button
                             onClick={() => chiediCancellazione(v)}
                             disabled={eliminandoVendita === v.id}
-                            title={v.tipo_movimento && v.tipo_movimento !== "vendita" ? "Si cancella la vendita originale: sparisce anche questo movimento" : "Cancella la vendita, senza lasciarne traccia"}
+                            title={v.tipo_movimento && v.tipo_movimento !== "vendita" ? "Si cancella la vendita originale: sparisce anche questo movimento" : "Metti la vendita nel cestino (si ripristina entro sei mesi) e rimetti i pezzi in magazzino"}
                             style={{ border: "none", background: "none", cursor: "pointer", color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? MUTED : "#C0392B", padding: 6, display: "flex", opacity: eliminandoVendita === v.id ? 0.5 : 1 }}
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
@@ -85484,11 +85568,11 @@ function Gestionale() {
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} syncEsiti={syncShopEsiti} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
+        <PaginaVenditeShop venditeShop={venditeShop} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} syncEsiti={syncShopEsiti} origine="woocommerce" chi={operatoreApp?.nome || ""} ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
       )}
 
       {view === "venditealbanco" && (
-        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="pos" ruoloUtente={ruoloUtente} ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
+        <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="pos" ruoloUtente={ruoloUtente} chi={operatoreApp?.nome || ""} ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
       )}
 
       {view === "omaggi" && (
@@ -86292,5 +86376,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite,
 };
