@@ -66,6 +66,9 @@ async function giro(ruolo, permessi) {
     if (!t) continue;
     const etichetta = nome(t);
     if (!etichetta || /^(Esci|Stile|Vista telefono|Home|Carrelli|Impostazioni)$/.test(etichetta)) continue;
+    // il tondo dell'assistente dei regolamenti sta su ogni pagina e apre
+    // un pannello, non una sezione: non e' una tessera da visitare
+    if (t.getAttribute("data-campo") === "assistente-regole") continue;
     try {
       await clicca(t);
       await attendi(220);

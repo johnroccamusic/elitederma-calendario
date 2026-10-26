@@ -17,13 +17,14 @@ import { consensoNeedlingV1 } from "./consenso-needling-v1";
 import { consensoLaminazioneV1 } from "./consenso-laminazione-v1";
 import { consensoTricoV1 } from "./consenso-trico-v1";
 import { consensoAreolaV1 } from "./consenso-areola-v1";
+import { consensoExtensionV1 } from "./consenso-extension-v1";
 
 export interface ModelloConsenso {
   /** quello che finisce nel link: ?consenso=<codice> */
   codice: string;
   /** come lo chiamate voi, non come si intitola il documento */
   nome: string;
-  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1 | typeof consensoTricoV1 | typeof consensoAreolaV1;
+  contenuto: typeof consensoV1 | typeof consensoV2 | typeof consensoV3 | typeof consensoNeedlingV1 | typeof consensoLaminazioneV1 | typeof consensoTricoV1 | typeof consensoAreolaV1 | typeof consensoExtensionV1;
 }
 
 export const CONSENSI: ModelloConsenso[] = [
@@ -50,6 +51,11 @@ export const CONSENSI: ModelloConsenso[] = [
   // mastectomia, su cute operata o irradiata, e il questionario del
   // trucco permanente non chiedeva niente di tutto questo.
   { codice: "areola", nome: "Consenso Areola", contenuto: consensoAreolaV1 },
+  // Extension ciglia, dal 26/10/2026, dal testo del titolare: adesivo al
+  // cianoacrilato, occhi chiusi per due-tre ore, patch test, e due
+  // consensi distinti per le foto (senza volto per uso interno, con volto
+  // per sito e social). Collegato a EXTENSION BASE ed EXTENSION VOL.
+  { codice: "extension", nome: "Consenso Extension ciglia", contenuto: consensoExtensionV1 },
 ];
 
 /**
@@ -69,6 +75,7 @@ const VERSIONI: Record<string, { codice: string; contenuto: ModelloConsenso["con
   "laminazione-v1": { codice: "laminazione", contenuto: consensoLaminazioneV1 },
   "trico-v1": { codice: "trico", contenuto: consensoTricoV1 },
   "areola-v1": { codice: "areola", contenuto: consensoAreolaV1 },
+  "extension-v1": { codice: "extension", contenuto: consensoExtensionV1 },
 };
 
 /** Il testo con cui un consenso gia' raccolto e' stato firmato.

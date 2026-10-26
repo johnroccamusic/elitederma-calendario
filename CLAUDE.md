@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   58 file, 423 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   58 file, 426 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -121,7 +121,7 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
   | `?consenso=` | **scrive dritto in `consensi_modelle`** (INSERT per `anon`) + caricamento su `consensi-documenti` |
 
-  **I modelli di consenso sono cinque, dal 19/10/2026** (`src/content/consensi.ts`):
+  **I modelli di consenso sono sei, dal 26/10/2026** (`src/content/consensi.ts`):
 
   | Codice | Copre | Corsi |
   |---|---|---|
@@ -130,6 +130,20 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   | `laminazione` | laminazione ciglia (e IKE) | 5 |
   | `trico` | tricopigmentazione | 2 |
   | `areola` | dermopigmentazione dell'areola | 1 |
+  | `extension` | extension ciglia | 2 (EXTENSION BASE, EXTENSION VOL) |
+
+  **Extension ciglia (26/10/2026)** è trascritto dal testo del titolare:
+  adesivo al cianoacrilato, occhi chiusi per due-tre ore, rischi e
+  controindicazioni suoi. Tre cose da sapere: il **patch test** è un campo
+  obbligatorio (data ed esito, oppure la rinuncia scritta); chi opera si
+  scrive (`esecutore`); le foto sono **due caselle facoltative
+  indipendenti**, `immagini` (con volto, sito e social) e
+  `immagini_senza_volto` (solo l'occhio, uso interno), perché il cartaceo
+  aveva tre opzioni e sono due consensi diversi. Le condizioni economiche
+  del cartaceo erano caselle a penna («gratuito / contributo», «ritocchi
+  inclusi / non inclusi»): nel digitale è scritto «gratuito salvo contributo
+  comunicato prima; ritocchi e rimozioni non inclusi». È una **scelta mia,
+  da fargli rileggere**: se è diverso si cambia il testo e si fa una v2.
 
   Trico e areola si sono staccati dal PMU perché quel modulo si intitolava
   «trattamento di trucco permanente», e né il cuoio capelluto né un'areola

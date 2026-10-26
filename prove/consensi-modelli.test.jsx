@@ -504,3 +504,22 @@ describe("la serratura sta nella funzione che scrive", () => {
     expect(errore).toBeNull();
   });
 });
+
+describe("il consenso extension ciglia", () => {
+  it("chiede il patch test, chi opera, e tiene separati i due consensi alle foto", () => {
+    const c = consensoDaCodice("extension").contenuto;
+    expect(c.versione).toBe("extension-v1");
+    expect(c.esecutore?.obbligatorio).toBe(true);
+    const patch = c.campiExtra.find((x) => x.chiave === "patch_test");
+    expect(patch?.obbligatorio).toBe(true);
+    // le foto: con volto per sito e social, senza volto per uso interno,
+    // tutte e due facoltative e indipendenti
+    expect(c.caselle.find((x) => x.chiave === "immagini").testo).toContain("volto riconoscibile");
+    expect(c.caselle.find((x) => x.chiave === "immagini_senza_volto").tipo).toBe("facoltativa");
+    // l'anamnesi del cartaceo
+    const chiavi = c.anamnesi.map((d) => d.chiave);
+    for (const k of ["allergie", "reazioni_extension_laminazione", "patologie_oculari", "interventi_occhi_6_mesi", "lenti_contatto", "tiroide_alopecia_ciglia", "medicine", "gravidanza_allattamento", "claustrofobia", "asma_vapori"]) expect(chiavi).toContain(k);
+    expect(c.testo).toContain("cianoacrilato");
+    expect(c.testo).toContain("12 mesi");
+  });
+});
