@@ -23,7 +23,7 @@ describe("Cestino delle vendite", () => {
     // prelevata dai kit: il magazzino non si tocca, e la prova guarda solo
     // che la cancellazione passi dal cestino con il nome di chi preme
     const p = await monta(<PaginaVenditeShop venditeShop={[{ ...VENDITA, prelevato_dai_kit: true }]} prodottiShop={[PRODOTTO]} origine="pos" chi="Titolare" ricarica={() => {}} onBack={() => {}} />);
-    await clicca([...p.nodo.querySelectorAll("button")].find((b) => /metti la vendita nel cestino/i.test(b.title || ""))));
+    await clicca([...p.nodo.querySelectorAll("button")].find((b) => /metti la vendita nel cestino/i.test(b.title || "")));
     await attendi(60);
     await clicca(p.tasto("Sì, cancella")); await attendi(200);
     const cestina = chiamate.find((c) => c[0] === "cestina");
