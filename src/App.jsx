@@ -36817,7 +36817,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
   );
 }
 
-function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo = "Progetti in corso" }) {
+export function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo = "Progetti in corso" }) {
   const isMobile = useIsMobile();
   const [progetti, setProgetti] = useState(null);
   const [storico, setStorico] = useState(false);
@@ -36935,7 +36935,10 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
         if (!b.scadenza) return -1;
         return String(a.scadenza).localeCompare(String(b.scadenza));
       });
-  }, [progetti, storico, filtroIncaricato, filtroPriorita, filtroRapido, ricercaTesto, ordine]);
+  // `soloRuh` deve stare qui: senza, l'elenco si rifaceva solo quando
+  // cambiava un altro filtro, e dal telefono «Progetti Ruh» mostrava
+  // tutti i progetti (26/10/2026)
+  }, [progetti, storico, soloRuh, filtroIncaricato, filtroPriorita, filtroRapido, ricercaTesto, ordine]);
 
   // Il riepilogo in cima. Sono numeri, ma anche filtri: leggere "priorità
   // alta 4" e non poter vedere quali quattro sarebbe una domanda lasciata
