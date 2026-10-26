@@ -4,9 +4,8 @@
 // titolare il 26/10/2026. Sesto modello. Codice «extension», QR suo,
 // collegato ai corsi EXTENSION BASE ed EXTENSION VOL.
 //
-// APPROVATO DAL TITOLARE: il testo e' il suo, trascritto. Le sole cose
-// che ho deciso io, da fargli rileggere, sono segnate qui sotto con
-// «SCELTA MIA».
+// APPROVATO DAL TITOLARE IL 26/10/2026: il testo e' il suo, trascritto;
+// le condizioni economiche le ha dettate lui (vedi sotto).
 //
 // COSA E' STATO TRASFORMATO, E PERCHE'.
 //
@@ -26,12 +25,11 @@
 // degli altri modelli (trattamento, maggiore eta' e veridicita', dati
 // di salute, informativa); i punti 2, 3, 5 e 6 restano nel testo.
 //
-// SCELTA MIA (26/10/2026): il cartaceo diceva «Il trattamento e'
-// [gratuito / a fronte di un contributo di €…]» e «ritocchi [sono / non
-// sono] inclusi». Un modulo digitale non ha caselle da barrare a penna:
-// ho scritto che e' gratuito salvo contributo comunicato prima, e che
-// ritocchi e rimozioni successive non sono inclusi. Se e' diverso, si
-// cambia il testo e si fa una v2.
+// CONDIZIONI ECONOMICHE, dettate dal titolare il 26/10/2026: il
+// trattamento in aula e' gratuito, nessun contributo; non sono incluse
+// le successive sedute di mantenimento — che si chiamano cosi', non
+// «ritocchi». Il cartaceo aveva caselle a penna su questi due punti;
+// nel digitale c'e' la frase decisa. Corretto prima di qualunque firma.
 //
 // L'anamnesi usa le chiavi gia' in giro dove la condizione e' la stessa
 // (`allergie`, `patologie_oculari`, `lenti_contatto`, `medicine`,
@@ -158,7 +156,7 @@ Il trattamento è eseguito da un'allieva/o in formazione, non ancora qualificata
 
 CONDIZIONI ECONOMICHE
 
-Il trattamento eseguito in aula è gratuito, salvo che un contributo per i materiali sia stato comunicato e concordato prima di cominciare. Eventuali ritocchi o rimozioni successivi non sono inclusi e vanno concordati a parte.
+Il trattamento eseguito in aula è gratuito: non è previsto alcun contributo. Non sono incluse le successive sedute di mantenimento.
 
 DURATA DEL RISULTATO
 
