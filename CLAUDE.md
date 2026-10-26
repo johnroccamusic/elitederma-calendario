@@ -746,7 +746,8 @@ sbagliata in un testo dettato per dieci minuti non si rifà a voce.
 
 **Il 26/10 alle 11:18 tre vendite incassate di Elia Cito** (PMU Napoli,
 8-9/10, contanti, 763,02 € in tutto) sono sparite da Vendite al banco con
-il cestino: nessuna copia e nessun nome di chi aveva premuto. L'unica
+il cestino: nessuna copia, e l'app non registrava chi aveva premuto (era
+Stefano, detto dal titolare). L'unica
 traccia era il magazzino, dove i pezzi erano rientrati con la nota
 «Vendita cancellata». Deciso dal titolare: **una vendita non si cancella,
 si mette nel cestino**, da cui si ripristina per sei mesi.
