@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   58 file, 426 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   59 file, 431 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -741,6 +741,22 @@ sono regole che altri applicheranno alla lettera.
 dettato, sistemato — entra in una pila, e i tasti battuti di seguito entro
 un secondo contano come un passo solo. Nato perché una cancellazione
 sbagliata in un testo dettato per dieci minuti non si rifà a voce.
+
+### Progetti: allegati e l'area «Progetti Ruh» (26/10/2026)
+
+Ogni progetto ha in fondo alla scheda gli **allegati**: uno o più file
+insieme (bozze, preventivi, grafiche), tabella `progetti_allegati`, secchio
+**privato** `progetti-allegati`, aperti con link firmato di un'ora
+(`src/progetti/AllegatiProgetto.jsx`). Stesse tre regole dei documenti
+evento: il tasto è il campo file in una `label`, la finestra si apre nel
+gesto, un file la cui riga non si scrive viene tolto. Un file che fallisce
+non ferma gli altri: si dice quale.
+
+**«Progetti Ruh»**, accanto a «Storico progetti», è la stessa pagina con un
+filtro acceso: i soli progetti con Ruh fra gli incaricati (riconosciuta dal
+nome, non dall'id). Lì si fa tutto come nell'area principale, e «Aggiungi
+progetto» crea il progetto già assegnato a Ruh: nasce in una lista e si
+vede in tutte e due, perché la lista è una.
 
 ### Chiedi ai dati (25/10/2026)
 

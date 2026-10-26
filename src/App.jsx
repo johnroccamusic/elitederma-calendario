@@ -69,6 +69,7 @@ import { creaZip, siPuoCondividere } from "./file/zip.js";
 const ModelliEmail = pezzo(() => import("./email/ModelliEmail.jsx"));
 const PaginaRegolamenti = pezzo(() => import("./regole/PaginaRegolamenti.jsx"));
 const AssistenteRegole = pezzo(() => import("./regole/AssistenteRegole.jsx"));
+const AllegatiProgetto = pezzo(() => import("./progetti/AllegatiProgetto.jsx"));
 const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx"));
 import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
@@ -36805,6 +36806,13 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
         </div>
       )}
 
+      {/* GLI ALLEGATI (26/10/2026): uno o piu' file per progetto — bozze,
+          preventivi, grafiche. Stanno sempre in vista, sotto la scheda,
+          perche' un allegato si cerca piu' spesso di quanto si carichi. */}
+      <Suspense fallback={null}>
+        <AllegatiProgetto progettoId={progetto.id} compatto={isMobile} />
+      </Suspense>
+
     </div>
   );
 }
@@ -36813,6 +36821,12 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
   const isMobile = useIsMobile();
   const [progetti, setProgetti] = useState(null);
   const [storico, setStorico] = useState(false);
+  // «Progetti Ruh» (26/10/2026, chiesto dal titolare): un'area a parte con
+  // i soli progetti assegnati a Ruh, gia' filtrati. Si riconosce dal nome
+  // fra gli incaricati, cosi' vale anche se la riga di Ruh cambiasse id.
+  const [soloRuh, setSoloRuh] = useState(false);
+  const eDiRuh = (p) => /^\s*ruh\b/i.test(String(p.incaricato_nome || ""))
+    || (Array.isArray(p.incaricati) && p.incaricati.some((a) => /^\s*ruh\b/i.test(String(a.nome || ""))));
   // il progetto per cui si sta chiedendo "sei sicuro?": la conferma e'
   // una finestra dell'app, non window.confirm, che nell'app aggiunta alla
   // home dell'iPhone spesso non compare e passa come un si'. Una scheda
@@ -36888,6 +36902,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
     const pesoPriorita = { alta: 0, intermedia: 1, normale: 2 };
     return (progetti || [])
       .filter((p) => (storico ? !!p.archiviato_il : !p.archiviato_il))
+      .filter((p) => !soloRuh || eDiRuh(p))
       .filter((p) => !filtroIncaricato
         || (Array.isArray(p.incaricati) && p.incaricati.some((a) => a.id === filtroIncaricato))
         || p.incaricato_id === filtroIncaricato)
@@ -36962,13 +36977,23 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
           <div style={{ position: "absolute", top: 0, left: 0 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         </div>
         <div style={{ paddingLeft: 80, display: "flex", alignItems: "center", minHeight: 68, justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-          <div style={{ ...stileTitoloPagina, color: NAVY }}>{storico ? "Storico progetti" : titolo}</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{storico ? (soloRuh ? "Storico progetti Ruh" : "Storico progetti") : soloRuh ? "Progetti Ruh" : titolo}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            data-campo="progetti-ruh"
+            onClick={() => setSoloRuh((v) => !v)}
+            title={soloRuh ? "Torna a tutti i progetti" : "Solo i progetti assegnati a Ruh"}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: soloRuh ? "#fff" : NAVY, background: soloRuh ? NAVY : "#fff", border: `1px solid ${soloRuh ? NAVY : CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
+          >
+            {soloRuh ? "← Tutti i progetti" : "Progetti Ruh"}
+          </button>
           <button
             onClick={() => setStorico((v) => !v)}
             style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: storico ? BG_CHIARO : "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "9px 16px", cursor: "pointer" }}
           >
             {storico ? "← Torna ai progetti in corso" : "Storico progetti"}
           </button>
+          </div>
         </div>
 
       {/* Due colonne: a sinistra il solo elenco dei titoli col colore
@@ -37115,6 +37140,7 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
       {mostraNuovo && (
         <ModaleNuovoProgetto
           incaricabili={incaricabili}
+          incaricatoIniziale={soloRuh ? (incaricabili.find((u) => /^\s*ruh\b/i.test(String(u.nome || "")))?.id || "") : ""}
           onClose={() => setMostraNuovo(false)}
           onCreato={() => { setMostraNuovo(false); carica(); }}
         />
@@ -37126,10 +37152,12 @@ function PaginaProgetti({ utentiApp, master, venditori, ricarica, onBack, titolo
 // Il modulo di apertura: nome, priorita', incaricato, scadenza e le note
 // iniziali. Lo stato non si chiede — un progetto appena aperto e' TO DO
 // per definizione, e le note di sviluppo le scrivera' chi ci lavora.
-function ModaleNuovoProgetto({ incaricabili, onClose, onCreato }) {
+function ModaleNuovoProgetto({ incaricabili, onClose, onCreato, incaricatoIniziale = "" }) {
   const [nome, setNome] = useState("");
   const [priorita, setPriorita] = useState("normale");
-  const [incaricatoId, setIncaricatoId] = useState("");
+  // dall'area «Progetti Ruh» il progetto nasce gia' assegnato a Ruh: e'
+  // li' che lo si sta creando, e si puo' comunque cambiare
+  const [incaricatoId, setIncaricatoId] = useState(incaricatoIniziale || "");
   const [scadenza, setScadenza] = useState("");
   const [note, setNote] = useState("");
   const [salvando, setSalvando] = useState(false);
