@@ -56376,8 +56376,23 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                                 adesso, si sceglie cosa deve esserci, e
                                 scegliere quello che c'e' gia' non fa
                                 niente. */}
+                            {/* LA TENDINA E' SOLO DI CHI AMMINISTRA, E MAI SU UN
+                                INCASSO STRIPE (27/10/2026). Le master sbagliano
+                                tasto — POS per contanti o viceversa — e la
+                                rettifica la fa l'amministrazione, lasciando
+                                l'incasso com'e'. Un pagamento arrivato da Stripe
+                                invece non si rietichetta: i soldi sono sul
+                                conto, e lo vieta anche il database. */}
                             {!v.metodo_pagamento ? (
                               <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>
+                            ) : (!puoRiscuotere || pagatoStripeIl(v)) ? (
+                              <span data-campo="metodo-fisso" title={pagatoStripeIl(v) ? "Incassato con Stripe: il metodo non si cambia" : "Il metodo di pagamento lo corregge l'amministrazione"}
+                                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "4px 8px", display: "inline-block",
+                                  border: `1px solid ${v.metodo_pagamento === "contanti" ? "#E8D4B0" : "#C9CEEA"}`,
+                                  color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
+                                  background: v.metodo_pagamento === "contanti" ? "#F7EEDE" : "#ECEDFA" }}>
+                                {etichettaMetodoVendita(v.metodo_pagamento)}
+                              </span>
                             ) : confermaMetodo && confermaMetodo.id === v.id ? (
                               <div style={{ display: "inline-block", background: "#FFF8E8", border: "1px solid #E8D4B0", borderRadius: 8, padding: "7px 9px", whiteSpace: "normal", maxWidth: 250 }}>
                                 <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY }}>Da {confermaMetodo.da} a {confermaMetodo.a}?</div>

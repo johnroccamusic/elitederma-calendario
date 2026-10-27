@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   61 file, 434 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   61 file, 436 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -741,6 +741,20 @@ sono regole che altri applicheranno alla lettera.
 dettato, sistemato — entra in una pila, e i tasti battuti di seguito entro
 un secondo contano come un passo solo. Nato perché una cancellazione
 sbagliata in un testo dettato per dieci minuti non si rifà a voce.
+
+### Il metodo di pagamento si corregge, ma non su Stripe (27/10/2026)
+
+In Vendite al banco la colonna **Incasso** è una tendina (POS, Contanti,
+Buono Amazon) con conferma dentro la riga: il totale non si tocca, si
+sposta solo la ripartizione imponibile/IVA. C'era già; da oggi è **solo
+di chi amministra** (programmatore, amministratore): le master vedono il
+metodo scritto e la rettifica la fa l'ufficio. E su una vendita
+**incassata con Stripe** la tendina non c'è per nessuno: i soldi sono sul
+conto, e rietichettarla «contanti» la toglierebbe dalle fatture da
+emettere e la metterebbe in una busta che non li ha mai visti. Lo vieta
+anche il database (`vendite_shop_metodo_non_si_cambia_se_stripe`, che
+guarda `pagamenti_pos.pagato_il` per vendita o per codice; provato sulla
+vendita di Lia: rifiutato).
 
 ### Il cestino delle vendite (26/10/2026)
 

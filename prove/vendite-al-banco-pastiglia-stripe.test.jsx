@@ -27,3 +27,27 @@ describe("vendite al banco", () => {
     await p.smonta();
   });
 });
+
+describe("la correzione del metodo di pagamento", () => {
+  const stripe = { "pagamenti_pos": [{ codice: "ABC123", vendita_id: null, pagato_il: "2026-10-19T11:00:00Z" }] };
+  it("chi amministra ha la tendina, ma non sull'incasso Stripe", async () => {
+    rispondiCon(stripe);
+    const p = await monta(<PaginaVenditeShop venditeShop={VENDITE} origine="pos" ricarica={async () => {}} onBack={() => {}} ruoloUtente="amministratore" />);
+    await attendi(150);
+    const righe = [...p.nodo.querySelectorAll("tbody tr")];
+    const rigaQr = righe.find((r) => r.textContent.includes("POS-1"));
+    const rigaCash = righe.find((r) => r.textContent.includes("POS-3"));
+    expect(rigaQr.querySelector("select")).toBeFalsy();
+    expect(rigaQr.querySelector('[data-campo="metodo-fisso"]').title).toContain("Stripe");
+    expect(rigaCash.querySelector("select")).toBeTruthy();
+    await p.smonta();
+  });
+  it("una master vede il metodo scritto, senza tendina", async () => {
+    rispondiCon(stripe);
+    const p = await monta(<PaginaVenditeShop venditeShop={VENDITE} origine="pos" ricarica={async () => {}} onBack={() => {}} ruoloUtente="master" />);
+    await attendi(150);
+    expect(p.nodo.querySelectorAll("tbody select").length).toBe(0);
+    expect(p.nodo.querySelectorAll('[data-campo="metodo-fisso"]').length).toBe(3);
+    await p.smonta();
+  });
+});
