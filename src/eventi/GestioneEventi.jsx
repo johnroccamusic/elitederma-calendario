@@ -19,6 +19,7 @@ import {
 } from "./dati.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
+import BollaEvento from "./BollaEvento.jsx";
 
 const euro = (n) => `${(Number(n) || 0).toFixed(2).replace(".", ",")} €`;
 // "2026-09-26" -> "26/09". Le date qui sono giorni, non istanti: si
@@ -1638,6 +1639,11 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
             <Pastiglia stato={evento.stato} />
             <Button variant="ghost" onClick={() => setInModifica(true)}>Modifica</Button>
           </div>
+        </div>
+        {/* la bolla di accompagnamento dei materiali: sta nella testata
+            perche' si cerca il giorno della partenza, non in una scheda */}
+        <div style={{ marginTop: 10 }}>
+          <BollaEvento evento={evento} onCambiato={onCambiato} />
         </div>
       </div>
 

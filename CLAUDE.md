@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   61 file, 437 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   62 file, 440 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -998,6 +998,21 @@ dalla fotografia si passa alla scheda in modifica, e il venditore vede la
 fotografia solo a modulo ricevuto o iscrizione confermata. La mail si
 rimanda dopo, dalla fascia di stato, quando la scheda è a posto. Prove in
 `prove/modelle-e-note-a-contratto-firmato.test.jsx`.
+
+### La bolla di accompagnamento di un evento (27/10/2026)
+
+Nella testata della scheda di un evento c'è **«Bolla di accompagnamento»**:
+apre un pannello con partenza (la sede della società), destinazione (il
+luogo dell'evento), vettore, causale, colli e aspetto, tutti correggibili;
+«Genera la bolla» salva quei dati in `eventi.bolla` (jsonb, con numero
+`DDT aaaa-mm-gg/XYZ` e date) e scarica il **PDF** fatto nel browser con
+pdf-lib (`src/eventi/bolla.js`): mittente, destinatario, causale, vettore,
+l'elenco dei materiali di `eventi_materiali` con quantità maggiore di
+zero, colli e aspetto, tre firme. Alla ristampa il tasto diventa
+«Ristampa la bolla», gli indirizzi tornano com'erano salvati e si possono
+cambiare; il numero resta lo stesso. Si salva **prima** di generare: se il
+PDF non uscisse, la ristampa trova comunque gli indirizzi. Prove in
+`prove/bolla-evento.test.jsx` (il PDF viene generato davvero, in jsdom).
 
 ### Il civico sta dentro la via (23/10/2026)
 
