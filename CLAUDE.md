@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   61 file, 436 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   61 file, 437 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -755,6 +755,16 @@ emettere e la metterebbe in una busta che non li ha mai visti. Lo vieta
 anche il database (`vendite_shop_metodo_non_si_cambia_se_stripe`, che
 guarda `pagamenti_pos.pagato_il` per vendita o per codice; provato sulla
 vendita di Lia: rifiutato).
+
+**E sistema la busta** (stesso giorno, chiesto dal titolare: «aggiorna pure i
+contanti che uno si aspetta in busta»). Fatture da emettere, provvigioni e
+prima nota leggono il metodo dal vivo; la busta della classe no, perché il
+suo importo si congela quando rientra in cassa. Quindi da contanti a carta
+la vendita **esce dalla busta** con la stessa logica della cancellazione
+(`sganciaDallaBusta`, condivisa): busta in cassa → si riapre, o se ha già
+appendici il suo importo scende; da carta a contanti **entra nel contante
+atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
+o nell'appendice. La riga lo dice **prima** di confermare.
 
 ### Il cestino delle vendite (26/10/2026)
 
