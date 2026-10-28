@@ -11445,18 +11445,15 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
         <div data-campo="quota-coordinatore" style={{ ...cardStyle, marginBottom: 14, borderLeft: `4px solid ${GOLD}`, padding: isMobile ? "12px 10px" : "16px 16px" }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY }}>Quota coordinatore — {quotaCoord.personaNome}</div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, margin: "2px 0 10px" }}>
-            {String(quotaCoord.percentuale).replace(".", ",")}% del pattuito di ogni iscrizione{quotaCoord.dal ? `, dai corsi che iniziano dal ${fmtData(quotaCoord.dal)}` : ""}. Si cambia da Setting → Quota coordinatore.
+            Quanto le spetta, mese per mese. L'analisi (iscrizioni, pattuito, percentuale) sta in Setting → Quota coordinatore.
           </div>
+          {/* SOLO MESE E QUOTA (28/10/2026): chi la prende vede quanto le
+              spetta, non da quante iscrizioni e su quale pattuito */}
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 110px 100px", gap: 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: 30, alignItems: "center", padding: "0 12px" }}>
-              <div style={intest}>Mese</div><div style={{ ...intest, textAlign: "center" }}>Isc.</div><div style={{ ...intest, textAlign: "right" }}>Pattuito</div><div style={{ ...intest, textAlign: "right" }}>Quota</div>
-            </div>
             {mesiCoordinatore.map((m) => (
-              <div key={m.chiave} data-campo="coord-mese" style={{ display: "grid", gridTemplateColumns: "1fr 60px 110px 100px", gap: 8, alignItems: "center", minHeight: 32, padding: "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, color: NAVY, fontWeight: 600 }}>{nomeMese(m.chiave)}</span>
-                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, textAlign: "center" }}>{m.iscritti}</span>
-                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.pattuito)}</span>
-                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.quota)}</span>
+              <div key={m.chiave} data-campo="coord-mese" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, minHeight: 34, padding: "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: NAVY, fontWeight: 600 }}>{nomeMese(m.chiave)}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(m.quota)}</span>
               </div>
             ))}
           </div>
@@ -19414,7 +19411,7 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
 // La scheda in Setting: chi e' il coordinatore, quanto prende, da quando.
 // Si salva con un tasto, non da sola: e' un compenso, e una percentuale
 // cambiata per sbaglio uscendo dal campo nessuno se ne accorge.
-function ImpostazioniQuotaCoordinatore({ venditori = [], master = [] }) {
+function ImpostazioniQuotaCoordinatore({ venditori = [], master = [], iscritti = [], corsiDate = [] }) {
   const [salvata, salva] = useImpostazioneCondivisa(CHIAVE_QUOTA_COORDINATORE, QUOTA_COORDINATORE_DEFAULT);
   const corrente = { ...QUOTA_COORDINATORE_DEFAULT, ...(salvata || {}) };
   const [persona, setPersona] = useState(corrente.personaNome || "");
@@ -19442,11 +19439,46 @@ function ImpostazioniQuotaCoordinatore({ venditori = [], master = [] }) {
       </div>
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginBottom: 8 }}>{msg}</div>}
       <Button disabled={!valida} onClick={() => { salva({ personaNome: persona, percentuale: n, dal: dal || "" }); setMsg(`Salvato: ${persona}, ${String(n).replace(".", ",")}% del pattuito${dal ? ` dai corsi dal ${fmtData(dal)}` : ""}.`); }} style={{ width: "100%" }}>Salva</Button>
+
+      {/* L'ANALISI STA QUI, non nella dashboard di chi la prende (28/10/2026,
+          deciso dal titolare): mese per mese iscrizioni, pattuito e quota,
+          calcolati su quello che e' scritto nei campi qui sopra — anche
+          prima di salvare, cosi' si vede cosa farebbe una percentuale o
+          una data diversa. */}
+      {(() => {
+        const anteprima = quotaCoordinatorePerMese(iscritti, corsiDate, { personaNome: persona || "—", percentuale: n, dal });
+        if (!persona || !(n > 0)) return null;
+        const totale = round2(anteprima.reduce((s, m) => s + m.quota, 0));
+        return (
+          <div data-campo="coord-analisi" style={{ marginTop: 16 }}>
+            <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Come esce, mese per mese</div>
+            {anteprima.length === 0 ? <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessuna iscrizione sui corsi da quella data in poi.</div> : (
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 56px 100px 90px", gap: 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: 28, alignItems: "center", padding: "0 10px", ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  <div>Mese</div><div style={{ textAlign: "center" }}>Isc.</div><div style={{ textAlign: "right" }}>Pattuito</div><div style={{ textAlign: "right" }}>Quota</div>
+                </div>
+                {anteprima.map((m) => (
+                  <div key={m.chiave} style={{ display: "grid", gridTemplateColumns: "1fr 56px 100px 90px", gap: 8, alignItems: "center", minHeight: 30, padding: "0 10px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11.5, color: NAVY }}>
+                    <span style={{ fontWeight: 600 }}>{nomeMese(m.chiave)}</span>
+                    <span style={{ color: MUTED, textAlign: "center" }}>{m.iscritti}</span>
+                    <span style={{ color: MUTED, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.pattuito)}</span>
+                    <span style={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.quota)}</span>
+                  </div>
+                ))}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 56px 100px 90px", gap: 8, alignItems: "center", minHeight: 32, padding: "0 10px", background: "#F4F4F6", ...fontBody, fontSize: 11.5, color: NAVY }}>
+                  <span style={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10 }}>Totale</span><span /><span />
+                  <span style={{ fontWeight: 800, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(totale)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, onApriModuloIscrizione, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
+function Impostazioni({ ruoloUtente, utenteLoggato = null, iscritti = [], corsiDate = [], corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, onApriModuloIscrizione, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -20097,7 +20129,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
 
       {showQuotaCoordinatoreModal && (
         <Modal title="Quota coordinatore" onClose={() => setShowQuotaCoordinatoreModal(false)} maxWidth={520}>
-          <ImpostazioniQuotaCoordinatore venditori={venditori} master={master} />
+          <ImpostazioniQuotaCoordinatore venditori={venditori} master={master} iscritti={iscritti} corsiDate={corsiDate} />
         </Modal>
       )}
 
@@ -83742,7 +83774,7 @@ function Gestionale() {
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     // "password_menu"/"utenti_app" (gia' fra le essenziali) servono
     // all'area "Utenti", che da ora vive qui dentro
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "intestazione_societa", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi", "iscritti", "corsi_date"],
     // `eventi` serve perche' il calendario disegna le fiere accanto ai
     // corsi, nella stessa griglia. Senza, la lista arriva vuota e la barra
     // non c'e': nessun errore, solo un evento che "e' sparito". Compariva
@@ -85497,7 +85529,7 @@ function Gestionale() {
           onBack={() => setView("home")}
           propsUtenti={{ passwordMenu, utentiApp, master, venditori, assistente, ricarica: fetchDati, onBack: () => setView("home") }}
           propsSetting={{
-            ruoloUtente, utenteLoggato, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
+            ruoloUtente, utenteLoggato, iscritti, corsiDate, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
             venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,
             impostazioniIva, intestazioneSocieta, registraInterceptaIndietro,
             ricarica: fetchDati,

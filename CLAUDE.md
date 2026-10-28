@@ -776,7 +776,10 @@ pattuito di ogni iscrizione e da quale data di inizio corso vale; si
 salva in `impostazioni_layout_tabelle` (`quota_coordinatore`), con un
 tasto e non da sola. In **Commissioni sui corsi** — anche nella Dashboard
 venditori, dov'è la scheda che Elena legge — compare in cima una scheda
-sua, separata: mese per mese iscrizioni, pattuito e quota. Il calcolo è
+sua, separata, con **solo mese e quota**: chi la prende vede quanto le
+spetta, non da quante iscrizioni né su quale pattuito. L'**analisi**
+(iscrizioni, pattuito, totale, calcolata sui valori scritti nei campi,
+anche prima di salvare) sta dentro Setting → Quota coordinatore. Il calcolo è
 `quotaCoordinatorePerMese`, vivo (non congelato), e **non è un costo
 della classe**. Impostato il 28/10/2026: Elena, 0,5%, corsi dal
 01/10/2026. Prove in `prove/quota-coordinatore.test.jsx`.
