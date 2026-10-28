@@ -786,6 +786,24 @@ anche prima di salvare) sta dentro Setting → Quota coordinatore. Il calcolo è
 della classe**. Impostato il 28/10/2026: Elena, 0,5%, corsi dal
 01/10/2026. Prove in `prove/quota-coordinatore.test.jsx`.
 
+### Il referral delle master dura un mese (28/10/2026)
+
+Chiesto dal titolare: il referral personale di ogni master (quello senza
+edizione, su tutto il catalogo — non il codice d'acquisto, non need30,
+non i codici d'aula) **scade a fine mese**; il primo del mese, alle 00:05
+di Roma, ne nasce uno nuovo con lo stesso accordo e il vecchio **si
+cancella dal sito** e nell'app diventa `scaduto`, sparendo da ogni
+elenco. La riga **non** si cancella: `v_punti_master_righe` trova la
+master dal codice, e senza la riga le vendite dei mesi passati
+perderebbero i punti. Lavoro: edge function `ruota-referral-master`,
+cron orario `ruota-referral-master-orario` (ogni ora perché il mese è
+quello di Roma e il cron è in UTC; un giro senza niente da fare non
+tocca il sito). Regole in `_shared/referralMensile.js`, condivise con
+l'app; anche il tasto «Conferma» di Genera referral code passa dalla
+funzione. Su WooCommerce la scadenza si scrive **il primo del mese
+dopo**: il sito spegne un coupon alle 00:00 del giorno indicato. Prove
+in `prove/referral-mensile.test.js`.
+
 ### La cassa contanti si legge un mese alla volta (28/10/2026)
 
 Deciso dal titolare: chi usa la cassa non deve leggere «quanto è entrato
