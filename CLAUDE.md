@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   63 file, 441 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   64 file, 442 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -765,6 +765,22 @@ la vendita **esce dalla busta** con la stessa logica della cancellazione
 appendici il suo importo scende; da carta a contanti **entra nel contante
 atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
 o nell'appendice. La riga lo dice **prima** di confermare.
+
+### Il POS si apre anche a un'assistente (28/10/2026)
+
+Martina Tora, assistente, premeva la tessera POS in Home e vedeva «una
+sfilza di errori e zero apertura». Dal 15/10 il POS leggeva
+`corsiDateDocentiPos` — le assegnazioni per capire di quali classi è
+assistente chi vende — **350 righe prima di dichiararlo**: `Cannot access
+before initialization`. Solo il ramo dell'assistente lo legge, per le
+master non si vedeva, e la build non se ne accorge perché è un ordine di
+righe. Il giro delle sezioni non lo prendeva: il suo profilo «assistente»
+non aveva `assistenteId`, quindi entrava come utente generico. Ora la
+dichiarazione sta prima dell'uso e `prove/pos-si-apre-per-assistente.test.jsx`
+monta l'app con un'assistente vera e preme la tessera. Nei log questo guasto
+**non lascia traccia**: muore nel telefono prima di qualunque richiesta.
+L'unica cosa che si vedeva era un 400 della Dashboard master (punti chiesti
+con l'id «ass:»), corretto lo stesso giorno.
 
 ### Il cestino delle vendite (26/10/2026)
 

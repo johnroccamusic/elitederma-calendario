@@ -69402,6 +69402,21 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const corsiFinestraPos = (corsiDate || []).filter((cd) =>
     (cd.data_inizio <= oggiStrPos && cd.data_fine >= oggiStrPos)
     || (cd.data_fine < oggiStrPos && cd.data_fine >= cinqueGgFaPos));
+  // LE ASSEGNAZIONI PER EDIZIONE, dichiarate QUI e non piu' in basso.
+  // `corsiEleggibiliPos` qui sotto le legge; stavano 350 righe dopo, e
+  // per una master non si notava — quel ramo non le tocca. Per
+  // un'assistente invece il POS moriva all'apertura con «Cannot access
+  // corsiDateDocentiPos before initialization»: tasto premuto, errori a
+  // sfilza, pagina mai aperta (Martina Tora, 28/10/2026). La build non
+  // se ne accorge: e' un ordine di righe, non un nome sbagliato.
+  const [corsiDateDocentiPos, setCorsiDateDocentiPos] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    if (operatoreReale?.tipo !== "assistente" && operatoreImpersonato?.tipo !== "assistente") return undefined;
+    supabase.from("corsi_date_docenti").select("corso_data_id, tipo, persona_id").eq("tipo", "assistente")
+      .then(({ data }) => { if (vivo) setCorsiDateDocentiPos(data || []); });
+    return () => { vivo = false; };
+  }, [operatoreReale?.tipo, operatoreImpersonato?.tipo]);
   // L'assistente vede SOLO le classi dove e' assegnata, nella stessa
   // finestra di tutti: i giorni del corso piu' cinque. Non ha un codice
   // suo — vende al corso dov'e', con lo sconto di quella classe — quindi
@@ -69764,16 +69779,6 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // scheda si apre per intero. Null = nessuna aperta
   const [storicoAperto, setStoricoAperto] = useState(null);
   const [statoQr, setStatoQr] = useState("in_attesa");
-  // le assegnazioni per edizione: il POS non le riceve, e servono solo a
-  // capire di quali classi e' assistente chi sta vendendo
-  const [corsiDateDocentiPos, setCorsiDateDocentiPos] = useState([]);
-  useEffect(() => {
-    let vivo = true;
-    if (operatoreReale?.tipo !== "assistente" && operatoreImpersonato?.tipo !== "assistente") return undefined;
-    supabase.from("corsi_date_docenti").select("corso_data_id, tipo, persona_id").eq("tipo", "assistente")
-      .then(({ data }) => { if (vivo) setCorsiDateDocentiPos(data || []); });
-    return () => { vivo = false; };
-  }, [operatoreReale?.tipo, operatoreImpersonato?.tipo]);
   const [creandoQr, setCreandoQr] = useState(false);
   // "copiato" per qualche secondo, poi torna com'era: un tasto che non
   // risponde lascia il dubbio di non averlo premuto, e si preme due volte
