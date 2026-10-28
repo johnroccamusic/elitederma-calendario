@@ -768,15 +768,19 @@ o nell'appendice. La riga lo dice **prima** di confermare.
 
 ### L'alloggio provvisorio in Operativo corsi (28/10/2026)
 
-Da «Gestisci» della colonna Hotel, anche su un corso già stabilito, si può
-scrivere un **alloggio provvisorio**: un testo libero (`alloggio_provvisorio`
-su `corsi_date` e `corsi_date_docenti`) per una struttura non ancora in
-Gestione Hotel o un appunto «da confermare». Nella colonna compare in
-arancione con «(provv.)» al posto di «Gestisci». Il campo c'è solo finché
-nella tendina non è scelto un hotel: scelto l'hotel vero, il provvisorio si
-svuota al salvataggio. Non entra nei conti dell'alloggio (notti, pattuito,
-scadenze): quelli nascono dall'hotel a listino. Prove in
-`prove/alloggio-provvisorio.test.jsx`.
+Da «Gestisci» della colonna Hotel, anche su un corso già stabilito, la
+scheda ha due strade come la creazione corso: **Registrato** (la tendina
+degli hotel) e **Provvisorio / occasionale**, una scheda completa — nome,
+via e civico, città, telefono, chi chiedere, tariffe a notte cash e con
+fattura, note. Salvando nasce una riga di `hotel` marcata `solo_edizione`
+(come fa `creaDataCorso`), la riga del corso la aggancia con `alloggio_id`,
+e notti, pattuito e scadenze funzionano come per un hotel qualunque; le
+tariffe scritte lì valgono anche per quel soggiorno. Se la riga del corso
+non si scrive, l'hotel appena nato si cancella. Il primo giro di
+stamattina era un testo libero (`alloggio_provvisorio`): il titolare ha
+chiesto «tutti i dati come nella creazione corso», e le due colonne sono
+state tolte prima di qualunque uso. Prove in
+`prove/alloggio-occasionale-da-gestisci.test.jsx`.
 
 ### Il POS si apre anche a un'assistente (28/10/2026)
 

@@ -7006,11 +7006,16 @@ function Gate({ onOk }) {
 // "Cash pulito in busta" a fine corso, non passa da qui.
 function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPeriodi, onClose, onSalvato }) {
   const [hotelId, setHotelId] = useState(riga.alloggio_id || "");
-  // L'ALLOGGIO PROVVISORIO (28/10/2026): una struttura non ancora in
-  // Gestione Hotel, o un appunto «da confermare», scritto a mano. Serve
-  // quando l'hotel vero non c'e' ancora — anche su un corso gia' stabilito
-  // — e sparisce da solo quando si sceglie l'hotel dalla tendina.
-  const [provvisorio, setProvvisorio] = useState(riga.alloggio_provvisorio || "");
+  // L'ALLOGGIO PROVVISORIO (28/10/2026): la stessa scheda completa della
+  // creazione corso — nome, via, civico, citta', telefono, referente,
+  // tariffe a notte, note — per una struttura che in Gestione Hotel non
+  // c'e' ancora. Serve anche su un corso gia' stabilito. Salvando nasce
+  // una riga di `hotel` marcata solo_edizione (non compare nella tendina
+  // degli alloggi registrati della creazione corso) e la riga del corso
+  // la aggancia come un hotel qualunque: notti, pattuito e scadenze
+  // funzionano uguali.
+  const [tipoAlloggio, setTipoAlloggio] = useState("registrato");
+  const [allOcc, setAllOcc] = useState({ nome: "", indirizzo: "", civico: "", citta: "", telefono: "", referente: "", costoCash: "", costoFattura: "", note: "" });
   const [checkIn, setCheckIn] = useState(riga.data_check_in || cd?.data_inizio || "");
   const [tipoStanza, setTipoStanza] = useState(riga.tipo_stanza || "");
   const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
@@ -7105,8 +7110,6 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
       pattuito_periodo_cash: totaleCash,
       pattuito_periodo_bonifico: totaleBonifico,
       alloggio_id: hotelId || null,
-      // con un hotel scelto il provvisorio non ha piu' ragione di restare
-      alloggio_provvisorio: hotelId ? null : (provvisorio.trim() || null),
       data_check_in: checkIn || null,
       tipo_stanza: tipoStanza || null,
       notti_prenotate: nottiNum,
@@ -7116,29 +7119,80 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
       tipo_pagamento_alloggio: tipoPagamento || null,
       scadenza_pagamento_alloggio: tipoPagamento === "cash" ? null : (scadenza || null),
     };
+    // l'alloggio occasionale nasce qui, prima della riga del corso; se la
+    // riga poi non si scrive, l'albergo appena nato si porta via, o resta
+    // in anagrafica un hotel di cui nessuno sa il perche'
+    let hotelNatoQui = null;
+    if (tipoAlloggio === "occasionale") {
+      if (!allOcc.nome.trim()) { setSalvando(false); setMsg("Serve almeno il nome dell'alloggio."); return; }
+      const { data, error: erroreHotel } = await supabase.from("hotel").insert({
+        nome: allOcc.nome.trim(),
+        indirizzo: allOcc.indirizzo.trim() || null, civico: allOcc.civico.trim() || null, citta: allOcc.citta.trim() || null,
+        telefono: allOcc.telefono.trim() || null, nome_referente: allOcc.referente.trim() || null, note: allOcc.note.trim() || null,
+        costo_notte_cash: allOcc.costoCash === "" ? null : parseNum(allOcc.costoCash),
+        costo_notte_fattura: allOcc.costoFattura === "" ? null : parseNum(allOcc.costoFattura),
+        solo_edizione: true, ricorrente_occasionale: "occasionale",
+      }).select("id").single();
+      if (erroreHotel) { setSalvando(false); setMsg("Alloggio non creato: " + testoErrore(erroreHotel)); return; }
+      hotelNatoQui = data.id;
+      campi.alloggio_id = data.id;
+      // le tariffe scritte qui valgono anche per questo soggiorno
+      if (campi.pattuito_a_notte_cash == null && allOcc.costoCash !== "") campi.pattuito_a_notte_cash = parseNum(allOcc.costoCash);
+      if (campi.pattuito_a_notte_bonifico == null && allOcc.costoFattura !== "") campi.pattuito_a_notte_bonifico = parseNum(allOcc.costoFattura);
+      if (nottiNum != null) {
+        if (campi.pattuito_periodo_cash == null && campi.pattuito_a_notte_cash != null) campi.pattuito_periodo_cash = round2(nottiNum * campi.pattuito_a_notte_cash);
+        if (campi.pattuito_periodo_bonifico == null && campi.pattuito_a_notte_bonifico != null) campi.pattuito_periodo_bonifico = round2(nottiNum * campi.pattuito_a_notte_bonifico);
+        if (campi.pattuito_periodo == null) campi.pattuito_periodo = tipoPagamento === "cash" ? campi.pattuito_periodo_cash : campi.pattuito_periodo_bonifico ?? campi.pattuito_periodo_cash;
+      }
+    }
     const { error } = await supabase.from(tabella).update(campi).eq("id", riga.id);
+    if (error) {
+      if (hotelNatoQui) await supabase.from("hotel").delete().eq("id", hotelNatoQui);
+      setSalvando(false); setMsg("Errore: " + testoErrore(error)); return;
+    }
     setSalvando(false);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     onSalvato();
   }
 
   return (
     <Modal title="Gestisci alloggio" onClose={onClose} maxWidth={480}>
-      <Field label="Hotel">
-        <select style={inputStyle} value={hotelId} onChange={(e) => setHotelId(e.target.value)}>
-          <option value="">— nessuno —</option>
-          {(hotel || []).map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
-        </select>
-      </Field>
-      {!hotelId && (
-        <Field label="Alloggio provvisorio (non ancora in Gestione Hotel)">
-          <input type="text" data-campo="alloggio-provvisorio" style={inputStyle} value={provvisorio} onChange={(e) => setProvvisorio(e.target.value)}
-            placeholder="es. B&B Da Maria, da confermare — oppure «appartamento della master»" />
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
-            Compare nella colonna Hotel in arancione, finché non scegli un hotel dalla tendina: allora si cancella da solo.
+      <Field label="Alloggio">
+        {/* le stesse due strade della creazione corso: uno registrato in
+            anagrafica, o uno occasionale scritto qui per questa volta */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          {[{ v: "registrato", l: "Registrato" }, { v: "occasionale", l: "Provvisorio / occasionale" }].map((t) => (
+            <button key={t.v} type="button" data-campo={`alloggio-${t.v}`} onClick={() => { setTipoAlloggio(t.v); if (t.v === "occasionale") setHotelId(""); }}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "7px 12px", borderRadius: 10, cursor: "pointer", background: tipoAlloggio === t.v ? NAVY : "#fff", color: tipoAlloggio === t.v ? "#fff" : NAVY, border: `1px solid ${tipoAlloggio === t.v ? NAVY : CREAM_BORDER}` }}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+        {tipoAlloggio === "registrato" ? (
+          <select style={inputStyle} value={hotelId} onChange={(e) => setHotelId(e.target.value)}>
+            <option value="">— nessuno —</option>
+            {(hotel || []).map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}{h.solo_edizione ? " (occasionale)" : ""}</option>)}
+          </select>
+        ) : (
+          <div data-campo="alloggio-occasionale">
+            <input style={{ ...inputStyle, marginBottom: 8 }} data-campo="occ-nome" value={allOcc.nome} onChange={(e) => setAllOcc((o) => ({ ...o, nome: e.target.value }))} placeholder="Nome dell'alloggio *" />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...inputStyle, marginBottom: 8, flex: "2 1 0", minWidth: 0 }} value={allOcc.indirizzo} onChange={(e) => setAllOcc((o) => ({ ...o, indirizzo: e.target.value }))} placeholder="Via" />
+              <input style={{ ...inputStyle, marginBottom: 8, flex: "1 1 0", minWidth: 0 }} value={allOcc.civico} onChange={(e) => setAllOcc((o) => ({ ...o, civico: e.target.value }))} placeholder="Civico" />
+            </div>
+            <input style={{ ...inputStyle, marginBottom: 8 }} value={allOcc.citta} onChange={(e) => setAllOcc((o) => ({ ...o, citta: e.target.value }))} placeholder="Città" />
+            <input style={{ ...inputStyle, marginBottom: 8 }} data-campo="occ-telefono" value={allOcc.telefono} onChange={(e) => setAllOcc((o) => ({ ...o, telefono: e.target.value }))} placeholder="Telefono" />
+            <input style={{ ...inputStyle, marginBottom: 8 }} value={allOcc.referente} onChange={(e) => setAllOcc((o) => ({ ...o, referente: e.target.value }))} placeholder="Chi chiedere" />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...inputStyle, marginBottom: 8, flex: 1, minWidth: 0 }} inputMode="decimal" data-campo="occ-costo-cash" value={allOcc.costoCash} onChange={(e) => setAllOcc((o) => ({ ...o, costoCash: e.target.value }))} placeholder="€ a notte cash" />
+              <input style={{ ...inputStyle, marginBottom: 8, flex: 1, minWidth: 0 }} inputMode="decimal" value={allOcc.costoFattura} onChange={(e) => setAllOcc((o) => ({ ...o, costoFattura: e.target.value }))} placeholder="€ a notte con fattura" />
+            </div>
+            <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical", marginBottom: 0 }} value={allOcc.note} onChange={(e) => setAllOcc((o) => ({ ...o, note: e.target.value }))} placeholder="Note: parcheggio, orari, come si entra…" />
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+              Nasce come alloggio occasionale: resta in <b style={{ color: NAVY }}>Setting → Gestione Hotel</b> con i suoi dati, e da lì si completa o si rende definitivo.
+            </div>
           </div>
-        </Field>
-      )}
+        )}
+      </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Data check-in">
@@ -8154,8 +8208,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     onNota: (v) => salvaCampo(cd.id, "note", v),
                     viaggio: cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file"),
                     alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: (!valoreCampo(cd, "alloggio_id") && valoreCampo(cd, "alloggio_provvisorio")) ? "#B5651D" : NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
-                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || (valoreCampo(cd, "alloggio_provvisorio") ? `${valoreCampo(cd, "alloggio_provvisorio")} (provv.)` : "Gestisci")}
+                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
                       </button>
                     ),
                     pagato: cellaHotelPagato(cd, cd.id),
@@ -8184,8 +8238,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     onNota: (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "note", v),
                     viaggio: cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file"),
                     alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: (!valoreCampo(riga, "alloggio_id") && valoreCampo(riga, "alloggio_provvisorio")) ? "#B5651D" : NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
-                        {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || (valoreCampo(riga, "alloggio_provvisorio") ? `${valoreCampo(riga, "alloggio_provvisorio")} (provv.)` : "Gestisci")}
+                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                        {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
                       </button>
                     ),
                     pagato: cellaHotelPagato(riga, cd.id),
@@ -8358,7 +8412,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           tabella={gestisciAlloggio.tabella}
           hotel={hotel}
           onClose={() => setGestisciAlloggio(null)}
-          onSalvato={() => { setGestisciAlloggio(null); ricarica([gestisciAlloggio.tabella]); }}
+          onSalvato={() => { setGestisciAlloggio(null); ricarica([gestisciAlloggio.tabella, "hotel"]); }}
         />
       )}
       {gestisciSede && (
