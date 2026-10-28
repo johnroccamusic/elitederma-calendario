@@ -7006,6 +7006,11 @@ function Gate({ onOk }) {
 // "Cash pulito in busta" a fine corso, non passa da qui.
 function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPeriodi, onClose, onSalvato }) {
   const [hotelId, setHotelId] = useState(riga.alloggio_id || "");
+  // L'ALLOGGIO PROVVISORIO (28/10/2026): una struttura non ancora in
+  // Gestione Hotel, o un appunto «da confermare», scritto a mano. Serve
+  // quando l'hotel vero non c'e' ancora — anche su un corso gia' stabilito
+  // — e sparisce da solo quando si sceglie l'hotel dalla tendina.
+  const [provvisorio, setProvvisorio] = useState(riga.alloggio_provvisorio || "");
   const [checkIn, setCheckIn] = useState(riga.data_check_in || cd?.data_inizio || "");
   const [tipoStanza, setTipoStanza] = useState(riga.tipo_stanza || "");
   const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
@@ -7100,6 +7105,8 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
       pattuito_periodo_cash: totaleCash,
       pattuito_periodo_bonifico: totaleBonifico,
       alloggio_id: hotelId || null,
+      // con un hotel scelto il provvisorio non ha piu' ragione di restare
+      alloggio_provvisorio: hotelId ? null : (provvisorio.trim() || null),
       data_check_in: checkIn || null,
       tipo_stanza: tipoStanza || null,
       notti_prenotate: nottiNum,
@@ -7123,6 +7130,15 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
           {(hotel || []).map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
         </select>
       </Field>
+      {!hotelId && (
+        <Field label="Alloggio provvisorio (non ancora in Gestione Hotel)">
+          <input type="text" data-campo="alloggio-provvisorio" style={inputStyle} value={provvisorio} onChange={(e) => setProvvisorio(e.target.value)}
+            placeholder="es. B&B Da Maria, da confermare — oppure «appartamento della master»" />
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
+            Compare nella colonna Hotel in arancione, finché non scegli un hotel dalla tendina: allora si cancella da solo.
+          </div>
+        </Field>
+      )}
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Data check-in">
@@ -8138,8 +8154,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     onNota: (v) => salvaCampo(cd.id, "note", v),
                     viaggio: cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file"),
                     alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
-                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
+                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: (!valoreCampo(cd, "alloggio_id") && valoreCampo(cd, "alloggio_provvisorio")) ? "#B5651D" : NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || (valoreCampo(cd, "alloggio_provvisorio") ? `${valoreCampo(cd, "alloggio_provvisorio")} (provv.)` : "Gestisci")}
                       </button>
                     ),
                     pagato: cellaHotelPagato(cd, cd.id),
@@ -8168,8 +8184,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     onNota: (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "note", v),
                     viaggio: cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file"),
                     alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
-                        {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
+                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: (!valoreCampo(riga, "alloggio_id") && valoreCampo(riga, "alloggio_provvisorio")) ? "#B5651D" : NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+                        {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || (valoreCampo(riga, "alloggio_provvisorio") ? `${valoreCampo(riga, "alloggio_provvisorio")} (provv.)` : "Gestisci")}
                       </button>
                     ),
                     pagato: cellaHotelPagato(riga, cd.id),
@@ -86435,5 +86451,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio,
 };

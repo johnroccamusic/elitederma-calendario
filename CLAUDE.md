@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   64 file, 442 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   65 file, 444 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -765,6 +765,18 @@ la vendita **esce dalla busta** con la stessa logica della cancellazione
 appendici il suo importo scende; da carta a contanti **entra nel contante
 atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
 o nell'appendice. La riga lo dice **prima** di confermare.
+
+### L'alloggio provvisorio in Operativo corsi (28/10/2026)
+
+Da «Gestisci» della colonna Hotel, anche su un corso già stabilito, si può
+scrivere un **alloggio provvisorio**: un testo libero (`alloggio_provvisorio`
+su `corsi_date` e `corsi_date_docenti`) per una struttura non ancora in
+Gestione Hotel o un appunto «da confermare». Nella colonna compare in
+arancione con «(provv.)» al posto di «Gestisci». Il campo c'è solo finché
+nella tendina non è scelto un hotel: scelto l'hotel vero, il provvisorio si
+svuota al salvataggio. Non entra nei conti dell'alloggio (notti, pattuito,
+scadenze): quelli nascono dall'hotel a listino. Prove in
+`prove/alloggio-provvisorio.test.jsx`.
 
 ### Il POS si apre anche a un'assistente (28/10/2026)
 
