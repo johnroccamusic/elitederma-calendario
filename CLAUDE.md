@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   65 file, 444 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   66 file, 445 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -765,6 +765,19 @@ la vendita **esce dalla busta** con la stessa logica della cancellazione
 appendici il suo importo scende; da carta a contanti **entra nel contante
 atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
 o nell'appendice. La riga lo dice **prima** di confermare.
+
+### La cassa contanti si legge un mese alla volta (28/10/2026)
+
+Deciso dal titolare: chi usa la cassa non deve leggere «quanto è entrato
+e uscito in tutto». La sezione «Come si compone» — buste, vendite,
+versamenti, prelievi e spese sommati dall'apertura in poi — è sostituita
+da **«Il mese»**: frecce per scegliere il mese (dall'apertura a oggi), il
+**riporto dal mese precedente** (o il saldo all'apertura nel primo mese),
+i parziali di quel mese e il **saldo a fine mese**. Lo storico mostra solo
+i movimenti del mese scelto. Il **saldo in cassa** in cima resta: è il
+cassetto, e chi preleva deve saperlo. Ogni flusso ha la sua data: le buste
+quella del rientro, le vendite quella dell'ordine, le spese quella del
+pagamento. Prove in `prove/cassa-contanti-per-mese.test.jsx`.
 
 ### L'alloggio provvisorio in Operativo corsi (28/10/2026)
 

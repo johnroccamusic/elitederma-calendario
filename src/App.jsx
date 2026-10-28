@@ -47671,7 +47671,7 @@ function SegnalatoriContabilita({
   return <RigaSegnalatoriInLinea isMobile={isMobile} perRigaTelefono={3} riquadri={riquadri} style={style} />;
 }
 
-function PannelloCassaContanti({
+export function PannelloCassaContanti({
   corsi, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
   leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [], spese, venditeShop, ricarica, onApriClasse,
 }) {
@@ -47683,6 +47683,16 @@ function PannelloCassaContanti({
   // numero ha l'appendice aperta di ogni corso
   const [busteAppendici, setBusteAppendici] = useState([]);
   const [venditeSenzaCorso, setVenditeSenzaCorso] = useState(0);
+  // le stesse vendite, una per una con la data: servono alla vista per
+  // mese (28/10/2026)
+  const [elencoVenditeCassa, setElencoVenditeCassa] = useState([]);
+  // IL MESE CHE SI GUARDA. Deciso dal titolare il 28/10/2026: la cassa si
+  // legge un mese alla volta — riporto dal mese prima, entrate e uscite
+  // di quel mese, saldo a fine mese — e NON mostra piu' i totali di
+  // entrate e uscite dall'apertura in poi: chi usa la cassa deve vedere
+  // la contabilita' del mese, non quanto si e' guadagnato in tutto.
+  // Il saldo in cassa resta: e' il cassetto, non un ricavo.
+  const [meseVista, setMeseVista] = useState(() => dataOggiStr().slice(0, 7));
   const [speseDallaCassa, setSpeseDallaCassa] = useState(0);
   // non solo il totale: anche l'elenco, perche' "Spese pagate dalla cassa
   // − 3.027,00" da solo e' un numero cieco. Chi guarda la cassa vuole
@@ -47722,7 +47732,7 @@ function PannelloCassaContanti({
       // all'estero, e in cassaforte non c'e'; quando l'evento si chiude
       // viene consegnato insieme alla busta, ed entra. Stessa regola delle
       // spese, dalla parte opposta: l'evento si tira tutto insieme.
-      supabase.from("vendite_shop").select("totale, evento_id").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
+      supabase.from("vendite_shop").select("totale, evento_id, data_ordine").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
       supabase.from("spese").select("id, descrizione, totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
       supabase.from("eventi").select("id, stato"),
@@ -47733,7 +47743,9 @@ function PannelloCassaContanti({
     setBuste(bus.data || []);
     setBusteAppendici(app.data || []);
     const conclusi = new Set((eve.data || []).filter((e) => e.stato === "concluso").map((e) => e.id));
-    setVenditeSenzaCorso(round2((ven.data || []).filter((v) => !incassoDiEventoAperto(v, conclusi)).reduce((s, v) => s + (v.totale || 0), 0)));
+    const venditeCassa = (ven.data || []).filter((v) => !incassoDiEventoAperto(v, conclusi));
+    setVenditeSenzaCorso(round2(venditeCassa.reduce((s, v) => s + (v.totale || 0), 0)));
+    setElencoVenditeCassa(venditeCassa);
     const dallaCassa = (spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEventoAperto(x, conclusi));
     setSpeseDallaCassa(round2(dallaCassa.reduce((s, x) => s + (x.totale || 0), 0)));
     setElencoSpeseCassa(dallaCassa);
@@ -47749,6 +47761,44 @@ function PannelloCassaContanti({
   const prelievi = round2((movimenti || []).filter((m) => m.tipo === "prelievo").reduce((s, m) => s + (m.importo || 0), 0));
   const saldoIniziale = round2(Number(apertura?.saldo_iniziale) || 0);
   const saldo = round2(saldoIniziale + totaleBuste + venditeSenzaCorso + versamenti - prelievi - speseDallaCassa);
+
+  // IL CONTO DEL MESE. Ogni flusso con la sua data: le buste con il giorno
+  // in cui sono rientrate, le vendite con la data dell'ordine, i movimenti
+  // con la loro, le spese con il giorno del pagamento. Quello che sta
+  // prima del mese e' il riporto; quello che sta dentro sono i parziali.
+  const flussi = useMemo(() => [
+    ...buste.map((b) => ({ data: String(b.busta_rientrata_il || "").slice(0, 10), importo: Number(b.busta_importo) || 0, voce: "buste" })),
+    ...appendiciRientrate.map((b) => ({ data: String(b.rientrata_il || "").slice(0, 10), importo: Number(b.importo) || 0, voce: "buste" })),
+    ...elencoVenditeCassa.map((v) => ({ data: String(v.data_ordine || "").slice(0, 10), importo: Number(v.totale) || 0, voce: "vendite" })),
+    ...(movimenti || []).filter((m) => m.tipo === "versamento").map((m) => ({ data: String(m.data || "").slice(0, 10), importo: Number(m.importo) || 0, voce: "versamenti" })),
+    ...(movimenti || []).filter((m) => m.tipo === "prelievo").map((m) => ({ data: String(m.data || "").slice(0, 10), importo: -(Number(m.importo) || 0), voce: "prelievi" })),
+    ...elencoSpeseCassa.map((x) => ({ data: String(x.data_pagamento || "").slice(0, 10), importo: -(Number(x.totale) || 0), voce: "spese" })),
+  ], [buste, appendiciRientrate, elencoVenditeCassa, movimenti, elencoSpeseCassa]);
+  const inizioMese = `${meseVista}-01`;
+  const fineMese = `${meseVista}-31`;
+  const contoMese = useMemo(() => {
+    const prima = flussi.filter((f) => f.data && f.data < inizioMese);
+    const dentro = flussi.filter((f) => f.data >= inizioMese && f.data <= fineMese);
+    const somma = (lista, voce) => round2(lista.filter((f) => f.voce === voce).reduce((s, f) => s + Math.abs(f.importo), 0));
+    const riporto = round2(saldoIniziale + prima.reduce((s, f) => s + f.importo, 0));
+    const voci = {
+      buste: somma(dentro, "buste"), nBuste: dentro.filter((f) => f.voce === "buste").length,
+      vendite: somma(dentro, "vendite"),
+      versamenti: somma(dentro, "versamenti"), nVersamenti: dentro.filter((f) => f.voce === "versamenti").length,
+      prelievi: somma(dentro, "prelievi"), nPrelievi: dentro.filter((f) => f.voce === "prelievi").length,
+      spese: somma(dentro, "spese"),
+    };
+    const fine = round2(riporto + dentro.reduce((s, f) => s + f.importo, 0));
+    return { riporto, ...voci, fine };
+  }, [flussi, inizioMese, fineMese, saldoIniziale]);
+  const meseApertura = String(apertura?.aperta_il || "").slice(0, 7);
+  const meseCorrente = dataOggiStr().slice(0, 7);
+  const spostaMese = (passo) => {
+    const [a, m] = meseVista.split("-").map(Number);
+    const d = new Date(a, m - 1 + passo, 1);
+    setMeseVista(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const etichettaMese = (ym) => { const [a, m] = ym.split("-").map(Number); return `${MESI[m - 1]} ${a}`; };
   // il fondo cassa non e' un numero scritto a mano: e' quanto serve ogni
   // mese per le spese che si pagano in contanti
   const fondoMinimo = round2(ricorrenti.reduce((s, r) => s + (r.importo_mensile || 0), 0));
@@ -47894,6 +47944,9 @@ function PannelloCassaContanti({
       motivo: x.descrizione || "Spesa", importo: x.totale, soloLettura: true,
     })),
   ].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+  // solo il mese che si guarda: lo storico intero dall'apertura e' il
+  // totale sotto un altro nome
+  const storicoMese = storico.filter((m) => { const d = String(m.data || "").slice(0, 10); return d >= inizioMese && d <= fineMese; });
   return (
     <div>
       {/* i numeri della cassa su una riga sola, telefono compreso: si
@@ -48014,31 +48067,40 @@ function PannelloCassaContanti({
         </div>
       )}
 
-      {/* da dove viene il saldo, riga per riga: una cassa che mostra solo il
-          totale non si puo' controllare */}
-      <div style={{ ...cardStyle, marginBottom: 14 }}>
-        <TitoloSezioneRiepilogo grande>Come si compone</TitoloSezioneRiepilogo>
-        {/* Detto a voce alta perche' altrimenti e' una regola invisibile:
-            riconciliando a settembre una fattura pagata in contanti a
-            luglio, quella non deve scalare niente da questa cassa — la
-            cassa a luglio non esisteva, e quel contante e' gia' dentro il
-            saldo di apertura. Tutte le letture qui sopra partono da quella
-            data, ma chi guarda il totale non ha modo di saperlo. */}
-        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, color: MUTED, marginBottom: 8, lineHeight: 1.4 }}>
-          Si conta solo da{apertura?.aperta_il ? ` ${fmtData(apertura.aperta_il)}` : "l'apertura"} in poi. Quello che è successo prima — spese pagate, buste rientrate, vendite — non entra qui: è già dentro il saldo all'apertura.
+      {/* IL MESE, NON IL TOTALE (28/10/2026). Prima qui c'era «Come si
+          compone»: buste, vendite, versamenti, prelievi e spese sommati
+          dall'apertura in poi — cioe' quanto era entrato e uscito in tutto.
+          Il titolare non vuole che chi usa la cassa legga quel numero: si
+          vede un mese alla volta, con il riporto dal mese prima, i parziali
+          del mese e il saldo a fine mese. Il saldo in cassa, in cima, resta:
+          e' il cassetto, e chi preleva deve saperlo. */}
+      <div data-campo="cassa-mese" style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <TitoloSezioneRiepilogo grande>Il mese</TitoloSezioneRiepilogo>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button type="button" onClick={() => spostaMese(-1)} disabled={!!meseApertura && meseVista <= meseApertura} aria-label="Mese precedente"
+              style={{ ...fontBody, fontSize: 14, fontWeight: 700, width: 32, height: 32, borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", opacity: (!!meseApertura && meseVista <= meseApertura) ? 0.35 : 1 }}>‹</button>
+            <span data-campo="mese-vista" style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, minWidth: 130, textAlign: "center", textTransform: "capitalize" }}>{etichettaMese(meseVista)}</span>
+            <button type="button" onClick={() => spostaMese(1)} disabled={meseVista >= meseCorrente} aria-label="Mese successivo"
+              style={{ ...fontBody, fontSize: 14, fontWeight: 700, width: 32, height: 32, borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", opacity: meseVista >= meseCorrente ? 0.35 : 1 }}>›</button>
+          </div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12, color: MUTED, margin: "4px 0 8px", lineHeight: 1.4 }}>
+          Il riporto è il saldo con cui il mese è cominciato; sotto, solo quello che è entrato e uscito in questo mese.
         </div>
         {[
-          { voce: `Saldo all'apertura (${apertura?.aperta_il ? fmtData(apertura.aperta_il) : "—"})`, importo: saldoIniziale, segno: 1 },
-          { voce: `Buste rientrate dai corsi (${buste.length + appendiciRientrate.length})`, importo: totaleBuste, segno: 1 },
-          { voce: "Vendite in contanti al banco, fuori dai corsi", importo: venditeSenzaCorso, segno: 1 },
-          { voce: `Versamenti (${storico.filter((m) => m.tipo === "versamento").length})`, importo: versamenti, segno: 1 },
-          { voce: `Prelievi (${storico.filter((m) => m.tipo === "prelievo").length})`, importo: prelievi, segno: -1 },
-          { voce: "Spese pagate dalla cassa", importo: speseDallaCassa, segno: -1 },
+          { voce: meseApertura && meseVista <= meseApertura ? `Saldo all'apertura (${fmtData(apertura.aperta_il)})` : "Riporto dal mese precedente", importo: contoMese.riporto, segno: 0 },
+          { voce: `Buste rientrate dai corsi (${contoMese.nBuste})`, importo: contoMese.buste, segno: 1 },
+          { voce: "Vendite in contanti al banco, fuori dai corsi", importo: contoMese.vendite, segno: 1 },
+          { voce: `Versamenti (${contoMese.nVersamenti})`, importo: contoMese.versamenti, segno: 1 },
+          { voce: `Prelievi (${contoMese.nPrelievi})`, importo: contoMese.prelievi, segno: -1 },
+          { voce: "Spese pagate dalla cassa", importo: contoMese.spese, segno: -1 },
+          { voce: `Saldo a fine ${etichettaMese(meseVista).toLowerCase()}`, importo: contoMese.fine, segno: 0, forte: true },
         ].map((r) => (
-          <div key={r.voce} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY }}>
+          <div key={r.voce} data-campo={r.forte ? "saldo-fine-mese" : undefined} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY, fontWeight: r.forte ? 700 : 400 }}>
             <span style={{ minWidth: 0 }}>{r.voce}</span>
-            <span style={{ fontWeight: 700, whiteSpace: "nowrap", color: r.segno < 0 ? "#C0392B" : "#2E7D32" }}>
-              {r.segno < 0 ? "−" : "+"} {euroRiepilogo(r.importo)}
+            <span style={{ fontWeight: 700, whiteSpace: "nowrap", color: r.segno < 0 ? "#C0392B" : r.segno > 0 ? "#2E7D32" : NAVY }}>
+              {r.segno < 0 ? "− " : r.segno > 0 ? "+ " : ""}{euroRiepilogo(r.importo)}
             </span>
           </div>
         ))}
@@ -48118,10 +48180,10 @@ function PannelloCassaContanti({
       {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
 
       <div style={cardStyle}>
-        <TitoloSezioneRiepilogo grande>Storico movimenti della cassa</TitoloSezioneRiepilogo>
+        <TitoloSezioneRiepilogo grande>Movimenti di {etichettaMese(meseVista).toLowerCase()}</TitoloSezioneRiepilogo>
         {movimenti == null ? <RigaCassaVuota testo="Carico…" />
-          : storico.length === 0 ? <RigaCassaVuota testo="Nessun prelievo, versamento o spesa pagata dalla cassa." />
-          : storico.map((m) => (
+          : storicoMese.length === 0 ? <RigaCassaVuota testo="Nessun prelievo, versamento o spesa pagata dalla cassa in questo mese." />
+          : storicoMese.map((m) => (
             <div key={m.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "auto 1fr auto 28px" : "110px 120px 1fr 130px 32px", gap: 8, alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
               <div style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: MUTED, whiteSpace: "nowrap" }}>{fmtData(m.data)}</div>
               {!isMobile && (
