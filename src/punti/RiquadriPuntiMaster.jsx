@@ -31,6 +31,11 @@ export function usePuntiMaster(masterId) {
   useEffect(() => {
     let vivo = true;
     if (!masterId) { setDati(null); return undefined; }
+    // un'assistente sfogliata dalla dashboard arriva come «ass:<id>»: non
+    // e' una master e non ha punti suoi. Chiedere alla vista con quell'id
+    // era una richiesta rifiutata (400) a ogni apertura — trovata nei log
+    // il 28/10/2026 — e la scheda mostrava gli zeri per il motivo sbagliato
+    if (String(masterId).startsWith("ass:")) { setDati(VUOTO); return undefined; }
     (async () => {
       const { data, error } = await supabase
         .from("v_punti_master")
@@ -62,6 +67,7 @@ export function useCarrelliPuntiMaster(masterId, attivo) {
   useEffect(() => {
     let vivo = true;
     if (!masterId || !attivo) { setRighe(null); return undefined; }
+    if (String(masterId).startsWith("ass:")) { setRighe([]); return undefined; }
     (async () => {
       const { data, error } = await supabase
         .from("v_punti_master_righe")
