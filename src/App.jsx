@@ -11448,14 +11448,26 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
             Quanto le spetta, mese per mese. L'analisi (iscrizioni, pattuito, percentuale) sta in Setting → Quota coordinatore.
           </div>
           {/* SOLO MESE E QUOTA (28/10/2026): chi la prende vede quanto le
-              spetta, non da quante iscrizioni e su quale pattuito */}
+              spetta, non da quante iscrizioni e su quale pattuito. I mesi
+              passati con il loro importo; il mese in corso come «maturato
+              a oggi», perche' sta ancora crescendo; i mesi futuri non si
+              vedono — li' niente e' maturato. */}
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
-            {mesiCoordinatore.map((m) => (
-              <div key={m.chiave} data-campo="coord-mese" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, minHeight: 34, padding: "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: NAVY, fontWeight: 600 }}>{nomeMese(m.chiave)}</span>
-                <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(m.quota)}</span>
-              </div>
-            ))}
+            {(() => {
+              const oggi = dataOggiStr();
+              const passati = mesiCoordinatore.filter((m) => m.chiave < meseCorrente);
+              const corrente = mesiCoordinatore.find((m) => m.chiave === meseCorrente);
+              const righe = [
+                ...passati.map((m) => ({ chiave: m.chiave, etichetta: nomeMese(m.chiave), quota: m.quota })),
+                { chiave: meseCorrente, etichetta: `Maturato al ${fmtData(oggi)}`, quota: corrente?.quota || 0, corrente: true },
+              ];
+              return righe.map((r) => (
+                <div key={r.chiave} data-campo="coord-mese" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, minHeight: 34, padding: "0 12px", borderBottom: `1px solid ${CREAM_BORDER}`, background: r.corrente ? "#FBF8F0" : "transparent" }}>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12.5, color: NAVY, fontWeight: r.corrente ? 700 : 600 }}>{r.etichetta}</span>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.quota)}</span>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}
