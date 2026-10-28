@@ -695,6 +695,33 @@ const PERCENTUALI_EURO_PUNTI_DEFAULT = { posShop: 15, cash: 20, eventoPosShop: 8
 // percentuale dei punti totali prodotto, in euro (un punto e' un euro).
 // Le percentuali si scrivono in cima alle colonne e restano per tutti
 const CHIAVE_QUOTE_COLONNE_PUNTI = "dettaglioProdotti_quoteColonnePunti";
+// LA QUOTA COORDINATORE, intestata a una persona (28/10/2026). Era gia'
+// esistita dal 01/10 al 14/10 come «percentuale del coordinatore» senza
+// nome, e si confondeva con la quota venditore. Il titolare l'ha
+// rivoluta cosi': una persona (Elena), una percentuale sul pattuito di
+// OGNI iscrizione, da una data in poi, e una scheda sua — separata — in
+// Commissioni sui corsi. Non e' un costo della classe.
+const CHIAVE_QUOTA_COORDINATORE = "quota_coordinatore";
+const QUOTA_COORDINATORE_DEFAULT = { personaNome: "", percentuale: 0, dal: "" };
+// Per mese di inizio corso: iscrizioni, pattuito e quota del coordinatore.
+// Vale per le classi che cominciano da `dal` in poi; prima, zero.
+function quotaCoordinatorePerMese(iscritti, corsiDate, impostazione) {
+  const pct = Number(impostazione?.percentuale) || 0;
+  const dal = String(impostazione?.dal || "");
+  if (!(pct > 0) || !String(impostazione?.personaNome || "").trim()) return [];
+  const perMese = new Map();
+  (iscritti || []).forEach((i) => {
+    const cd = (corsiDate || []).find((c) => c.id === i.corso_data_id);
+    if (!cd?.data_inizio || (dal && cd.data_inizio < dal)) return;
+    const chiave = cd.data_inizio.slice(0, 7);
+    const m = perMese.get(chiave) || { chiave, iscritti: 0, pattuito: 0, quota: 0 };
+    m.iscritti += 1;
+    m.pattuito = round2(m.pattuito + (Number(i.totale_pattuito) || 0));
+    m.quota = round2(m.quota + round2((Number(i.totale_pattuito) || 0) * pct / 100));
+    perMese.set(chiave, m);
+  });
+  return [...perMese.values()].sort((a, b) => a.chiave.localeCompare(b.chiave));
+}
 const QUOTE_COLONNE_PUNTI_DEFAULT = [25, 30, 50];
 // Il margine operativo (21/09/2026): una fetta del prezzo netto di
 // vendita che si mette da parte prima di ragionare sul resto. La
@@ -11265,6 +11292,11 @@ function nomeMese(chiave) {
 
 function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile }) {
   const [liquidazioni, setLiquidazioni] = useState(null);
+  // la quota coordinatore, se qualcuno l'ha accesa in Setting: una scheda
+  // sua, in cima, separata dalla quota venditore
+  const [quotaCoordSalvata] = useImpostazioneCondivisa(CHIAVE_QUOTA_COORDINATORE, QUOTA_COORDINATORE_DEFAULT);
+  const quotaCoord = { ...QUOTA_COORDINATORE_DEFAULT, ...(quotaCoordSalvata || {}) };
+  const mesiCoordinatore = useMemo(() => quotaCoordinatorePerMese(iscritti, corsiDate, quotaCoord), [iscritti, corsiDate, quotaCoord.personaNome, quotaCoord.percentuale, quotaCoord.dal]); // eslint-disable-line react-hooks/exhaustive-deps
   const [msg, setMsg] = useState("");
   const [inCorso, setInCorso] = useState("");
 
@@ -11408,6 +11440,28 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
   return (
     <div>
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>{msg}</div>}
+
+      {mesiCoordinatore.length > 0 && (
+        <div data-campo="quota-coordinatore" style={{ ...cardStyle, marginBottom: 14, borderLeft: `4px solid ${GOLD}`, padding: isMobile ? "12px 10px" : "16px 16px" }}>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY }}>Quota coordinatore — {quotaCoord.personaNome}</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, margin: "2px 0 10px" }}>
+            {String(quotaCoord.percentuale).replace(".", ",")}% del pattuito di ogni iscrizione{quotaCoord.dal ? `, dai corsi che iniziano dal ${fmtData(quotaCoord.dal)}` : ""}. Si cambia da Setting → Quota coordinatore.
+          </div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 110px 100px", gap: 8, background: "#F4F4F6", borderBottom: `1px solid ${CREAM_BORDER}`, minHeight: 30, alignItems: "center", padding: "0 12px" }}>
+              <div style={intest}>Mese</div><div style={{ ...intest, textAlign: "center" }}>Isc.</div><div style={{ ...intest, textAlign: "right" }}>Pattuito</div><div style={{ ...intest, textAlign: "right" }}>Quota</div>
+            </div>
+            {mesiCoordinatore.map((m) => (
+              <div key={m.chiave} data-campo="coord-mese" style={{ display: "grid", gridTemplateColumns: "1fr 60px 110px 100px", gap: 8, alignItems: "center", minHeight: 32, padding: "0 12px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10 : 11.5, color: NAVY, fontWeight: 600 }}>{nomeMese(m.chiave)}</span>
+                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, textAlign: "center" }}>{m.iscritti}</span>
+                <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.pattuito)}</span>
+                <span style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700, color: NAVY, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroErp2(m.quota)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {aperti.length === 0 ? (
         <div style={{ ...cardStyle, textAlign: "center", padding: 34, color: MUTED, ...fontBody, fontSize: 13.5 }}>
@@ -19357,6 +19411,41 @@ function IntestazioneSocieta({ intestazione, ricarica }) {
 // "Commissioni sui corsi" nella dashboard del venditore. Non si regola da
 // nessuna parte in Impostazioni, perche' non e' una percentuale che si
 // decide: e' 7% del pattuito, minimo 50 euro, arrotondata ai 5.
+// La scheda in Setting: chi e' il coordinatore, quanto prende, da quando.
+// Si salva con un tasto, non da sola: e' un compenso, e una percentuale
+// cambiata per sbaglio uscendo dal campo nessuno se ne accorge.
+function ImpostazioniQuotaCoordinatore({ venditori = [], master = [] }) {
+  const [salvata, salva] = useImpostazioneCondivisa(CHIAVE_QUOTA_COORDINATORE, QUOTA_COORDINATORE_DEFAULT);
+  const corrente = { ...QUOTA_COORDINATORE_DEFAULT, ...(salvata || {}) };
+  const [persona, setPersona] = useState(corrente.personaNome || "");
+  const [pct, setPct] = useState(corrente.percentuale ? String(corrente.percentuale).replace(".", ",") : "");
+  const [dal, setDal] = useState(corrente.dal || "");
+  const [msg, setMsg] = useState("");
+  useEffect(() => { setPersona(corrente.personaNome || ""); setPct(corrente.percentuale ? String(corrente.percentuale).replace(".", ",") : ""); setDal(corrente.dal || ""); }, [salvata]); // eslint-disable-line react-hooks/exhaustive-deps
+  const persone = [...new Set([...(venditori || []).map((v) => v.nome), ...(master || []).map((m) => m.nome)].filter(Boolean).map((n) => String(n).toUpperCase()))].sort();
+  const n = parseNum(pct);
+  const valida = !!persona && Number.isFinite(n) && n >= 0 && n <= 100;
+  return (
+    <div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.5, marginBottom: 12 }}>
+        Una percentuale sul pattuito di <b style={{ color: NAVY }}>ogni iscrizione</b> dei corsi che cominciano dalla data scritta qui, intestata a una persona. Compare in Commissioni sui corsi in una scheda sua, separata dalla quota venditore. Spenta con lo 0.
+      </div>
+      <Field label="Coordinatore">
+        <select data-campo="coord-persona" style={inputStyle} value={persona} onChange={(e) => setPersona(e.target.value)}>
+          <option value="">— nessuno —</option>
+          {persone.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><Field label="Percentuale sul pattuito"><input data-campo="coord-pct" style={inputStyle} inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="es. 0,5" /></Field></div>
+        <div style={{ flex: 1 }}><Field label="Vale dai corsi che iniziano dal"><input data-campo="coord-dal" type="date" style={inputStyle} value={dal} onChange={(e) => setDal(e.target.value)} /></Field></div>
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginBottom: 8 }}>{msg}</div>}
+      <Button disabled={!valida} onClick={() => { salva({ personaNome: persona, percentuale: n, dal: dal || "" }); setMsg(`Salvato: ${persona}, ${String(n).replace(".", ",")}% del pattuito${dal ? ` dai corsi dal ${fmtData(dal)}` : ""}.`); }} style={{ width: "100%" }}>Salva</Button>
+    </div>
+  );
+}
+
 function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, intestazioneSocieta, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSlideCorsi, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, onApriModuloIscrizione, registraInterceptaIndietro, titolo = "Setting", senzaIntestazione = false }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
@@ -19398,6 +19487,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
   const [showIntestazioneModal, setShowIntestazioneModal] = useState(false);
   const [showNotificheModal, setShowNotificheModal] = useState(false);
   const [showModelliEmailModal, setShowModelliEmailModal] = useState(false);
+  const [showQuotaCoordinatoreModal, setShowQuotaCoordinatoreModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
@@ -19412,7 +19502,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal], [showIntestazioneModal, setShowIntestazioneModal],
-      [showNotificheModal, setShowNotificheModal], [showModelliEmailModal, setShowModelliEmailModal],
+      [showNotificheModal, setShowNotificheModal], [showModelliEmailModal, setShowModelliEmailModal], [showQuotaCoordinatoreModal, setShowQuotaCoordinatoreModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -19644,6 +19734,7 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       chiave: "corsi", titolo: "Corsi", coloreBg: "#EDE4F5", Icona: IconaCorsoRiga,
       voci: [
         { chiave: "slidecorsi", etichetta: "Associa slide del corso", Icona: IconaDiplomaRiga, onClick: onApriSlideCorsi },
+        { chiave: "quotacoordinatore", etichetta: "Quota coordinatore", Icona: IconaTargetRiga, onClick: () => setShowQuotaCoordinatoreModal(true) },
       ],
     },
     {
@@ -20001,6 +20092,12 @@ function Impostazioni({ ruoloUtente, utenteLoggato = null, corsi, location, setL
       {showModelliEmailModal && (
         <Modal title="Modelli email" onClose={() => setShowModelliEmailModal(false)} maxWidth={760}>
           <ModelliEmail componi={componiMailConferma} />
+        </Modal>
+      )}
+
+      {showQuotaCoordinatoreModal && (
+        <Modal title="Quota coordinatore" onClose={() => setShowQuotaCoordinatoreModal(false)} maxWidth={520}>
+          <ImpostazioniQuotaCoordinatore venditori={venditori} master={master} />
         </Modal>
       )}
 
@@ -86567,5 +86664,5 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
 };

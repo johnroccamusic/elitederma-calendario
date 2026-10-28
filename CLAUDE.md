@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   66 file, 445 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   67 file, 448 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -765,6 +765,21 @@ la vendita **esce dalla busta** con la stessa logica della cancellazione
 appendici il suo importo scende; da carta a contanti **entra nel contante
 atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
 o nell'appendice. La riga lo dice **prima** di confermare.
+
+### La quota coordinatore, intestata a una persona (28/10/2026)
+
+Esisteva dal 1° al 14 ottobre come «percentuale del coordinatore» senza
+nome (0,25%, poi 0,5%) e si confondeva con la quota venditore: tolta il
+14/10. Il titolare l'ha rivoluta, **di qualcuno**: in **Setting → Corsi →
+Quota coordinatore** si scelgono la persona (Elena), la percentuale sul
+pattuito di ogni iscrizione e da quale data di inizio corso vale; si
+salva in `impostazioni_layout_tabelle` (`quota_coordinatore`), con un
+tasto e non da sola. In **Commissioni sui corsi** — anche nella Dashboard
+venditori, dov'è la scheda che Elena legge — compare in cima una scheda
+sua, separata: mese per mese iscrizioni, pattuito e quota. Il calcolo è
+`quotaCoordinatorePerMese`, vivo (non congelato), e **non è un costo
+della classe**. Impostato il 28/10/2026: Elena, 0,5%, corsi dal
+01/10/2026. Prove in `prove/quota-coordinatore.test.jsx`.
 
 ### La cassa contanti si legge un mese alla volta (28/10/2026)
 
