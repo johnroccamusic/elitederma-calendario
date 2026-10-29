@@ -90,6 +90,7 @@ import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaMod
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
+import { referralDiOggi, eSpento, ultimoGiornoDelMese, giornoRoma } from "../supabase/functions/_shared/referralMensile.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -14454,8 +14455,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // quale arrivava prima.
   function codiciMaster() {
     if (!masterSel) return null;
-    const suoi = (coupon || []).filter((c) => c.master_id === masterSel.id && !c.corsi_date_id);
-    const referral = suoi.find((c) => c.serie_regole !== "acquisto_master");
+    const suoi = (coupon || []).filter((c) => c.master_id === masterSel.id && !c.corsi_date_id && !eSpento(c));
+    // il referral cambia ogni mese: si mostra quello che vale oggi, mai
+    // uno gia' ritirato (la riga resta per i punti, ma non e' piu' suo)
+    const referral = referralDiOggi(coupon, masterSel.id, giornoRoma());
     const acquisti = suoi.find((c) => c.serie_regole === "acquisto_master");
     if (!referral && !acquisti) return null;
     const pillola = (testo, codice, sotto) => (
@@ -14479,7 +14482,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
          leggono come la coppia che sono. Il testo dentro si stringe
          (minmax 0) invece di spingere la riga */
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, alignItems: "stretch", marginBottom: 16 }}>
-        {referral && pillola("Il tuo referral code personale è:", referral.codice, "Quello che dai ai clienti")}
+        {referral && pillola("Il tuo referral code personale è:", referral.codice,
+          referral.valido_fino_a ? `Quello che dai ai clienti · vale fino al ${fmtData(referral.valido_fino_a)}, poi ne arriva uno nuovo` : "Quello che dai ai clienti")}
         {acquisti && pillola("Il coupon code per i tuoi acquisti personali è:", acquisti.codice, "Quello con cui compri tu, al listino master")}
       </div>
     );
@@ -23338,7 +23342,7 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
   const couponEdizione = c?.corsoPosId ? (coupon || []).find((x) => x.corsi_date_id === c.corsoPosId) : null;
   const codiceScritto = String(c?.couponCodiceTesto || "").trim().toUpperCase();
   const couponScritto = !couponEdizione && codiceScritto
-    ? (coupon || []).find((x) => String(x.codice || "").trim().toUpperCase() === codiceScritto) || null
+    ? (coupon || []).find((x) => String(x.codice || "").trim().toUpperCase() === codiceScritto && !eSpento(x)) || null
     : null;
   const couponAttivo = couponEdizione || couponScritto;
   // un codice personale (della master, senza classe) non segue la serie
@@ -42051,7 +42055,9 @@ function SchedaFasceReferralPersonale({ prodottiShop, coupon, ricarica, isMobile
     // la riga di base: sul coupon e sul sito viaggia quella, le fasce di
     // spesa le applica il POS che il carrello ce l'ha
     const fasce = fasceScontoValide(gruppiFasceValidi(regolaReferralMaster?.fasce).gruppi[0]);
-    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && codiceSuTuttoIlCatalogo(c));
+    // non i ritirati: sul sito non esistono piu', e riscriverli vorrebbe
+    // dire contare un errore per ognuno
+    const personali = (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && codiceSuTuttoIlCatalogo(c) && !eSpento(c));
     if (personali.length === 0) { setMsgCodiciPersonali("Nessun codice personale da aggiornare."); return; }
     // una pressione sola, e il conto vero: vedi la gemella dei codici d'aula
     setApplicandoAiCodici(true);
@@ -42870,9 +42876,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   }
 
   // ---------- tab "Genera referral code" ----------
-  // un referral code per master, per sempre (non uno per corso): la
-  // lista mostra chi ne ha già uno e chi no, generarne uno nuovo lo crea
-  // subito su WooCommerce con le regole del template automatico
+  // un referral code per master, che dal 28/10/2026 dura un mese di
+  // calendario: il primo del mese ruota-referral-master gliene fa uno
+  // nuovo e spegne il vecchio. La lista mostra chi ha il codice di questo
+  // mese e chi no; generarne uno lo crea subito su WooCommerce
   // il margine del carrello tipico: serve a tradurre in percentuale sul
   // lordo uno sconto pensato sul margine, perche' WooCommerce sa fare
   // solo quello
@@ -42888,8 +42895,14 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     // nessuna edizione come il referral, ma servono all'opposto - uno
     // sconta ai suoi clienti, l'altro sconta a lei. Senza questa riga
     // generare l'uno faceva sparire il tasto dell'altro.
-    (coupon || []).filter((c) => c.master_id && !c.corsi_date_id && c.serie_regole !== "acquisto_master")
-      .forEach((c) => { mappa[c.master_id] = c; });
+    // e solo quello che vale oggi: i referral dei mesi passati restano
+    // nella tabella per i punti, ma qui spariscono — altrimenti una master
+    // il cui codice non e' rinato risulterebbe servita da un codice spento
+    const oggi = giornoRoma();
+    [...new Set((coupon || []).map((c) => c.master_id).filter(Boolean))].forEach((id) => {
+      const c = referralDiOggi(coupon, id, oggi);
+      if (c) mappa[id] = c;
+    });
     return mappa;
   }, [coupon]);
   const couponAcquistoPerMasterId = useMemo(() => {
@@ -42928,38 +42941,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     const sceltaSconto = { percentuale: percentualeWooDaFasce(prodottiShop, fasceReferral), base: "lordo" };
     setMasterCreandoId(m.id); setMsg("");
     const codiceScelto = (codiceProposto[m.id] || (await generaCodiceReferralUnivoco(m.nome))).toLowerCase();
-    // nel registro PRIMA di creare il coupon vero: se qualcosa fallisce dopo,
-    // il codice resta comunque bruciato per sempre, mai riassegnato
-    const { error: erroreRegistro } = await supabase.from("codici_emessi").insert({ codice: codiceScelto, origine: "manuale", master_id: m.id, corsi_date_id: null });
-    if (erroreRegistro) { setMasterCreandoId(null); setMsgTipo("errore"); setMsg("Errore registro codici: " + erroreRegistro.message); return; }
-    const r = regoleReferralAutomatico;
-    const { data: riga, error: erroreInsert } = await supabase.from("coupon").insert({
-      codice: codiceScelto,
-      descrizione: `Referral — ${m.nome}`,
-      tipo_sconto: "percent",
-      base_sconto: sceltaSconto.base,
-      valore: sceltaSconto.percentuale,
-      // a fasce il "valore" e' gia' la media sul lordo, quindi coincide
-      valore_woo: sceltaSconto.percentuale,
-      tipo_regola_sconto: "fasce",
-      fasce_sconto: fasceReferral,
-      valido_da: null,
-      valido_fino_a: null,
-      ambito: "tutto",
-      utilizzi_max: r.utilizzi_max,
-      utilizzi_max_per_utente: r.utilizzi_max_per_cliente,
-      spesa_minima: r.spesa_minima,
-      non_cumulabile: r.non_cumulabile,
-      stato: "bozza",
-      master_id: m.id,
-      generato_da_cron: false,
-      creato_da: "manuale",
-    }).select().single();
-    if (erroreInsert || !riga) { setMasterCreandoId(null); setMsgTipo("errore"); setMsg("Errore: " + testoErrore(erroreInsert)); return; }
-    const { data, error: erroreAttiva } = await supabase.functions.invoke("woo-crea-coupon", { body: { couponId: riga.id } });
+    // Registro, riga, sito e scadenza li fa ruota-referral-master, la
+    // stessa strada dei codici che rinascono il primo del mese: la
+    // scadenza sul sito si scrive diversa da come la scriviamo noi, e
+    // due strade vorrebbero dire due istanti diversi in cui un codice
+    // smette di valere. Lo sconto e il codice restano scelti qui.
+    const { data, error: erroreFunzione } = await supabase.functions.invoke("ruota-referral-master", {
+      body: { masterId: m.id, codice: codiceScelto, valore: sceltaSconto.percentuale, fasce: fasceReferral },
+    });
     setMasterCreandoId(null);
-    if (erroreAttiva || data?.errore) { setMsgTipo("errore"); setMsg("Coupon salvato ma non creato su WooCommerce: " + (data?.errore || erroreAttiva.message)); ricarica(["coupon"]); return; }
-    setMsgTipo("successo"); setMsg(`Referral code "${codiceScelto.toUpperCase()}" creato per ${toTitleCase(m.nome)}.`);
+    if (erroreFunzione || data?.errore) { setMsgTipo("errore"); setMsg("Referral non creato: " + (data?.errore || erroreFunzione.message)); ricarica(["coupon"]); return; }
+    setMsgTipo("successo"); setMsg(`Referral code "${codiceScelto.toUpperCase()}" creato per ${toTitleCase(m.nome)}, valido fino al ${fmtData(data?.validoFinoA || ultimoGiornoDelMese(giornoRoma()))}.`);
     setCodiceProposto((prev) => { const n = { ...prev }; delete n[m.id]; return n; });
     ricarica(["coupon"]);
   }
@@ -43296,7 +43288,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
         {tab === "referral" && (
           <div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
-              Un referral code per master, per sempre: crealo una volta, da quel momento le vendite fatte con quel codice risulteranno nella sua dashboard.
+              Un referral code per master, che vale fino alla fine del mese: il primo di ogni mese ne nasce uno nuovo con lo stesso sconto, e il vecchio smette di funzionare e sparisce, anche dal sito. Le vendite fatte con i codici passati restano nella sua dashboard.
             </div>
             {/* Qui la regola e' una sola: lo sconto a fasce. Una
                 percentuale per master non aveva senso — un prodotto che
@@ -43331,6 +43323,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{esistente.codice}</span>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: (ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).colore, borderRadius: 20, padding: "2px 9px" }}>{(ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).testo}</span>
+                      {esistente.valido_fino_a && <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>fino al {fmtData(esistente.valido_fino_a)}</span>}
                     </div>
                   ) : codiceProposto[m.id] ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -70482,6 +70475,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     const oggi = dataOggiStr();
     return (coupon || []).find((c) => {
       if (String(c.codice || "").trim().toLowerCase() !== cercato) return false;
+      // ritirato: il referral del mese scorso, spento anche sul sito
+      if (eSpento(c)) return false;
       if (c.valido_da && oggi < c.valido_da) return false;
       if (c.valido_fino_a && oggi > c.valido_fino_a) return false;
       return true;
@@ -70500,18 +70495,15 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // codice i punti si riducono come per ogni sconto dato
   const couponReferralPersonale = (() => {
     if (operatore?.tipo !== "master") return null;
-    const oggi = dataOggiStr();
     // il REFERRAL, non il codice d'acquisto: vivono nella stessa tabella
     // e sono tutti e due "suoi e senza edizione", a distinguerli e' solo
-    // la serie. Senza il filtro usciva quello che capitava.
-    return (coupon || []).find((c) => c.master_id === operatore.id && !c.corsi_date_id && c.codice
-      && c.serie_regole !== "acquisto_master"
-      // e NON un codice ristretto a certe categorie. Tommaso Giumbini ha
-      // "need30" — il 30% sui soli prodotti da needling, suo e senza
-      // edizione come il referral — e usciva quello al posto di TG997U:
-      // il POS gli offriva come codice personale uno sconto d'aula.
-      && codiceSuTuttoIlCatalogo(c)
-      && !(c.valido_da && oggi < c.valido_da) && !(c.valido_fino_a && oggi > c.valido_fino_a)) || null;
+    // la serie. E NON un codice ristretto a certe categorie: Tommaso
+    // Giumbini ha "need30" — il 30% sui soli prodotti da needling, suo e
+    // senza edizione come il referral — e usciva quello al posto di
+    // TG997U. Tutte e due le esclusioni stanno in eReferralPersonale.
+    // Dal 28/10/2026 il referral cambia ogni mese: quello di questo mese,
+    // non il primo che capita fra il nuovo e i ritirati.
+    return referralDiOggi(coupon, operatore.id, dataOggiStr());
   })();
   // IL CODICE CON CUI LA MASTER COMPRA PER SE'.
   // Non e' una vendita a un cliente: non matura provvigione, ma i punti
