@@ -29710,8 +29710,17 @@ function PannelloRiepilogoAmministrativo({
   //
   // Non si cancellano da soli: un impegno e' un debito, e sparire da
   // solo e' peggio che restare. Si mostrano, e si tolgono premendo.
+  //
+  // Viva vuol dire che la riga ha ancora contanti da pagare, e basta.
+  // Prima bastava anche che fosse "rinviata" o "pagata": ma rinviata lo
+  // diventa proprio perche' l'impegno esiste, quindi un impegno teneva in
+  // vita se stesso. E' successo su LAMINAZIONE BASE Udine 28/10: Disponi
+  // aveva rinviato i 150 in contanti della master (meta' e meta', il
+  // default), poi la riga e' passata a B con 300 a bonifico, e i 150
+  // sono rimasti nello scadenziario accanto ai 300 senza che niente lo
+  // dicesse - 450 per un compenso da 300.
   const chiaviVive = new Set([
-    ...righeSpeseTutte.filter((r) => (r.cash || 0) > 0 || r.cashRinviato || r.cashPagato).map((r) => chiaveCashRiga(r)),
+    ...righeSpeseTutte.filter((r) => (r.cash || 0) > 0).map((r) => chiaveCashRiga(r)),
     ...venditoriDecisi.filter((v) => v.suoCash > 0).map((v) => `cash_venditore_${v.rigaId}`),
   ]);
   const impegniOrfani = (impegni || []).filter((x) =>
@@ -30757,7 +30766,7 @@ function PannelloRiepilogoAmministrativo({
                         </div>
                       ))}
                       <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", lineHeight: 1.45, marginTop: 4 }}>
-                        Succede quando si toglie la quota di un venditore, o si cambia il tutor di un'allieva, dopo averla mandata
+                        Succede quando si toglie la quota di un venditore, si cambia il tutor di un'allieva o si passa una riga tutta a bonifico, dopo averla mandata
                         nello scadenziario. Non si cancella da sola: un impegno è un debito, e sparire da solo sarebbe peggio
                         che restare.
                       </div>
