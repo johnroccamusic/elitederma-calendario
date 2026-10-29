@@ -32350,7 +32350,9 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
     if (pagAcconto.totale === "") daCompletare.push("quota acconto");
     if (!pacchettoKit.trim()) daCompletare.push("pacchetto/kit");
     if (!tutor.trim()) daCompletare.push("tutor");
-    if (!tagliaDivisa) daCompletare.push("taglia divisa");
+    // la taglia NON e' da completare qui: la sceglie l'allieva nel
+    // modulo (29/10/2026). Obbligarla al venditore voleva dire una «M»
+    // tirata a indovinare per poter salvare, e poi bloccata nel modulo.
 
     if (metodiMancanti.length > 0 || fileBonificoMancanti.length > 0) {
       const parti = [];

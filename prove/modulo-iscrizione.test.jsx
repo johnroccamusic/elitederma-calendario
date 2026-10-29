@@ -254,4 +254,23 @@ describe("modulo di iscrizione", () => {
     expect(voci).toContain("ITALIA");
     expect(voci).toContain("Romania");
   });
+
+  // LA TAGLIA LA SCEGLIE LEI (29/10/2026). Segnalato dai venditori: le
+  // allieve non potevano selezionarla, perche' la scheda obbligava il
+  // venditore a sceglierne una e un campo pieno arrivava bloccato.
+  it("la taglia della divisa e' una tendina sua, anche se il venditore ne aveva scritta una", async () => {
+    const p = await apriIlModulo({ ...VISTA, campi: [...VISTA.campi,
+      { chiave: "taglia_divisa", valore: "M", bloccato: false, obbligatorio: true }] });
+    expect(p.testo()).toContain("La tua divisa");
+    const tendina = p.nodo.querySelector('select[data-campo="taglia_divisa"]');
+    expect(tendina).toBeTruthy();
+    expect(tendina.value).toBe("M");
+    const voci = [...tendina.options].map((o) => o.value);
+    expect(voci).toContain("NO DIVISA");
+    expect(voci).toContain("XXXL");
+    await scegli(tendina, "XL");
+    expect(tendina.value).toBe("XL");
+    // e non compare una seconda volta fra i dati organizzativi letti
+    expect(p.testo().match(/Taglia divisa/g).length).toBe(1);
+  });
 });

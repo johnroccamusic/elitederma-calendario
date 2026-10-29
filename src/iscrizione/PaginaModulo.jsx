@@ -691,6 +691,7 @@ export default function PaginaModulo({ token }) {
     serve(campo, campo.chiave === "comune_nascita" && natoFuori);
   }));
   AREA_FATTURAZIONE.righe.forEach((r) => r.campi.forEach((campo) => serve(campo, !eAzienda)));
+  if (c("taglia_divisa")) serve({ chiave: "taglia_divisa", etichetta: "Taglia divisa" }, false);
   if (c("doc_tipo"))   serve({ chiave: "doc_tipo" }, false);
   if (c("doc_numero")) serve({ chiave: "doc_numero" }, false);
   if (c("doc_fronte")?.obbligatorio && !c("doc_fronte")?.bloccato && !docFronte) mancanti.push("Foto del documento — fronte");
@@ -914,6 +915,22 @@ export default function PaginaModulo({ token }) {
           {AREA_ALLIEVO.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r)}</React.Fragment>)}
         </div>
 
+        {/* LA TAGLIA LA SCEGLIE LEI (29/10/2026). Stava nei «Dati
+            organizzativi», di sola lettura per intero, e la scheda
+            obbligava il venditore a sceglierla: arrivava sempre piena e
+            sempre bloccata, cioe' una «M» tirata a indovinare che
+            l'allieva non poteva correggere. Qui e' una tendina sua, e
+            se il venditore aveva scritto qualcosa lo trova gia' scelto. */}
+        {c("taglia_divisa") && (
+          <div style={pannello}>
+            <IntestazioneArea>La tua divisa</IntestazioneArea>
+            <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
+              La taglia della divisa che riceverai al corso. Se non la vuoi, scegli «NO DIVISA».
+            </div>
+            {rigaSua({ campi: [{ chiave: "taglia_divisa", etichetta: "Taglia divisa" }] })}
+          </div>
+        )}
+
         <div style={pannello}>
           <IntestazioneArea>Dati per la fattura</IntestazioneArea>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
@@ -947,7 +964,8 @@ export default function PaginaModulo({ token }) {
         {GRUPPI_LETTURA.filter((g) => g.titolo !== "Il corso").map((g) => {
           // niente di scritto, niente riquadro: un "Presenza al corso"
           // con dentro un trattino non va mandato a nessuno
-          const presenti = scritte(g.chiavi);
+          // la taglia ha il suo riquadro sopra, dove si sceglie
+          const presenti = scritte(g.chiavi.filter((k) => k !== "taglia_divisa"));
           if (!presenti.length) return null;
           return (
             <div key={g.titolo} style={pannello}>

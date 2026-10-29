@@ -1042,6 +1042,22 @@ indicato…, ma la foto sembra una patente»), e «Usa i dati» corregge
 `doc_tipo` con il valore di `TIPI_DOCUMENTO`; `tipoDocumentoCanonico`
 riduce a un nome solo i modi in cui un tipo può essere scritto.
 
+### La taglia della divisa la sceglie l'allieva (29/10/2026)
+
+I venditori segnalavano che le allieve «non possono selezionare la
+taglia» nel modulo. Due regole giuste messe insieme: la scheda
+obbligava il venditore a scegliere una taglia prima di salvare, e
+`modulo_campo_bloccato` blocca al primo invio ogni campo già pieno.
+Risultato: una «M» tirata a indovinare per poter salvare, che l'allieva
+trovava bloccata fra i «Dati organizzativi» in sola lettura. Ora
+`taglia_divisa` è come `tipo_cliente`: **non si blocca mai** e
+`modulo_salva` la riscrive con quello che manda lei (solo valori di
+`TAGLIE`, in `src/iscrizione/campi-scheda.js`). Nel modulo ha il suo
+riquadro «La tua divisa», tendina precompilata se il venditore aveva
+scritto qualcosa; la scheda non la pretende più per salvare.
+Migrazione `20261029100000_taglia_la_sceglie_l_allieva.sql`, prova in
+`prove/modulo-iscrizione.test.jsx`.
+
 ### Il modulo riaperto si ricompila (24/10/2026)
 
 Riaperto il modulo, l'allieva non riusciva a correggere la data di
