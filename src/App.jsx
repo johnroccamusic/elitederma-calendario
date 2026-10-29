@@ -6258,15 +6258,31 @@ function toTitleCase(testo) {
 }
 // testo da stampare sul segnaposto di ciascun iscritto della classe:
 // solo il nome (già maiuscolo, così com'è salvato). Se nella stessa
-// classe più iscritti condividono lo stesso nome, si aggiunge
-// l'iniziale del cognome per distinguerli (es. "GIULIA G.")
+// classe più iscritti condividono lo stesso nome, si aggiunge l'inizio
+// del cognome per distinguerli (es. "GIULIA G.").
+//
+// Quante lettere del cognome: le meno possibili che bastino a
+// distinguerli. Il 29/10/2026 nella classe di needling c'erano Vanessa
+// Barigelli e Vanessa Biagioni, e con una lettera sola erano tutte e due
+// «VANESSA B.»: due segnaposti uguali su due sedie. Ora, se le iniziali
+// coincidono, si allunga finché non si separano: «VANESSA BA.» e
+// «VANESSA BI.». Lo stesso numero di lettere per tutte le omonime, così
+// nessuna sembra «quella senza cognome».
 function testiSegnaposto(listaIscritti) {
-  const conteggio = new Map();
-  listaIscritti.forEach((i) => conteggio.set(i.nome, (conteggio.get(i.nome) || 0) + 1));
-  const mappa = new Map();
+  const perNome = new Map();
   listaIscritti.forEach((i) => {
-    const testo = conteggio.get(i.nome) > 1 ? `${i.nome} ${i.cognome.charAt(0)}.` : i.nome;
-    mappa.set(i.id, testo);
+    const gruppo = perNome.get(i.nome) || [];
+    gruppo.push(i);
+    perNome.set(i.nome, gruppo);
+  });
+  const mappa = new Map();
+  perNome.forEach((gruppo, nome) => {
+    if (gruppo.length < 2) { mappa.set(gruppo[0].id, nome); return; }
+    const cognomi = gruppo.map((i) => String(i.cognome || "").trim());
+    const massimo = Math.max(1, ...cognomi.map((c) => c.length));
+    let lettere = 1;
+    while (lettere < massimo && new Set(cognomi.map((c) => c.slice(0, lettere).toUpperCase())).size < cognomi.length) lettere += 1;
+    gruppo.forEach((i, idx) => mappa.set(i.id, `${nome} ${cognomi[idx].slice(0, lettere)}.`));
   });
   return mappa;
 }
@@ -86663,6 +86679,7 @@ function Gestionale() {
 // App.jsx a parte dentro ogni prova, cioe' provare una COPIA del codice
 // invece del codice.
 export {
+  testiSegnaposto,
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
