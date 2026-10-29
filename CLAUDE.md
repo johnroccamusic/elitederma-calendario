@@ -766,6 +766,19 @@ appendici il suo importo scende; da carta a contanti **entra nel contante
 atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
 o nell'appendice. La riga lo dice **prima** di confermare.
 
+### Iscrivi allievo: il modulo non si carica più, parte dall'app (29/10/2026)
+
+Tolti dalla scheda dell'allievo l'area «Carica modulo di iscrizione», il
+tasto «Leggi dati dal modulo» e le due funzioni che li servivano; dalla
+pagina Iscrizione allievi il vecchio link al modulo del sito
+(`elitederma.eu/modulo-iscrizione-corsi`) e, nelle tappe, le frasi «invia
+il link» e «carica il modulo compilato». La strada è una: dalla scheda
+si preme «Invia il modulo», l'allieva lo firma dal telefono, torna
+firmato nella scheda. Il testo di quella pagina vive in `normative_testi`
+(`iscrizione_allievi`), che comanda sul testo di partenza nel codice:
+corretti tutti e due. Resta, in sola lettura, il link ai moduli cartacei
+caricati in passato (`iscritti.file_iscrizione`).
+
 ### La quota coordinatore, intestata a una persona (28/10/2026)
 
 Esisteva dal 1° al 14 ottobre come «percentuale del coordinatore» senza

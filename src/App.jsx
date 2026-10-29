@@ -32691,30 +32691,6 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
     }
   }
 
-  // il caricamento del file NON legge più i dati in automatico: si limita a
-  // salvare il file scelto. La lettura avviene solo premendo esplicitamente
-  // "Leggi dati dal modulo" (rileggiModuloForzato)
-  function gestisciFileModulo(file) {
-    setFileIscrizione(file);
-  }
-
-  // pulsante esplicito "Leggi dati dal modulo": a differenza della lettura
-  // automatica al caricamento (che tocca solo i campi vuoti), qui l'utente
-  // sceglie consapevolmente di rileggere il PDF e sovrascrivere anche i
-  // campi già compilati a mano — da qui l'avviso prima di procedere
-  async function rileggiModuloForzato() {
-    if (!fileIscrizione) { setMsg("Carica prima il modulo PDF."); return; }
-    if (!window.confirm("Vuoi leggere i dati dal modulo caricato? La lettura sovrascriverà i dati eventualmente già inseriti a mano.")) return;
-    try {
-      const dati = await estraiDatiModuloPdf(fileIscrizione);
-      if (!dati) { setMsg("Non ho trovato i dati attesi nel modulo PDF: da compilare a mano."); return; }
-      applicaDatiModulo(dati, true);
-      setMsg("Dati letti dal modulo PDF e inseriti nel form (sovrascritti): controllali prima di salvare.");
-    } catch (e) {
-      setMsg("Non sono riuscito a leggere automaticamente questo modulo PDF: da compilare a mano.");
-    }
-  }
-
   // A.C.M. — Accesso Contabilita' Master. Accende, per QUESTA edizione, il
   // tasto "Contabilita' Classe" nella dashboard della master. Quella pagina
   // dice quanto ha pagato ogni allievo: quando la master puo' vederla lo
@@ -33927,43 +33903,20 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
 
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14, order: -1 }}>Anagrafica</div>
           <>
-          <div {...propsRiga("anagrafica", "modulo")}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-              {manigliaRiga("anagrafica", "modulo")}
-              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-              <IntestazioneArea Icona={IconaCaricaFile}>Carica modulo di iscrizione</IntestazioneArea>
-              <div>
-                {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
-                  <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY, marginBottom: 8 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-                )}
-                {/* casella, tasto di lettura e conferma su una riga sola,
-                    anche da telefono: il tasto si accorcia in "Leggi dati" e
-                    la conferma in "Caricato", invece di scendere ognuno su
-                    una riga sua */}
-                <div style={{ display: "flex", gap: isMobile ? 6 : 8, alignItems: "center", flexWrap: isMobile ? "nowrap" : "wrap" }}>
-                  <CampoFileTrascinabile
-                    accept="application/pdf,image/*"
-                    style={{ ...campoAreaScheda, flex: "1 1 0", minWidth: 0, ...(isMobile ? { fontSize: 11, padding: "6px 6px" } : {}) }}
-                    onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)}
-                  />
-                  <Button
-                    variant="ghost"
-                    onClick={rileggiModuloForzato}
-                    disabled={!fileIscrizione || soloLettura}
-                    style={isMobile ? { fontSize: 11, padding: "7px 8px", borderRadius: 9, whiteSpace: "nowrap", flexShrink: 0 } : { whiteSpace: "nowrap", flexShrink: 0 }}
-                  >
-                    {isMobile ? "Leggi dati" : "Leggi dati dal modulo"}
-                  </Button>
-                  {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato stretto={isMobile} />}
-                </div>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
-                  <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
+          {/* IL CARICAMENTO DEL MODULO NON C'E' PIU' (29/10/2026). Il modulo
+              parte dall'app e torna firmato nella scheda, quindi non c'e'
+              niente da caricare ne' da «leggere dal PDF». Resta solo il link
+              ai moduli cartacei caricati in passato, in sola lettura. */}
+          {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && (
+            <div {...propsRiga("anagrafica", "modulo")}>
+              <div style={{ ...areaSchedaIscritto }}>
+                <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 13, color: NAVY }}>
+                  Modulo cartaceo caricato in passato: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} />
                 </div>
               </div>
-              </div>
+              {spaziatoreRiga("anagrafica", "modulo")}
             </div>
-            {spaziatoreRiga("anagrafica", "modulo")}
-          </div>
+          )}
 
           {/* nome, cognome, residenza, contatti, tutor e l'intestazione
               Privato/Azienda sono un riquadro solo: chi compila la scheda
@@ -38912,7 +38865,7 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "pr2", tipo: "tappa", icona: "etichetta", numero: "02", titolo: "Manda il modulo dall'app", testo: "Inserisci l’allievo nella classe da «Iscrivi allievo» e, dalla sua scheda, premi «Invia il modulo»: gli arriva per email, lo compila e lo firma dal telefono DOPO aver pagato l’acconto, e torna firmato nella scheda. Non si manda più nessun link a mano." },
   { id: "pr3", tipo: "tappa", icona: "diamante", numero: "03", titolo: "Se paga con carta", testo: "Non serve comunicare i dati per la fattura: viene emessa in automatico." },
   { id: "pr4", tipo: "tappa", icona: "persone", numero: "04", titolo: "Se paga con bonifico", testo: "Avvisa Elena e manda la ricevuta di pagamento insieme ai dati dell’allievo. Senza quella, la fattura non parte." },
-  { id: "pr5", tipo: "passi", occhiello: "Completamento", titolo: "Completamento iscrizione", sottotitolo: "Segui i passaggi qui sotto per inserire l’allievo e completare l’iscrizione.", bollo: "Iscrizione finalizzata", importante: "L’iscrizione è finalizzata solo dopo aver completato tutti i passaggi.", testo: "Inserisci l’allievo nella classe su [Genyon] nella sezione <“Iscrivi allievo”>\n\nCarica il modulo di iscrizione compilato dall’allievo.\nMolti dati si compilano automaticamente: verifica le informazioni richieste e completa quelle mancanti.\n\nPer dubbi o chiarimenti\nPrima o dopo l’inserimento puoi chiedere supporto a <Elena>.\n\nInvia il messaggio di benvenuto.\nUna volta completata l’iscrizione, manda all’allievo il [messaggio di benvenuto] che trovi in fondo a questa pagina." },
+  { id: "pr5", tipo: "passi", occhiello: "Completamento", titolo: "Completamento iscrizione", sottotitolo: "Segui i passaggi qui sotto per inserire l’allievo e completare l’iscrizione.", bollo: "Iscrizione finalizzata", importante: "L’iscrizione è finalizzata solo dopo aver completato tutti i passaggi.", testo: "Inserisci l’allievo nella classe su [Genyon] nella sezione <“Iscrivi allievo”>\n\nDalla sua scheda premi «Invia il modulo»: l’allievo lo compila e lo firma dal telefono, e torna firmato nella scheda. Verifica i dati che ha scritto e completa quelli mancanti.\n\nPer dubbi o chiarimenti\nPrima o dopo l’inserimento puoi chiedere supporto a <Elena>.\n\nInvia il messaggio di benvenuto.\nUna volta completata l’iscrizione, manda all’allievo il [messaggio di benvenuto] che trovi in fondo a questa pagina." },
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
   { id: "ia6", tipo: "link", titolo: "Acconto 152,50 \u20ac \u2014 Henn\u00e8, Laminazione, Extension, Gemme Dentali", url: "https://elitederma.eu/shop/kit-formazione-150/", testo: "125 \u20ac + IVA. Si usa con l\u2019allievo davanti, mentre il corso \u00e8 in aula: finito il corso questo link non vale pi\u00f9." },
   { id: "ia7", tipo: "link", titolo: "Acconto 201,30 \u20ac \u2014 tutti gli altri corsi", url: "https://elitederma.eu/shop/kit-formazione-200/", testo: "165 \u20ac + IVA. Stessa regola: con l\u2019allievo davanti, mentre il corso \u00e8 in aula." },

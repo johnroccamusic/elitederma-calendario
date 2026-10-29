@@ -65,7 +65,7 @@ describe("contratto già firmato", () => {
     expect(rpc).toHaveLength(1);
     expect(rpc[0].p_iscritto_id).toBe("i1");
     expect(rpc[0].p_chi).toBe("MARIO");
-    expect(p.tasto("Leggi dati dal modulo"), "la scheda aperta").toBeTruthy();
+    expect(p.testo(), "la scheda aperta").toContain("Anagrafica");
     await p.smonta();
   });
 
@@ -81,7 +81,7 @@ describe("contratto già firmato", () => {
     expect(rpc).toHaveLength(1);
     expect(rpc[0].p_motivo).toBe("Vuole le modelle");
     // la fotografia si chiude e la scheda si apre in modifica: i dati in alto si possono rifare
-    expect(p.tasto("Leggi dati dal modulo"), "la scheda aperta").toBeTruthy();
+    expect(p.testo(), "la scheda aperta").toContain("Anagrafica");
     expect(p.campi().some((c) => c.value === "LIA")).toBe(true);
     await p.smonta();
   });
@@ -92,7 +92,7 @@ describe("contratto già firmato", () => {
     const p = await apri(aperta);
     expect(p.tasto("Ricomincia procedura di firma")).toBeUndefined();
 
-    expect(p.tasto("Leggi dati dal modulo"), "la scheda aperta").toBeTruthy();
+    expect(p.testo(), "la scheda aperta").toContain("Anagrafica");
     await p.smonta();
   });
 });
