@@ -273,4 +273,14 @@ describe("modulo di iscrizione", () => {
     // e non compare una seconda volta fra i dati organizzativi letti
     expect(p.testo().match(/Taglia divisa/g).length).toBe(1);
   });
+
+  // deciso dal titolare il 29/10/2026: senza taglia il modulo non parte
+  it("senza la taglia il modulo dice che manca e non si spedisce", async () => {
+    const p = await apriIlModulo({ ...VISTA, campi: [...VISTA.campi,
+      { chiave: "taglia_divisa", valore: null, bloccato: false, obbligatorio: true }] });
+    expect(p.testo()).toContain("Manca ancora");
+    expect(p.testo()).toMatch(/Manca ancora:.*Taglia divisa/);
+    await scegli(p.nodo.querySelector('select[data-campo="taglia_divisa"]'), "S");
+    expect(p.testo()).not.toMatch(/Manca ancora:.*Taglia divisa/);
+  });
 });

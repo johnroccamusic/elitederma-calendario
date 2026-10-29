@@ -1054,7 +1054,10 @@ trovava bloccata fra i «Dati organizzativi» in sola lettura. Ora
 `modulo_salva` la riscrive con quello che manda lei (solo valori di
 `TAGLIE`, in `src/iscrizione/campi-scheda.js`). Nel modulo ha il suo
 riquadro «La tua divisa», tendina precompilata se il venditore aveva
-scritto qualcosa; la scheda non la pretende più per salvare.
+scritto qualcosa; la scheda non la pretende più per salvare. **Ed è
+obbligatoria per spedire** (deciso dal titolare lo stesso giorno): la
+pagina la elenca in «Manca ancora» e `modulo_salva` rifiuta con
+`senza_taglia` se non arriva né dalle risposte né dalla scheda.
 Migrazione `20261029100000_taglia_la_sceglie_l_allieva.sql`, prova in
 `prove/modulo-iscrizione.test.jsx`.
 

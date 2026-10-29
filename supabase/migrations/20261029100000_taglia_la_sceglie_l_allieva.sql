@@ -81,6 +81,20 @@ begin
   select coalesce(array_agg(c.chiave), '{}') into accese
     from public.modulo_iscrizione_campi c where coalesce(c.incluso, true);
 
+  -- LA TAGLIA E' OBBLIGATORIA (29/10/2026, deciso dal titolare): senza, il
+  -- modulo non parte. La pagina lo dice gia', ma un controllo che vive
+  -- solo nel browser non e' un controllo. Vale se il campo e' acceso e
+  -- segnato obbligatorio in Setting; conta quello che manda lei, e in
+  -- ripiego quello gia' in scheda.
+  if exists (select 1 from public.modulo_iscrizione_campi c
+              where c.chiave = 'taglia_divisa' and coalesce(c.incluso, true) and coalesce(c.obbligatorio, true))
+     and not (upper(btrim(coalesce(p_risposte ->> 'taglia_divisa', ''))) = any (taglie))
+     and not (upper(btrim(coalesce(i.taglia_divisa, ''))) = any (taglie)) then
+    return jsonb_build_object('ok', false,
+      'errore', 'Scegli la taglia della divisa prima di inviare il modulo.',
+      'motivo', 'senza_taglia');
+  end if;
+
   foreach k in array consentite loop
     if not (k = any (accese)) then continue; end if;
     if p_risposte is null or not (p_risposte ? k) then continue; end if;
