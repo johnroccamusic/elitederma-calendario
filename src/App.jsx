@@ -20557,8 +20557,11 @@ const ELEMENTI_DIPLOMA = [
 
 // quanti nomi allievo entrano in un foglio A4 di segnaposti: oltre questo
 // numero la stampa genera più pagine, ripetendo lo stesso foglio di
-// riferimento e ricominciando dal primo posto
-const POSTI_PER_PAGINA_SEGNAPOSTI = 7;
+// riferimento e ricominciando dal primo posto.
+// Erano 7; dal 29/10/2026 sono 4, perche' il foglio vero ha quattro
+// segnaposti e tre nomi di prova in piu' da trascinare confondevano
+// chi regolava. Le colonne slot5-7 restano nella tabella, non lette.
+const POSTI_PER_PAGINA_SEGNAPOSTI = 4;
 const CONFIG_SEGNAPOSTI_DEFAULT = {
   id: null,
   font_path: null,
@@ -20567,18 +20570,15 @@ const CONFIG_SEGNAPOSTI_DEFAULT = {
   colore: "#000000",
   // due linee verticali trascinabili (sinistra/destra): la distanza tra
   // le due definisce la larghezza massima consentita per il nome in
-  // stampa, uguale per tutti i 7 posti
+  // stampa, uguale per tutti i posti
   limite_sx_pos_x: 30,
   limite_dx_pos_x: 70,
-  // posizioni di default: 7 righe distribuite lungo il foglio, poi si
+  // posizioni di default: 4 righe distribuite lungo il foglio, poi si
   // trascinano nel punto esatto sul foglio di riferimento caricato
-  slot1_pos_x: 50, slot1_pos_y: 12.5,
-  slot2_pos_x: 50, slot2_pos_y: 25,
-  slot3_pos_x: 50, slot3_pos_y: 37.5,
-  slot4_pos_x: 50, slot4_pos_y: 50,
-  slot5_pos_x: 50, slot5_pos_y: 62.5,
-  slot6_pos_x: 50, slot6_pos_y: 75,
-  slot7_pos_x: 50, slot7_pos_y: 87.5,
+  slot1_pos_x: 50, slot1_pos_y: 20,
+  slot2_pos_x: 50, slot2_pos_y: 40,
+  slot3_pos_x: 50, slot3_pos_y: 60,
+  slot4_pos_x: 50, slot4_pos_y: 80,
 };
 const SLOT_SEGNAPOSTI = Array.from({ length: POSTI_PER_PAGINA_SEGNAPOSTI }, (_, idx) => ({
   chiave: `slot${idx + 1}`,
