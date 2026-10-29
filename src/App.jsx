@@ -38904,12 +38904,15 @@ const NORMATIVA_ISCRIZIONE_ALLIEVI = [
   { id: "ia1", tipo: "testata", titolo: "Iscrizione allievi", sottotitolo: "Come la master iscrive un allievo a un corso", claim: "Pagina per le master — non va mandata all'allievo", lato: "Uso interno" },
   { id: "pr0", tipo: "sezione", testo: "Procedura" },
   { id: "pr1", tipo: "tappa", icona: "bersaglio", numero: "01", titolo: "Manda il pagamento", testo: "Invia all’allievo il link per pagare con carta, oppure i dati per il bonifico." },
-  { id: "pr2", tipo: "tappa", icona: "etichetta", numero: "02", titolo: "Manda il modulo", testo: "Invia il link del modulo di iscrizione. L’allievo lo compila DOPO aver pagato l’acconto: nel modulo c’è da indicare anche quale importo ha versato per l’iscrizione." },
+  // Il modulo NON si manda piu' con un link copiato dal sito (29/10/2026):
+  // parte dall'app, dalla scheda dell'allievo in «Iscrivi allievo», e
+  // torna firmato nella stessa scheda. Il vecchio link del sito e' stato
+  // tolto da questa pagina: due strade per la stessa cosa vogliono dire
+  // moduli che non si ritrovano.
+  { id: "pr2", tipo: "tappa", icona: "etichetta", numero: "02", titolo: "Manda il modulo dall'app", testo: "Inserisci l’allievo nella classe da «Iscrivi allievo» e, dalla sua scheda, premi «Invia il modulo»: gli arriva per email, lo compila e lo firma dal telefono DOPO aver pagato l’acconto, e torna firmato nella scheda. Non si manda più nessun link a mano." },
   { id: "pr3", tipo: "tappa", icona: "diamante", numero: "03", titolo: "Se paga con carta", testo: "Non serve comunicare i dati per la fattura: viene emessa in automatico." },
   { id: "pr4", tipo: "tappa", icona: "persone", numero: "04", titolo: "Se paga con bonifico", testo: "Avvisa Elena e manda la ricevuta di pagamento insieme ai dati dell’allievo. Senza quella, la fattura non parte." },
   { id: "pr5", tipo: "passi", occhiello: "Completamento", titolo: "Completamento iscrizione", sottotitolo: "Segui i passaggi qui sotto per inserire l’allievo e completare l’iscrizione.", bollo: "Iscrizione finalizzata", importante: "L’iscrizione è finalizzata solo dopo aver completato tutti i passaggi.", testo: "Inserisci l’allievo nella classe su [Genyon] nella sezione <“Iscrivi allievo”>\n\nCarica il modulo di iscrizione compilato dall’allievo.\nMolti dati si compilano automaticamente: verifica le informazioni richieste e completa quelle mancanti.\n\nPer dubbi o chiarimenti\nPrima o dopo l’inserimento puoi chiedere supporto a <Elena>.\n\nInvia il messaggio di benvenuto.\nUna volta completata l’iscrizione, manda all’allievo il [messaggio di benvenuto] che trovi in fondo a questa pagina." },
-  { id: "ia3", tipo: "sezione", testo: "Il link da mandare all'allievo" },
-  { id: "ia4", tipo: "link", titolo: "Modulo di iscrizione ai corsi", url: "https://elitederma.eu/modulo-iscrizione-corsi/", testo: "Premi \u201cCopia link\u201d e incollalo nella chat dell\u2019allievo: si compila da telefono." },
   { id: "ia5", tipo: "sezione", testo: "Acconto in aula \u2014 solo durante il corso" },
   { id: "ia6", tipo: "link", titolo: "Acconto 152,50 \u20ac \u2014 Henn\u00e8, Laminazione, Extension, Gemme Dentali", url: "https://elitederma.eu/shop/kit-formazione-150/", testo: "125 \u20ac + IVA. Si usa con l\u2019allievo davanti, mentre il corso \u00e8 in aula: finito il corso questo link non vale pi\u00f9." },
   { id: "ia7", tipo: "link", titolo: "Acconto 201,30 \u20ac \u2014 tutti gli altri corsi", url: "https://elitederma.eu/shop/kit-formazione-200/", testo: "165 \u20ac + IVA. Stessa regola: con l\u2019allievo davanti, mentre il corso \u00e8 in aula." },
