@@ -34,6 +34,7 @@ import { caricaKitInAula } from "./rientri/pos";
 // smontaggio di App.jsx.
 const QuadroSostituzioni = pezzo(() => import("./rientri/QuadroSostituzioni.jsx"));
 const StampePackaging = pezzo(() => import("./stampe/StampePackaging.jsx"));
+const PaginaCrmContatti = pezzo(() => import("./crm/PaginaContatti.jsx"));
 const SchedaRientro = pezzo(() => import("./rientri/SchedaRientro.jsx"));
 import { pezzo } from "./pezzo.js";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
@@ -27868,6 +27869,7 @@ const AREA_MADRE_VISTA = {
   classificazionevocishop: ["magazzinoshop"],
   crmshop: ["crmallievi"],
   crmallievielenco: ["crmallievi"],
+  crmcontatti: ["crmallievi"],
   generacoupon: ["compensipremi"],
   gestionepunti: ["compensipremi"],
   dashboardassistente: ["home"],
@@ -55765,7 +55767,7 @@ function ModaleScegliPreferito({ destinazioni, onScegli, onTogli, onClose }) {
 // dello shop dall'altra. Sono due anagrafiche diverse — chi compra un
 // corso e chi compra un prodotto — ma si guardano con la stessa domanda
 // in testa, ed è giusto che stiano dietro allo stesso tasto
-function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "CRM" }) {
+function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, onApriCrmContatti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "CRM" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -55774,12 +55776,16 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Chi ha comprato da noi: gli allievi dei corsi e i clienti dello shop.</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Chi ha comprato da noi, gli allievi dei corsi e i clienti dello shop, e chi ci ha scritto senza ancora comprare.</div>
         <GrigliaTasti
-          pagina="crm" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={2}
+          pagina="crm" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "crmallievielenco", title: "CRM Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso.", Icona: IconaGruppoTeam, attivo: true, onClick: onApriCrmAllievi },
             { chiave: "crmshop", title: "Clienti shop", descrizione: "Chi ha comprato online: contatti, ordini, spesa. E la classifica dei prodotti.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
+            // i contatti importati da Vetta (30/10/2026): tutti quelli che
+            // hanno scritto, anche chi non ha comprato. Filtri per zona,
+            // corso e periodo, e da qui partiranno le campagne
+            { chiave: "crmcontatti", title: "Contatti", descrizione: "Chi ci ha scritto: le richieste arrivate dal sito e dal CRM, con filtri per zona, corso e periodo.", Icona: IconaGruppoTeam, attivo: true, onClick: onApriCrmContatti },
           ]}
         />
       </div>
@@ -83836,6 +83842,9 @@ function Gestionale() {
     // 1.859, e i numeri in cima (carrello medio, ordini per cliente)
     // raccontavano gli ultimi mesi spacciandoli per sempre.
     crmshop: ["vendite_shop_storico", "voci_shop_classificazione", "vendite_shop_crm", "prodotti_shop", "iscritti", "storico_allievi", "master"],
+    // i contatti si leggono una pagina alla volta dalla pagina stessa
+    // (crm_cerca_contatti): nessuna tabella intera da caricare
+    crmcontatti: [],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti", "categorie_prodotti", "prodotti_categorie"],
     statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
@@ -84571,6 +84580,7 @@ function Gestionale() {
   function apriGestioneLocation() { setView("gestionelocation"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriCrmAllieviElenco() { apriViewProtetta("crmallievielenco"); }
+  function apriCrmContatti() { apriViewProtetta("crmcontatti"); }
   function apriStoricoAllievi() { apriViewProtetta("storicoallievi"); }
   function apriMagazzino() { setProdottoDaAprireInMagazzino(null); setViewPrimaDiMagazzino("magazzinoshop"); apriViewProtetta("magazzino"); }
   function apriProdottoInMagazzino(prodottoId, vistaDiPartenza) {
@@ -84908,6 +84918,7 @@ function Gestionale() {
     { chiave: "crmallievi", titolo: etichettaTasto("home", "crmallievi", "CRM / Allievi"), apri: apriCrmAllievi, figli: [
       { chiave: "crmallievielenco", titolo: etichettaTasto("crm", "crmallievielenco", "CRM Allievi"), apri: apriCrmAllieviElenco },
       { chiave: "crmshop", titolo: etichettaTasto("crm", "crmshop", "Clienti shop"), apri: apriCrmShop },
+      { chiave: "crmcontatti", titolo: etichettaTasto("crm", "crmcontatti", "Contatti"), apri: apriCrmContatti },
     ] },
     { chiave: "storicoallievi", titolo: etichettaTasto("home", "storicoallievi", "Storico Allievi"), apri: apriStoricoAllievi, figli: [] },
     { chiave: "normative", titolo: etichettaTasto("home", "normative", "Normative"), apri: apriNormative, figli: [
@@ -86605,10 +86616,18 @@ function Gestionale() {
           onBack={() => setView("home")}
           onApriCrmAllievi={apriCrmAllieviElenco}
           onApriCrmShop={apriCrmShop}
+          onApriCrmContatti={apriCrmContatti}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.crm?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("crm", { ordine: o })}
           colonneTasti={layoutTasti.crm?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("crm", { colonne: n })}
           etichetteTasti={layoutTasti.crm?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("crm", chiave, testo)}
           titolo={etichettaTasto("home", "crmallievi", "CRM")}
+        />
+      )}
+
+      {view === "crmcontatti" && (
+        <PaginaCrmContatti
+          onBack={() => setView("crmallievi")}
+          titolo={etichettaTasto("crm", "crmcontatti", "Contatti")}
         />
       )}
 

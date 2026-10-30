@@ -1098,6 +1098,51 @@ righe, Napoli 152), quindi niente da rimettere in pari. Migrazione
 `20261030150000_materiale_evento_resta_in_magazzino.sql`, prove in
 `prove/materiale-evento-resta-in-magazzino.test.jsx`.
 
+### CRM Contatti: tutti quelli che hanno scritto, importati da Vetta (30/10/2026)
+
+Vetta (il CRM commerciale, su base Twenty) aveva 23.847 persone: clienti,
+scartati, da richiamare. Ora stanno in Genion, **una persona molte
+richieste**: `crm_contatti` (23.757, i doppioni per email o telefono uniti)
+e `crm_richieste` (23.847, una per record Vetta, con data, corsi, canale,
+form, chi l'ha trattata e la qualifica di quel momento). Il contatto tiene
+`corsi_interesse` come unione, `primo_contatto_il`/`ultimo_contatto_il`,
+la qualifica e lo stato trattativa (`venduto` / `in_trattativa` /
+`nessuna`, dalle opportunità), il luogo normalizzato sul comune ISTAT
+accanto a quello scritto, il collegamento allo Storico allievi o a un
+iscritto (`certo` / `dubbio` / `nessuno`, con la nota del perché) e i flag
+`da_verificare` (nome vuoto, nome di attività, nome senza lettere, senza
+email né telefono, omonimi non uniti) e `nome_nota` («solo il nome, senza
+cognome»: informazione, non motivo di verifica, deciso dal titolare).
+
+**Lo script** è `scripts/importa-vetta.mjs` (REST di Vetta con
+`VETTA_API_KEY`; con una chiave `sb_secret_` di Supabase va messa solo in
+`apikey`, mai in Authorization), con `scripts/vetta-normalizza.mjs` per
+nomi, telefoni, comuni, corsi canonici. È idempotente per `vetta_id`. Le
+826 opportunità che in Vetta non puntano a nessuna persona si agganciano
+per nome solo se una persona sola porta quel nome con nome e cognome (un
+nome solo basta solo se è già CLIENTI): 605 agganciate, 100 ambigue, 118
+senza nessuno. Riepilogo e dubbi in `.importa-vetta/`, fuori da git.
+
+**In Vetta non esiste un consenso al marketing** (verificato su tutti i
+campi). Il titolare ha deciso: si scrive a tutti, il consenso è quello
+raccolto sul sito, e ogni mail porta il link per disiscriversi. **Chi si
+disiscrive resta in archivio** con `disiscritto_il` e `disiscritto_come`:
+di default è fuori dalle liste (filtro «Disiscritti» per vederli), dalle
+campagne è fuori sempre. Il blocco vale per email, così un re-import o una
+richiesta nuova non lo riportano dentro.
+
+**La pagina** è `src/crm/PaginaContatti.jsx`, tessera «Contatti» nel CRM.
+Non carica la tabella: chiede una pagina da 50 a `crm_cerca_contatti`
+(filtri in jsonb, totale vero) e i valori dei filtri a
+`crm_filtri_valori`, entrambe `security invoker` per `authenticated`.
+Periodo (anno o dal/al) e corso filtrano **sulle richieste**; regione,
+provincia, comune, qualifica, stato, trattato da, mestiere, Genion sul
+contatto. La scheda aperta legge le richieste e mostra la cronologia
+(«03/2024 Microblading · 05/2025 Laminazione»), le opportunità e il tasto
+per segnare un disiscritto a mano. Prove in `prove/crm-contatti.test.jsx`.
+**Da fare**: «Componi mail» (campagne a lotti via Resend, piè di pagina con
+disiscrizione, rotta pubblica `?disiscrizione=`).
+
 ### Il cash rinviato segue il Riepilogo (30/10/2026)
 
 Udine, LAMINAZIONE BASE del 28/10: lo Scadenzario passivo mostrava per
