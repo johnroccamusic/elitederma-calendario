@@ -77852,6 +77852,127 @@ function ModaleInventarioSede({ corsoData, corso, inviatiPerProdotto, prodottiSh
     </Modal>
   );
 }
+// LA LISTA DI RACCOLTA (30/10/2026, chiesta dal titolare): prima di
+// comporre le scatole, chi prepara passa fra gli scaffali e prende TUTTO
+// quello che serve all'edizione — "12 Horus, 13 pacchi di aghi" — in una
+// lista sola, prodotto per prodotto, con le quantita' gia' moltiplicate
+// per i kit. E' la stessa fotografia del pacco che si congela alla
+// spedizione (componiSpedizione), aperta pezzo per pezzo: i kit per
+// iscritti e di riserva per la loro distinta, i dermografi comprati a
+// parte, gli accessori didattica, gli extra, la merce da vendere, le
+// consulenze. Un prodotto che arriva da due strade ha una riga sola e
+// dice da dove viene.
+function listaRaccoltaMateriale({ iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId, dataInizio = null }) {
+  const sped = componiSpedizione({ stato: statoEdizione || {}, iscrittiEdizione, kitDefinizioni, corsoId, corsiKitProdotti, dataInizio });
+  const nome = (id) => (prodottiShop || []).find((p) => p.id === id)?.nome || "—";
+  const righe = new Map();
+  const aggiungi = (chiave, { prodottoId = null, nomeRiga, quantita, da }) => {
+    if (!(quantita > 0)) return;
+    const r = righe.get(chiave) || { chiave, prodottoId, nome: nomeRiga, quantita: 0, da: [] };
+    r.quantita += quantita;
+    if (!r.da.includes(da)) r.da.push(da);
+    righe.set(chiave, r);
+  };
+  Object.entries(sped.kit || {}).forEach(([kitId, k]) => {
+    const n = (Number(k.per_iscritti) || 0) + (Number(k.riserva) || 0);
+    (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && r.tipo === "kit").forEach((r) => {
+      aggiungi(`prodotto::${r.prodotto_id}`, { prodottoId: r.prodotto_id, nomeRiga: nome(r.prodotto_id), quantita: n * (Number(r.quantita) || 0), da: `${n} × ${k.nome || "kit"}` });
+    });
+  });
+  Object.entries(sped.accessori || {}).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: Number(q) || 0, da: "accessori ed extra" }));
+  Object.entries(sped.merce_vendita || {}).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: Number(q) || 0, da: "da vendere al corso" }));
+  const consulenzePer = {};
+  (sped.consulenze || []).forEach((c) => { consulenzePer[c.prodotto_id] = (consulenzePer[c.prodotto_id] || 0) + 1; });
+  Object.entries(consulenzePer).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: q, da: "consulenze" }));
+  // i dermografi comprati a parte dagli allievi e quelli di riserva: quelli
+  // dentro un kit stanno gia' nella sua distinta, e non si contano due volte
+  const derm = {};
+  Object.entries(sped.dermografi?.assegnati || {}).forEach(([m, q]) => { derm[m] = (derm[m] || 0) + (Number(q) || 0); });
+  Object.entries(sped.dermografi?.riserva || {}).forEach(([m, q]) => { derm[m] = (derm[m] || 0) + (Number(q) || 0); });
+  Object.entries(derm).forEach(([m, q]) => {
+    const prod = prodottoDermografo(prodottiShop, m);
+    aggiungi(prod ? `prodotto::${prod.id}` : `dermografo::${m}`, { prodottoId: prod?.id || null, nomeRiga: prod?.nome || etichettaDermografo(m) || m, quantita: q, da: "dermografi degli allievi e di riserva" });
+  });
+  return [...righe.values()].sort((a, b) => String(a.nome).localeCompare(String(b.nome), "it", { numeric: true }));
+}
+
+// La pagina intera della raccolta: una riga per prodotto, la quantita'
+// grande a sinistra, e un tocco — col dito o col mouse — che la fa
+// diventare verde. Le spunte si salvano sull'edizione
+// (logistica_kit_edizioni.checklist), con chi e quando: se cambia turno,
+// o si chiude la pagina a meta', si riprende da dove si era. L'ordine
+// delle righe non cambia mentre si spunta, o chi raccoglie perde il
+// segno fra uno scaffale e l'altro.
+function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {} }) {
+  const prese = righe.filter((r) => spunte?.[r.chiave]).length;
+  const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
+  const pezziPresi = righe.filter((r) => spunte?.[r.chiave]).reduce((s, r) => s + r.quantita, 0);
+  const completa = righe.length > 0 && prese === righe.length;
+  useEffect(() => {
+    const esc = (e) => { if (e.key === "Escape") onChiudi(); };
+    document.addEventListener("keydown", esc);
+    const prima = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", esc); document.body.style.overflow = prima; };
+  }, [onChiudi]);
+  return (
+    <div data-raccolta style={{ position: "fixed", inset: 0, zIndex: 9000, background: BG, overflowY: "auto", overscrollBehavior: "contain" }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 1, background: completa ? "#EAF5EA" : "#fff", borderBottom: `1px solid ${completa ? "#C7E3C7" : CREAM_BORDER}`, padding: "12px 16px" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>Raccolta materiale</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{titolo}{sottotitolo ? ` · ${sottotitolo}` : ""}</div>
+          </div>
+          <div style={{ textAlign: "right" }} data-avanzamento>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: completa ? "#2E7D32" : NAVY, lineHeight: 1.1 }}>{prese} / {righe.length}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{completa ? "tutto preso" : `prodotti presi · ${pezziPresi} di ${pezziTotali} pezzi`}</div>
+          </div>
+          <button type="button" onClick={onChiudi} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer" }}>Chiudi</button>
+        </div>
+        <div style={{ maxWidth: 760, margin: "8px auto 0", height: 6, background: CREAM_BORDER, borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ width: `${righe.length ? Math.round((prese / righe.length) * 100) : 0}%`, height: "100%", background: "#2E7D32", transition: "width .25s" }} />
+        </div>
+      </div>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "12px 16px 90px" }}>
+        {righe.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Non c'è ancora niente da raccogliere: nessun iscritto ha scelto un kit e non ci sono accessori.</div>}
+        {righe.map((r) => {
+          const presa = !!spunte?.[r.chiave];
+          const url = r.prodottoId ? immaginePerProdotto[r.prodottoId] : null;
+          return (
+            <button
+              key={r.chiave} type="button" onClick={() => onSpunta(r.chiave, !presa)} data-riga-raccolta={presa ? "presa" : "da-prendere"}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", minHeight: 60, padding: "10px 12px", marginBottom: 8,
+                background: presa ? "#EAF5EA" : "#fff", border: `1.5px solid ${presa ? "#8BC48B" : CREAM_BORDER}`, borderRadius: 14, cursor: "pointer",
+                boxShadow: presa ? "none" : "0 1px 2px rgba(14,27,51,0.05)",
+              }}
+            >
+              <span style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: presa ? "#2E7D32" : NAVY, minWidth: 44, textAlign: "center", flexShrink: 0 }}>{r.quantita}</span>
+              <span style={{ width: 40, height: 40, borderRadius: 9, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: 2 }}>
+                {url ? <img src={url} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ ...fontBody, fontSize: 14, color: MUTED }}>·</span>}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 15, fontWeight: 700, color: presa ? "#2E7D32" : NAVY, overflowWrap: "anywhere", textDecoration: presa ? "line-through" : "none", textDecorationColor: "#8BC48B" }}>{r.nome}</span>
+                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                  {r.da.join(" · ")}
+                  {presa && spunte[r.chiave]?.da ? ` · preso da ${spunte[r.chiave].da}` : ""}
+                </span>
+              </span>
+              <span aria-hidden style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: presa ? "#2E7D32" : "#fff", border: `2px solid ${presa ? "#2E7D32" : CREAM_BORDER}`, color: "#fff", fontSize: 16, fontWeight: 800 }}>{presa ? "✓" : ""}</span>
+            </button>
+          );
+        })}
+        {prese > 0 && onAzzera && (
+          <button type="button" onClick={() => { if (window.confirm("Togliere tutte le spunte? La lista resta, si ricomincia a raccogliere.")) onAzzera(); }}
+            style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", background: "none", border: "none", cursor: "pointer", marginTop: 10, padding: 6 }}>
+            Azzera le spunte
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   const oggiStr = dataOggiStr();
   // stessa intestazione (data/corso/città nel colore del corso) della
@@ -77985,6 +78106,14 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     return mappa;
   }, [prodottiImmagini]);
 
+  // la lista di raccolta e le sue spunte (vedi RaccoltaMateriale)
+  const [raccoltaAperta, setRaccoltaAperta] = useState(false);
+  const chiudiRaccolta = useMemo(() => () => setRaccoltaAperta(false), []);
+  const righeRaccolta = useMemo(() => listaRaccoltaMateriale({
+    iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId: corso?.id || null, dataInizio: corsoData.data_inizio || null,
+  }), [iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corso?.id, corsoData.data_inizio]);
+  const spunteRaccolta = righeRaccolta.filter((r) => (statoEdizione.checklist || {})[r.chiave]).length;
+
   function FotoProdotto({ prodottoId, lato = 34 }) {
     const url = immaginePerProdotto[prodottoId];
     return (
@@ -78108,8 +78237,33 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
-        <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          {/* «Prepara» (30/10/2026): la lista di raccolta a tutta pagina,
+              prodotto per prodotto, con le quantita' gia' sommate su tutti
+              i kit. Sta qui in alto a destra perche' e' il primo gesto di
+              chi prepara, prima ancora di guardare i singoli kit */}
+          <Button onClick={() => setRaccoltaAperta(true)} disabled={righeRaccolta.length === 0} title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo">
+            Prepara{spunteRaccolta > 0 ? ` · ${spunteRaccolta}/${righeRaccolta.length}` : ""}
+          </Button>
+          <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
+        </div>
       </div>
+      {raccoltaAperta && (
+        <RaccoltaMateriale
+          titolo={`${corso?.nome || "—"} · ${toTitleCase(loc?.nome || "—")}`}
+          sottotitolo={corsoData.data_inizio ? fmtData(corsoData.data_inizio) : ""}
+          righe={righeRaccolta}
+          spunte={statoEdizione.checklist || {}}
+          immaginePerProdotto={immaginePerProdotto}
+          onSpunta={(chiave, acceso) => {
+            const attuali = { ...(statoEdizione.checklist || {}) };
+            if (acceso) attuali[chiave] = { il: new Date().toISOString(), da: nomeUtente || null }; else delete attuali[chiave];
+            onSalvaCampi({ checklist: attuali });
+          }}
+          onAzzera={() => onSalvaCampi({ checklist: {} })}
+          onChiudi={chiudiRaccolta}
+        />
+      )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -86767,4 +86921,5 @@ export {
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
   calcolaVociScadenziario, vociCashRinviate,
+  listaRaccoltaMateriale, RaccoltaMateriale,
 };

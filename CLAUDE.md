@@ -1183,6 +1183,27 @@ quell'email. Due ingressi: la rotta pubblica `?disiscrizione=<gettone>`
 function pubblica `crm-disiscrivi` (POST = one-click dal programma di
 posta, GET = rimanda alla pagina). Prove in `prove/crm-campagna.test.jsx`.
 
+### La raccolta del materiale, a tutta pagina (30/10/2026)
+
+In Logistica → Spedizioni corsi, in alto a destra nella scheda di
+allestimento di un'edizione, c'è **«Prepara»**: apre a tutta pagina la
+lista di **tutto** quello che serve a quell'edizione, prodotto per
+prodotto, con le quantità già sommate («7 Aghi 1RL», «3 Dermografo
+Horus»), perché chi prepara passa fra gli scaffali una volta sola prima
+di comporre le scatole. La lista la compone `listaRaccoltaMateriale`
+dalla stessa fotografia del pacco di `componiSpedizione`: le distinte
+dei kit per iscritti e di riserva, i dermografi comprati a parte e di
+riserva (quelli dentro un kit stanno già nella sua distinta), gli
+accessori didattica, gli extra, la merce da vendere, le consulenze. Un
+prodotto che arriva da più strade ha una riga sola e dice da dove.
+
+Si spunta col dito o col mouse: la riga diventa verde e la spunta si
+salva in `logistica_kit_edizioni.checklist` (chiave → chi e quando), così
+si riprende da dove si era e un altro turno vede cosa è già stato preso.
+L'ordine delle righe non cambia mentre si spunta. È una lista di
+raccolta, non un movimento: il magazzino scende come prima, a «Materiale
+preparato». Prove in `prove/raccolta-materiale.test.jsx`.
+
 ### Il cash rinviato segue il Riepilogo (30/10/2026)
 
 Udine, LAMINAZIONE BASE del 28/10: lo Scadenzario passivo mostrava per
