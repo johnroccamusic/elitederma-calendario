@@ -62300,16 +62300,18 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
     .filter((cd) => cd.data_inizio && cd.data_inizio >= oggi)
     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
 
-  // Anche un evento impegna magazzino. Quello che e' in elenco per una
-  // fiera e non e' ancora uscito verra' preso il giorno della partenza,
-  // esattamente come il kit di un corso: se non si conta, l'Advisor
-  // promette ai corsi pezzi che quel giorno saranno dentro uno scatolone
-  // diretto a Napoli. Quello gia' scaricato non si conta di nuovo —
-  // dalle giacenze da cui parte questa simulazione e' gia' uscito.
+  // Anche un evento impegna magazzino. Il materiale di una fiera NON
+  // esce dalle giacenze (30/10/2026): resta nostro, in un altro posto, e
+  // scende solo quando il POS lo vende. Ma finche' l'evento e' in
+  // programma quei pezzi sono dentro uno scatolone diretto a Napoli, e
+  // se non si contano l'Advisor li promette ai corsi. Quello che per la
+  // regola vecchia fosse ancora fuori (scaricato e non ricaricato) non si
+  // conta di nuovo: dalle giacenze da cui parte la simulazione manca gia'.
   const materialiPerEvento = {};
   (eventiMateriali || []).forEach((r) => {
     if (!r.prodotto_id) return;
-    const resta = Math.max(0, (Number(r.quantita) || 0) - (Number(r.quantita_scaricata) || 0));
+    const ancoraFuori = Math.max(0, (Number(r.quantita_scaricata) || 0) - (Number(r.quantita_ricaricata) || 0));
+    const resta = Math.max(0, (Number(r.quantita) || 0) - ancoraFuori);
     if (resta <= 0) return;
     const dentro = (materialiPerEvento[r.evento_id] = materialiPerEvento[r.evento_id] || {});
     dentro[r.prodotto_id] = (dentro[r.prodotto_id] || 0) + resta;
@@ -83483,7 +83485,7 @@ function Gestionale() {
     // il materiale impegnato dagli eventi: serve all'Advisor, che deve
     // contarlo come conta i kit dei corsi. Solo le righe a catalogo —
     // un roll-up non ha giacenza
-    eventi_materiali: async () => setEventiMateriali((await supabase.from("eventi_materiali").select("evento_id, prodotto_id, quantita, quantita_scaricata").not("prodotto_id", "is", null)).data || []),
+    eventi_materiali: async () => setEventiMateriali((await supabase.from("eventi_materiali").select("evento_id, prodotto_id, quantita, quantita_scaricata, quantita_ricaricata").not("prodotto_id", "is", null)).data || []),
     fornitori: async () => setFornitori((await supabase.from("fornitori").select("*").order("nome")).data || []),
     // "data_documento" da sola non basta a decidere l'ordine: le spese di
     // una classe nascono tutte nello stesso giorno (o senza data), e a

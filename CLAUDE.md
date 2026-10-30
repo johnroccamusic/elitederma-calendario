@@ -1061,6 +1061,40 @@ pagina la elenca in «Manca ancora» e `modulo_salva` rifiuta con
 Migrazione `20261029100000_taglia_la_sceglie_l_allieva.sql`, prova in
 `prove/modulo-iscrizione.test.jsx`.
 
+### Il materiale di un evento resta in magazzino (30/10/2026)
+
+Terza versione della regola, e stavolta è una decisione del titolare,
+testuale: «i prodotti impegnati negli eventi non devono essere scalati
+nel magazzino, è come se si spostasse una parte del magazzino
+all'evento; verranno scalati solo una volta venduti». Fino al 08/10 il
+materiale restava in giacenza senza essere impegnato; dal 08/10 al 30/10
+«Partito» scaricava e «Rimetti in magazzino» ricaricava. Da oggi:
+
+- quello che è in elenco **resta in giacenza ed è impegnato** finché
+  l'evento è `programmato` (`impegniMagazzino` in `src/eventi/dati.js`,
+  `simulaScorte` in App.jsx): il banco non lo rivende, lo shop non lo
+  dichiara, l'Advisor lo conta. Concluso l'evento, torna libero;
+- **scende solo quando il POS lo vende** alla fiera (tendina «Sei a un
+  evento?»): è la vendita che scarica, come sempre, con `vendita_pos`;
+- **«Partito»** scrive `quantita_portata` dove non c'è già un numero a
+  mano e **non muove niente**; «Rimetti in magazzino» non esiste più;
+- al rientro **non si scrive un numero, si conta**: la riga dice
+  «Venduti all'evento N (di cui M in omaggio), ne riporti in magazzino P»
+  e chi apre lo scatolone **spunta** (`rientro_verificato_il`). Solo
+  verifica sulle quantità. Se il POS ne ha registrati più dei partiti la
+  riga lo dice in rosso. La chiusura dell'evento chiede la spunta su ogni
+  riga partita (`problemiDiChiusura`), e il conto valorizza a costo
+  quello che il POS ha registrato.
+
+`quantita_scaricata`, `quantita_ricaricata`, `quantita_rientrata` restano
+come **storico del periodo 08/10–30/10** e non si scrivono più; il
+giorno del cambio nessuna riga le aveva diverse da zero (Catania 17
+righe, Napoli 152), quindi niente da rimettere in pari. Chi legge gli
+impegni toglie comunque `scaricata − ricaricata`, per il caso in cui un
+giorno quei numeri non fossero zero. Migrazione
+`20261030150000_materiale_evento_resta_in_magazzino.sql`, prove in
+`prove/materiale-evento-resta-in-magazzino.test.jsx`.
+
 ### Il modulo riaperto si ricompila (24/10/2026)
 
 Riaperto il modulo, l'allieva non riusciva a correggere la data di

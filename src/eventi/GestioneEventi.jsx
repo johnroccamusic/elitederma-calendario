@@ -12,7 +12,7 @@ import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
-  impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
+  impegniMagazzino, segnaPartito, rientroAtteso, segnaRientroVerificato, tieneGiacenza,
   leggiCategoriePrincipali, leggiImmaginiProdotti,
   leggiDocumentiEvento, creaDocumentoEvento, caricaFileDocumento, eliminaDocumentoEvento, linkDocumentoEvento,
   leggiVenditeEvento, prodottiPiuVenduti, totaliVendite,
@@ -404,42 +404,29 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
     setNomeLibero(""); ricarica();
   }
 
-  // quanti pezzi stanno ancora fuori: usciti dal magazzino per questo
-  // evento e non ancora rimessi dentro
-  const fuoriAdesso = (righe || []).reduce((s, r) => s + Math.max(0, (Number(r.quantita_scaricata) || 0) - (Number(r.quantita_ricaricata) || 0)), 0);
-  const giaPartito = (righe || []).some((r) => (Number(r.quantita_scaricata) || 0) > 0);
-  const daRimettere = (righe || []).some((r) => r.quantita_rientrata != null && (Number(r.quantita_rientrata) || 0) !== (Number(r.quantita_ricaricata) || 0));
+  // "Partito" e' contabilita' della scatola, non un movimento: scrive in
+  // "Partito" quello che era da portare, dove non c'e' gia' un numero a
+  // mano. Il magazzino non si tocca (regola del 30/10/2026)
+  const daSegnare = (righe || []).filter((r) => r.quantita_portata == null).length;
+  const giaPartito = (righe || []).some((r) => r.quantita_portata != null);
 
   async function premiPartito() {
-    const conto = (righe || []).filter((r) => {
-      const obiettivo = r.quantita_portata == null ? (Number(r.quantita) || 0) : (Number(r.quantita_portata) || 0);
-      return obiettivo !== (Number(r.quantita_scaricata) || 0);
-    }).length;
-    if (conto === 0) { setMsg({ tipo: "ok", testo: "Il magazzino è già allineato a quello che è partito: non c'è niente da muovere." }); return; }
-    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${conto} rig${conto === 1 ? "a" : "he"} da allineare: quello che è da portare diventa partito ed esce dalle giacenze. Le righe dove hai già scritto a mano un numero in "Partito" lo tengono.`)) return;
+    if (daSegnare === 0) { setMsg({ tipo: "ok", testo: "Tutte le righe hanno già un numero in «Partito»: non c'è niente da segnare." }); return; }
+    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${daSegnare} rig${daSegnare === 1 ? "a" : "he"} da segnare: quello che è da portare diventa partito. Il magazzino non si muove — i pezzi restano in giacenza e scendono solo quando si vendono al POS. Le righe dove hai già scritto a mano un numero in "Partito" lo tengono.`)) return;
     setInCorso("partito"); setMsg(null); setAvanzamento([0, righe.length]);
     try {
-      const esito = await segnaPartito({ righe, prodottiPerId: perId, nomeEvento: evento?.nome, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
-      ricarica(); onStockCambiato?.();
-      setMsg(esito.errori.length
-        ? { tipo: "errore", testo: `${esito.mosse} prodott${esito.mosse === 1 ? "o" : "i"} scaricat${esito.mosse === 1 ? "o" : "i"}. Non è riuscito: ${primiErrori(esito.errori)}` }
-        : { tipo: "ok", testo: `Partito. ${esito.mosse} prodott${esito.mosse === 1 ? "o è uscito" : "i sono usciti"} dal magazzino.` });
+      const esito = await segnaPartito({ righe, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
+      ricarica();
+      setMsg({ tipo: "ok", testo: `Partito. ${esito.segnate} rig${esito.segnate === 1 ? "a segnata" : "he segnate"}; il magazzino non è cambiato.` });
     } catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
     setInCorso(""); setAvanzamento(null);
   }
 
-  async function premiRientro() {
-    if (!daRimettere) { setMsg({ tipo: "ok", testo: "Non c'è niente da rimettere dentro: compila prima la colonna «Rientrato»." }); return; }
-    if (!window.confirm("Rimettere in magazzino quello che è scritto nella colonna «Rientrato»?\n\nI pezzi tornano nelle giacenze e tornano vendibili.")) return;
-    setInCorso("rientro"); setMsg(null); setAvanzamento([0, 0]);
-    try {
-      const esito = await segnaRientro({ righe, prodottiPerId: perId, nomeEvento: evento?.nome, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
-      ricarica(); onStockCambiato?.();
-      setMsg(esito.errori.length
-        ? { tipo: "errore", testo: `${esito.mosse} prodott${esito.mosse === 1 ? "o" : "i"} rimess${esito.mosse === 1 ? "o" : "i"} dentro. Non è riuscito: ${primiErrori(esito.errori)}` }
-        : { tipo: "ok", testo: `Rientrati. ${esito.mosse} prodott${esito.mosse === 1 ? "o è tornato" : "i sono tornati"} in magazzino.` });
-    } catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
-    setInCorso(""); setAvanzamento(null);
+  // la spunta del rientro, riga per riga: chi scarica lo scatolone conta
+  // e conferma. Non muove niente, quindi non chiede conferma
+  async function spuntaRientro(r, verificato) {
+    try { await segnaRientroVerificato(r.id, verificato); ricarica(); }
+    catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
   }
 
   // L'ELENCO RAGGRUPPATO PER CATEGORIA.
@@ -493,26 +480,27 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
 
   return (
     <>
-      {/* La regola, scritta dove si lavora. Fino al 08/10/2026 diceva
-          l'opposto — "non esce dal magazzino, resta nostro solo in un
-          altro posto" — ed era comodo da dire e falso da usare: quei
-          pezzi al banco non c'erano, ma il magazzino continuava a
-          prometterli ai corsi e allo shop. */}
+      {/* La regola, scritta dove si lavora. E' cambiata due volte: fino
+          al 08/10/2026 il materiale restava in giacenza, dal 08/10 al
+          30/10 usciva con "Partito" e rientrava con "Rimetti in
+          magazzino". Dal 30/10/2026 il titolare ha deciso: NON si scala.
+          E' come spostare una parte del magazzino all'evento — resta
+          nostro, impegnato finche' la fiera e' in programma, e scende
+          solo quando il POS lo vende sul posto. Al rientro si conta e si
+          spunta, non si scrive un numero. */}
       <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 12, lineHeight: 1.55 }}>
-        Quello che metti in elenco è <b>impegnato</b>: resta in giacenza ma non lo promette più nessun altro, e l'Advisor lo conta.
-        Con <b>Partito</b> esce davvero dal magazzino; con <b>Rimetti in magazzino</b> torna dentro quello che è scritto in «Rientrato».
+        Quello che metti in elenco <b>resta in magazzino</b> ma è <b>impegnato</b>: non lo promette più nessun altro e l'Advisor lo conta.
+        Scende solo quando lo vendi al POS all'evento. <b>Partito</b> segna quanto è uscito dalla sede, senza toccare le giacenze;
+        al rientro ogni riga dice quanti pezzi devono tornare e tu <b>spunti</b> quando li hai contati.
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
         <Button onClick={premiPartito} disabled={!!inCorso || righe.length === 0}>
-          {inCorso === "partito" ? `Esco dal magazzino… ${avanzamento ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Partito"}
+          {inCorso === "partito" ? `Segno… ${avanzamento ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Partito"}
         </Button>
-        <Button variant="ghost" onClick={premiRientro} disabled={!!inCorso || !giaPartito}>
-          {inCorso === "rientro" ? `Rimetto dentro… ${avanzamento && avanzamento[1] ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Rimetti in magazzino"}
-        </Button>
-        {fuoriAdesso > 0 && (
+        {giaPartito && (
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#8A6D1D" }}>
-            {fuoriAdesso} pz fuori dal magazzino per questo evento
+            Il materiale è all'evento: resta in giacenza, scende solo con le vendite al POS
           </span>
         )}
       </div>
@@ -617,21 +605,17 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
             </span>
           </div>
           {g.righe.map((r) => {
-        const portata = r.quantita_portata == null ? null : Number(r.quantita_portata);
-        const rientrata = r.quantita_rientrata == null ? null : Number(r.quantita_rientrata);
-        const vendutoQui = r.prodotto_id ? (uscite.venduto[r.prodotto_id] || 0) : 0;
-        const omaggiatoQui = r.prodotto_id ? (uscite.omaggiato[r.prodotto_id] || 0) : 0;
-        // il conto della consegna: quello che e' partito meno quello che
-        // e' tornato deve fare quello che e' uscito — venduto PIU'
-        // omaggiato, perche' anche un pezzo regalato non e' tornato
-        const mancante = portata != null && rientrata != null ? Math.round((portata - rientrata - vendutoQui - omaggiatoQui) * 100) / 100 : null;
+        // il conto del rientro: partiti meno usciti dalla scatola al POS
+        // (venduti PIU' omaggiati, perche' anche un pezzo regalato non
+        // e' tornato) = quanti ne devono tornare sullo scaffale
+        const rientro = rientroAtteso(r, uscite);
+        const verificato = !!r.rientro_verificato_il;
         const d = r.prodotto_id ? disponibile(r.prodotto_id) : null;
-        const scaricata = Number(r.quantita_scaricata) || 0;
         // i pezzi che questa riga impegna sono gia' dentro "impegnato
         // altrove"? No: impegniMagazzino salta l'evento aperto. Quindi
         // il confronto e' fra quello che si chiede e quello che resta
         const chiesti = Number(r.quantita) || 0;
-        const scoperti = d ? Math.max(0, chiesti - scaricata - d.libera) : 0;
+        const scoperti = d ? Math.max(0, chiesti - d.libera) : 0;
         return (
           /* TUTTO SU UNA RIGA.
              Il nome prende lo spazio che resta, le quantita' ne
@@ -647,7 +631,6 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
                 <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
                   {nomeVivo(r)}
                   {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, marginLeft: 7 }}>a catalogo</span>}
-                  {scaricata > 0 && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", marginLeft: 7 }}>{scaricata} fuori</span>}
                 </span>
                 {/* quanto se ne puo' ancora prendere, sulla stessa riga
                     del nome: era un blocco di tre righe sotto */}
@@ -666,7 +649,6 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
               {[
                 ["Da portare", "quantita", r.quantita],
                 ["Partito", "quantita_portata", r.quantita_portata],
-                ["Rientrato", "quantita_rientrata", r.quantita_rientrata],
               ].map(([etichetta, campo, valore]) => (
                 <label key={campo} style={{ flex: "0 0 auto", width: 78 }}>
                   <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</span>
@@ -681,21 +663,28 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
                   />
                 </label>
               ))}
-              <span style={{ flex: "0 0 auto", width: 54, textAlign: "right" }} title={omaggiatoQui > 0 ? `${vendutoQui} venduti e ${omaggiatoQui} in omaggio` : "Venduto al POS all'evento"}>
-                <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap" }}>Al POS</span>
-                <span style={{ display: "block", ...fontBody, fontSize: 13.5, fontWeight: 700, color: (vendutoQui + omaggiatoQui) > 0 ? "#2E7D32" : MUTED, padding: "6px 0" }}>
-                  {vendutoQui + omaggiatoQui}
-                </span>
-              </span>
               <span style={{ flex: "0 0 auto", paddingBottom: 4 }}>
                 <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
               </span>
             </div>
-            {mancante != null && mancante !== 0 && (
+            {/* Il rientro non si scrive, si conta (30/10/2026): la riga
+                dice quanti ne sono usciti al POS e quanti devono tornare,
+                e chi apre lo scatolone spunta. Solo verifica sulle
+                quantita' — il magazzino non si muove da qui. */}
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, lineHeight: 1.4, color: verificato ? "#2E7D32" : MUTED }}>
+              <input
+                type="checkbox" checked={verificato} data-campo="rientro_verificato"
+                onChange={(e) => spuntaRientro(r, e.target.checked)}
+                style={{ width: 16, height: 16, margin: 0, flexShrink: 0, accentColor: "#2E7D32" }}
+              />
+              <span>
+                Venduti all'evento <b>{rientro.usciti}</b>{rientro.omaggiati > 0 && ` (di cui ${rientro.omaggiati} in omaggio)`}, ne riporti in magazzino <b>{rientro.attesi}</b>
+                {verificato ? " · verificato" : " · spunta quando li hai contati"}
+              </span>
+            </label>
+            {rientro.inEccesso > 0 && (
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>
-                {mancante > 0
-                  ? `Non torna: ${mancante} pz partiti che non sono né rientrati né usciti al POS.`
-                  : `Non torna: sono rientrati ${-mancante} pz più di quanti ne fossero partiti.`}
+                Non torna: il POS ne ha registrati {rientro.inEccesso} più di quanti ne risultino partiti. Controlla «Partito».
               </div>
             )}
           </div>
@@ -1039,7 +1028,7 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
   if (errore) return <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B" }}>Non riesco a leggere il conto: {errore}</div>;
   if (!conto) return <Vuoto>Sto facendo i conti…</Vuoto>;
 
-  const { entrate, omaggi, uscitePerCategoria, usciteTotale, uscite, merce, costoMerce, merceSenzaCosto, righeScartate, risultato, completo } = conto;
+  const { entrate, omaggi, uscitePerCategoria, usciteTotale, uscite, merce, costoMerce, merceSenzaCosto, risultato, completo } = conto;
 
   const problemi = problemiDiChiusura(conto);
 
@@ -1137,15 +1126,18 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
           <>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
               Il materiale portato a un evento non esce dal magazzino: resta roba nostra, solo in un altro posto.
-              Scende quando si vende o si regala. Qui si valorizza a costo di acquisto quello che non è tornato indietro.
+              Scende quando si vende o si regala al POS. Qui si valorizza a costo di acquisto quello che il POS ha registrato;
+              il rientro si conta e si spunta nella scheda Materiali.
             </div>
             {merce.map((r) => (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
                 <span style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
-                  {r.portata != null ? `${r.portata} portati` : "partenza non contata"}
+                  {`${r.portata} partiti`}
                   {r.venduto > 0 ? ` · ${r.venduto} venduti` : ""}
                   {r.omaggiata > 0 ? ` · ${r.omaggiata} omaggio` : ""}
+                  {` · ${r.daRiportare} da riportare`}
+                  {r.rientroVerificato ? " ✓" : ""}
                 </span>
                 {r.senzaCosto ? (
                   <span title="Senza costo di acquisto questa merce vale zero nel conto: mettilo nella scheda del prodotto."
@@ -1193,7 +1185,7 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
           {problemi.length === 0 ? (
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
-                Tutto quadra: la merce partita torna col venduto, le spese sono pagate e hanno un importo.
+                Tutto quadra: il rientro del materiale è stato contato, le spese sono pagate e hanno un importo.
               </span>
               <Button onClick={() => cambiaStato("concluso")} disabled={chiudendo}>{chiudendo ? "Chiudo…" : "Chiudi l'evento"}</Button>
             </div>
@@ -1223,21 +1215,6 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
         </Riquadro>
       )}
 
-      {righeScartate.length > 0 && (
-        <Riquadro titolo="Non torna" sfondo="#FBEBE9" bordo="#F0C8C2">
-          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", lineHeight: 1.5, marginBottom: 6 }}>
-            Quello che è partito meno quello che è tornato deve fare quello che si è venduto o regalato. Qui non torna:
-          </div>
-          {righeScartate.map((r) => (
-            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12, color: "#C0392B", padding: "3px 0" }}>
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
-              <span style={{ whiteSpace: "nowrap", fontWeight: 700 }}>
-                {r.scarto > 0 ? `${r.scarto} in meno del venduto` : `${-r.scarto} venduti più di quanti ne risultino partiti`}
-              </span>
-            </div>
-          ))}
-        </Riquadro>
-      )}
     </div>
   );
 }
