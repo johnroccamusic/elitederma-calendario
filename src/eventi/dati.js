@@ -127,24 +127,22 @@ export async function usciteAllEvento(eventoId) {
 // --- il magazzino visto da un evento ---------------------------------------
 
 // Quanti pezzi sono gia' impegnati altrove, e quindi non si possono
-// promettere a questo evento:
-//   - quelli dentro un carrello sospeso del POS. La giacenza li ha
-//     ancora (sono in scatola), ma sono di qualcuno: il banco non li
-//     rivende e il sito non li dichiara;
-//   - quelli che un ALTRO evento in programma ha messo in elenco. Il
-//     materiale di una fiera non esce dal magazzino (vedi sotto): e'
-//     impegnato finche' l'evento e' in programma, poi torna libero.
+// promettere a questo evento: quelli dentro un carrello sospeso del POS.
+// La giacenza li ha ancora (sono in scatola), ma sono di qualcuno: il
+// banco non li rivende e il sito non li dichiara.
+//
+// Gli ALTRI eventi non impegnano niente (30/10/2026, deciso dal
+// titolare): il materiale portato a una fiera resta in magazzino e lo
+// puo' vendere chiunque. Dal 08/10 al 30/10 si contava anche quello.
+// L'Advisor continua a dire quanto serve a fiere e corsi, ma informa:
+// non vincola.
 //
 // I pezzi in attesa di spedizione NON entrano in questo conto. Una
 // vendita al banco scarica il magazzino nell'istante in cui si incassa,
 // spedizione o no: dalla giacenza sono gia' usciti, e toglierli di nuovo
 // qui li conterebbe due volte.
 export async function impegniMagazzino() {
-  const [sospesi, materiali, eventi] = await Promise.all([
-    supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", "pos_carrelliSospesi").maybeSingle(),
-    supabase.from("eventi_materiali").select("evento_id, prodotto_id, quantita, quantita_scaricata, quantita_ricaricata").not("prodotto_id", "is", null),
-    supabase.from("eventi").select("id, stato"),
-  ]);
+  const sospesi = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", "pos_carrelliSospesi").maybeSingle();
 
   const carrelli = {};
   const lista = Array.isArray(sospesi.data?.valore) ? sospesi.data.valore : [];
@@ -153,22 +151,7 @@ export async function impegniMagazzino() {
     if (r?.prodottoId && q > 0) carrelli[r.prodottoId] = (carrelli[r.prodottoId] || 0) + q;
   }));
 
-  // un evento annullato non impegna niente, e uno concluso ha il suo
-  // materiale di nuovo sullo scaffale: impegnano solo quelli in programma.
-  // Quello che per la regola vecchia fosse ancora fuori dalle giacenze
-  // (scaricato e non ricaricato) non si impegna di nuovo: non c'e' gia'
-  const vivi = new Set((eventi.data || []).filter((e) => e.stato === "programmato").map((e) => e.id));
-  const perEvento = {};
-  (materiali.data || []).forEach((r) => {
-    if (!vivi.has(r.evento_id)) return;
-    const ancoraFuori = Math.max(0, (Number(r.quantita_scaricata) || 0) - (Number(r.quantita_ricaricata) || 0));
-    const resta = Math.max(0, (Number(r.quantita) || 0) - ancoraFuori);
-    if (resta <= 0) return;
-    const dentro = (perEvento[r.evento_id] = perEvento[r.evento_id] || {});
-    dentro[r.prodotto_id] = (dentro[r.prodotto_id] || 0) + resta;
-  });
-
-  return { carrelli, perEvento };
+  return { carrelli };
 }
 
 // Un prodotto che una giacenza propria ce l'ha davvero: un bundle
@@ -182,9 +165,9 @@ export function tieneGiacenza(p) {
 //
 // Il materiale di una fiera NON esce dal magazzino (regola del titolare,
 // 30/10/2026): e' come se una parte del magazzino si spostasse
-// all'evento. Resta in giacenza, resta impegnato finche' l'evento e' in
-// programma — cosi' nessun altro lo promette — e scende SOLO quando si
-// vende, col POS, sul posto: e' la vendita che scarica, come sempre.
+// all'evento. Resta in giacenza, non e' impegnato in niente — lo puo'
+// vendere chiunque, il banco, lo shop, la fiera — e scende SOLO quando
+// qualcuno lo vende: e' la vendita che scarica, come sempre.
 //
 // Dal 08/10 al 30/10/2026 la regola era l'opposta ("Partito" scaricava,
 // "Rimetti in magazzino" ricaricava): quantita_scaricata e

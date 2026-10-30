@@ -2,10 +2,12 @@
 --
 -- "I prodotti impegnati negli eventi non devono essere scalati: e' come se
 -- si spostasse una parte del magazzino all'evento. Verranno scalati solo
--- una volta venduti." Quindi: quello che e' in elenco per una fiera resta
--- in giacenza, resta impegnato finche' l'evento e' in programma (nessun
--- altro lo promette, l'Advisor lo conta), e scende solo quando il POS lo
--- vende sul posto — ed e' la vendita che scarica, come sempre.
+-- una volta venduti." E, precisato lo stesso giorno: "non e' impegnato in
+-- nulla e tutti lo possono vendere". Quindi: quello che e' in elenco per
+-- una fiera resta in giacenza, vendibile dal banco, dallo shop e dalla
+-- fiera, e scende solo quando qualcuno lo vende — e' la vendita che
+-- scarica, come sempre. L'Advisor dice quanto serve a fiere e corsi per
+-- capire se le quantita' bastano, ma informa: non vincola.
 --
 -- Dal 08/10 al 30/10 la regola era l'opposta: "Partito" scaricava e
 -- "Rimetti in magazzino" ricaricava (20261008200000_eventi_materiali_scarico).

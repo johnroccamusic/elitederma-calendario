@@ -62300,13 +62300,16 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
     .filter((cd) => cd.data_inizio && cd.data_inizio >= oggi)
     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
 
-  // Anche un evento impegna magazzino. Il materiale di una fiera NON
-  // esce dalle giacenze (30/10/2026): resta nostro, in un altro posto, e
-  // scende solo quando il POS lo vende. Ma finche' l'evento e' in
-  // programma quei pezzi sono dentro uno scatolone diretto a Napoli, e
-  // se non si contano l'Advisor li promette ai corsi. Quello che per la
-  // regola vecchia fosse ancora fuori (scaricato e non ricaricato) non si
-  // conta di nuovo: dalle giacenze da cui parte la simulazione manca gia'.
+  // Anche un evento entra nella simulazione, come INFORMAZIONE e non
+  // come vincolo (30/10/2026, parole del titolare: "l'Advisor ti avvisa
+  // quanto materiale ci vuole a fare l'evento e quanti prodotti servono
+  // per i corsi nel caso in cui i prodotti vengono portati via dal
+  // magazzino, ma nessun impegno"). Il materiale di una fiera resta in
+  // giacenza e lo puo' vendere chiunque; qui si mette in fila con le
+  // edizioni solo per far vedere se, portandolo via, ai corsi basta quel
+  // che resta. Quello che per la regola vecchia fosse ancora fuori
+  // (scaricato e non ricaricato) non si conta di nuovo: dalle giacenze da
+  // cui parte la simulazione manca gia'.
   const materialiPerEvento = {};
   (eventiMateriali || []).forEach((r) => {
     if (!r.prodotto_id) return;

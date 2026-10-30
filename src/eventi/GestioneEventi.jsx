@@ -311,7 +311,7 @@ function SchedaTeam({ eventoId, persone }) {
 export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, fabbisognoCorsi = {} }) {
   const [righe, setRighe] = useState(null);
   const [uscite, setUscite] = useState({ venduto: {}, omaggiato: {} });
-  const [impegni, setImpegni] = useState({ carrelli: {}, perEvento: {} });
+  const [impegni, setImpegni] = useState({ carrelli: {} });
   // la categoria con cui ogni prodotto si raggruppa, e la sua foto
   const [categorie, setCategorie] = useState({ principale: {} });
   const [immagini, setImmagini] = useState({});
@@ -334,7 +334,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
   const ricarica = () => {
     leggiRighe("eventi_materiali", eventoId).then(setRighe).catch(() => setRighe([]));
     usciteAllEvento(eventoId).then(setUscite).catch(() => setUscite({ venduto: {}, omaggiato: {} }));
-    impegniMagazzino().then(setImpegni).catch(() => setImpegni({ carrelli: {}, perEvento: {} }));
+    impegniMagazzino().then(setImpegni).catch(() => setImpegni({ carrelli: {} }));
   };
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
   useEffect(() => {
@@ -368,11 +368,11 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
   // blocca — in elenco si puo' scrivere anche di piu', perche' fra oggi
   // e la fiera puo' arrivare un ordine — ma si vede prima di scrivere,
   // che era tutto il punto.
+  // solo i carrelli sospesi: gli altri eventi non impegnano niente, il
+  // loro materiale resta in magazzino e vendibile (30/10/2026)
   function impegnatoAltrove(prodottoId) {
     const daiCarrelli = impegni.carrelli[prodottoId] || 0;
-    const daAltriEventi = Object.entries(impegni.perEvento)
-      .reduce((s, [id, mappa]) => (id === eventoId ? s : s + (mappa[prodottoId] || 0)), 0);
-    return { daiCarrelli, daAltriEventi, totale: daiCarrelli + daAltriEventi };
+    return { daiCarrelli, totale: daiCarrelli };
   }
   function disponibile(prodottoId) {
     const p = perId.get(prodottoId);
@@ -483,14 +483,15 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
       {/* La regola, scritta dove si lavora. E' cambiata due volte: fino
           al 08/10/2026 il materiale restava in giacenza, dal 08/10 al
           30/10 usciva con "Partito" e rientrava con "Rimetti in
-          magazzino". Dal 30/10/2026 il titolare ha deciso: NON si scala.
-          E' come spostare una parte del magazzino all'evento — resta
-          nostro, impegnato finche' la fiera e' in programma, e scende
-          solo quando il POS lo vende sul posto. Al rientro si conta e si
-          spunta, non si scrive un numero. */}
+          magazzino". Dal 30/10/2026 il titolare ha deciso: NON si scala
+          e NON si impegna. E' come spostare una parte del magazzino
+          all'evento — resta nostro, lo puo' vendere chiunque, e scende
+          solo quando qualcuno lo vende. Al rientro si conta e si spunta,
+          non si scrive un numero. */}
       <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 12, lineHeight: 1.55 }}>
-        Quello che metti in elenco <b>resta in magazzino</b> ma è <b>impegnato</b>: non lo promette più nessun altro e l'Advisor lo conta.
-        Scende solo quando lo vendi al POS all'evento. <b>Partito</b> segna quanto è uscito dalla sede, senza toccare le giacenze;
+        Quello che metti in elenco <b>resta in magazzino</b> e resta <b>vendibile da tutti</b>: banco, shop, fiera. Non è impegnato;
+        l'Advisor ti dice quanto serve all'evento e quanto ai corsi, per capire se le quantità bastano, senza nessun vincolo.
+        Scende solo quando qualcuno lo vende. <b>Partito</b> segna quanto è uscito dalla sede, senza toccare le giacenze;
         al rientro ogni riga dice quanti pezzi devono tornare e tu <b>spunti</b> quando li hai contati.
       </div>
 
@@ -500,7 +501,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
         </Button>
         {giaPartito && (
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#8A6D1D" }}>
-            Il materiale è all'evento: resta in giacenza, scende solo con le vendite al POS
+            Il materiale è all'evento: resta in giacenza e vendibile, scende solo quando si vende
           </span>
         )}
       </div>
@@ -611,9 +612,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
         const rientro = rientroAtteso(r, uscite);
         const verificato = !!r.rientro_verificato_il;
         const d = r.prodotto_id ? disponibile(r.prodotto_id) : null;
-        // i pezzi che questa riga impegna sono gia' dentro "impegnato
-        // altrove"? No: impegniMagazzino salta l'evento aperto. Quindi
-        // il confronto e' fra quello che si chiede e quello che resta
+        // quello che si chiede contro quello che c'e' sullo scaffale
         const chiesti = Number(r.quantita) || 0;
         const scoperti = d ? Math.max(0, chiesti - d.libera) : 0;
         return (

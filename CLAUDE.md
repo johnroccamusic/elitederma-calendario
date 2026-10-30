@@ -1070,12 +1070,17 @@ all'evento; verranno scalati solo una volta venduti». Fino al 08/10 il
 materiale restava in giacenza senza essere impegnato; dal 08/10 al 30/10
 «Partito» scaricava e «Rimetti in magazzino» ricaricava. Da oggi:
 
-- quello che è in elenco **resta in giacenza ed è impegnato** finché
-  l'evento è `programmato` (`impegniMagazzino` in `src/eventi/dati.js`,
-  `simulaScorte` in App.jsx): il banco non lo rivende, lo shop non lo
-  dichiara, l'Advisor lo conta. Concluso l'evento, torna libero;
-- **scende solo quando il POS lo vende** alla fiera (tendina «Sei a un
-  evento?»): è la vendita che scarica, come sempre, con `vendita_pos`;
+- quello che è in elenco **resta in giacenza e non è impegnato in
+  niente** (precisato dal titolare lo stesso giorno: «tutti lo possono
+  vendere»): il banco, lo shop e la fiera lo vendono tutti dalla stessa
+  giacenza. `impegniMagazzino` conta solo i carrelli sospesi. L'Advisor
+  (`simulaScorte`) tiene le fiere in fila con le edizioni, ma come
+  **informazione**: «ti avvisa quanto materiale ci vuole a fare l'evento
+  e quanti prodotti servono per i corsi nel caso in cui i prodotti
+  vengono portati via dal magazzino, ma nessun impegno». I dipendenti
+  devono capire da lì se le quantità bastano per corsi ed evento;
+- **scende solo quando qualcuno lo vende**: alla fiera col POS (tendina
+  «Sei a un evento?»), o altrove. È la vendita che scarica, come sempre;
 - **«Partito»** scrive `quantita_portata` dove non c'è già un numero a
   mano e **non muove niente**; «Rimetti in magazzino» non esiste più;
 - al rientro **non si scrive un numero, si conta**: la riga dice
@@ -1089,9 +1094,7 @@ materiale restava in giacenza senza essere impegnato; dal 08/10 al 30/10
 `quantita_scaricata`, `quantita_ricaricata`, `quantita_rientrata` restano
 come **storico del periodo 08/10–30/10** e non si scrivono più; il
 giorno del cambio nessuna riga le aveva diverse da zero (Catania 17
-righe, Napoli 152), quindi niente da rimettere in pari. Chi legge gli
-impegni toglie comunque `scaricata − ricaricata`, per il caso in cui un
-giorno quei numeri non fossero zero. Migrazione
+righe, Napoli 152), quindi niente da rimettere in pari. Migrazione
 `20261030150000_materiale_evento_resta_in_magazzino.sql`, prove in
 `prove/materiale-evento-resta-in-magazzino.test.jsx`.
 
