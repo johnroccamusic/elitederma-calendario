@@ -47,6 +47,21 @@ describe("il cash rinviato segue il Riepilogo", () => {
     expect(riga.totale).toBe(100);
     expect(riga.oggetto).toContain("rinviata per 150,00 €");
   });
+  it("la quota venditore a bonifico porta il nome di chi la prende", () => {
+    const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
+    const iscritti = [{ id: "a1", corso_data_id: CLASSE, tutor: "ANGELICA BURELLI", quota_venditore: 50 }, { id: "a2", corso_data_id: CLASSE, tutor: "ANGELICA BURELLI", quota_venditore: 85 }];
+    const quoteVenditoriSplit = [{ corso_data_id: CLASSE, venditore: "ANGELICA BURELLI", modalita: "B" }];
+    const { daPagareVirtuali, cashRicalcolati } = calcolaVociScadenziario({ ...base, corsiDate, iscritti, quoteVenditoriSplit });
+    const quota = daPagareVirtuali.find((r) => r.tipo === "venditore");
+    expect(quota.nome).toBe("Quota venditore — ANGELICA BURELLI");
+    expect(quota.totale).toBe(135);
+    // e la sua parte in contanti, oggi, e' zero
+    expect(cashRicalcolati.get(`cash_venditore_${CLASSE}_ANGELICA BURELLI`)).toBe(0);
+    // rimessa su C (contanti), la riga a bonifico sparisce e il cash torna 135
+    const dopo = calcolaVociScadenziario({ ...base, corsiDate, iscritti, quoteVenditoriSplit: [] });
+    expect(dopo.daPagareVirtuali.find((r) => r.tipo === "venditore")).toBeUndefined();
+    expect(dopo.cashRicalcolati.get(`cash_venditore_${CLASSE}_ANGELICA BURELLI`)).toBe(135);
+  });
   it("un impegno già coperto in parte tiene la cifra scritta", () => {
     const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
     const { cashRicalcolati } = calcolaVociScadenziario({ ...base, corsiDate });

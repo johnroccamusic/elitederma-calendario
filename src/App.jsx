@@ -28441,14 +28441,20 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // divergere ne diventa una.
   const rigaVenditoreClasse = (() => {
     const perVenditore = raggruppaQuoteVenditori(listaIscritti);
+    // chi, fra i venditori, ha una parte a bonifico: nello Scadenzario la
+    // riga compariva come "Quota venditore" e basta, e il titolare non
+    // capiva di chi fosse (Udine, 30/10/2026). Qui nel Riepilogo il nome
+    // resta "Quota venditore", perche' sotto c'e' il dettaglio per persona
+    const aBonifico = [];
     const bonifico = round2(perVenditore.reduce((somma, v) => {
       const modalita = modalitaVenditore(quoteVenditoriSplit, corsoData.id, v.chiave);
-      if (modalita === "B") return somma + v.totale;
-      if (modalita === "Mix") return somma + v.totale / 2;
+      if (modalita === "B") { aBonifico.push(v.nome); return somma + v.totale; }
+      if (modalita === "Mix") { aBonifico.push(v.nome); return somma + v.totale / 2; }
       return somma;
     }, 0));
     return {
       rigaId: corsoData.id, tabella: "corsi_date", tipo: "venditore", nome: "Quota venditore",
+      nomeScadenziario: aBonifico.length ? `Quota venditore — ${aBonifico.join(", ")}` : "Quota venditore",
       totale: quoteVenditoreClasse,
       bonifico,
       cash: round2(quoteVenditoreClasse - bonifico),
@@ -44221,7 +44227,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       // master/alloggio/assistente/venditore)
       const sottocategoriaId = r.tipo === "location" ? (r.categoriaSpesaId || null) : categoriaGruppoPer(r.tipo, categorieGruppi);
       daPagare.push({
-        key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo,
+        key: chiave, chiave, corsoData: cd, nome: r.nomeScadenziario || r.nome, totale: r.bonifico, tipo: r.tipo,
         tabella: r.tabella, rigaId: r.rigaId, sottocategoriaId,
         fornitore: r.fornitore || null, fornitoreId: r.fornitoreId || null, iban: r.iban || null,
         // la classificazione gestionale gia' scritta sull'anagrafica
