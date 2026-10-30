@@ -29710,8 +29710,15 @@ function PannelloRiepilogoAmministrativo({
   //
   // Non si cancellano da soli: un impegno e' un debito, e sparire da
   // solo e' peggio che restare. Si mostrano, e si tolgono premendo.
+  //
+  // Vale anche quando la riga c'e' ancora ma la sua quota in contanti e'
+  // scesa a zero: a Udine (28/10/2026) il compenso della master era
+  // diviso a meta', "Disponi pagamenti" ha rinviato 150 € di contanti,
+  // poi il bonifico e' stato portato a 300 e i 150 sono rimasti nello
+  // scadenziario come dovuti. Prima l'impegno teneva viva la sua stessa
+  // chiave (cashRinviato) e nessuno lo vedeva piu' qui dentro.
   const chiaviVive = new Set([
-    ...righeSpeseTutte.filter((r) => (r.cash || 0) > 0 || r.cashRinviato || r.cashPagato).map((r) => chiaveCashRiga(r)),
+    ...righeSpeseTutte.filter((r) => (r.cash || 0) > 0 || r.cashPagato).map((r) => chiaveCashRiga(r)),
     ...venditoriDecisi.filter((v) => v.suoCash > 0).map((v) => `cash_venditore_${v.rigaId}`),
   ]);
   const impegniOrfani = (impegni || []).filter((x) =>
@@ -44174,12 +44181,28 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
   // se in Riepilogo si sposta un costo da cash a bonifico o si cambia una
   // tariffa, lo Scadenzario si aggiorna da solo.
   const importiRicalcolati = new Map();
+  // chiave "cash_<tipo>_<rigaId>" -> quanto vale OGGI la parte in
+  // contanti di quel costo. Serve agli impegni rinviati dal corso
+  // ("contanti non coperti"): l'impegno nasce con la cifra di quel
+  // giorno, ma il Riepilogo puo' spostare il costo da cash a bonifico
+  // dopo — e' successo a Udine il 28/10/2026: compenso master diviso a
+  // meta', 150 € rinviati, poi il bonifico portato a 300 e i 150 rimasti
+  // scritti nello scadenziario come se fossero ancora dovuti.
+  const cashRicalcolati = new Map();
   (corsiDate || []).forEach((cd) => {
     // la soglia guarda l'inizio del corso: un corso gia' cominciato o
     // finito l'ha superata, e i suoi costi entrano tutti
     const entroLaSoglia = cd.data_inizio && cd.data_inizio <= addGiorni(oggiStr, GIORNI_ANTICIPO_SCADENZIARIO);
     if (!entroLaSoglia && !classiConSpesa.has(cd.id)) return;
     const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi });
+    righeSpeseTutte.forEach((r) => cashRicalcolati.set(`cash_${r.tipo}_${r.rigaId}`, round2(r.cash || 0)));
+    // i venditori hanno una chiave a testa (vedi righeVenditoriCash nel
+    // Riepilogo): stessa regola, stessa cifra
+    raggruppaQuoteVenditori((iscritti || []).filter((i) => i.corso_data_id === cd.id)).forEach((v) => {
+      const modalita = modalitaVenditore(quoteVenditoriSplit, cd.id, v.chiave);
+      const suoBonifico = modalita === "B" ? v.totale : modalita === "Mix" ? round2(v.totale / 2) : 0;
+      cashRicalcolati.set(`cash_venditore_${cd.id}_${v.chiave}`, round2(v.totale - suoBonifico));
+    });
     righeSpeseTutte.forEach((r) => {
       const chiave = `${r.tipo}_${r.rigaId}`;
       // il valore di oggi va registrato SEMPRE, anche quando e' zero: uno
@@ -44216,7 +44239,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       });
     });
   });
-  return { daPagareVirtuali: daPagare, importiRicalcolati };
+  return { daPagareVirtuali: daPagare, importiRicalcolati, cashRicalcolati };
 }
 
 // Le quote in contanti che il Riepilogo di una classe ha mandato nello
@@ -44226,20 +44249,40 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
 // saldano dalla cassa contanti o con bonifico. La categoria e' quella del
 // gruppo del tipo di riga (master, venditore, assistente…), cosi' la
 // spesa che nasce e' gia' classificata
-function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }) {
+//
+// L'importo NON e' quello scritto sull'impegno: e' quello che il
+// Riepilogo della classe prevede OGGI in contanti per quella voce
+// (cashRicalcolati), finche' l'impegno non e' stato coperto nemmeno in
+// parte. Stessa regola della parte a bonifico (importiRicalcolati): una
+// voce non si congela finche' qualcuno non la paga. Se oggi il Riepilogo
+// non prevede piu' contanti per quella voce, la riga resta — un impegno
+// e' un debito scritto, e sparire da solo e' peggio che restare — ma
+// vale zero, dice perche', e si toglie dal Riepilogo della classe.
+function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati = null }) {
   const cdById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
   return (impegnoTabella || [])
     .filter((x) => String(x.chiave_origine || "").startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"))
     .map((x) => {
       const tipoRiga = String(x.chiave_origine).split("_")[1] || "manuale";
       const cd = cdById[x.origine_id] || null;
+      const scritto = round2(Number(x.importo_previsto) || 0);
+      const coperto = round2(Number(x.importo_coperto) || 0);
+      const vivo = cashRicalcolati && cashRicalcolati.has(x.chiave_origine) && coperto <= 0 ? cashRicalcolati.get(x.chiave_origine) : null;
+      const totale = vivo == null ? scritto : vivo;
+      const nonPiuDovuto = vivo != null && vivo <= 0;
       return {
         key: x.chiave_origine, chiave: x.chiave_origine, tipo: "cash_rinviato", tipoRiga, impegno: x, corsoData: cd,
         nome: String(x.descrizione || "").replace(/ — contanti non coperti$/, ""),
-        totale: Number(x.importo_previsto) || 0,
+        totale,
+        importoScritto: scritto,
+        nonPiuDovuto,
         sottocategoriaId: categoriaGruppoPer(tipoRiga, categorieGruppi) || null,
         fornitore: null, iban: null,
-        oggetto: "Quota in contanti rinviata dal corso",
+        oggetto: nonPiuDovuto
+          ? `Rinviato per ${fmtEuroErp2(scritto)}, ma oggi il Riepilogo della classe non prevede contanti per questa voce: non è più dovuto. Si toglie dal Riepilogo, in «Impegni senza riga».`
+          : vivo != null && vivo !== scritto
+            ? `Quota in contanti rinviata dal corso · rinviata per ${fmtEuroErp2(scritto)}, oggi il Riepilogo dice ${fmtEuroErp2(vivo)}`
+            : "Quota in contanti rinviata dal corso",
         dataDebito: x.data_prevista || cd?.data_fine || null,
         scadenza: x.data_prevista || null,
       };
@@ -50672,7 +50715,7 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
     return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
   }
 
-  const { daPagareVirtuali, importiRicalcolati } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
+  const { daPagareVirtuali, importiRicalcolati, cashRicalcolati } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
 
   // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
   // (stato diverso da "pagata") resta qui finché non viene segnata
@@ -50764,8 +50807,8 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
   // le quote in contanti rinviate dalle classi: vere righe di impegno
   // sotto il nome la stessa riga delle voci a bonifico: corso, sede e
   // data ("IKE · Milano · 11 set"), niente altro
-  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi })
-    .map((x) => ({ ...x, oggetto: x.corsoData ? null : x.oggetto }));
+  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati })
+    .map((x) => ({ ...x, oggetto: x.corsoData && !x.nonPiuDovuto && x.totale === x.importoScritto ? null : x.oggetto }));
   // Lo Scadenzario si legge per data di scadenza crescente: prima quello
   // che scade prima. Prima si ordinava per data del debito, che e' la
   // data in cui il costo e' nato — utile a capire da dove viene, inutile
@@ -51826,8 +51869,10 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
                     statoFattura={item.spesaReale?.numero_documento || item.numeroDocumento ? "associata" : "in_attesa"}
                     numeroDocumento={item.spesaReale?.numero_documento || item.numeroDocumento || null}
                     categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
-                    disabilitato={!item.sottocategoriaId}
-                    motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
+                    disabilitato={!item.sottocategoriaId || !!item.nonPiuDovuto}
+                    motivoDisabilitato={item.nonPiuDovuto
+                      ? "Non c'è niente da pagare: il Riepilogo della classe non prevede più contanti per questa voce. Toglila da lì, in «Impegni senza riga»."
+                      : `Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
                     onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento([item], doc) : null}
                     onAssociaASpesaEsistente={(spesa) => associaImpegnoASpesaEsistente(item, spesa)}
@@ -52674,7 +52719,7 @@ function PaginaInserimentoCostiRicavi({
   // conteggi per la riga di tasti verso le altre schede di Amministrazione
   // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
   // i numeri non possono mai divergere
-  const { daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
+  const { daPagareVirtuali: daPagareVirtualiPerConteggio, cashRicalcolati: cashRicalcolatiPerConteggio } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
   const oggiStrConteggio = dataOggiStr();
   const daPagareRealiPerConteggio = (spese || [])
     .filter((s) => s.stato !== "pagata")
@@ -52775,7 +52820,7 @@ function PaginaInserimentoCostiRicavi({
   // Scadenziario Passivo E quello del segnalatore rosso in cima, scritto
   // una volta sola. Due conti uguali fatti in due punti diventano due
   // numeri diversi il giorno in cui se ne tocca uno.
-  const passivoCount = daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio + vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi }).length;
+  const passivoCount = daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio + vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati: cashRicalcolatiPerConteggio }).length;
 
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
@@ -86689,4 +86734,5 @@ export {
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
+  calcolaVociScadenziario, vociCashRinviate,
 };

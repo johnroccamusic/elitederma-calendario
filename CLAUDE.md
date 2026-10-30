@@ -1098,6 +1098,32 @@ righe, Napoli 152), quindi niente da rimettere in pari. Migrazione
 `20261030150000_materiale_evento_resta_in_magazzino.sql`, prove in
 `prove/materiale-evento-resta-in-magazzino.test.jsx`.
 
+### Il cash rinviato segue il Riepilogo (30/10/2026)
+
+Udine, LAMINAZIONE BASE del 28/10: lo Scadenzario passivo mostrava per
+Angelica Burelli **300 € a bonifico più 150 € «Costo Master»**, e nessuno
+sapeva da dove venissero i 150. Erano un **impegno** scritto da «Disponi
+pagamenti» alle 9:27 di quel giorno, quando il compenso era ancora diviso
+a metà di default (150 bonifico, 150 cash) e la busta non copriva il
+cash; poi il bonifico è stato portato a 300 e il cash a 0, ma l'impegno
+è rimasto aperto con la cifra del giorno del rinvio. E il Riepilogo non
+lo mostrava fra gli «Impegni senza riga» perché l'impegno teneva viva
+la propria chiave (`cashRinviato`).
+
+Due correzioni, nessuna cancellazione automatica (un impegno è un debito
+scritto: sparire da solo è peggio che restare):
+
+- `calcolaVociScadenziario` restituisce anche **`cashRicalcolati`**,
+  quanto vale oggi la parte in contanti di ogni voce (anche per
+  venditore). `vociCashRinviate` usa quella cifra finché l'impegno non è
+  coperto nemmeno in parte: se oggi è zero la riga resta, **vale 0 €**,
+  dice «non è più dovuto» e non si può pagare; se è cambiata lo dice.
+- Nel Riepilogo della classe una riga con la quota in contanti a zero
+  **non tiene più vivo il suo impegno**: compare fra «Impegni senza
+  riga», con il tasto per toglierlo.
+
+Prove in `prove/cash-rinviato-segue-il-riepilogo.test.js`.
+
 ### Il modulo riaperto si ricompila (24/10/2026)
 
 Riaperto il modulo, l'allieva non riusciva a correggere la data di
