@@ -13,6 +13,13 @@
 // Chi si e' disiscritto resta in archivio con la data: di default e' fuori
 // dai risultati, e col filtro «Disiscritti» si vedono solo loro. Dalle
 // campagne e' fuori sempre, qualunque filtro ci sia.
+//
+// LA DATA NON E' SEMPRE VERA. 16.327 record su 23.847 sono nati in Vetta il
+// 9 marzo 2026, il giorno del caricamento in blocco: la loro data e' quella,
+// non quella della richiesta, e Vetta non ne conserva un'altra. Quelle
+// richieste si mostrano come «data non nota», e il filtro per anno le
+// ignora e guarda anche le vendite (che una data vera ce l'hanno):
+// «2024» e' chi ha chiesto nel 2024 con data certa, o ha comprato nel 2024.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
@@ -45,7 +52,7 @@ export const etichettaStato = (s) => STATI[s] || s || "—";
 const FILTRI_VUOTI = {
   cerca: "", anno: "", dal: "", al: "", corso: "", regione: "", provincia: "", comune: "",
   qualifica: "", stato: "", trattato_da: "", mestiere: "", collegamento: "",
-  disiscritti: false, da_verificare: false, con_email: false,
+  disiscritti: false, da_verificare: false, con_email: false, senza_data: false,
 };
 
 // "03/2024 Microblading · 05/2025 Laminazione": la storia di una persona
@@ -54,7 +61,7 @@ const FILTRI_VUOTI = {
 export function cronologiaRichieste(richieste) {
   return [...(richieste || [])]
     .sort((a, b) => String(a.richiesta_il || "").localeCompare(String(b.richiesta_il || "")))
-    .map((r) => `${meseAnno(r.richiesta_il)} ${(r.corsi || []).length ? r.corsi.join(", ") : "richiesta"}`)
+    .map((r) => `${r.data_certa === false ? "data non nota" : meseAnno(r.richiesta_il)} ${(r.corsi || []).length ? r.corsi.join(", ") : "richiesta"}`)
     .join(" · ");
 }
 
@@ -92,6 +99,7 @@ export function riassuntoFiltri(f) {
   if (f.collegamento) pezzi.push(COLLEGAMENTI[f.collegamento] || f.collegamento);
   if (f.da_verificare) pezzi.push("da verificare");
   if (f.con_email) pezzi.push("con email");
+  if (f.senza_data) pezzi.push("data non nota");
   if (f.disiscritti) pezzi.push("disiscritti");
   return pezzi.join(" · ");
 }
@@ -162,7 +170,7 @@ function SchedaContatto({ c, onCambiato }) {
   const [msg, setMsg] = useState("");
   useEffect(() => {
     let vivo = true;
-    supabase.from("crm_richieste").select("id, richiesta_il, corsi, corsi_vetta, canale, form_origine, trattato_da, qualifica, gestione_chiamata, citta_originale, comune, provincia, regione, preferenza_giorno, preferenza_ora")
+    supabase.from("crm_richieste").select("id, richiesta_il, data_certa, corsi, corsi_vetta, canale, form_origine, trattato_da, qualifica, gestione_chiamata, citta_originale, comune, provincia, regione, preferenza_giorno, preferenza_ora")
       .eq("contatto_id", c.id).order("richiesta_il")
       .then(({ data, error }) => { if (vivo) setRichieste(error ? [] : data || []); });
     supabase.from("crm_contatti").select("opportunita, email_aggiuntive, telefoni_aggiuntivi").eq("id", c.id).maybeSingle()
@@ -223,7 +231,8 @@ function SchedaContatto({ c, onCambiato }) {
         )}
         {(richieste || []).map((r) => (
           <div key={r.id} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5, padding: "4px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <b style={{ color: NAVY }}>{dataIt(r.richiesta_il)}</b>
+            <b style={{ color: NAVY }}>{r.data_certa === false ? "Data non nota" : dataIt(r.richiesta_il)}</b>
+            {r.data_certa === false && <span style={{ color: MUTED }} title="Caricata in Vetta il 9 marzo 2026 insieme a tutto lo storico: la data della richiesta non c'è"> (in Vetta dal {dataIt(r.richiesta_il)})</span>}
             {" · "}{(r.corsi || []).length ? r.corsi.join(", ") : (r.corsi_vetta || []).join(", ") || "senza corso"}
             {r.form_origine ? ` · ${r.form_origine}` : ""}
             {r.canale ? ` · ${r.canale}` : ""}
@@ -336,6 +345,7 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiM
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
           Chi ha scritto a Elitederma, importato da Vetta: una scheda a persona, con tutte le richieste sotto.
           {valori?.totale != null && ` In archivio ${numero(valori.totale)} contatti${valori.disiscritti ? `, di cui ${numero(valori.disiscritti)} disiscritti` : ""}.`}
+          {valori?.senza_data > 0 && ` Per ${numero(valori.senza_data)} la data della richiesta non è nota: sono stati caricati in Vetta in blocco il 9 marzo 2026, e il filtro per anno li lascia fuori.`}
         </div>
 
         {/* I FILTRI. Periodo e corso guardano le richieste; il resto il
@@ -348,6 +358,8 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiM
               <input value={cercaScritto} onChange={(e) => setCercaScritto(e.target.value)} placeholder="nome, email, telefono, comune"
                 style={{ ...inputStyle, padding: "7px 9px", fontSize: 12.5, width: "100%", minWidth: 0 }} />
             </label>
+            {/* gli anni delle richieste con data certa e delle vendite:
+                2022-2026, non solo l'anno del caricamento in Vetta */}
             <Tendina etichetta="Anno" larghezza={110} valore={filtri.anno} onCambia={(v) => cambia("anno", v)} opzioni={(valori?.anni || []).map((a) => ({ valore: String(a.valore), quanti: a.quanti }))} tutto="Tutti" />
             <label style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
               <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Periodo (dal → al)</span>
@@ -373,6 +385,7 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiM
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
             <Spunta etichetta="Solo con email" valore={filtri.con_email} onCambia={(v) => cambia("con_email", v)} />
             <Spunta etichetta="Solo da verificare" valore={filtri.da_verificare} onCambia={(v) => cambia("da_verificare", v)} />
+            <Spunta etichetta="Data non nota" valore={filtri.senza_data} onCambia={(v) => cambia("senza_data", v)} />
             <Spunta etichetta="Disiscritti" valore={filtri.disiscritti} onCambia={(v) => cambia("disiscritti", v)} />
             {filtriAccesi && (
               <button type="button" onClick={azzera} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: "auto" }}>
@@ -422,8 +435,10 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiM
                     {c.collegamento === "dubbio" && <Pastiglia colore="#8A6D1D" sfondo="#FDF8EC" bordo="#EBD9AE" titolo={c.collegamento_nota}>Genion?</Pastiglia>}
                     {c.da_verificare && <Pastiglia colore="#C0392B" sfondo="#FBEBE9" bordo="#F0C8C2" titolo={c.da_verificare_motivo}>da verificare</Pastiglia>}
                     {c.disiscritto_il && <Pastiglia colore="#C0392B" sfondo="#FBEBE9" bordo="#F0C8C2">disiscritto</Pastiglia>}
-                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }} title="Ultimo contatto">
-                      {c.numero_richieste > 1 ? `${c.numero_richieste} richieste · ` : ""}{dataIt(c.ultimo_contatto_il)}{c.trattato_da ? ` · ${c.trattato_da}` : ""}
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }} title={c.con_data_certa === false ? "La data della richiesta non è nota: caricata in Vetta in blocco il 9 marzo 2026" : "Ultimo contatto"}>
+                      {c.numero_richieste > 1 ? `${c.numero_richieste} richieste · ` : ""}
+                      {c.con_data_certa === false ? (c.ultima_vendita_il ? `venduto ${dataIt(c.ultima_vendita_il)}` : "data non nota") : dataIt(c.ultimo_contatto_il)}
+                      {c.trattato_da ? ` · ${c.trattato_da}` : ""}
                     </span>
                   </span>
                 </div>

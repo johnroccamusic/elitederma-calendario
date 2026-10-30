@@ -197,6 +197,10 @@ function richiestaDa(p, membriPerId, oppPerPersona) {
   return {
     vetta_id: p.id,
     richiesta_il: p.createdAt,
+    // il 9 marzo 2026 lo storico e' stato caricato in blocco in Vetta:
+    // 16.327 record su 23.847 hanno quella createdAt, che e' la data del
+    // caricamento e non della richiesta. Nessun altro campo la conserva.
+    data_certa: !String(p.createdAt || "").startsWith(GIORNO_CARICAMENTO_VETTA),
     corsi, corsi_vetta: corsiVetta,
     canale: p.canale || null,
     form_origine: extra.form || null,
@@ -249,6 +253,7 @@ function raggruppa(richieste) {
 }
 
 const SOLO_NOME = "solo il nome, senza cognome";
+const GIORNO_CARICAMENTO_VETTA = "2026-03-09";
 
 function contattoDa(gruppo) {
   const prima = gruppo[0]; const ultima = gruppo[gruppo.length - 1];

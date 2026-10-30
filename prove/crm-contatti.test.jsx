@@ -17,8 +17,8 @@ const VALORI = {
   trattati_da: [{ valore: "Katia", quanti: 5620 }],
   mestieri: [{ valore: "estetista", quanti: 8527 }],
   corsi: [{ valore: "Microblading", quanti: 5377 }, { valore: "PMU", quanti: 5575 }],
-  anni: [{ valore: 2026, quanti: 9000 }, { valore: 2025, quanti: 8000 }],
-  totale: 23757, disiscritti: 12,
+  anni: [{ valore: 2026, quanti: 9000 }, { valore: 2025, quanti: 8000 }, { valore: 2022, quanti: 419 }],
+  totale: 23757, disiscritti: 12, senza_data: 14884,
 };
 const CONTATTI = [
   { id: "c1", nome: "Giulia", cognome: "Rossi", email: "giulia@esempio.it", comune: "Roma", provincia: "ROMA", regione: "LAZIO", mestiere: "estetista",
@@ -29,8 +29,8 @@ const CONTATTI = [
     ultimo_contatto_il: "2026-02-01T10:00:00Z", collegamento: "nessuno", da_verificare: true, da_verificare_motivo: "sembra il nome di un'attività" },
 ];
 const RICHIESTE_C1 = [
-  { id: "r2", richiesta_il: "2025-05-10T10:00:00Z", corsi: ["Laminazione"], form_origine: "Corso di Laminazione Italy", trattato_da: "Katia", qualifica: "CLIENTI" },
-  { id: "r1", richiesta_il: "2024-03-02T10:00:00Z", corsi: ["Microblading"], form_origine: "Form Microblading", trattato_da: "Olga", qualifica: "CONTATTI_DA_RICHIAMARE" },
+  { id: "r2", richiesta_il: "2025-05-10T10:00:00Z", data_certa: true, corsi: ["Laminazione"], form_origine: "Corso di Laminazione Italy", trattato_da: "Katia", qualifica: "CLIENTI" },
+  { id: "r1", richiesta_il: "2024-03-02T10:00:00Z", data_certa: true, corsi: ["Microblading"], form_origine: "Form Microblading", trattato_da: "Olga", qualifica: "CONTATTI_DA_RICHIAMARE" },
 ];
 
 function prepara(chiamate) {
@@ -58,6 +58,10 @@ describe("la lista contatti del CRM", () => {
     const t = p.testo().replace(/\s+/g, " ");
     expect(t).toContain("2 contatti");
     expect(t).toContain("In archivio 23.757 contatti, di cui 12 disiscritti");
+    expect(t).toContain("Per 14.884 la data della richiesta non è nota");
+    // il filtro Anno offre anche gli anni delle vendite, non solo il 2026
+    const anni = [...p.nodo.querySelector('select[data-filtro="Anno"]').options].map((o) => o.value);
+    expect(anni).toEqual(["", "2026", "2025", "2022"]);
     expect(t).toContain("Giulia Rossi");
     expect(t).toContain("Centro Estetico Luna");
     expect(t).toContain("da verificare");
@@ -109,6 +113,8 @@ describe("la lista contatti del CRM", () => {
   it("le funzioni pure: cronologia, riassunto, filtri puliti, etichette", () => {
     expect(cronologiaRichieste(RICHIESTE_C1)).toBe("03/2024 Microblading · 05/2025 Laminazione");
     expect(cronologiaRichieste([{ richiesta_il: "2026-01-15T10:00:00Z", corsi: [] }])).toBe("01/2026 richiesta");
+    // caricata in blocco in Vetta: la data non si spaccia per vera
+    expect(cronologiaRichieste([{ richiesta_il: "2026-03-09T16:12:10Z", data_certa: false, corsi: ["PMU"] }])).toBe("data non nota PMU");
     expect(riassuntoFiltri({ corso: "Microblading", regione: "LAZIO", anno: "2025", qualifica: "CLIENTI", disiscritti: true })).toBe("Microblading · 2025 · LAZIO · Cliente · disiscritti");
     expect(filtriPerIlDatabase({ cerca: "", regione: "LAZIO", disiscritti: false, con_email: true, anno: "" })).toEqual({ regione: "LAZIO", con_email: true });
     expect(etichettaQualifica("CONTATTI_DA_RICHIAMARE")).toBe("Da richiamare");
