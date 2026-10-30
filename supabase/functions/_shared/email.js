@@ -149,6 +149,64 @@ export function piede({ societa, valori }) {
   };
 }
 
+// LE CAMPAGNE DEL CRM (30/10/2026): la stessa mail la vede chi la scrive
+// (anteprima nel browser) e la riceve il contatto (spedita da Deno). Una
+// funzione sola, o anteprima e mail sarebbero due mail diverse.
+//
+// Il corpo arriva gia' in HTML dall'editor; i segnaposti {nome} {comune}
+// {provincia} {regione} {corso} si riempiono per persona. Il piede e'
+// FISSO e non si toglie: chi scrive, da dove, perche' questa mail e'
+// arrivata, e il link per non riceverne piu'. In Vetta un consenso al
+// marketing non esiste; il titolare ha deciso di scrivere a tutti perche'
+// il consenso era sul sito, e la contropartita e' che la disiscrizione sia
+// a un tocco e in fondo a ogni mail.
+export const SEGNAPOSTI_CAMPAGNA = ["nome", "cognome", "comune", "provincia", "regione", "corso"];
+
+/** @param {{ societa?: any, linkDisiscrizione?: string, motivo?: string }} args */
+export function piedeCampagna({ societa, linkDisiscrizione, motivo }) {
+  const righe = [societa?.nome, societa?.indirizzo].map((r) => String(r || "").trim()).filter(Boolean);
+  const perche = motivo || "Ricevi questa mail perché hai chiesto informazioni sui corsi di Elitederma.";
+  const link = linkDisiscrizione || "#";
+  return {
+    testo: ["", "—", perche, ...righe, `Per non ricevere più queste mail: ${link}`].join("\n"),
+    html: `<hr style="border:none;border-top:1px solid #e6dfce;margin:26px 0 14px">`
+      + `<div style="font-size:12px;line-height:1.5;color:#7a7f8c">`
+      + `${proteggi(perche)}<br>`
+      + righe.map((r) => proteggi(r)).join("<br>")
+      + `<br><a href="${proteggi(link)}" style="color:#7a7f8c">Non voglio più ricevere queste mail</a>`
+      + `</div>`,
+  };
+}
+
+// L'HTML in testo semplice, per la parte "text" della mail e per chi legge
+// senza HTML: righe dove c'erano blocchi, link con l'indirizzo accanto.
+export function htmlInTesto(html) {
+  return String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, (m, href, testo) => `${testo} (${href})`)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** @param {{ oggetto: string, corpoHtml: string, valori?: Record<string, any>, societa?: any, linkDisiscrizione?: string, motivo?: string }} args */
+export function componiCampagna({ oggetto, corpoHtml, valori, societa, linkDisiscrizione, motivo }) {
+  const perHtml = {};
+  for (const k of SEGNAPOSTI_CAMPAGNA) perHtml[k] = proteggi(valori?.[k] ?? "");
+  const perTesto = {};
+  for (const k of SEGNAPOSTI_CAMPAGNA) perTesto[k] = String(valori?.[k] ?? "");
+  const piede = piedeCampagna({ societa, linkDisiscrizione, motivo });
+  const corpo = applicaSegnaposti(corpoHtml, perHtml);
+  return {
+    oggetto: applicaSegnaposti(oggetto, perTesto),
+    html: `${APRE_HTML}${corpo}${piede.html}\n</div>`,
+    testo: `${applicaSegnaposti(htmlInTesto(corpoHtml), perTesto)}${piede.testo}`,
+  };
+}
+
 // LA CONFERMA DI RICEZIONE DEL MODULO.
 //
 // Parte da sola appena l'allieva preme Invia e il modulo e' stato

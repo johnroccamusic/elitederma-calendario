@@ -73,6 +73,7 @@ const AssistenteRegole = pezzo(() => import("./regole/AssistenteRegole.jsx"));
 const AllegatiProgetto = pezzo(() => import("./progetti/AllegatiProgetto.jsx"));
 const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx"));
 import PaginaRecesso from "./recesso/PaginaRecesso.jsx";
+import PaginaDisiscrizione from "./crm/PaginaDisiscrizione.jsx";
 import { RiquadroRecesso } from "./recesso/Riquadro.jsx";
 import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { separaCivico, pulisciCitta } from "./iscrizione/indirizzo-pezzi.js";
@@ -83079,6 +83080,11 @@ export default function App() {
   const paramRecesso = new URLSearchParams(window.location.search).get("recesso");
   if (paramRecesso) return <PaginaRecesso token={paramRecesso} />;
 
+  // ?disiscrizione=<gettone>: chi non vuole piu' ricevere le mail del CRM.
+  // Stessa regola: nessun account, un tocco e basta
+  const paramDisiscrizione = new URLSearchParams(window.location.search).get("disiscrizione");
+  if (paramDisiscrizione !== null) return <PaginaDisiscrizione token={paramDisiscrizione} />;
+
   // DA QUI IN GIU' NON C'E' PIU' NIENTE, ED E' IL PUNTO.
   //
   // Sopra ci sono solo le rotte pubbliche, che escono con un `return`;
@@ -86626,6 +86632,7 @@ function Gestionale() {
 
       {view === "crmcontatti" && (
         <PaginaCrmContatti
+          utente={utenteLoggato?.nome || venditoreLoggato?.nome || ""}
           onBack={() => setView("crmallievi")}
           titolo={etichettaTasto("crm", "crmcontatti", "Contatti")}
         />

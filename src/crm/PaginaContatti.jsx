@@ -25,6 +25,7 @@ import { supabase } from "../supabase.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
 import SelettorePeriodo, { etichettaPeriodo } from "../ui/SelettorePeriodo.jsx";
+import ComponiMail, { ElencoCampagne } from "./ComponiMail.jsx";
 
 export const PER_PAGINA = 50;
 
@@ -276,8 +277,11 @@ export function nomeDi(c) {
 
 // ----------------------------------------------------------------- la pagina
 
-export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiMail = null }) {
+export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "" }) {
   const isMobile = useIsMobile();
+  // le tre viste: la lista, l'elenco delle campagne fatte, una campagna
+  // aperta (nuova dai filtri correnti, o una gia' esistente)
+  const [vista, setVista] = useState({ nome: "lista" });
   const [filtri, setFiltri] = useState(FILTRI_VUOTI);
   const [cercaScritto, setCercaScritto] = useState("");
   const [da, setDa] = useState(0);
@@ -334,6 +338,20 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiM
   const filtriAccesi = Object.keys(filtriDb).length > 0;
   const totale = esito.totale;
   const fine = Math.min(da + PER_PAGINA, totale || 0);
+
+  if (vista.nome === "campagne") {
+    return <ElencoCampagne onChiudi={() => setVista({ nome: "lista" })} onApri={(c) => setVista({ nome: "componi", campagna: c })} />;
+  }
+  if (vista.nome === "componi") {
+    return (
+      <ComponiMail
+        key={vista.campagna?.id || "nuova"}
+        campagnaIniziale={vista.campagna || null}
+        filtri={vista.filtri || {}} riassunto={vista.riassunto || ""} totale={vista.totale || 0} utente={utente}
+        onChiudi={() => setVista({ nome: "lista" })}
+      />
+    );
+  }
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -402,11 +420,14 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", onComponiM
             {caricando && <span style={{ ...fontBody, fontSize: 12, color: MUTED, marginLeft: 8 }}>aggiorno…</span>}
           </div>
           {riassunto && <span style={{ ...fontBody, fontSize: 12.5, color: GRAFITE }}>{riassunto}</span>}
-          {onComponiMail && (
-            <Button onClick={() => onComponiMail({ filtri: filtriDb, riassunto, totale })} disabled={!totale || filtri.disiscritti} style={{ marginLeft: "auto" }}>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            <Button variant="ghost" onClick={() => setVista({ nome: "campagne" })}>Campagne</Button>
+            {/* a chi e' in lista adesso, con questi filtri: i disiscritti
+                non si possono scegliere, e lo dice il tasto spento */}
+            <Button onClick={() => setVista({ nome: "componi", filtri: filtriDb, riassunto, totale })} disabled={!totale || filtri.disiscritti} title={filtri.disiscritti ? "Ai disiscritti non si scrive" : "Scrivi una mail a chi è in lista"}>
               Componi mail
             </Button>
-          )}
+          </span>
         </div>
         {errore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{errore}</div>}
 

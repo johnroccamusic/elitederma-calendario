@@ -1140,8 +1140,37 @@ provincia, comune, qualifica, stato, trattato da, mestiere, Genion sul
 contatto. La scheda aperta legge le richieste e mostra la cronologia
 («03/2024 Microblading · 05/2025 Laminazione»), le opportunità e il tasto
 per segnare un disiscritto a mano. Prove in `prove/crm-contatti.test.jsx`.
-**Da fare**: «Componi mail» (campagne a lotti via Resend, piè di pagina con
-disiscrizione, rotta pubblica `?disiscrizione=`).
+**La data della richiesta non è sempre vera.** 16.327 record su 23.847
+sono nati in Vetta il 9 marzo 2026, il giorno del caricamento in blocco:
+`crm_richieste.data_certa = false`. La pagina scrive «data non nota», il
+filtro Anno ignora quelle date e guarda anche le vendite (2022–2026),
+la spunta «Data non nota» isola chi non ha nessuna data vera.
+
+**Componi mail** (`src/crm/ComponiMail.jsx`, stesso giorno). Dalla lista
+filtrata nasce una `crm_campagne` (filtri, oggetto, HTML, stato bozza →
+pronta → in_invio → inviata); l'editor è un `contentEditable` senza
+librerie; l'anteprima usa `componiCampagna` di `_shared/email.js`, **la
+stessa funzione del server**, con il piede fisso (chi siamo, perché
+ricevi questa mail, link di disiscrizione). «Prepara i destinatari» è
+`crm_campagna_prepara`: li congela in `crm_campagne_destinatari` (un
+indirizzo una mail, mai disiscritti, mai da verificare, mai un indirizzo
+già rimbalzato) e dice quanti restano fuori e perché. La lista e le
+campagne usano la stessa `crm_contatti_filtrati`: due copie della WHERE
+darebbero due conteggi diversi. L'invio è la edge function
+`crm-campagna-invia`: cento mail a chiamata con l'API batch di Resend,
+una a testa, con `List-Unsubscribe` e `List-Unsubscribe-Post` (il tasto
+«Disiscriviti» di Gmail e Mail); la pagina richiama finché la coda è
+vuota, e se si chiude a metà da «Campagne» si riprende. «Mandami una
+prova» spedisce a un indirizzo solo con valori finti. Il webhook
+`email-eventi` annota consegna, apertura, rimbalzo e segnalazione spam
+sul destinatario; chi segnala spam viene disiscritto con il motivo.
+
+**La disiscrizione** è `crm_disiscrivi(token)`, security definer
+eseguibile da `anon`: scrive `disiscritto_il` su tutte le schede con
+quell'email. Due ingressi: la rotta pubblica `?disiscrizione=<gettone>`
+(`src/crm/PaginaDisiscrizione.jsx`, disiscrive appena si apre) e la edge
+function pubblica `crm-disiscrivi` (POST = one-click dal programma di
+posta, GET = rimanda alla pagina). Prove in `prove/crm-campagna.test.jsx`.
 
 ### Il cash rinviato segue il Riepilogo (30/10/2026)
 
