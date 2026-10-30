@@ -170,3 +170,22 @@ describe("scegliere i destinatari di una campagna dalla lista", () => {
     await p.smonta();
   });
 });
+
+describe("la scheda del contatto dice le mail di campagna ricevute", () => {
+  it("mostra stato e campagna", async () => {
+    const chiamate = [];
+    prepara(chiamate);
+    const base = globalThis.fetch;
+    globalThis.fetch = async (url, opz) => String(url).includes("crm_campagne_destinatari")
+      ? new Response(JSON.stringify([{ id: "d1", stato: "aperta", inviata_il: "2026-10-30T20:00:00Z", ultimo_evento_il: "2026-10-30T20:15:00Z", crm_campagne: { nome: "Emilia-Romagna · 30/10/2026", oggetto: "Ciao" } }]), { status: 200, headers: { "Content-Type": "application/json" } })
+      : base(url, opz);
+    globalThis.window.fetch = globalThis.fetch;
+    const p = await monta(<PaginaContatti onBack={() => {}} />);
+    await attendi(200);
+    await clicca(p.nodo.querySelector('[data-contatto="c1"] [role="button"]'));
+    await attendi(200);
+    const riga = p.nodo.querySelector("[data-campagna-ricevuta]");
+    expect(riga.textContent).toContain("aperta · Emilia-Romagna · 30/10/2026");
+    await p.smonta();
+  });
+});

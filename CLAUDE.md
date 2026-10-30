@@ -1165,6 +1165,17 @@ prova» spedisce a un indirizzo solo con valori finti. Il webhook
 `email-eventi` annota consegna, apertura, rimbalzo e segnalazione spam
 sul destinatario; chi segnala spam viene disiscritto con il motivo.
 
+**Chi ha aperto.** Su Resend il tracciamento di aperture e clic sul
+dominio `elitederma.net` era spento: acceso il 30/10/2026 sera, deciso dal
+titolare. Da lì il webhook segna «aperta» sul destinatario; nella campagna
+il pannello «Destinatari, uno per uno» li elenca per stato (in coda,
+spedita, consegnata, aperta, rimbalzata, segnalata, non riuscita) con
+ricerca per nome, e la scheda del contatto mostra le mail di campagna
+ricevute con lo stato. Va detto a chi legge: «aperta» è un'immagine
+scaricata dal programma di posta, Mail di iPhone la scarica per tutti e
+Gmail solo se mostra le immagini; è una tendenza, non una prova di lettura.
+Il tracciamento dei clic riscrive i link facendoli passare da Resend.
+
 **La disiscrizione** è `crm_disiscrivi(token)`, security definer
 eseguibile da `anon`: scrive `disiscritto_il` su tutte le schede con
 quell'email. Due ingressi: la rotta pubblica `?disiscrizione=<gettone>`

@@ -142,3 +142,39 @@ describe("i destinatari si scelgono anche dopo, e si cancellano", () => {
     await p.smonta();
   });
 });
+
+describe("chi ha aperto", () => {
+  it("il pannello dei destinatari conta per stato e mostra i nomi con lo stato", async () => {
+    const { DestinatariCampagna } = await import("../src/crm/ComponiMail.jsx");
+    const RIGHE = [
+      { id: "d1", nome: "Giulia Rossi", email: "giulia@esempio.it", stato: "aperta", inviata_il: "2026-10-30T20:00:00Z", ultimo_evento_il: "2026-10-30T20:15:00Z" },
+      { id: "d2", nome: "Marco Bianchi", email: "marco@esempio.it", stato: "rimbalzata", inviata_il: "2026-10-30T20:00:00Z", ultimo_evento_il: "2026-10-30T20:01:00Z" },
+    ];
+    rispondiCon({
+      "rest/v1/crm_campagne_destinatari": (corpo, url) => {
+        // i conteggi per stato chiedono solo la testa; la lista chiede le righe
+        if (url.includes("select=id&")) return [];
+        if (url.includes("stato=eq.aperta")) return [RIGHE[0]];
+        return RIGHE;
+      },
+    });
+    // Range/Content-Range: la finta risposta non li ha, quindi i conteggi
+    // restano a zero: qui si prova la lista, non PostgREST
+    const p = await monta(<DestinatariCampagna campagnaId="c1" />);
+    await attendi(100);
+    expect(p.testo()).toContain("Destinatari, uno per uno");
+    await clicca(p.tasto("Destinatari, uno per uno"));
+    await attendi(250);
+    const t = p.testo().replace(/\s+/g, " ");
+    expect(t).toContain("Giulia Rossi");
+    expect(t).toContain("Marco Bianchi");
+    expect(p.nodo.querySelectorAll('[data-destinatario="aperta"]').length).toBe(1);
+    expect(p.nodo.querySelectorAll('[data-destinatario="rimbalzata"]').length).toBe(1);
+    expect(t).toContain("È una tendenza, non una prova di lettura");
+    await clicca(p.tasto("Aperta"));
+    await attendi(250);
+    expect(p.testo()).toContain("Giulia Rossi");
+    expect(p.testo()).not.toContain("Marco Bianchi");
+    await p.smonta();
+  });
+});

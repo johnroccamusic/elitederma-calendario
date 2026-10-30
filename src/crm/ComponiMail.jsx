@@ -24,6 +24,23 @@ import { componiCampagna, SEGNAPOSTI_CAMPAGNA } from "../../supabase/functions/_
 export const STATI_CAMPAGNA = {
   bozza: "Bozza", pronta: "Pronta", in_invio: "In invio", inviata: "Inviata", annullata: "Annullata",
 };
+// lo stato di ogni destinatario: lo scrive la funzione d'invio (in coda,
+// spedita, non riuscita) e poi il webhook di Resend (consegnata, aperta,
+// rimbalzata, segnalata). «Aperta» arriva solo se su Resend il
+// tracciamento delle aperture e' acceso sul dominio: lo e' dal 30/10/2026
+export const STATI_DESTINATARIO = {
+  in_coda: "in coda", inviata: "spedita", consegnata: "consegnata", aperta: "aperta",
+  rimbalzata: "rimbalzata", segnalata: "segnalata come spam", fallita: "non riuscita",
+};
+export const COLORE_STATO_DESTINATARIO = {
+  aperta: { colore: "#2E7D32", sfondo: "#EAF5EA", bordo: "#C7E3C7" },
+  consegnata: { colore: "#1F4E8C", sfondo: "#EEF3FA", bordo: "#C9D7EC" },
+  inviata: { colore: GRAFITE, sfondo: "#F3F0E8", bordo: CREAM_BORDER },
+  in_coda: { colore: MUTED, sfondo: "#F7F6F2", bordo: CREAM_BORDER },
+  rimbalzata: { colore: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2" },
+  segnalata: { colore: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2" },
+  fallita: { colore: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2" },
+};
 
 const VALORI_ANTEPRIMA = { nome: "Giulia", cognome: "Rossi", comune: "Roma", provincia: "ROMA", regione: "LAZIO", corso: "Microblading" };
 
@@ -327,7 +344,102 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
             )}
           </div>
         </div>
+        {campagna?.id && campagna.totale_destinatari > 0 && <DestinatariCampagna campagnaId={campagna.id} aggiornamento={(campagna.inviate || 0) + (invio?.inviate || 0)} />}
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------- chi ha ricevuto cosa
+
+// I DESTINATARI DI UNA CAMPAGNA, uno per uno, con il loro stato. E' qui
+// che si risponde a «chi ha aperto?»: si sceglie lo stato in alto (le
+// aperte, le rimbalzate, quelle ancora in coda) e si cerca per nome o
+// email. Cinquanta alla volta, dal database, come la lista contatti.
+const PER_PAGINA_DESTINATARI = 50;
+export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
+  const [statoScelto, setStatoScelto] = useState("tutti");
+  const [cerca, setCerca] = useState("");
+  const [cercaScritto, setCercaScritto] = useState("");
+  const [da, setDa] = useState(0);
+  const [conteggi, setConteggi] = useState(null);
+  const [righe, setRighe] = useState([]);
+  const [totale, setTotale] = useState(0);
+  const [aperto, setAperto] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => { setCerca(cercaScritto.trim()); setDa(0); }, 300);
+    return () => clearTimeout(t);
+  }, [cercaScritto]);
+  useEffect(() => {
+    if (!campagnaId || !aperto) return;
+    let vivo = true;
+    Promise.all(Object.keys(STATI_DESTINATARIO).map((st) =>
+      supabase.from("crm_campagne_destinatari").select("id", { count: "exact", head: true }).eq("campagna_id", campagnaId).eq("stato", st)
+        .then(({ count }) => [st, count || 0]),
+    )).then((coppie) => { if (vivo) setConteggi(Object.fromEntries(coppie)); });
+    return () => { vivo = false; };
+  }, [campagnaId, aperto, aggiornamento]);
+  useEffect(() => {
+    if (!campagnaId || !aperto) return;
+    let vivo = true;
+    let q = supabase.from("crm_campagne_destinatari")
+      .select("id, nome, email, stato, inviata_il, ultimo_evento, ultimo_evento_il, errore", { count: "exact" })
+      .eq("campagna_id", campagnaId);
+    if (statoScelto !== "tutti") q = q.eq("stato", statoScelto);
+    if (cerca) q = q.or(`nome.ilike.%${cerca.replace(/[%,()]/g, "")}%,email.ilike.%${cerca.replace(/[%,()]/g, "")}%`);
+    q.order("ultimo_evento_il", { ascending: false, nullsFirst: false }).order("nome").range(da, da + PER_PAGINA_DESTINATARI - 1)
+      .then(({ data, count }) => { if (vivo) { setRighe(Array.isArray(data) ? data : []); setTotale(count || 0); } });
+    return () => { vivo = false; };
+  }, [campagnaId, aperto, statoScelto, cerca, da, aggiornamento]);
+
+  if (!campagnaId) return null;
+  const totaleTutti = conteggi ? Object.values(conteggi).reduce((s, n) => s + n, 0) : null;
+  const linguetta = (chiave, testo, n) => (
+    <button key={chiave} type="button" onClick={() => { setStatoScelto(chiave); setDa(0); }}
+      style={{ ...fontBody, fontSize: 12, fontWeight: statoScelto === chiave ? 700 : 500, color: statoScelto === chiave ? "#fff" : NAVY, background: statoScelto === chiave ? NAVY : "#fff", border: `1px solid ${statoScelto === chiave ? NAVY : CREAM_BORDER}`, borderRadius: 999, padding: "4px 10px", cursor: "pointer" }}>
+      {testo}{n != null ? ` ${numero(n)}` : ""}
+    </button>
+  );
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 16, marginTop: 16 }} data-destinatari>
+      <button type="button" onClick={() => setAperto((a) => !a)} style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+        {aperto ? "▾" : "▸"} Destinatari, uno per uno {totaleTutti != null ? `(${numero(totaleTutti)})` : ""}
+      </button>
+      {!aperto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>Chi ha ricevuto, chi ha aperto, chi è rimbalzato: premi per vedere i nomi.</div>}
+      {aperto && (
+        <>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "10px 0" }}>
+            {linguetta("tutti", "Tutti", totaleTutti)}
+            {Object.entries(STATI_DESTINATARIO).map(([k, v]) => linguetta(k, v.charAt(0).toUpperCase() + v.slice(1), conteggi?.[k] || 0))}
+          </div>
+          <input value={cercaScritto} onChange={(e) => setCercaScritto(e.target.value)} placeholder="cerca per nome o email" style={{ ...inputStyle, width: "100%", minWidth: 0, marginBottom: 8 }} />
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            «Aperta» la segna il programma di posta quando scarica le immagini: Mail di iPhone lo fa da solo per tutti, Gmail solo se le mostra. È una tendenza, non una prova di lettura.
+          </div>
+          {righe.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 0" }}>Nessun destinatario con questo stato.</div>}
+          {righe.map((r) => {
+            const c = COLORE_STATO_DESTINATARIO[r.stato] || COLORE_STATO_DESTINATARIO.inviata;
+            return (
+              <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}` }} data-destinatario={r.stato}>
+                <span style={{ flex: "1 1 220px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere" }}>
+                  <b>{r.nome || "(senza nome)"}</b> <span style={{ color: MUTED }}>{r.email}</span>
+                </span>
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: c.colore, background: c.sfondo, border: `1px solid ${c.bordo}`, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>{STATI_DESTINATARIO[r.stato] || r.stato}</span>
+                <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }} title={r.errore || ""}>
+                  {r.ultimo_evento_il ? dataOraIt(r.ultimo_evento_il) : r.inviata_il ? dataOraIt(r.inviata_il) : ""}
+                </span>
+              </div>
+            );
+          })}
+          {totale > PER_PAGINA_DESTINATARI && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", marginTop: 10 }}>
+              <Button variant="ghost" onClick={() => setDa(Math.max(0, da - PER_PAGINA_DESTINATARI))} disabled={da === 0} style={{ padding: "6px 12px", fontSize: 12 }}>← Precedenti</Button>
+              <span style={{ ...fontBody, fontSize: 12, color: GRAFITE }}>{numero(da + 1)}–{numero(Math.min(da + PER_PAGINA_DESTINATARI, totale))} di {numero(totale)}</span>
+              <Button variant="ghost" onClick={() => setDa(da + PER_PAGINA_DESTINATARI)} disabled={da + PER_PAGINA_DESTINATARI >= totale} style={{ padding: "6px 12px", fontSize: 12 }}>Successivi →</Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

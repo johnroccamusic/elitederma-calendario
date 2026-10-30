@@ -25,7 +25,7 @@ import { supabase } from "../supabase.js";
 import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
 import SelettorePeriodo, { etichettaPeriodo } from "../ui/SelettorePeriodo.jsx";
-import ComponiMail, { ElencoCampagne } from "./ComponiMail.jsx";
+import ComponiMail, { ElencoCampagne, STATI_DESTINATARIO, dataOraIt } from "./ComponiMail.jsx";
 
 export const PER_PAGINA = 50;
 
@@ -168,9 +168,13 @@ function Spunta({ etichetta, valore, onCambia }) {
 function SchedaContatto({ c, onCambiato }) {
   const [richieste, setRichieste] = useState(null);
   const [opportunita, setOpportunita] = useState(null);
+  const [campagne, setCampagne] = useState(null);   // le mail di campagna ricevute, con lo stato
   const [msg, setMsg] = useState("");
   useEffect(() => {
     let vivo = true;
+    supabase.from("crm_campagne_destinatari").select("id, stato, inviata_il, ultimo_evento_il, crm_campagne(nome, oggetto)")
+      .eq("contatto_id", c.id).order("inviata_il", { ascending: false, nullsFirst: false })
+      .then(({ data }) => { if (vivo) setCampagne(Array.isArray(data) ? data : []); });
     supabase.from("crm_richieste").select("id, richiesta_il, data_certa, corsi, corsi_vetta, canale, form_origine, trattato_da, qualifica, gestione_chiamata, citta_originale, comune, provincia, regione, preferenza_giorno, preferenza_ora")
       .eq("contatto_id", c.id).order("richiesta_il")
       .then(({ data, error }) => { if (vivo) setRichieste(error ? [] : data || []); });
@@ -252,6 +256,18 @@ function SchedaContatto({ c, onCambiato }) {
                 {o.importo != null ? ` · ${Number(o.importo).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : ""}
                 {o.chiusa_il ? ` · ${dataIt(o.chiusa_il)}` : ""}
                 {o.agganciata_per === "nome" ? " · agganciata per nome" : ""}
+              </div>
+            ))}
+          </>
+        )}
+        {campagne && campagne.length > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 10, marginBottom: 2 }}>Mail di campagna ({campagne.length})</div>
+            {campagne.map((d) => (
+              <div key={d.id} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5 }} data-campagna-ricevuta>
+                <b style={{ color: d.stato === "aperta" ? "#2E7D32" : d.stato === "rimbalzata" || d.stato === "segnalata" || d.stato === "fallita" ? "#C0392B" : NAVY }}>{(STATI_DESTINATARIO[d.stato] || d.stato)}</b>
+                {" · "}{d.crm_campagne?.nome || "campagna"}
+                {d.ultimo_evento_il ? ` · ${dataOraIt(d.ultimo_evento_il)}` : d.inviata_il ? ` · ${dataOraIt(d.inviata_il)}` : ""}
               </div>
             ))}
           </>
