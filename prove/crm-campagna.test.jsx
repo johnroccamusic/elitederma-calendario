@@ -119,3 +119,26 @@ describe("la pagina di disiscrizione", () => {
     await p.smonta();
   });
 });
+
+describe("i destinatari si scelgono anche dopo, e si cancellano", () => {
+  it("«Cancella destinatari» svuota la coda e la campagna torna bozza", async () => {
+    const cancellazioni = [];
+    let campagna = { id: "c9", nome: "Prova", oggetto: "Ciao", corpo_html: "<p>x</p>", stato: "pronta", totale_destinatari: 22306, inviate: 0, fallite: 0, filtri: {} };
+    rispondiCon({
+      "rest/v1/intestazione_societa": { nome: "ELITEDERMA Srl" },
+      "rest/v1/crm_campagne_destinatari": (corpo, url) => { cancellazioni.push(url); return []; },
+      "rest/v1/crm_campagne?": (corpo) => { if (corpo) campagna = { ...campagna, ...corpo }; return campagna; },
+    });
+    const p = await monta(<ComponiMail campagnaIniziale={campagna} onChiudi={() => {}} onSelezionaDestinatari={() => {}} />);
+    await attendi(200);
+    expect(p.tasto("Cancella destinatari")).toBeTruthy();
+    expect(p.tasto("Seleziona destinatari")).toBeTruthy();
+    await clicca(p.tasto("Cancella destinatari"));
+    await attendi(200);
+    expect(cancellazioni.some((u) => u.includes("stato=eq.in_coda"))).toBe(true);
+    expect(campagna.stato).toBe("bozza");
+    expect(campagna.totale_destinatari).toBe(0);
+    expect(p.testo()).toContain("Destinatari tolti");
+    await p.smonta();
+  });
+});

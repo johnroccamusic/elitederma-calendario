@@ -106,13 +106,13 @@ function Editor({ htmlIniziale, onCambia, disabilitato }) {
   );
 }
 
-export default function ComponiMail({ campagnaIniziale = null, filtri = {}, riassunto = "", totale = 0, utente = "", onChiudi, onSalvata }) {
+export default function ComponiMail({ campagnaIniziale = null, filtri = {}, riassunto = "", totale = 0, utente = "", onChiudi, onSalvata, onSelezionaDestinatari = null, messaggioIniziale = null }) {
   const [campagna, setCampagna] = useState(campagnaIniziale);
   const [nome, setNome] = useState(campagnaIniziale?.nome || nomeProposto(riassunto));
   const [oggetto, setOggetto] = useState(campagnaIniziale?.oggetto || "");
   const [corpoHtml, setCorpoHtml] = useState(campagnaIniziale?.corpo_html || "");
   const [societa, setSocieta] = useState(null);
-  const [msg, setMsg] = useState(null);   // { tipo: "ok" | "errore", testo }
+  const [msg, setMsg] = useState(messaggioIniziale);   // { tipo: "ok" | "errore", testo }
   const [salvando, setSalvando] = useState(false);
   const [preparazione, setPreparazione] = useState(null);
   const [invio, setInvio] = useState(null); // { inCorso, inviate, fallite, restanti, totale }
@@ -181,6 +181,36 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
       const { data: agg } = await supabase.from("crm_campagne").select("*").eq("id", c.id).maybeSingle();
       if (agg) setCampagna(agg);
       setMsg({ tipo: "ok", testo: `Destinatari pronti: ${numero((agg || c).totale_destinatari)}. ${fraseEsclusi(data)}` });
+    } catch (e) { setMsg({ tipo: "errore", testo: e.message }); }
+    setSalvando(false);
+  }
+
+  // I DESTINATARI SI SCELGONO ANCHE DOPO. Si puo' scrivere prima e decidere
+  // poi a chi mandare: il tasto porta alla lista contatti con i filtri
+  // della campagna gia' accesi, e «Usa questi N contatti» li congela. La
+  // campagna si salva prima di uscire, cosi' il testo non si perde.
+  async function scegliDestinatari() {
+    setSalvando(true); setMsg(null);
+    try { const c = await assicuraCampagna(); onSelezionaDestinatari?.(c); }
+    catch (e) { setMsg({ tipo: "errore", testo: e.message }); }
+    setSalvando(false);
+  }
+
+  // «Cancella destinatari»: si svuota la coda e la campagna torna bozza.
+  // Quelli gia' spediti non si toccano: una mail partita e' partita.
+  async function cancellaDestinatari() {
+    if (!campagna?.id) return;
+    if (!window.confirm(`Togliere i ${numero(campagna.totale_destinatari)} destinatari in coda? Il testo resta, la campagna torna in bozza e i destinatari si scelgono di nuovo.`)) return;
+    setSalvando(true); setMsg(null);
+    try {
+      const { error } = await supabase.from("crm_campagne_destinatari").delete().eq("campagna_id", campagna.id).eq("stato", "in_coda");
+      if (error) throw new Error(error.message);
+      const { count } = await supabase.from("crm_campagne_destinatari").select("id", { count: "exact", head: true }).eq("campagna_id", campagna.id);
+      const campi = { totale_destinatari: count || 0, esclusi: {}, aggiornata_il: new Date().toISOString(), ...(count ? {} : { stato: "bozza" }) };
+      const { data, error: e2 } = await supabase.from("crm_campagne").update(campi).eq("id", campagna.id).select("*").maybeSingle();
+      if (e2) throw new Error(e2.message);
+      setCampagna(data); setPreparazione(null);
+      setMsg({ tipo: "ok", testo: "Destinatari tolti. Il testo è salvato: scegli a chi mandarla quando vuoi." });
     } catch (e) { setMsg({ tipo: "errore", testo: e.message }); }
     setSalvando(false);
   }
@@ -270,7 +300,9 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {!bloccata && <Button variant="ghost" onClick={salva} disabled={salvando}>Salva bozza</Button>}
               {!bloccata && <Button variant="ghost" onClick={prova} disabled={salvando}>Mandami una prova</Button>}
-              {!bloccata && <Button variant="ghost" onClick={prepara} disabled={salvando}>{campagna?.totale_destinatari ? "Rifai i destinatari" : "Prepara i destinatari"}</Button>}
+              {!bloccata && onSelezionaDestinatari && <Button variant="ghost" onClick={scegliDestinatari} disabled={salvando} title="Scegli dalla lista contatti, con i filtri">Seleziona destinatari</Button>}
+              {!bloccata && <Button variant="ghost" onClick={prepara} disabled={salvando} title={campagna?.riassunto_filtri || riassunto ? `Con i filtri: ${campagna?.riassunto_filtri || riassunto}` : "Tutti i contatti con un'email"}>{campagna?.totale_destinatari ? "Rifai i destinatari" : "Prepara i destinatari"}</Button>}
+              {!bloccata && campagna?.totale_destinatari > 0 && <Button variant="danger" onClick={cancellaDestinatari} disabled={salvando}>Cancella destinatari</Button>}
               {stato !== "inviata" && stato !== "annullata" && (
                 <Button onClick={invia} disabled={salvando || !campagna?.totale_destinatari || invio?.inCorso}>
                   {stato === "in_invio" ? "Riprendi l'invio" : `Invia${campagna?.totale_destinatari ? ` a ${numero(campagna.totale_destinatari)}` : ""}`}
@@ -307,7 +339,7 @@ export function ElencoCampagne({ onApri, onChiudi }) {
   const [esiti, setEsiti] = useState({});
   useEffect(() => {
     supabase.from("crm_campagne").select("*").order("creata_il", { ascending: false }).limit(200)
-      .then(({ data }) => setCampagne(data || []));
+      .then(({ data }) => setCampagne(Array.isArray(data) ? data : []));
   }, []);
   // consegne, aperture e rimbalzi, contati dai destinatari
   useEffect(() => {

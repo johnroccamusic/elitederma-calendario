@@ -122,3 +122,51 @@ describe("la lista contatti del CRM", () => {
     expect(nomeDi({ nome: "", cognome: "", nome_originale: "", email: "x@y.it" })).toBe("x@y.it");
   });
 });
+
+describe("scegliere i destinatari di una campagna dalla lista", () => {
+  it("«Usa questi contatti» scrive i filtri sulla campagna, prepara i destinatari e torna alla campagna", async () => {
+    const chiamate = []; const aggiornamenti = []; const rpc = [];
+    const { default: ComponiMail } = await import("../src/crm/ComponiMail.jsx");
+    void ComponiMail;
+    prepara(chiamate);
+    const risposteBase = globalThis.fetch;
+    // sopra alle risposte della lista, quelle della campagna
+    rispondiCon({
+      "rpc/crm_campagna_prepara": (corpo) => { rpc.push(corpo); return { inseriti: 1, senza_email: 1, disiscritti: 0, da_verificare: 0 }; },
+      "rest/v1/crm_campagne?": (corpo, url) => {
+        if (corpo) aggiornamenti.push(corpo);
+        const c = { id: "c5", nome: "Scritta prima", oggetto: "Ciao", stato: "bozza", filtri: {}, totale_destinatari: 1, inviate: 0, fallite: 0, creata_il: "2026-10-30T10:00:00Z" };
+        return url.includes("order=creata_il") ? [c] : c;
+      },
+      "rest/v1/intestazione_societa": { nome: "ELITEDERMA Srl" },
+    });
+    const conCampagna = globalThis.fetch;
+    globalThis.fetch = async (url, opz) => (String(url).includes("crm_campagn") || String(url).includes("intestazione_societa") ? conCampagna(url, opz) : risposteBase(url, opz));
+    globalThis.window.fetch = globalThis.fetch;
+
+    const p = await monta(<PaginaContatti onBack={() => {}} />);
+    await attendi(200);
+    // si apre una campagna esistente dall'elenco, poi «Seleziona destinatari»
+    await clicca(p.tasto("Campagne"));
+    await attendi(200);
+    const riga = p.nodo.querySelector('[data-campagna="c5"]');
+    await clicca(riga);
+    await attendi(200);
+    await clicca(p.tasto("Seleziona destinatari"));
+    await attendi(200);
+    expect(p.nodo.querySelector("[data-scelta-destinatari]").textContent).toContain("Stai scegliendo i destinatari di «Scritta prima»");
+    const tendina = p.nodo.querySelector('select[data-filtro="Regione"]');
+    const { act } = await import("react");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set.call(tendina, "LOMBARDIA");
+      tendina.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+    await attendi(250);
+    await clicca(p.tasto("Usa questi 1 contatti"));
+    await attendi(300);
+    expect(aggiornamenti.some((a) => a.filtri && a.filtri.regione === "LOMBARDIA" && a.riassunto_filtri === "LOMBARDIA")).toBe(true);
+    expect(rpc[0]).toEqual({ p_campagna: "c5" });
+    expect(p.testo()).toContain("Destinatari pronti: 1 (fuori: 1 senza email).");
+    await p.smonta();
+  });
+});

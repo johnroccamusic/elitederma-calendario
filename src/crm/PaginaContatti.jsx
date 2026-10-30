@@ -282,6 +282,11 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
   // le tre viste: la lista, l'elenco delle campagne fatte, una campagna
   // aperta (nuova dai filtri correnti, o una gia' esistente)
   const [vista, setVista] = useState({ nome: "lista" });
+  // quando si sta scegliendo a chi mandare una campagna gia' scritta: la
+  // lista e' la stessa, ma il tasto in cima congela i destinatari e torna
+  // alla campagna
+  const perCampagna = vista.nome === "lista" ? vista.perCampagna || null : null;
+  const [congelando, setCongelando] = useState(false);
   const [filtri, setFiltri] = useState(FILTRI_VUOTI);
   const [cercaScritto, setCercaScritto] = useState("");
   const [da, setDa] = useState(0);
@@ -339,6 +344,24 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
   const totale = esito.totale;
   const fine = Math.min(da + PER_PAGINA, totale || 0);
 
+  async function usaQuestiContatti() {
+    if (!perCampagna?.id || !totale) return;
+    setCongelando(true); setErrore("");
+    try {
+      const { error } = await supabase.from("crm_campagne")
+        .update({ filtri: filtriDb, riassunto_filtri: riassunto || null, aggiornata_il: new Date().toISOString() }).eq("id", perCampagna.id);
+      if (error) throw new Error(error.message);
+      const { data, error: e2 } = await supabase.rpc("crm_campagna_prepara", { p_campagna: perCampagna.id });
+      if (e2) throw new Error(e2.message);
+      setVista({
+        nome: "componi",
+        campagna: { ...perCampagna, filtri: filtriDb, riassunto_filtri: riassunto || null },
+        messaggio: { tipo: "ok", testo: `Destinatari pronti: ${numero(data?.inseriti || 0)}${data?.senza_email || data?.disiscritti || data?.da_verificare ? ` (fuori: ${[data.senza_email ? `${numero(data.senza_email)} senza email` : "", data.disiscritti ? `${numero(data.disiscritti)} disiscritti` : "", data.da_verificare ? `${numero(data.da_verificare)} da verificare` : ""].filter(Boolean).join(", ")})` : ""}.` },
+      });
+    } catch (e) { setErrore("Non riesco a congelare i destinatari: " + e.message); }
+    setCongelando(false);
+  }
+
   if (vista.nome === "campagne") {
     return <ElencoCampagne onChiudi={() => setVista({ nome: "lista" })} onApri={(c) => setVista({ nome: "componi", campagna: c })} />;
   }
@@ -348,7 +371,14 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
         key={vista.campagna?.id || "nuova"}
         campagnaIniziale={vista.campagna || null}
         filtri={vista.filtri || {}} riassunto={vista.riassunto || ""} totale={vista.totale || 0} utente={utente}
+        messaggioIniziale={vista.messaggio || null}
         onChiudi={() => setVista({ nome: "lista" })}
+        onSelezionaDestinatari={(c) => {
+          // si riparte dai filtri che la campagna ha gia', se ne ha
+          const f = { ...FILTRI_VUOTI, ...(c.filtri || {}) };
+          setFiltri(f); setCercaScritto(f.cerca || ""); setDa(0); setApertoId(null);
+          setVista({ nome: "lista", perCampagna: c });
+        }}
       />
     );
   }
@@ -365,6 +395,15 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
           {valori?.totale != null && ` In archivio ${numero(valori.totale)} contatti${valori.disiscritti ? `, di cui ${numero(valori.disiscritti)} disiscritti` : ""}.`}
           {valori?.senza_data > 0 && ` Per ${numero(valori.senza_data)} la data della richiesta non è nota: sono stati caricati in Vetta in blocco il 9 marzo 2026, e il filtro per anno li lascia fuori.`}
         </div>
+
+        {perCampagna && (
+          <div style={{ ...fontBody, fontSize: 13, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 14px", marginBottom: 12, lineHeight: 1.5, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }} data-scelta-destinatari>
+            <span style={{ flex: 1, minWidth: 200 }}>
+              Stai scegliendo i destinatari di <b>«{perCampagna.nome}»</b>: imposta i filtri e poi premi «Usa questi contatti».
+            </span>
+            <Button variant="ghost" onClick={() => setVista({ nome: "componi", campagna: perCampagna })} disabled={congelando}>Torna alla campagna</Button>
+          </div>
+        )}
 
         {/* I FILTRI. Periodo e corso guardano le richieste; il resto il
             contatto. Tutti insieme restringono, e il conteggio sotto e'
@@ -421,12 +460,18 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
           </div>
           {riassunto && <span style={{ ...fontBody, fontSize: 12.5, color: GRAFITE }}>{riassunto}</span>}
           <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            {perCampagna ? (
+              <Button onClick={usaQuestiContatti} disabled={!totale || filtri.disiscritti || congelando}>
+                {congelando ? "Congelo…" : `Usa questi ${numero(totale || 0)} contatti`}
+              </Button>
+            ) : <>
             <Button variant="ghost" onClick={() => setVista({ nome: "campagne" })}>Campagne</Button>
             {/* a chi e' in lista adesso, con questi filtri: i disiscritti
                 non si possono scegliere, e lo dice il tasto spento */}
             <Button onClick={() => setVista({ nome: "componi", filtri: filtriDb, riassunto, totale })} disabled={!totale || filtri.disiscritti} title={filtri.disiscritti ? "Ai disiscritti non si scrive" : "Scrivi una mail a chi è in lista"}>
               Componi mail
             </Button>
+            </>}
           </span>
         </div>
         {errore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{errore}</div>}
