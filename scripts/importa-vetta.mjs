@@ -44,6 +44,22 @@ const VETTA_KEY = process.env.VETTA_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://snhvvipszhfllrgemsdu.supabase.co";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
+// Il client verso Supabase. Le chiavi nuove (sb_secret_…) non sono JWT:
+// vanno passate SOLO nell'intestazione apikey. supabase-js mette la stessa
+// chiave anche in "Authorization: Bearer …", e il gateway prova a leggerla
+// come JWT — da li' "JWT issued at future" (30/10/2026, primo giro
+// dell'import). Con una chiave JWT (eyJ…) le due intestazioni restano
+// entrambe, come sempre.
+function clientSupabase() {
+  const chiaveNuova = SUPABASE_KEY.startsWith("sb_secret_") || SUPABASE_KEY.startsWith("sb_publishable_");
+  const fetchSenzaBearer = (url, opzioni = {}) => {
+    const headers = new Headers(opzioni.headers || {});
+    if (chiaveNuova && String(headers.get("Authorization") || "").includes(SUPABASE_KEY)) headers.delete("Authorization");
+    return fetch(url, { ...opzioni, headers });
+  };
+  return createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false }, global: { fetch: fetchSenzaBearer } });
+}
+
 function log(...a) { console.log(new Date().toISOString().slice(11, 19), ...a); }
 
 // ---------------------------------------------------------------- Vetta
@@ -101,8 +117,10 @@ async function leggiVetta() {
     throw e;
   }
   const membri = (await vettaTutti("workspaceMembers"));
+  // in prova si leggono 300 persone ma TUTTE le opportunita' (sono poche):
+  // senza, lo "stato trattativa" non si vedrebbe mai nel giro di prova
   const persone = await vettaTutti("people", PROVA ? 300 : Infinity);
-  const opportunita = PROVA ? [] : await vettaTutti("opportunities");
+  const opportunita = await vettaTutti("opportunities");
   fs.writeFileSync(file("persone.json"), JSON.stringify(persone));
   fs.writeFileSync(file("opportunita.json"), JSON.stringify(opportunita));
   fs.writeFileSync(file("membri.json"), JSON.stringify(membri));
@@ -330,7 +348,7 @@ async function main() {
     c.da_verificare_motivo = [c.da_verificare_motivo, `possibile doppione: altri ${lista.length - 1} contatti con lo stesso nome senza email o telefono in comune`].filter(Boolean).join("; ");
   }
 
-  const sb = SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } }) : null;
+  const sb = SUPABASE_KEY ? clientSupabase() : null;
   if (sb) {
     const [storico, iscritti, corsi, corsiDate] = await Promise.all([
       leggiTutte(sb, "storico_allievi", "id, nome, cognome, corso_id"),
