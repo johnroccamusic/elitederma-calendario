@@ -81,7 +81,7 @@ async function vettaGet(percorso, query) {
 // Il limite massimo non e' documentato senza chiave: si prova 200 e si scende a 60.
 async function vettaTutti(oggettoPlurale, massimo = Infinity) {
   const tutti = [];
-  let cursore = null; let limite = 200;
+  let cursore = null; let limite = 200; let totale = null;
   for (;;) {
     let r;
     try {
@@ -91,12 +91,16 @@ async function vettaTutti(oggettoPlurale, massimo = Infinity) {
       throw e;
     }
     const lista = r?.data?.[oggettoPlurale] || [];
+    if (r?.totalCount != null) totale = r.totalCount;
     tutti.push(...lista);
     if (tutti.length === lista.length) log(`${oggettoPlurale}: ${r.totalCount ?? "?"} in totale`);
     if (tutti.length % 2000 < limite) log(`${oggettoPlurale}: letti ${tutti.length}`);
     if (!r?.pageInfo?.hasNextPage || !lista.length || tutti.length >= massimo) break;
     cursore = r.pageInfo.endCursor;
   }
+  // il conto finale, sempre: i log intermedi escono a multipli di 2000 e
+  // da soli fanno credere che la lettura si sia fermata li'
+  log(`${oggettoPlurale}: letti ${Math.min(tutti.length, massimo)}${totale != null ? ` di ${totale}` : ""}${massimo < Infinity && tutti.length >= massimo ? " (tetto della prova)" : ""}`);
   return tutti.slice(0, massimo);
 }
 
@@ -129,6 +133,44 @@ async function leggiVetta() {
 
 // ------------------------------------------------------- Vetta -> righe
 
+// Le opportunita' senza persona. In Vetta 826 su 2.774 (822 vendute) non
+// puntano a nessun contatto: hanno solo il nome del cliente scritto a
+// mano, a volte con una data accanto ("victoria 25/06"). Nel giro di prova
+// 6 dei 7 CLIENTI senza vendita avevano un'opportunita' cosi' col loro
+// nome. Si agganciano per nome SOLO quando una persona sola porta quel
+// nome: due Giulia Rossi restano senza, e lo dice il riepilogo.
+//
+// E un nome solo ("victoria") non basta, a meno che quella persona sia
+// gia' CLIENTI in Vetta: nel giro di prova 12 opportunita' vendute con
+// un nome solo finivano su contatti SCARTATI che per caso erano l'unica
+// Victoria fra 300 — su 23.847 sarebbe raro, ma una vendita appiccicata
+// alla persona sbagliata e' peggio di una vendita senza persona.
+const chiaveNomeSenzaNumeri = (testo) => chiave(testo).split(" ").filter((parola) => parola && !/\d/.test(parola)).join(" ");
+function agganciaOpportunitaOrfane(opportunita, persone, oppPerPersona) {
+  const perNome = new Map();
+  for (const p of persone) {
+    const k = chiaveNomeSenzaNumeri([p.name?.firstName, p.name?.lastName].filter(Boolean).join(" "));
+    if (!k) continue;
+    if (!perNome.has(k)) perNome.set(k, []);
+    perNome.get(k).push({ id: p.id, categoria: p.categoria || null });
+  }
+  const stat = { totali: opportunita.length, senza_persona: 0, agganciate_per_nome: 0, nome_ambiguo: 0, solo_nome_non_cliente: 0, senza_nessuno: 0 };
+  for (const o of opportunita) {
+    if (o.pointOfContactId) continue;
+    stat.senza_persona++;
+    const k = chiaveNomeSenzaNumeri(o.nomeCliente || o.name);
+    const candidati = k ? perNome.get(k) : null;
+    if (!candidati) { stat.senza_nessuno++; continue; }
+    if (candidati.length > 1) { stat.nome_ambiguo++; continue; }
+    const [persona] = candidati;
+    if (k.split(" ").length < 2 && persona.categoria !== "CLIENTI") { stat.solo_nome_non_cliente++; continue; }
+    o._agganciataPerNome = true;
+    (oppPerPersona[persona.id] ||= []).push(o);
+    stat.agganciate_per_nome++;
+  }
+  return stat;
+}
+
 // «katia» in Vetta, «Katia» qui: e' un nome, non un'utenza
 const nomeMembro = (m) => [m?.name?.firstName, m?.name?.lastName].filter(Boolean).join(" ").trim()
   .split(" ").map((p) => (/@/.test(p) ? "" : p.charAt(0).toUpperCase() + p.slice(1))).filter(Boolean).join(" ");
@@ -145,6 +187,9 @@ function richiestaDa(p, membriPerId, oppPerPersona) {
   const trattatoDa = membro ? nomeMembro(membro) : (agenteStorico ? nomeAgenteDaEmail(agenteStorico) : "");
   const opp = (oppPerPersona[p.id] || []).map((o) => ({
     vetta_id: o.id, stato: o.stage || null, corso: corsoCanonico((o.corso || [])[0] || o.name) || null,
+    // "contatto" = in Vetta puntava a questa persona; "nome" = era senza
+    // persona e porta il suo nome (vedi agganciaOpportunitaOrfane)
+    agganciata_per: o._agganciataPerNome ? "nome" : "contatto",
     corso_vetta: (o.corso || [])[0] || null, importo: o.amount?.amountMicros ? Number(o.amount.amountMicros) / 1e6 : null,
     chiusa_il: o.closeDate ? o.closeDate.slice(0, 10) : null,
   }));
@@ -203,6 +248,8 @@ function raggruppa(richieste) {
   return [...gruppi.values()].map((g) => g.sort((a, b) => a.richiesta_il.localeCompare(b.richiesta_il)));
 }
 
+const SOLO_NOME = "solo il nome, senza cognome";
+
 function contattoDa(gruppo) {
   const prima = gruppo[0]; const ultima = gruppo[gruppo.length - 1];
   // il nome: quello con il cognome scritto, altrimenti il piu' recente
@@ -221,8 +268,11 @@ function contattoDa(gruppo) {
   const vinte = opp.filter((o) => o.stato === "CLOSED_WON");
   const stato = vinte.length ? "venduto" : (opp.length ? "in_trattativa" : "nessuna");
   const motivi = [...new Set(gruppo.map((r) => r._nome.motivo).filter(Boolean))];
+  // «solo il nome, senza cognome» non e' un motivo per verificare (deciso
+  // dal titolare il 30/10/2026: erano 52 su 300): resta scritto a parte
   const daVerificare = [];
-  if (nome.motivo) daVerificare.push(nome.motivo);
+  const nomeNota = nome.motivo === SOLO_NOME ? SOLO_NOME : null;
+  if (nome.motivo && nome.motivo !== SOLO_NOME) daVerificare.push(nome.motivo);
   if (!email && !telefono) daVerificare.push("senza email né telefono");
   return {
     vetta_id_principale: prima.vetta_id,
@@ -240,6 +290,7 @@ function contattoDa(gruppo) {
     trattato_da: ultima.trattato_da, trattato_da_email: ultima.trattato_da_email, trattato_da_vetta_id: ultima.trattato_da_vetta_id, agente_storico_email: ultima.agente_storico_email,
     numero_richieste: gruppo.length, primo_contatto_il: prima.richiesta_il, ultimo_contatto_il: ultima.richiesta_il,
     da_verificare: daVerificare.length > 0, da_verificare_motivo: daVerificare.join("; ") || null,
+    nome_nota: nomeNota,
     creato_in_vetta_il: prima.richiesta_il, aggiornato_in_vetta_il: gruppo.map((r) => r.aggiornato_in_vetta_il).filter(Boolean).sort().pop() || null,
     creato_da: prima.creato_da, creato_da_nome: prima.creato_da_nome,
     _motiviRichieste: motivi, _gruppo: gruppo,
@@ -334,6 +385,8 @@ async function main() {
   const membriPerId = Object.fromEntries(membri.map((m) => [m.id, m]));
   const oppPerPersona = {};
   for (const o of opportunita) if (o.pointOfContactId) (oppPerPersona[o.pointOfContactId] ||= []).push(o);
+  const statOpportunita = agganciaOpportunitaOrfane(opportunita, persone, oppPerPersona);
+  log(`opportunità: ${statOpportunita.totali} in tutto, ${statOpportunita.senza_persona} senza persona; agganciate per nome ${statOpportunita.agganciate_per_nome}, nome ambiguo ${statOpportunita.nome_ambiguo}, nome solo su non clienti ${statOpportunita.solo_nome_non_cliente}, senza nessuno ${statOpportunita.senza_nessuno}`);
 
   const richieste = persone.map((p) => richiestaDa(p, membriPerId, oppPerPersona));
   const gruppi = raggruppa(richieste);
@@ -379,6 +432,11 @@ async function main() {
     mestiere: Object.fromEntries([...new Set(contatti.map((c) => c.mestiere || "(nessuno)"))].map((m) => [m, conta((c) => (c.mestiere || "(nessuno)") === m)])),
     corsi: Object.fromEntries([...new Set(contatti.flatMap((c) => c.corsi_interesse))].map((k) => [k, conta((c) => c.corsi_interesse.includes(k))])),
     da_verificare: conta((c) => c.da_verificare), omonimi_non_uniti: omonimi,
+    solo_nome_senza_cognome: conta((c) => c.nome_nota),
+    // i CLIENTI di Vetta che restano senza nessuna opportunita', nemmeno
+    // per nome: la qualifica dice venduto, le opportunita' no
+    clienti_senza_opportunita: conta((c) => c.qualifica === "CLIENTI" && c.stato_trattativa === "nessuna"),
+    opportunita: statOpportunita,
     motivi_verifica: Object.fromEntries([...new Set(contatti.flatMap((c) => (c.da_verificare_motivo || "").split("; ").filter(Boolean)).map((m) => m.replace(/\d+/g, "N")))].map((m) => [m, conta((c) => (c.da_verificare_motivo || "").replace(/\d+/g, "N").includes(m))])),
     collegamenti: Object.fromEntries(["certo", "dubbio", "nessuno"].map((s) => [s, conta((c) => c.collegamento === s)])),
     collegati_storico: conta((c) => c.storico_allievo_id), collegati_iscritti: conta((c) => c.iscritto_id),
