@@ -28449,17 +28449,21 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     // capiva di chi fosse (Udine, 30/10/2026). Qui nel Riepilogo il nome
     // resta "Quota venditore", perche' sotto c'e' il dettaglio per persona
     const aBonifico = [];
-    const bonifico = round2(perVenditore.reduce((somma, v) => {
+    // il bonifico di OGNI venditore, con il suo nome: lo Scadenzario passivo
+    // ha una voce per persona (31/10/2026), non una per tutta la classe
+    const bonificoPerVenditore = perVenditore.map((v) => {
       const modalita = modalitaVenditore(quoteVenditoriSplit, corsoData.id, v.chiave);
-      if (modalita === "B") { aBonifico.push(v.nome); return somma + v.totale; }
-      if (modalita === "Mix") { aBonifico.push(v.nome); return somma + v.totale / 2; }
-      return somma;
-    }, 0));
+      const suo = modalita === "B" ? v.totale : modalita === "Mix" ? round2(v.totale / 2) : 0;
+      if (suo > 0) aBonifico.push(v.nome);
+      return { chiave: v.chiave, nome: v.nome, bonifico: round2(suo) };
+    });
+    const bonifico = round2(bonificoPerVenditore.reduce((somma, v) => somma + v.bonifico, 0));
     return {
       rigaId: corsoData.id, tabella: "corsi_date", tipo: "venditore", nome: "Quota venditore",
       nomeScadenziario: aBonifico.length ? `Quota venditore — ${aBonifico.join(", ")}` : "Quota venditore",
       totale: quoteVenditoreClasse,
       bonifico,
+      bonificoPerVenditore,
       cash: round2(quoteVenditoreClasse - bonifico),
     };
   })();
@@ -44213,38 +44217,52 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       cashRicalcolati.set(`cash_venditore_${cd.id}_${v.chiave}`, round2(v.totale - suoBonifico));
     });
     righeSpeseTutte.forEach((r) => {
-      const chiave = `${r.tipo}_${r.rigaId}`;
-      // il valore di oggi va registrato SEMPRE, anche quando e' zero: uno
-      // zero vuol dire che quel costo e' passato tutto in contanti, e
-      // dallo Scadenzario deve sparire
-      importiRicalcolati.set(chiave, round2(r.bonifico || 0));
-      // solo quello che si paga con bonifico: la parte in contanti si
-      // regola dalla busta della classe, non da qui
-      if (!(r.bonifico > 0)) return;
-      if (!entroLaSoglia) return;
-      // gia' diventata una spesa vera (fattura associata o pagata): la
-      // riga vera l'ha sostituita
-      if (spesePerChiave.has(chiave)) return;
-      // la location ha una categoria di spesa propria per sede (non più
-      // un'unica categoria condivisa da tutte, come invece restano
-      // master/alloggio/assistente/venditore)
-      const sottocategoriaId = r.tipo === "location" ? (r.categoriaSpesaId || null) : categoriaGruppoPer(r.tipo, categorieGruppi);
-      daPagare.push({
-        key: chiave, chiave, corsoData: cd, nome: r.nomeScadenziario || r.nome, totale: r.bonifico, tipo: r.tipo,
-        tabella: r.tabella, rigaId: r.rigaId, sottocategoriaId,
-        fornitore: r.fornitore || null, fornitoreId: r.fornitoreId || null, iban: r.iban || null,
-        // la classificazione gestionale gia' scritta sull'anagrafica
-        // (master, sede, hotel, assistente): la scheda del pagamento si
-        // apre con quella dentro, non vuota
-        anagrafica: r.anagrafica || null,
-        // la data decisa a mano vince su tutto; poi quella scritta in
-        // Assegnazione Master; senza nessuna delle due si stima la fine
-        // del corso — e la riga lo dichiara
-        scadenza: scadenzeSpostate.get(chiave) || r.scadenza || cd.data_fine || null,
-        scadenzaSuggerita: r.scadenza || null,
-        scadenzaStimata: !scadenzeSpostate.has(chiave) && !r.scadenza,
-        statoFattura: "in_attesa",
-        statoPagamento: "da_pagare",
+      // QUOTA VENDITORE: una voce PER PERSONA (31/10/2026), col suo nome e la
+      // sua cifra a bonifico, non una voce sola per tutta la classe. Ognuno si
+      // paga per conto suo, e nello Scadenzario si legge a chi. Una spesa
+      // salvata con la chiave vecchia di classe ("venditore_<classe>") vale
+      // per tutti e le voci per persona non si ripropongono.
+      const voci = r.tipo === "venditore"
+        ? (r.bonificoPerVenditore || []).map((v) => ({
+            chiave: `venditore_${r.rigaId}_${v.chiave}`, bonifico: v.bonifico,
+            nome: `Quota venditore — ${v.nome}`, fornitore: v.nome, saltaSe: `venditore_${r.rigaId}`,
+          }))
+        : [{ chiave: `${r.tipo}_${r.rigaId}`, bonifico: r.bonifico || 0, nome: r.nomeScadenziario || r.nome, fornitore: r.fornitore || null, saltaSe: null }];
+      if (r.tipo === "venditore") importiRicalcolati.set(`venditore_${r.rigaId}`, round2(r.bonifico || 0));
+      voci.forEach((voce) => {
+        const chiave = voce.chiave;
+        // il valore di oggi va registrato SEMPRE, anche quando e' zero: uno
+        // zero vuol dire che quel costo e' passato tutto in contanti, e
+        // dallo Scadenzario deve sparire
+        importiRicalcolati.set(chiave, round2(voce.bonifico || 0));
+        // solo quello che si paga con bonifico: la parte in contanti si
+        // regola dalla busta della classe, non da qui
+        if (!(voce.bonifico > 0)) return;
+        if (!entroLaSoglia) return;
+        // gia' diventata una spesa vera (fattura associata o pagata): la
+        // riga vera l'ha sostituita
+        if (spesePerChiave.has(chiave) || (voce.saltaSe && spesePerChiave.has(voce.saltaSe))) return;
+        // la location ha una categoria di spesa propria per sede (non più
+        // un'unica categoria condivisa da tutte, come invece restano
+        // master/alloggio/assistente/venditore)
+        const sottocategoriaId = r.tipo === "location" ? (r.categoriaSpesaId || null) : categoriaGruppoPer(r.tipo, categorieGruppi);
+        daPagare.push({
+          key: chiave, chiave, corsoData: cd, nome: voce.nome, totale: voce.bonifico, tipo: r.tipo,
+          tabella: r.tabella, rigaId: r.rigaId, sottocategoriaId,
+          fornitore: voce.fornitore, fornitoreId: r.fornitoreId || null, iban: r.iban || null,
+          // la classificazione gestionale gia' scritta sull'anagrafica
+          // (master, sede, hotel, assistente): la scheda del pagamento si
+          // apre con quella dentro, non vuota
+          anagrafica: r.anagrafica || null,
+          // la data decisa a mano vince su tutto; poi quella scritta in
+          // Assegnazione Master; senza nessuna delle due si stima la fine
+          // del corso — e la riga lo dichiara
+          scadenza: scadenzeSpostate.get(chiave) || r.scadenza || cd.data_fine || null,
+          scadenzaSuggerita: r.scadenza || null,
+          scadenzaStimata: !scadenzeSpostate.has(chiave) && !r.scadenza,
+          statoFattura: "in_attesa",
+          statoPagamento: "da_pagare",
+        });
       });
     });
   });

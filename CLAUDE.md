@@ -1322,8 +1322,19 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   produzione: oggi nessun reso, annullo o cambio in archivio. Prove in
   `prove/storni-vendite.test.js` e `prove/cassa-contanti-per-mese.test.jsx`.
 
-**Ancora aperto**, in ordine: quota
-venditore dopo «Disponi pagamenti», 18 secchi pubblici.
+- **Quota venditore nello Scadenzario passivo: una voce per persona**
+  (31/10/2026). La parte a bonifico non e' piu' una voce di classe («Quota
+  venditore — Katia, Gina») ma una per venditore, «Quota venditore — Katia»,
+  con la sua cifra e la chiave `venditore_<classe>_<NOME>`; una spesa
+  salvata con la vecchia chiave `venditore_<classe>` vale per tutti (in
+  archivio non ce n'era nessuna). **Decisione del titolare sul resto:** la
+  quota venditore non cambia dopo «Disponi pagamenti», perche' la classe si
+  chiude prima del corso e nessuna quota viene aggiunta o scende dopo —
+  quindi il «pagato per classe» di Disponi (una spesa aggregata con i nomi
+  nella nota) non e' un difetto da correggere. Prove in
+  `prove/quota-venditore-nello-scadenziario.test.js`.
+
+**Ancora aperto**, in ordine: 18 secchi pubblici.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
 
