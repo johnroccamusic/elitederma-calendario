@@ -1227,11 +1227,9 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   recesso compreso, cioè il gettone di un altro diritto.
 - **`modulo_salva`**: i file devono stare nella cartella del gettone e non
   contenere `..` (prima si poteva indicare il documento di un'altra
-  iscrizione); i documenti obbligatori si controllano anche sul server;
-  il contratto deve avere la forma di un contratto. **Aperto, e deciso dal
-  titolare:** il testo del regolamento lo manda ancora il browser, perché
-  `modulo_iscrizione_testi` è vuota e l'originale sta nel codice; fissarlo
-  sul server vuol dire portare quel testo nel database.
+  iscrizione); i documenti obbligatori si controllano anche sul server.
+  **Il contratto firmato lo compone il server** (31/10/2026, richiesta del
+  titolare): vedi il paragrafo qui sotto.
 - La pagina del modulo chiudeva su **qualunque** `motivo` del rifiuto
   («Iscrizione già confermata» al posto del modulo, anche per una taglia
   mancante): ora chiudono solo `gia_inviato` e `confermato`.
@@ -1241,6 +1239,33 @@ atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
 venditore dopo «Disponi pagamenti», campagne (doppi invii, rifiuti
 temporanei), funzioni di servizio chiamabili da `anon`, upload anonimi
 senza tetto, 18 secchi pubblici.
+
+### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
+
+`modulo_iscrizione_testi` era vuota: regolamento, caselle dei consensi e
+intestazione vivevano solo nel codice (`src/iscrizione/contenuto.js`) e
+`modulo_salva` archiviava come «contratto firmato» il testo che mandava il
+browser, quindi con un gettone si poteva far registrare un regolamento
+alterato. Ora le tre righe (`intro`, `regolamento`, `consensi`) sono nel
+database, **identiche al codice parola per parola** (impronte md5 dei
+valori uguali nei due posti, verificate), e `modulo_salva` compone
+`iscritti.contratto_firmato` da lì: dal browser prende solo l'elenco delle
+caselle che l'allieva ha visto (l'avvio immediato compare solo a ridosso
+del corso). Il contratto salvato dice `origine: 'server'` e
+`uguale_a_quello_mostrato`, che è falso se il testo è stato corretto o
+alterato mentre lei compilava. Se una riga mancasse si ricade sul testo
+del client (`origine: 'client'`): meglio un modulo firmato che bloccato.
+
+**Resta modificabile da app a piacimento**, come prima: Setting → Modulo
+di iscrizione → Il contratto scrive in quella tabella e il prossimo modulo
+firmato congela il testo nuovo; chi ha già firmato tiene il suo (`coalesce`).
+Ogni correzione archivia da sola la versione precedente in
+`modulo_iscrizione_testi_archivio` (trigger `modulo_testi_archivia`). **«Rimetti
+com'era» non cancella più la riga: la riscrive con il testo di partenza**,
+altrimenti il server non avrebbe l'originale. Le righe con `aggiornato_da`
+che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
+resta come rete per far vedere la pagina se la query fallisce, ma non è più
+quello che si firma. Prove in `prove/testi-contratto.test.js`.
 
 ### Il cash rinviato segue il Riepilogo (30/10/2026)
 

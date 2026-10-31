@@ -12,9 +12,11 @@
 // correzione, si scrive, si preme Salva — oppure Annulla e non e'
 // successo niente.
 //
-// "RIMETTI COM'ERA" cancella la riga dal database, e allora torna a
-// valere il testo trascritto nel codice. E' la via d'uscita se qualcuno
-// combina un guaio: non bisogna riscrivere nove punti a mano.
+// "RIMETTI COM'ERA" riscrive nel database il testo di partenza, quello
+// trascritto nel codice (la riga non si cancella: dal 31/10/2026 il server
+// compone da li' il contratto firmato). E' la via d'uscita se qualcuno
+// combina un guaio: non bisogna riscrivere nove punti a mano. La versione
+// che si butta resta in archivio.
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import { Button, Field } from "../ui/base.jsx";
@@ -129,8 +131,9 @@ export default function TestoContratto({ Icona, amministratore = true }) {
         È il testo che l'allieva legge e firma. <b style={{ color: NAVY }}>Si corregge un pezzo alla volta</b>, e
         il salvataggio è un gesto a parte: qui niente si salva da solo, perché sono clausole di un contratto.
         <div style={{ marginTop: 6 }}>
-          Un pezzo mai corretto vale quello trascritto nel codice dal modulo del sito. <b style={{ color: NAVY }}>Rimetti
-          com'era</b> ci torna, e non serve riscrivere niente a mano.
+          Un pezzo mai corretto è quello di partenza, trascritto dal modulo del sito. <b style={{ color: NAVY }}>Rimetti
+          com'era</b> ci torna, e non serve riscrivere niente a mano. Ogni correzione conserva la versione precedente in archivio, e chi ha già firmato
+          mantiene il testo che aveva davanti.
         </div>
       </div>
 
