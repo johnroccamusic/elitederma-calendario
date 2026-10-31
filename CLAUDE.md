@@ -1253,6 +1253,18 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   libero (carica anche in `_azienda/` e i PDF). Provato in transazione
   annullata: gettone falso, `..` e nomi storti rifiutati; i percorsi veri passano.
 
+- **`leggi-documento` ha un tetto** (31/10/2026): 8 tentativi all'ora e 25 in
+  tutto per modulo, contati prima di chiamare il modello (chiave `limite` in
+  `iscritti.documento_letto`); oltre, 429 e il modulo si invia comunque.
+- **`modulo_vista` serve solo le chiavi di un elenco** (31/10/2026, migrazione
+  `20261031170000`). Leggeva da `iscritti` la colonna nominata da ogni riga di
+  `modulo_iscrizione_campi`: da Setting si poteva accendere `quota_venditore`,
+  `quota_speciale`, `accordi_commerciali` o `note` e finivano nel JSON
+  dell'allieva. Ora quelle quattro (e qualunque chiave fuori elenco) si
+  saltano anche se la riga e' accesa. **Una chiave nuova del modulo va
+  aggiunta all'elenco `consentiti` della funzione**, altrimenti non compare.
+  Impronta del risultato su 273 moduli identica prima e dopo.
+
 **Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
 atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
 venditore dopo «Disponi pagamenti», campagne (doppi invii, rifiuti
