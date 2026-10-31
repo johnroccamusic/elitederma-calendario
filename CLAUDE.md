@@ -1303,7 +1303,26 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   controllo dell'app (`preparaScarichi`). Prove in `prove/stock-in-blocco.test.js`
   e `prove/cestino-vendite.test.jsx`.
 
-**Ancora aperto**, in ordine: vendite annullate ancora contate in busta/cassa/eventi, quota
+- **Resi, annullamenti e cambi si compensano** (31/10/2026). La riga
+  negativa che li registra (`tipo_movimento` reso / annullamento / cambio)
+  ora EREDITA dalla vendita originale corso, evento, metodo di pagamento e
+  `richiede_fattura` (`datiEreditatiDallaVendita`). Prima restava senza, e
+  busta, cassa, conto eventi e IVA continuavano a contare la vendita
+  annullata. **Regola del titolare: i soldi di una busta gia' chiusa non si
+  toccano e la contabilita' non si riapre.** Se l'originale sta gia' in una
+  busta chiusa (`busta_numero` valorizzato, contanti, con corso) la riga
+  negativa porta `busta_numero = FUORI_BUSTA` (0): non entra in nessuna busta
+  ne' appendice e la Cassa contanti la conta come uscita («Resi e
+  annullamenti rimborsati in contanti») nel giorno in cui si fa. Con la busta
+  ancora aperta (o la vendita nell'appendice aperta) le due righe si
+  compensano dentro la busta. Statisticamente, conto eventi, vendite del
+  corso e IVA trimestrale la contano sempre. «Fatture da emettere» non
+  prende resi e cambi e salta le vendite annullate; la prima nota mostra le
+  righe negative. Il cambio conta come differenza. Non c'e' ancora nulla in
+  produzione: oggi nessun reso, annullo o cambio in archivio. Prove in
+  `prove/storni-vendite.test.js` e `prove/cassa-contanti-per-mese.test.jsx`.
+
+**Ancora aperto**, in ordine: quota
 venditore dopo «Disponi pagamenti», 18 secchi pubblici.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)

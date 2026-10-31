@@ -45,4 +45,27 @@ describe("Cassa contanti per mese", () => {
     expect(p.testo()).not.toContain("Restituzione");
     await p.smonta();
   });
+
+  it("un rimborso in contanti (reso/annullo di una busta chiusa) esce dalla cassa nel giorno in cui si fa", async () => {
+    rispondiCon({
+      "cassa_contanti_impostazioni": { aperta_il: "2026-09-01", saldo_iniziale: 1000 },
+      "cassa_contanti_movimenti": [],
+      "corsi_date_buste": [],
+      "corsi_date": [],
+      "vendite_shop": [
+        { totale: 50, evento_id: null, data_ordine: "2026-10-10T10:00:00" },
+        { totale: -40, evento_id: null, data_ordine: "2026-10-12T09:00:00" },
+      ],
+      "spese": [],
+      "cassa_spese_ricorrenti": [],
+      "eventi": [],
+    });
+    const p = await monta(<PannelloCassaContanti {...vuoti} ricarica={() => {}} />);
+    await attendi(200);
+    const mese = p.nodo.querySelector('[data-campo="cassa-mese"]');
+    expect(mese.textContent).toContain("Resi e annullamenti rimborsati in contanti");
+    // 1000 + 50 − 40: il rimborso toglie, non si somma in valore assoluto
+    expect(p.nodo.querySelector('[data-campo="saldo-fine-mese"]').textContent).toContain("1010,00");
+    await p.smonta();
+  });
 });

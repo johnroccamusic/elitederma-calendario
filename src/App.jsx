@@ -40468,7 +40468,7 @@ function ivaTrimestraleAnno({ anno, venditeShop, spese, iscritti, corsiDate }) {
   const dentro = (d) => d && String(d).slice(0, 4) === String(anno);
 
   (venditeShop || []).forEach((v) => {
-    if (v.tipo_movimento === "annullamento" || v.tipo_movimento === "omaggio") return;
+    if (v.tipo_movimento === "omaggio") return; // annullamenti e resi sono righe negative: si compensano
     if (senzaIvaPerContanti(v.metodo_pagamento, v.richiede_fattura)) return;
     const d = v.data_ordine ? String(v.data_ordine).slice(0, 10) : null;
     if (!dentro(d)) return;
@@ -47447,6 +47447,30 @@ function provenienzaClasse(cd, corsi, location) {
   return [corso, sede, date].filter(Boolean).join(", ");
 }
 
+// RESI, ANNULLAMENTI E CAMBI (31/10/2026). La riga negativa che li registra
+// EREDITA dalla vendita originale corso, evento, metodo di pagamento e se ha
+// chiesto fattura: senza, restava senza corso/evento/metodo e busta, cassa,
+// conto degli eventi e IVA continuavano a contare la vendita annullata.
+//
+// Regola del titolare: i soldi di una busta GIA' CHIUSA non si toccano e la
+// contabilita' non si riapre. L'annullo incide sulle vendite statistiche del
+// corso, ma il rimborso esce dalla CASSA nel giorno in cui si fa. Quindi,
+// se l'originale sta gia' in una busta chiusa (busta_numero valorizzato), la
+// riga negativa porta FUORI_BUSTA: non entra in nessuna busta e la cassa la
+// conta come uscita. Se la busta e' ancora aperta, le due righe si
+// compensano dentro la busta e non c'e' niente da rimborsare dalla cassa.
+const FUORI_BUSTA = 0;
+function datiEreditatiDallaVendita(originale) {
+  if (!originale) return {};
+  const inBustaChiusa = originale.metodo_pagamento === "contanti" && !!originale.corso_data_id && originale.busta_numero != null;
+  return {
+    corso_data_id: originale.corso_data_id || null,
+    evento_id: originale.evento_id || null,
+    metodo_pagamento: originale.metodo_pagamento || null,
+    richiede_fattura: !!originale.richiede_fattura,
+    busta_numero: inBustaChiusa ? FUORI_BUSTA : null,
+  };
+}
 // una vendita in contanti che non sta nella prima busta, quando la prima
 // busta e' gia' chiusa: e' materia di un'appendice
 function venditaInAppendice(v, cd) {
@@ -47455,7 +47479,7 @@ function venditaInAppendice(v, cd) {
 // le vendite che il Riepilogo della classe conta nella prima busta: tutte
 // finche' la busta e' aperta, poi solo quelle contate quel giorno
 function venditeDellaPrimaBusta(venditeShop, cd) {
-  return (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio" && !venditaInAppendice(v, cd));
+  return (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && !venditaInAppendice(v, cd));
 }
 // le spese della prima contabilita' della classe: quelle uscite da
 // un'appendice hanno busta_numero >= 2 e non toccano la prima busta
@@ -47484,7 +47508,7 @@ function righeProdottiVendite(vendite) {
 // non con quelli soltanto scritti.
 function contiAppendici({ cd, venditeShop, spese, buste }) {
   if (!cd?.busta_rientrata_il) return { chiuse: [], aperta: null };
-  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio" && v.metodo_pagamento === "contanti");
+  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && v.metodo_pagamento === "contanti");
   const speseCorso = (spese || []).filter((x) => x.classe_id === cd.id && x.busta_numero > 1);
   const chiuse = (buste || []).filter((b) => b.corso_data_id === cd.id).sort((a, b) => a.numero - b.numero).map((b) => {
     const vendite = venditeCorso.filter((v) => v.busta_numero === b.numero);
@@ -47899,7 +47923,10 @@ export function PannelloCassaContanti({
       // all'estero, e in cassaforte non c'e'; quando l'evento si chiude
       // viene consegnato insieme alla busta, ed entra. Stessa regola delle
       // spese, dalla parte opposta: l'evento si tira tutto insieme.
-      supabase.from("vendite_shop").select("totale, evento_id, data_ordine").eq("metodo_pagamento", "contanti").is("corso_data_id", null).gte("data_ordine", aperta).not("tipo_movimento", "in", '("annullamento","omaggio")'),
+      // (31/10/2026) Entrano anche le righe di reso/annullo di una vendita
+      // di corso GIA' in una busta chiusa (busta_numero = FUORI_BUSTA): sono
+      // rimborsi che escono dalla cassa nel giorno in cui si fanno.
+      supabase.from("vendite_shop").select("totale, evento_id, data_ordine").eq("metodo_pagamento", "contanti").or(`corso_data_id.is.null,busta_numero.eq.${FUORI_BUSTA}`).gte("data_ordine", aperta).neq("tipo_movimento", "omaggio"),
       supabase.from("spese").select("id, descrizione, totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
       supabase.from("eventi").select("id, stato"),
@@ -47936,7 +47963,7 @@ export function PannelloCassaContanti({
   const flussi = useMemo(() => [
     ...buste.map((b) => ({ data: String(b.busta_rientrata_il || "").slice(0, 10), importo: Number(b.busta_importo) || 0, voce: "buste" })),
     ...appendiciRientrate.map((b) => ({ data: String(b.rientrata_il || "").slice(0, 10), importo: Number(b.importo) || 0, voce: "buste" })),
-    ...elencoVenditeCassa.map((v) => ({ data: String(v.data_ordine || "").slice(0, 10), importo: Number(v.totale) || 0, voce: "vendite" })),
+    ...elencoVenditeCassa.map((v) => ({ data: String(v.data_ordine || "").slice(0, 10), importo: Number(v.totale) || 0, voce: (Number(v.totale) || 0) < 0 ? "rimborsi" : "vendite" })),
     ...(movimenti || []).filter((m) => m.tipo === "versamento").map((m) => ({ data: String(m.data || "").slice(0, 10), importo: Number(m.importo) || 0, voce: "versamenti" })),
     ...(movimenti || []).filter((m) => m.tipo === "prelievo").map((m) => ({ data: String(m.data || "").slice(0, 10), importo: -(Number(m.importo) || 0), voce: "prelievi" })),
     ...elencoSpeseCassa.map((x) => ({ data: String(x.data_pagamento || "").slice(0, 10), importo: -(Number(x.totale) || 0), voce: "spese" })),
@@ -47951,6 +47978,7 @@ export function PannelloCassaContanti({
     const voci = {
       buste: somma(dentro, "buste"), nBuste: dentro.filter((f) => f.voce === "buste").length,
       vendite: somma(dentro, "vendite"),
+      rimborsi: somma(dentro, "rimborsi"),
       versamenti: somma(dentro, "versamenti"), nVersamenti: dentro.filter((f) => f.voce === "versamenti").length,
       prelievi: somma(dentro, "prelievi"), nPrelievi: dentro.filter((f) => f.voce === "prelievi").length,
       spese: somma(dentro, "spese"),
@@ -48259,6 +48287,7 @@ export function PannelloCassaContanti({
           { voce: meseApertura && meseVista <= meseApertura ? `Saldo all'apertura (${fmtData(apertura.aperta_il)})` : "Riporto dal mese precedente", importo: contoMese.riporto, segno: 0 },
           { voce: `Buste rientrate dai corsi (${contoMese.nBuste})`, importo: contoMese.buste, segno: 1 },
           { voce: "Vendite in contanti al banco, fuori dai corsi", importo: contoMese.vendite, segno: 1 },
+          ...(contoMese.rimborsi > 0 ? [{ voce: "Resi e annullamenti rimborsati in contanti", importo: contoMese.rimborsi, segno: -1 }] : []),
           { voce: `Versamenti (${contoMese.nVersamenti})`, importo: contoMese.versamenti, segno: 1 },
           { voce: `Prelievi (${contoMese.nPrelievi})`, importo: contoMese.prelievi, segno: -1 },
           { voce: "Spese pagate dalla cassa", importo: contoMese.spese, segno: -1 },
@@ -52593,13 +52622,15 @@ function PaginaInserimentoCostiRicavi({
     if (i.incassato && i.saldo_metodo) aggiungi("saldo", "Saldo al corso", i.saldo_incassato_il || cd?.data_inizio, (i.saldo_totale || 0) + modelleTotaleDi(i), i.saldo_metodo);
   });
   (venditeShop || []).forEach((v) => {
-    if (v.tipo_movimento === "annullamento" || v.tipo_movimento === "omaggio") return;
-    if (!(v.totale > 0) || !v.data_ordine) return;
+    if (v.tipo_movimento === "omaggio") return;
+    // anche le righe negative (resi, annullamenti): il rimborso e' un'uscita
+    // del giorno in cui si fa, e il totale delle entrate le compensa
+    if (!v.totale || !v.data_ordine) return;
     const pos = v.origine === "pos";
     entrateTutte.push({
       id: `v_${v.id}`, tipo: "entrata", data: String(v.data_ordine).slice(0, 10), registrato: v.ts_ricevuto || v.data_ordine || "",
       titolo: v.cliente_nome || (pos ? "Vendita al banco" : "Ordine shop"), corsoData: v.corso_data_id ? corsiDateById[v.corso_data_id] || null : null,
-      fase: pos ? "Vendita POS" : "Vendita shop", metodo: v.metodo_pagamento ? toTitleCase(v.metodo_pagamento) : "—", importo: round2(v.totale), vendita: v,
+      fase: v.tipo_movimento === "annullamento" ? "Annullo vendita" : v.tipo_movimento === "reso" ? "Reso" : v.tipo_movimento === "cambio" ? "Cambio merce" : pos ? "Vendita POS" : "Vendita shop", metodo: v.metodo_pagamento ? toTitleCase(v.metodo_pagamento) : "—", importo: round2(v.totale), vendita: v,
     });
   });
   const entrateNelPeriodo = entrateTutte.filter((e) => e.data && e.data >= range.inizio && e.data <= range.fine);
@@ -64190,6 +64221,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       totale: -importoReso, totale_imponibile: -imponibile, totale_iva: -iva,
       prodotti: [{ nome: rigaSelezionata.nome, quantita: -qta, totale_riga: -importoReso }],
       origine: "pos", tipo_movimento: "reso", vendita_collegata_id: rigaSelezionata.venditaId,
+      ...datiEreditatiDallaVendita(rigaSelezionata.vendita),
       operatore_tipo: rigaSelezionata.operatoreTipo, operatore_id: rigaSelezionata.operatoreId, operatore_nome: rigaSelezionata.operatoreNome,
       coupon_id: rigaSelezionata.vendita?.coupon_id || null, codice_coupon: rigaSelezionata.vendita?.codice_coupon || null,
     });
@@ -64220,6 +64252,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       totale: -(v.totale || 0), totale_imponibile: -(v.totale_imponibile || 0), totale_iva: -(v.totale_iva || 0),
       prodotti: righe.map((r) => ({ nome: r.nome, quantita: -(r.quantita || 0), totale_riga: -(r.totale_riga || 0) })),
       origine: "pos", tipo_movimento: "annullamento", vendita_collegata_id: v.id,
+      ...datiEreditatiDallaVendita(v),
       operatore_tipo: v.operatore_tipo, operatore_id: v.operatore_id, operatore_nome: v.operatore_nome,
       coupon_id: v.coupon_id || null, codice_coupon: v.codice_coupon || null,
     });
@@ -64277,6 +64310,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       totale: differenzaFinale, totale_imponibile: imponibile, totale_iva: iva,
       prodotti: prodottiRiga,
       origine: "pos", tipo_movimento: "cambio", vendita_collegata_id: rigaAttribuzione.venditaId,
+      ...datiEreditatiDallaVendita(rigaAttribuzione.vendita),
       operatore_tipo: rigaAttribuzione.operatoreTipo, operatore_id: rigaAttribuzione.operatoreId, operatore_nome: rigaAttribuzione.operatoreNome,
       coupon_id: rigaAttribuzione.vendita?.coupon_id || null, codice_coupon: rigaAttribuzione.vendita?.codice_coupon || null,
     });
@@ -67519,11 +67553,16 @@ function PaginaFattureDaEmettere({ chi = "", onBack, titolo = "Fatture da emette
       .select("id, numero_ordine, data_ordine, totale, prodotti, cliente_nome, cliente_email, cliente_fattura_id, richiede_fattura, fattura_numero, fattura_fic_id, fattura_emessa_il, fattura_manuale, pagamento_codice, note")
       .eq("origine", "pos").eq("metodo_pagamento", "pos")
       .is("pagamento_codice", null)
-      .not("tipo_movimento", "in", '("annullamento","omaggio")')
+      // (31/10/2026) resi e cambi ereditano richiede_fattura dalla vendita
+      // originale: non sono vendite da fatturare (la nota di credito si fa a
+      // mano), e una vendita ANNULLATA non va fatturata
+      .not("tipo_movimento", "in", '("annullamento","omaggio","reso","cambio")')
       .order("data_ordine", { ascending: false }).limit(400);
     if (erroreVendite) { setVendite([]); return; }
+    const { data: annullamenti } = await supabase.from("vendite_shop").select("vendita_collegata_id").eq("tipo_movimento", "annullamento");
+    const annullate = new Set((annullamenti || []).map((x) => x.vendita_collegata_id).filter(Boolean));
     const collegate = new Set(daStripe.map((p) => p.vendita_id).filter(Boolean));
-    const nostre = (vend || []).filter((v) => !collegate.has(v.id) && (v.richiede_fattura || v.cliente_fattura_id));
+    const nostre = (vend || []).filter((v) => !collegate.has(v.id) && !annullate.has(v.id) && (v.richiede_fattura || v.cliente_fattura_id));
     // i dati di fatturazione stanno in anagrafica, non sulla vendita: si
     // leggono qui una volta sola, non una query per riga
     const idAnagrafiche = [...new Set(nostre.map((v) => v.cliente_fattura_id).filter(Boolean))];
@@ -86923,4 +86962,5 @@ export {
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
   calcolaVociScadenziario, vociCashRinviate,
   listaRaccoltaMateriale, RaccoltaMateriale,
+  datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA,
 };
