@@ -57,7 +57,7 @@ const PrezziListini = pezzo(() => import("./prezzi/PrezziListini.jsx"));
 // il listino delle master: la quota e il conto del prezzo stanno li', in
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
-import { muoviStock, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
+import { muoviStock, muoviStockInBlocco, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
 import { usePuntiMaster, useCarrelliPuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 // ATTENZIONE: in questo file esiste gia' una stagioneCorrente() che
 // torna un NUMERO (2026), usata per gli obiettivi. Quella dei punti torna
@@ -55888,31 +55888,39 @@ function CestinoVendite({ origine, prodottiShop = [], bundleComponenti = [], ric
 
   async function ripristina(c) {
     setOccupato(c.id); setMsg("");
-    const { data: riga, error } = await supabase.rpc("vendita_ripristina", { p_id: c.id });
-    if (error) { setOccupato(""); setMsg(`Non ripristinata: ${testoErrore(error)}`); return; }
-    // lo scarico del magazzino: l'inverso esatto di quello che la
-    // cancellazione aveva rimesso dentro
-    const v = riga || c.riga || {};
-    const prodotti = Array.isArray(v.prodotti) ? v.prodotti : [];
-    const mancati = [];
-    if (!v.prelevato_dai_kit && (v.tipo_movimento || "vendita") === "vendita") {
+    // PRIMA il magazzino, in un blocco solo: se manca un pezzo la vendita
+    // resta nel cestino e non cambia niente (prima tornava in elenco e lo
+    // scarico riusciva a meta')
+    const vCestino = c.riga || {};
+    const prodottiCestino = Array.isArray(vCestino.prodotti) ? vCestino.prodotti : [];
+    let daScaricare = [];
+    if (!vCestino.prelevato_dai_kit && (vCestino.tipo_movimento || "vendita") === "vendita") {
       const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
       const perNome = Object.fromEntries((prodottiShop || []).map((p) => [String(p.nome || "").trim().toLowerCase(), p]));
-      for (const r of prodotti) {
+      for (const r of prodottiCestino) {
         if (!(r.quantita > 0)) continue;
         const prodotto = (r.prodotto_id && perId[r.prodotto_id]) || perNome[String(r.nome || "").trim().toLowerCase()];
         if (!prodotto) continue;
         const pezzi = bundleVirtuale(prodotto)
           ? righeBundleCon(prodotto.id, bundleComponenti, perId).map((b) => ({ prodotto: b.prodotto, quantita: r.quantita * b.quantitaPerBundle }))
           : [{ prodotto, quantita: r.quantita }];
-        for (const m of pezzi) {
-          const errore = await muoviStock(m.prodotto, -m.quantita, { origine: "vendita", nota: `Vendita #${v.numero_ordine} ripristinata dal cestino` });
-          if (errore) mancati.push(errore);
-        }
+        pezzi.forEach((m) => daScaricare.push({ prodotto: m.prodotto, delta: -m.quantita }));
       }
     }
+    const contesto = { origine: "vendita", nota: `Vendita #${vCestino.numero_ordine} ripristinata dal cestino` };
+    const erroreScarico = await muoviStockInBlocco(daScaricare, contesto);
+    if (erroreScarico) { setOccupato(""); setMsg(`Non ripristinata (il magazzino non e' stato toccato): ${erroreScarico}`); return; }
+    const { data: riga, error } = await supabase.rpc("vendita_ripristina", { p_id: c.id });
+    if (error) {
+      const ritiro = await muoviStockInBlocco(daScaricare.map((m) => ({ ...m, delta: -m.delta })),
+        { origine: "vendita", nota: `Vendita #${vCestino.numero_ordine}: ripristino non riuscito, pezzi rimessi` });
+      setOccupato("");
+      setMsg(`Non ripristinata: ${testoErrore(error)}${ritiro ? ` ATTENZIONE: i pezzi scaricati non sono stati rimessi (${ritiro}): controlla il magazzino.` : ""}`);
+      return;
+    }
+    const v = riga || vCestino;
     setOccupato("");
-    setMsg(mancati.length ? `Vendita ripristinata, ma il magazzino non è stato scaricato per: ${mancati.join(" · ")}` : `Vendita #${v.numero_ordine} ripristinata.`);
+    setMsg(`Vendita #${v.numero_ordine} ripristinata.`);
     await carica();
     ricarica?.(["vendite_shop", "prodotti_shop"]);
   }
@@ -56048,6 +56056,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
     const rimetteStock = !v.prelevato_dai_kit && !giaAnnullata && righe.some((r) => r.quantita > 0);
     setEliminandoVendita(v.id); setMsgElimina("");
+    let rimessoNelMagazzino = null;
     if (rimetteStock) {
       const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
       const perNome = Object.fromEntries((prodottiShop || []).map((p) => [String(p.nome || "").trim().toLowerCase(), p]));
@@ -56065,18 +56074,22 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
           daRimettere.push({ prodotto, quantita: r.quantita });
         }
       }
+      // TUTTI INSIEME O NIENTE (31/10/2026): prima si rimetteva un prodotto
+      // alla volta, e se il giro si fermava alla terza riga i primi due
+      // pezzi erano gia' tornati: riprovando tornavano due volte. Ora il
+      // blocco passa da una transazione del database.
       setAvanzamento({ fatti: 0, totali: daRimettere.length });
-      for (let i = 0; i < daRimettere.length; i += 1) {
-        const m = daRimettere[i];
-        const errore = await muoviStock(m.prodotto, m.quantita, { origine: "reso", nota: `Vendita #${v.numero_ordine || v.woo_order_id} cancellata` });
-        if (errore) {
-          setAvanzamento(null); setEliminandoVendita(null);
-          setMsgElimina(`Magazzino non aggiornato al passo ${i + 1} di ${daRimettere.length}, vendita NON cancellata: ${errore}`);
-          return;
-        }
-        setAvanzamento({ fatti: i + 1, totali: daRimettere.length });
+      const errore = await muoviStockInBlocco(
+        daRimettere.map((m) => ({ prodotto: m.prodotto, delta: m.quantita })),
+        { origine: "reso", nota: `Vendita #${v.numero_ordine || v.woo_order_id} cancellata` });
+      if (errore) {
+        setAvanzamento(null); setEliminandoVendita(null);
+        setMsgElimina(`Magazzino non aggiornato, vendita NON cancellata (nessun prodotto e' stato toccato): ${errore}`);
+        return;
       }
+      setAvanzamento({ fatti: daRimettere.length, totali: daRimettere.length });
       setAvanzamento(null);
+      rimessoNelMagazzino = daRimettere;
     }
     // NEL CESTINO, NON NEL VUOTO (26/10/2026). Il 26/10 alle 11:18 tre
     // vendite incassate sono sparite da qui senza copia e senza il nome di
@@ -56085,7 +56098,18 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     // cestinata; da «Cestino» si ripristina per sei mesi.
     const { error } = await supabase.rpc("vendita_cestina", { p_id: v.id, p_chi: chi || null });
     setEliminandoVendita(null);
-    if (error) { setVenditaDaEliminare(null); setAvanzamento(null); setMsgElimina("Vendita non cancellata: " + testoErrore(error)); return; }
+    if (error) {
+      // la vendita e' rimasta: i pezzi appena rimessi in magazzino vanno
+      // ritolti, o ci sarebbero due volte (in giacenza e nella vendita)
+      let ritolti = "";
+      if (rimessoNelMagazzino) {
+        const erroreRitiro = await muoviStockInBlocco(
+          rimessoNelMagazzino.map((m) => ({ prodotto: m.prodotto, delta: -m.quantita })),
+          { origine: "vendita", nota: `Vendita #${v.numero_ordine || v.woo_order_id}: cancellazione non riuscita, pezzi ritirati` });
+        ritolti = erroreRitiro ? ` ATTENZIONE: i pezzi rimessi non si sono ritolti (${erroreRitiro}): controlla il magazzino.` : " I pezzi rimessi in magazzino sono stati ritolti.";
+      }
+      setVenditaDaEliminare(null); setAvanzamento(null); setMsgElimina("Vendita non cancellata: " + testoErrore(error) + ritolti); return;
+    }
     // Il contante di quella vendita non e' mai stato incassato. Per una
     // vendita al banco, o di un corso con la busta ancora aperta, la cassa
     // se ne accorge da sola. Se invece la vendita stava in una busta gia'
@@ -62158,36 +62182,19 @@ function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, tito
 // shop passa da WooCommerce (fonte di verità della giacenza online) e il
 // magazzino viaggia nella stessa chiamata quando la riga è divisa fra le
 // due fonti — un giro di rete in meno
-// Esegue `lavoro` su ogni elemento, al massimo `concorrenza` per volta.
-// Ogni movimento di magazzino aspetta anche WooCommerce, tre-cinque
-// secondi l'uno: in fila, un corso da 25 prodotti durava due minuti.
-// Cinque per volta e' un quinto del tempo, e ogni prodotto e' una riga a
-// se': non si pestano. Un errore ferma l'avvio dei successivi e viene
-// restituito; quelli gia' partiti finiscono il loro giro
-async function inParallelo(elementi, concorrenza, lavoro) {
-  const coda = [...elementi];
-  let primoErrore = null;
-  async function operaio() {
-    while (coda.length && !primoErrore) {
-      const elemento = coda.shift();
-      const errore = await lavoro(elemento);
-      if (errore && !primoErrore) primoErrore = errore;
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concorrenza, elementi.length) }, operaio));
-  return primoErrore;
-}
-const CONCORRENZA_MAGAZZINO = 5;
 async function applicaScarichi(piani, contesto = {}, onAvanzamento = null) {
   const daFare = (piani || []).filter(({ piano }) => piano.daScaricare);
-  let fatti = 0;
-  return inParallelo(daFare, CONCORRENZA_MAGAZZINO, async ({ prodotto, piano }) => {
-    const errore = await muoviStock(prodotto, -piano.daScaricare, { origine: "scarico", ...contesto });
-    if (errore) return errore;
-    fatti += 1;
-    onAvanzamento?.(fatti, daFare.length);
-    return null;
-  });
+  if (daFare.length === 0) return null;
+  // TUTTO INSIEME O NIENTE (31/10/2026): lo scarico di un kit da 25 prodotti
+  // passa da una sola chiamata al database, che rifiuta l'intero blocco se
+  // anche un solo prodotto non basta. Prima si scaricava un prodotto alla
+  // volta, e un errore lasciava il magazzino a meta' con il kit ancora da
+  // consegnare.
+  const errore = await muoviStockInBlocco(
+    daFare.map(({ prodotto, piano }) => ({ prodotto, delta: -piano.daScaricare })),
+    { origine: "scarico", ...contesto });
+  if (!errore) onAvanzamento?.(daFare.length, daFare.length);
+  return errore;
 }
 
 // ===========================================================
@@ -64051,11 +64058,10 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
   // "rientrano" del cambio
   async function ripristinaStock(prodotto, quantita) {
     if (bundleVirtuale(prodotto)) {
-      for (const r of righeBundleCon(prodotto.id, bundleComponenti, prodottiPerId)) {
-        const errore = await muoviStock(r.prodotto, quantita * r.quantitaPerBundle, { origine: "reso", nota: `Rientro da "${prodotto.nome}"`, collegatoProdottoId: prodotto.id });
-        if (errore) return errore;
-      }
-      return null;
+      // i componenti rientrano insieme, o nessuno
+      return muoviStockInBlocco(
+        righeBundleCon(prodotto.id, bundleComponenti, prodottiPerId).map((r) => ({ prodotto: r.prodotto, delta: quantita * r.quantitaPerBundle, collegatoProdottoId: prodotto.id })),
+        { origine: "reso", nota: `Rientro da "${prodotto.nome}"` });
     }
     return await muoviStock(prodotto, quantita, { origine: "reso" });
   }
@@ -77805,13 +77811,13 @@ function ModaleInventarioSede({ corsoData, corso, inviatiPerProdotto, prodottiSh
       : `Rimetto in magazzino ${totaleRientro} pezzi. Confermi?`;
     if (!window.confirm(messaggio)) return;
     setSalvando(true);
-    for (const r of daRimettere) {
-      const errore = await muoviStock(r.prodotto, r.q, {
-        origine: "rientro_corso_sede", nota: `Inventario fine corso — ${corso?.nome || ""}`.trim(),
-        riferimento: corsoData.id, utente: nomeUtente || null,
-      });
-      if (errore) { window.alert("Attenzione: " + errore); setSalvando(false); return; }
-    }
+    // un blocco solo (31/10/2026): o rientra tutto l'inventario o niente,
+    // cosi' un secondo tentativo non rimette due volte i primi pezzi
+    const erroreInventario = await muoviStockInBlocco(
+      daRimettere.map((r) => ({ prodotto: r.prodotto, delta: r.q })),
+      { origine: "rientro_corso_sede", nota: `Inventario fine corso — ${corso?.nome || ""}`.trim(),
+        riferimento: corsoData.id, utente: nomeUtente || null });
+    if (erroreInventario) { window.alert("Attenzione, nessun pezzo e' rientrato: " + erroreInventario); setSalvando(false); return; }
     await onConfermato(Object.fromEntries(daRimettere.map((r) => [r.prodottoId, r.q])));
     setSalvando(false);
   }
@@ -78935,21 +78941,24 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       return prodotto && (delta > 0 || prodotto.conta_magazzino === false);
     });
-    const totaleMovimenti = rientri.length + (pianiKit || []).filter(({ piano }) => piano.daScaricare).length;
-    let fattiMovimenti = 0;
-    setAvanzamentoScarico({ fatti: 0, totale: totaleMovimenti });
-    await inParallelo(rientri, CONCORRENZA_MAGAZZINO, async ([prodottoId, delta]) => {
-      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Rientro/rettifica preparazione kit", riferimento: corsoData.id });
-      fattiMovimenti += 1;
-      setAvanzamentoScarico({ fatti: fattiMovimenti, totale: totaleMovimenti });
-      return null;
-    });
-    const erroreScaricoKit = await applicaScarichi(pianiKit, { origine: "kit_corso", nota: "Scarico kit per il corso", riferimento: corsoData.id }, (fatti) => setAvanzamentoScarico({ fatti: fattiMovimenti + fatti, totale: totaleMovimenti }));
+    // UN BLOCCO SOLO (31/10/2026): rientri e scarichi del kit insieme, o
+    // tutti o nessuno. Prima erano due giri in fila senza controllare gli
+    // errori dei rientri: un guasto a meta' lasciava il magazzino spostato
+    // a pezzi, con lo scarico non registrato e quindi ripetibile.
+    const righeBlocco = [
+      ...rientri.map(([prodottoId, delta]) => ({
+        prodotto: prodottiShop.find((p) => p.id === prodottoId), delta, nota: "Rientro/rettifica preparazione kit",
+      })),
+      ...(pianiKit || []).filter(({ piano }) => piano.daScaricare)
+        .map(({ prodotto, piano }) => ({ prodotto, delta: -piano.daScaricare, nota: "Scarico kit per il corso" })),
+    ];
+    setAvanzamentoScarico({ fatti: 0, totale: righeBlocco.length });
+    const erroreScaricoKit = await muoviStockInBlocco(righeBlocco, { origine: "kit_corso", riferimento: corsoData.id });
     if (erroreScaricoKit) {
-      mostraAvviso("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
+      mostraAvviso("Scarico kit NON eseguito, nessun prodotto e' stato toccato — " + erroreScaricoKit);
       return false;
     }
+    setAvanzamentoScarico({ fatti: righeBlocco.length, totale: righeBlocco.length });
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati, scarico_dermografi: nuovoScaricoDermografi });
     return true;
   }
@@ -78989,14 +78998,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     if (Object.keys(deltaPerProdotto).length > 0) {
       const voci = Object.entries(deltaPerProdotto);
       setAvanzamentoScarico({ fatti: 0, totale: voci.length });
-      let fatti = 0;
-      await inParallelo(voci, CONCORRENZA_MAGAZZINO, async ([prodottoId, delta]) => {
-        const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-        if (prodotto) await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Prodotti rientrati dal corso", riferimento: corsoData.id });
-        fatti += 1;
-        setAvanzamentoScarico({ fatti, totale: voci.length });
-        return null;
-      });
+      // in un blocco solo; se il database rifiuta NON si azzera il registro
+      // di cosa era stato scaricato, o il rientro non si potrebbe ripetere
+      const erroreRientro = await muoviStockInBlocco(
+        voci.map(([prodottoId, delta]) => ({ prodotto: prodottiShop.find((p) => p.id === prodottoId), delta })),
+        { origine: "kit_corso", nota: "Prodotti rientrati dal corso", riferimento: corsoData.id });
+      if (erroreRientro) { mostraAvviso("Rientro NON eseguito, nessun prodotto e' stato toccato — " + erroreRientro); return; }
+      setAvanzamentoScarico({ fatti: voci.length, totale: voci.length });
     }
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
   }
@@ -79028,14 +79036,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       });
       const voci = Object.entries(delta).filter(([, q]) => q > 0);
       setAvanzamentoScarico({ fatti: 0, totale: voci.length });
-      let fatti = 0;
-      await inParallelo(voci, CONCORRENZA_MAGAZZINO, async ([prodottoId, q]) => {
-        const prodotto = (prodottiShop || []).find((p) => p.id === prodottoId);
-        if (prodotto) await muoviStock(prodotto, q, { origine: "kit_corso", nota: "Rientrati dal corso, dichiarati dalla master", riferimento: corsoData.id });
-        fatti += 1;
-        setAvanzamentoScarico({ fatti, totale: voci.length });
-        return null;
-      });
+      const erroreRipristino = await muoviStockInBlocco(
+        voci.map(([prodottoId, q]) => ({ prodotto: (prodottiShop || []).find((p) => p.id === prodottoId), delta: q })),
+        { origine: "kit_corso", nota: "Rientrati dal corso, dichiarati dalla master", riferimento: corsoData.id });
+      if (erroreRipristino) { window.alert("Rientro NON eseguito, nessun prodotto e' stato toccato — " + erroreRipristino); return; }
+      setAvanzamentoScarico({ fatti: voci.length, totale: voci.length });
 
       // i guasti NON tornano a scaffale: vanno nel magazzino dei difettosi,
       // dove qualcuno decidera' se buttarli o rimetterli dentro
@@ -79136,14 +79141,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     if (!window.confirm(quanti > 0
       ? `Rifare l'inventario? I ${quanti} pezzi rimessi dentro l'ultima volta vengono tolti di nuovo dal magazzino.`
       : "Rifare l'inventario di questo corso?")) return;
-    for (const [prodottoId, q] of Object.entries(rientrati)) {
-      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      if (!prodotto || !q) continue;
-      const errore = await muoviStock(prodotto, -Number(q), {
-        origine: "rientro_corso_sede", nota: "Inventario annullato", riferimento: corsoData.id, utente: utenteLoggato?.nome || null,
-      });
-      if (errore) { window.alert("Attenzione: " + errore); return; }
-    }
+    const erroreAnnullo = await muoviStockInBlocco(
+      Object.entries(rientrati).map(([prodottoId, q]) => ({ prodotto: prodottiShop.find((p) => p.id === prodottoId), delta: -Number(q) })).filter((r) => r.prodotto && r.delta),
+      { origine: "rientro_corso_sede", nota: "Inventario annullato", riferimento: corsoData.id, utente: utenteLoggato?.nome || null });
+    if (erroreAnnullo) { window.alert("Attenzione, l'inventario NON e' stato annullato (nessun pezzo toccato): " + erroreAnnullo); return; }
     await salvaCampiEdizione(corsoData.id, { inventario_sede_ts: null, rientro_sede: {} });
     ricarica(["prodotti_shop"]);
   }

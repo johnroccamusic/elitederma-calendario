@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import "./preparazione.js";
 import { rispondiCon } from "./preparazione.js";
-import { muoviStockInBlocco } from "../src/magazzino/stock.js";
+import { muoviStockInBlocco, muoviStock } from "../src/magazzino/stock.js";
 
 const A = { id: "a1", nome: "Aghi 1RL", woo_product_id: 11 };
 const B = { id: "b2", nome: "Pigmento nero" };
@@ -47,5 +47,18 @@ describe("muoviStockInBlocco", () => {
     const f = rispondiCon({});
     expect(await muoviStockInBlocco([{ prodotto: A, delta: 0 }, { prodotto: null, delta: 4 }], { origine: "reso" })).toBeNull();
     expect(f).not.toHaveBeenCalled();
+  });
+
+  it("muoviStock (un prodotto) passa dallo stesso blocco: niente piu' lettura e riscrittura dal browser", async () => {
+    const f = rispondiCon({
+      "rpc/stock_muovi": { ok: true, quantita: {} },
+      "woo-riallinea-shop": { ok: true },
+    });
+    expect(await muoviStock(A, -2, { origine: "rettifica_manuale", nota: "Correzione" })).toBeNull();
+    const url = f.mock.calls.map((c) => String(c[0]));
+    expect(url.some((u) => u.includes("rpc/stock_muovi"))).toBe(true);
+    // nessuna lettura di prodotti_shop e nessuna scrittura diretta della giacenza
+    expect(url.some((u) => u.includes("rest/v1/prodotti_shop"))).toBe(false);
+    expect(url.some((u) => u.includes("woo-aggiorna-prodotto"))).toBe(false);
   });
 });

@@ -1285,20 +1285,25 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   di un destinatario solo in avanti (inviata < consegnata < aperta <
   rimbalzata < segnalata): un avviso in ritardo non lo riporta indietro.
 
-- **Stock atomico: passi 1 e 2 fatti** (31/10/2026, migrazione
-  `20261031190000`). `stock_muovi(righe, origine, nota, riferimento, utente)`
-  blocca i prodotti in ordine di id, rifiuta TUTTO il blocco se uno solo
-  scenderebbe sotto zero (nessuna scrittura), applica `quantita + delta` nel
-  database e scrive i movimenti nella stessa transazione. In `stock.js`
-  `muoviStockInBlocco(righe, contesto)` la chiama e riallinea WooCommerce
-  dopo il commit. **`muoviStock` (un prodotto, scrittura assoluta, sito
-  prima) non e' ancora cambiato**: restano da convertire, una alla volta,
-  `eliminaVendita`, il ripristino dal cestino, lo scarico kit
-  (`applicaScarichi`), la rettifica e i rientri. Prima di convertire serve la
-  decisione del titolare sull'ordine con il sito (database prima, sito dopo).
+- **Lo stock si muove nel database, tutto o niente** (31/10/2026, migrazioni
+  `20261031190000` e `20261031200000`). `stock_muovi(righe, origine, nota,
+  riferimento, utente)` blocca i prodotti in ordine di id, rifiuta l'INTERO
+  blocco se uno solo scenderebbe sotto zero (nessuna scrittura), applica
+  `quantita + delta` nel database e scrive i movimenti nella stessa
+  transazione (nota e riferimento possono stare anche sulla singola riga).
+  `muoviStockInBlocco` (in `stock.js`) la chiama e riallinea WooCommerce
+  DOPO il commit (prima si scriveva sul sito e poi nel database: deciso dal
+  titolare che fa fede l'app); `muoviStock` e' il caso di un prodotto solo.
+  Convertiti a un blocco: cancellazione vendita (se poi `vendita_cestina`
+  fallisce i pezzi si ritolgono), ripristino dal cestino (il magazzino prima,
+  la vendita poi; se la vendita non torna si rimette), scarico kit
+  (rientri e scarichi insieme), rientro del kit, ripristino dichiarato dalla
+  master, inventario di fine corso e suo annullo, rientro dei bundle. **Il
+  database non ha il tetto della soglia di riordino**: quella resta un
+  controllo dell'app (`preparaScarichi`). Prove in `prove/stock-in-blocco.test.js`
+  e `prove/cestino-vendite.test.jsx`.
 
-**Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
-atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
+**Ancora aperto**, in ordine: vendite annullate ancora contate in busta/cassa/eventi, quota
 venditore dopo «Disponi pagamenti», 18 secchi pubblici.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
