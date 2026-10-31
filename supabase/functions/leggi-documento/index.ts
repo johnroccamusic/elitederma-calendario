@@ -18,6 +18,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const MODELLO = "claude-haiku-5-5";
 const MAX_BYTES = 4 * 1024 * 1024;
+// Il gettone e' l'unica porta e ogni lettura costa token a nostro carico:
+// chi ha il link non puo' farla girare all'infinito. Un'allieva che rifa'
+// la foto un paio di volte sta molto sotto; chi ripete per centinaia di
+// volte no. Il conto sta in documento_letto.limite, accanto a fronte/retro
+// (chi legge quel campo guarda solo le due chiavi dei lati).
+const MAX_ALL_ORA = 8;
+const MAX_TOTALE = 25;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +66,19 @@ Deno.serve(async (req) => {
   const chiave = Deno.env.get("ANTHROPIC_API_KEY");
   if (!chiave) return json({ ok: false, errore: "Lettura non disponibile." }, 503);
 
+  // si conta il TENTATIVO prima di chiamare il modello: un fallimento del
+  // lettore costa comunque, e contare dopo lascerebbe la porta aperta a
+  // chi manda richieste che muoiono a meta'
+  const base = (isc.documento_letto && typeof isc.documento_letto === "object") ? isc.documento_letto : {};
+  const ora = Date.now();
+  const precedentiTentativi: number[] = Array.isArray((base as any).limite?.tentativi) ? (base as any).limite.tentativi.filter((t: unknown) => typeof t === "number") : [];
+  const ultimaOra = precedentiTentativi.filter((t) => ora - t < 3600_000).length;
+  if (ultimaOra >= MAX_ALL_ORA || precedentiTentativi.length >= MAX_TOTALE) {
+    return json({ ok: false, errore: "Troppi tentativi di lettura. Se la foto non viene letta, puoi inviare comunque il modulo." }, 429);
+  }
+  const conTentativo = { ...base, limite: { tentativi: [...precedentiTentativi, ora].slice(-MAX_TOTALE) } };
+  await admin.from("iscritti").update({ documento_letto: conTentativo }).eq("id", isc.id);
+
   let risposta: Response;
   try {
     risposta = await fetch("https://api.anthropic.com/v1/messages", {
@@ -98,7 +118,7 @@ Deno.serve(async (req) => {
   if (!letto || typeof letto !== "object") return json({ ok: false, errore: "Non sono riuscito a leggere il documento." }, 502);
 
   // si tiene: il letto, da che lato, con quale modello e quando. Niente foto.
-  const precedente = (isc.documento_letto && typeof isc.documento_letto === "object") ? isc.documento_letto : {};
+  const precedente = conTentativo;
   const registrazione = {
     ...precedente,
     [lato]: { ...letto, modello: MODELLO, letto_il: new Date().toISOString(),
