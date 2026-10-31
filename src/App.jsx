@@ -44699,8 +44699,9 @@ async function caricaRicevutaSpesa(file) {
   const nomeFile = `${Date.now()}-${sanitizzaNomeFile(file.name)}`;
   const { error } = await supabase.storage.from("spese-allegati").upload(nomeFile, file);
   if (error) return { errore: error.message };
-  const { data } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
-  return { url: data.publicUrl };
+  // si salva il percorso, non un indirizzo pubblico: il secchio e' privato e
+  // il file si apre con un link a scadenza (apriAllegato)
+  return { url: nomeFile };
 }
 
 // riga di tasti per passare fra le pagine di Amministrazione (Prima nota
@@ -46757,7 +46758,7 @@ function PaginaRiconciliazione({
       const nome = `${Date.now()}-${sanitizzaNomeFile(pagataFile.name)}`;
       const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nome, pagataFile);
       if (erroreUpload) { setSalvando(false); setMsg("Errore allegato: " + erroreUpload.message); return; }
-      allegato = supabase.storage.from("spese-allegati").getPublicUrl(nome).data.publicUrl;
+      allegato = nome;
     }
     const sottocat = sottocategoriaCostoDi(costiSottocategorie, pagataSottocat);
     const { error } = await supabase.from("spese").insert({
@@ -51913,7 +51914,7 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
                         <>
                           <RiquadroDataCard etichetta="Pagata il" data={spesa.data_pagamento} />
                           {spesa.allegato_path && (
-                            <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ ...stileTastoCardChiaro(isMobile), textDecoration: "none" }}>
+                            <a href="#apri-allegato" onClick={(e) => { e.preventDefault(); apriAllegato("spese-allegati", spesa.allegato_path); }} rel="noreferrer" title="Apri ricevuta" style={{ ...stileTastoCardChiaro(isMobile), textDecoration: "none" }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                               Ricevuta
                             </a>
@@ -81573,7 +81574,7 @@ function PannelloDrillDownCosti({ drillDown, onClose, kpi, range, location, cors
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(importo)}</span>
                   {spesa.allegato_path && (
-                    <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri allegato" style={{ display: "flex", color: NAVY }}>
+                    <a href="#apri-allegato" onClick={(e) => { e.preventDefault(); apriAllegato("spese-allegati", spesa.allegato_path); }} rel="noreferrer" title="Apri allegato" style={{ display: "flex", color: NAVY }}>
                       <IconaCopiaFile size={14} />
                     </a>
                   )}
@@ -82071,8 +82072,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       const nomeFile = `${Date.now()}-${sanitizzaNomeFile(allegatoFile.name)}`;
       const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nomeFile, allegatoFile);
       if (erroreUpload) { setMsg("Errore allegato: " + erroreUpload.message); setSalvando(false); return; }
-      const { data: pubData } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
-      allegatoPath = pubData.publicUrl;
+      allegatoPath = nomeFile;
     }
 
     const payload = {
@@ -82673,8 +82673,7 @@ function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, even
       const nomeFile = `${Date.now()}-${sanitizzaNomeFile(allegatoFile.name)}`;
       const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nomeFile, allegatoFile);
       if (erroreUpload) { setMsg("Errore allegato: " + erroreUpload.message); setSalvando(false); return; }
-      const { data: pubData } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
-      allegatoPath = pubData.publicUrl;
+      allegatoPath = nomeFile;
     }
 
     const payload = {

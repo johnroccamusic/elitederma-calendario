@@ -1349,12 +1349,12 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   **Restano pubblici**, perche' senza dati personali: shop-immagini,
   locandine-corsi, loghi-*, diploma-*, intestazione-societa, sfondi-app,
   stampe-packaging, master-foto, venditori-foto, leve-assistenti-foto.
-  **Da fare: `spese-allegati`** (78 fatture, 66 righe con l'URL pubblico
-  intero in `spese.allegato_path`; il lettore tollerante e' gia' in
-  `percorsoDaValore`, restano da convertire gli 8 punti del codice). Prove in
+  **Anche `spese-allegati`** (78 fatture dei fornitori) e' privato: le nuove
+  spese salvano il percorso, le 66 righe vecchie tengono l'URL pubblico intero
+  e `percorsoDaValore` lo legge lo stesso (dati non toccati). Prove in
   `prove/allegati-riservati.test.jsx`.
 
-**Ancora aperto**, in ordine: `spese-allegati`.
+**Ancora aperto**: nulla di questo elenco (restano i punti minori: `search_path` su 14 funzioni, indici su chiavi esterne, indici duplicati su `crm_contatti`).
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
 
