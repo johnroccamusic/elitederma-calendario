@@ -113,10 +113,9 @@ Deno.serve(async (req) => {
   // ---- il lotto
   if (!["pronta", "in_invio"].includes(camp.stato)) return json({ errore: `La campagna è ${camp.stato}: non si può spedire.` }, 400);
   const lotto = Math.min(LOTTO_MASSIMO, Math.max(1, Number(corpo.lotto) || LOTTO_MASSIMO));
-  const { data: coda, error: errCoda } = await admin.from("crm_campagne_destinatari")
-    .select("id, email, nome, valori, token_disiscrizione")
-    .eq("campagna_id", campagnaId).eq("stato", "in_coda")
-    .order("id").limit(lotto);
+  // il lotto si PRENDE in modo atomico (skip locked): due chiamate insieme
+  // non possono avere le stesse righe, quindi niente doppi invii
+  const { data: coda, error: errCoda } = await admin.rpc("crm_campagna_prendi_lotto", { p_campagna: campagnaId, p_n: lotto });
   if (errCoda) return json({ errore: errCoda.message }, 500);
   const destinatari = (coda || []) as Destinatario[];
 
@@ -124,13 +123,19 @@ Deno.serve(async (req) => {
     await admin.from("crm_campagne").update({ stato: "in_invio", aggiornata_il: new Date().toISOString() }).eq("id", campagnaId);
   }
 
-  if (destinatari.length === 0) {
+  const aperti = async () => {
     const { count } = await admin.from("crm_campagne_destinatari").select("id", { count: "exact", head: true })
-      .eq("campagna_id", campagnaId).eq("stato", "in_coda");
-    if (!count) {
+      .eq("campagna_id", campagnaId).in("stato", ["in_coda", "in_spedizione"]);
+    return count || 0;
+  };
+  if (destinatari.length === 0) {
+    const restanti = await aperti();
+    // righe ancora «in_spedizione»: le sta spedendo un'altra chiamata. Non
+    // si chiude la campagna e si dice a chi chiama di aspettare.
+    if (!restanti) {
       await admin.from("crm_campagne").update({ stato: "inviata", inviata_il: new Date().toISOString(), aggiornata_il: new Date().toISOString() }).eq("id", campagnaId);
     }
-    return json({ ok: true, inviate: 0, fallite: 0, restanti: count || 0, stato: count ? "in_invio" : "inviata" });
+    return json({ ok: true, inviate: 0, fallite: 0, restanti, attesa: restanti > 0, stato: restanti ? "in_invio" : "inviata" });
   }
 
   // UNA MAIL A TESTA. Il nome dentro, il link di disiscrizione suo, e le
@@ -156,21 +161,45 @@ Deno.serve(async (req) => {
     };
   });
 
-  const r = await fetch("https://api.resend.com/emails/batch", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${chiave}`, "Content-Type": "application/json" },
-    body: JSON.stringify(messaggi),
-  });
+  // chiave di idempotenza: lo stesso lotto rimandato (funzione morta a meta',
+  // riga tornata in coda) non spedisce due volte per Resend
+  const impronta = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(destinatari.map((d) => d.id).sort().join(",")))))
+    .map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  const idsLotto = destinatari.map((d) => d.id);
+  const rimettiInCoda = () => admin.from("crm_campagne_destinatari")
+    .update({ stato: "in_coda", ultimo_evento: "rimandato: Resend non disponibile", ultimo_evento_il: new Date().toISOString() })
+    .in("id", idsLotto);
+
+  let r: Response;
+  try {
+    r = await fetch("https://api.resend.com/emails/batch", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${chiave}`, "Content-Type": "application/json", "Idempotency-Key": `crm-${campagnaId}-${impronta}` },
+      body: JSON.stringify(messaggi),
+    });
+  } catch (e) {
+    await rimettiInCoda();
+    return json({ ok: false, temporaneo: true, riprova_tra: 20, restanti: await aperti(), stato: "in_invio", errore: "Resend non risponde: " + String(e).slice(0, 100) });
+  }
   const esito = await r.json().catch(() => ({}));
   const adesso = new Date().toISOString();
   let inviate = 0, fallite = 0;
+  if (r.status === 429 || r.status >= 500) {
+    // rifiuto TEMPORANEO (limite di velocita', Resend giu'): nessuno di questi
+    // indirizzi e' sbagliato. Tornano in coda e chi chiama riprova fra poco;
+    // segnarli «fallita» li toglieva dalla campagna per un guasto non loro.
+    await rimettiInCoda();
+    const attesa = Number(r.headers.get("retry-after")) || 20;
+    return json({ ok: false, temporaneo: true, riprova_tra: Math.min(120, attesa), restanti: await aperti(), stato: "in_invio", errore: `Resend ${r.status}: ${esito?.message || "momentaneamente non disponibile"}` });
+  }
   if (!r.ok) {
-    // il lotto intero e' stato rifiutato (chiave, dominio, limite): si
-    // segna l'errore su ogni riga e ci si ferma, cosi' chi guarda lo legge
+    // il lotto intero e' stato rifiutato in modo definitivo (chiave, dominio,
+    // dati): si segna l'errore su ogni riga e ci si ferma, cosi' chi guarda lo legge
     const messaggio = `Resend ${r.status}: ${esito?.message || "errore sconosciuto"}`;
     await admin.from("crm_campagne_destinatari")
       .update({ stato: "fallita", errore: messaggio, ultimo_evento: "rifiuto lotto", ultimo_evento_il: adesso })
-      .in("id", destinatari.map((d) => d.id));
+      .in("id", idsLotto);
     fallite = destinatari.length;
   } else {
     // Resend risponde con gli id nello stesso ordine dei messaggi
@@ -187,8 +216,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { count: restanti } = await admin.from("crm_campagne_destinatari").select("id", { count: "exact", head: true })
-    .eq("campagna_id", campagnaId).eq("stato", "in_coda");
+  const restanti = await aperti();
   const { count: totInviate } = await admin.from("crm_campagne_destinatari").select("id", { count: "exact", head: true })
     .eq("campagna_id", campagnaId).in("stato", ["inviata", "consegnata", "aperta", "rimbalzata", "segnalata"]);
   const { count: totFallite } = await admin.from("crm_campagne_destinatari").select("id", { count: "exact", head: true })

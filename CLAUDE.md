@@ -1265,10 +1265,29 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   aggiunta all'elenco `consentiti` della funzione**, altrimenti non compare.
   Impronta del risultato su 273 moduli identica prima e dopo.
 
+- **Campagne CRM: quattro difetti chiusi** (31/10/2026, migrazione
+  `20261031180000`, funzioni `crm-campagna-invia` ed `email-eventi`
+  ripubblicate). (1) **Doppi invii**: il lotto si prende con
+  `crm_campagna_prendi_lotto` (`for update skip locked`, righe in
+  `in_spedizione`; quelle ferme da 15 minuti tornano in coda) e il batch
+  porta una `Idempotency-Key` di Resend; la pagina aspetta se un'altra
+  chiamata sta spedendo (`attesa`). (2) **429 e 5xx di Resend non segnano
+  piu' `fallita`**: le righe tornano in coda, la funzione risponde
+  `temporaneo` con `riprova_tra` e la pagina riprova (cinque volte di fila,
+  poi si ferma e si riprende da Campagne). Solo i rifiuti definitivi (4xx)
+  segnano `fallita`. (3) **Riattiva/Disiscrivi dallo staff agiscono per
+  email** (`crm_disiscrizione_staff`), come la disiscrizione dal link, e
+  riattivare chi si era disiscritto da solo chiede una conferma che lo dice.
+  (4) **La pagina `?disiscrizione=` non disiscrive piu' all'apertura**:
+  serve il tasto «Sì, disiscrivimi», perche' antivirus e programmi di posta
+  aprono i link da soli; il tasto «Disiscriviti» di Gmail/Mail (POST a
+  `crm-disiscrivi`) non cambia. Inoltre `email-eventi` fa avanzare lo stato
+  di un destinatario solo in avanti (inviata < consegnata < aperta <
+  rimbalzata < segnalata): un avviso in ritardo non lo riporta indietro.
+
 **Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
 atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
-venditore dopo «Disponi pagamenti», campagne (doppi invii, rifiuti
-temporanei), 18 secchi pubblici.
+venditore dopo «Disponi pagamenti», 18 secchi pubblici.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
 

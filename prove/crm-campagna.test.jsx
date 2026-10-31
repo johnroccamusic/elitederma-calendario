@@ -85,6 +85,36 @@ describe("Componi mail", () => {
     await p.smonta();
   });
 
+  it("un rifiuto temporaneo di Resend (429) non segna nessuno come fallito: si aspetta e si riprova", async () => {
+    const invii = [];
+    let campagna = null;
+    rispondiCon({
+      "rest/v1/intestazione_societa": { nome: "ELITEDERMA Srl", indirizzo: "Via Terni 90/a, 00182 ROMA" },
+      "rest/v1/crm_campagne?": (corpo) => {
+        if (corpo && !campagna) { campagna = { id: "camp1", stato: "bozza", totale_destinatari: 0, inviate: 0, fallite: 0, ...corpo }; return campagna; }
+        if (corpo) { campagna = { ...campagna, ...corpo }; return campagna; }
+        return campagna;
+      },
+      "rpc/crm_campagna_prepara": () => { campagna = { ...campagna, stato: "pronta", totale_destinatari: 50 }; return { inseriti: 50, contatti_filtrati: 50, senza_email: 0, disiscritti: 0, da_verificare: 0 }; },
+      "functions/v1/crm-campagna-invia": () => {
+        invii.push(1);
+        if (invii.length === 1) return { ok: false, temporaneo: true, riprova_tra: 0.05, restanti: 50, stato: "in_invio", errore: "Resend 429: troppe richieste" };
+        return { ok: true, inviate: 50, fallite: 0, restanti: 0, stato: "inviata" };
+      },
+    });
+    const p = await monta(<ComponiMail filtri={{ regione: "LAZIO" }} riassunto="LAZIO" totale={50} utente="Elena" onChiudi={() => {}} />);
+    await attendi(150);
+    await act(async () => { scrivi(p.nodo.querySelector("[data-oggetto]"), "Ciao {nome}"); });
+    await clicca(p.tasto("Prepara i destinatari"));
+    await attendi(200);
+    await clicca(p.tasto("Invia a 50"));
+    await attendi(500);
+    expect(invii.length).toBe(2);
+    expect(p.testo()).toContain("Spedite 50 mail");
+    expect(p.testo()).not.toContain("non riuscite");
+    await p.smonta();
+  });
+
   it("l'elenco delle campagne mostra stato e conteggi", async () => {
     rispondiCon({
       "rest/v1/crm_campagne?": [{ id: "c1", nome: "Microblading · LAZIO · 30/10/2026", oggetto: "Ciao", stato: "inviata", totale_destinatari: 230, inviate: 228, fallite: 2, creata_il: "2026-10-30T10:00:00Z", creata_da: "Elena" }],
@@ -101,10 +131,21 @@ describe("Componi mail", () => {
 });
 
 describe("la pagina di disiscrizione", () => {
-  it("disiscrive appena si apre e lo dice con il nome", async () => {
+  it("aprire il link NON disiscrive: serve il tasto (gli antivirus aprono i link da soli)", async () => {
     const chiamate = [];
     rispondiCon({ "rpc/crm_disiscrivi": (corpo) => { chiamate.push(corpo); return { ok: true, gia: false, nome: "Giulia", email: "g…@esempio.it" }; } });
     const p = await monta(<PaginaDisiscrizione token="abcdefghijklmnopqrstuvwxyz0123456789" />);
+    await attendi(150);
+    expect(chiamate.length).toBe(0);
+    expect(p.nodo.querySelector("[data-titolo]").textContent).toBe("Non vuoi più ricevere le nostre mail?");
+    await p.smonta();
+  });
+  it("col tasto disiscrive e lo dice con il nome", async () => {
+    const chiamate = [];
+    rispondiCon({ "rpc/crm_disiscrivi": (corpo) => { chiamate.push(corpo); return { ok: true, gia: false, nome: "Giulia", email: "g…@esempio.it" }; } });
+    const p = await monta(<PaginaDisiscrizione token="abcdefghijklmnopqrstuvwxyz0123456789" />);
+    await attendi(50);
+    p.nodo.querySelector("[data-conferma]").click();
     await attendi(150);
     expect(chiamate[0]).toEqual({ p_token: "abcdefghijklmnopqrstuvwxyz0123456789", p_come: "link" });
     expect(p.nodo.querySelector("[data-titolo]").textContent).toBe("Fatto");
@@ -114,6 +155,8 @@ describe("la pagina di disiscrizione", () => {
   it("con un link sbagliato lo dice senza inventare", async () => {
     rispondiCon({ "rpc/crm_disiscrivi": { ok: false, errore: "link non valido" } });
     const p = await monta(<PaginaDisiscrizione token="x" />);
+    await attendi(50);
+    p.nodo.querySelector("[data-conferma]").click();
     await attendi(150);
     expect(p.nodo.querySelector("[data-titolo]").textContent).toBe("Questo link non funziona");
     await p.smonta();

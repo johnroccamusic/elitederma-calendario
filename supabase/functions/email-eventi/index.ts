@@ -164,8 +164,18 @@ Deno.serve(async (req) => {
       : tipo === "email.bounced" ? "rimbalzata"
       : tipo === "email.complained" ? "segnalata"
       : null;
+    // Gli avvisi di Resend arrivano fuori ordine: «consegnata» dopo «aperta»
+    // riportava la riga indietro, e un rimbalzo o una segnalazione, che sono
+    // definitivi, venivano cancellati da un avviso piu' lento. Lo stato si
+    // sposta solo in avanti in questa scala; ultimo_evento si scrive sempre.
+    const SCALA: Record<string, number> = { in_coda: 0, in_spedizione: 0, inviata: 1, consegnata: 2, aperta: 3, rimbalzata: 4, segnalata: 5, fallita: 0 };
+    const { data: attuale } = await admin.from("crm_campagne_destinatari").select("id, stato").eq("resend_id", idMail);
+    const daAvanzare = (attuale || []).filter((x: any) => statoCampagna && (SCALA[statoCampagna] ?? 0) > (SCALA[x.stato] ?? 0)).map((x: any) => x.id);
+    if (daAvanzare.length) {
+      await admin.from("crm_campagne_destinatari").update({ stato: statoCampagna }).in("id", daAvanzare);
+    }
     const { data: dest, error: errDest } = await admin.from("crm_campagne_destinatari")
-      .update({ ...(statoCampagna ? { stato: statoCampagna } : {}), ultimo_evento: tipo, ultimo_evento_il: quando })
+      .update({ ultimo_evento: tipo, ultimo_evento_il: quando })
       .eq("resend_id", idMail)
       .select("id, contatto_id, email");
     if (errDest) return json({ ok: false, errore: errDest.message }, 500);
@@ -173,7 +183,7 @@ Deno.serve(async (req) => {
     if (d && tipo === "email.complained" && d.email) {
       await admin.from("crm_contatti")
         .update({ disiscritto_il: quando, disiscritto_come: "segnalazione spam", aggiornato_il: quando })
-        .ilike("email", d.email).is("disiscritto_il", null);
+        .ilike("email", d.email.replace(/[\\%_]/g, "\\$&")).is("disiscritto_il", null);
     }
     return json({ ok: true, tipo, righe: 0, campagna: dest?.length || 0 });
   }

@@ -184,12 +184,16 @@ function SchedaContatto({ c, onCambiato }) {
   }, [c.id]);
 
   async function disiscrivi(riattiva) {
+    // chi si e' disiscritto da solo ha chiesto di non essere piu' contattato:
+    // riattivarlo e' una scelta dello staff, e la frase lo dice chiaro
+    const daSolo = riattiva && c.disiscritto_come && c.disiscritto_come !== "staff";
     const frase = riattiva
-      ? `Riattivare ${nomeDi(c)}? Tornerà a ricevere le campagne.`
+      ? `Riattivare ${nomeDi(c)}? Tornerà a ricevere le campagne.${daSolo ? `\n\nATTENZIONE: la disiscrizione risulta fatta dalla persona stessa (${c.disiscritto_come === "segnalazione spam" ? "segnalazione di spam" : c.disiscritto_come}). Riattivarla vuol dire scrivere a chi ha chiesto di non essere contattato.` : ""}`
       : `Segnare ${nomeDi(c)} come disiscritto? Non riceverà più nessuna campagna, finché qualcuno non lo riattiva da qui.`;
     if (!window.confirm(frase)) return;
-    const campi = riattiva ? { disiscritto_il: null, disiscritto_come: null } : { disiscritto_il: new Date().toISOString(), disiscritto_come: "staff" };
-    const { error } = await supabase.from("crm_contatti").update(campi).eq("id", c.id);
+    // per EMAIL, come la disiscrizione dal link: su una scheda sola l'indirizzo
+    // restava bloccato dalle altre con la stessa mail
+    const { error } = await supabase.rpc("crm_disiscrizione_staff", { p_id: c.id, p_riattiva: !!riattiva });
     if (error) { setMsg("Errore: " + error.message); return; }
     onCambiato?.();
   }

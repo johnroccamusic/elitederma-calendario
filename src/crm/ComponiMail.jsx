@@ -241,9 +241,22 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
     try {
       const salvata = await assicuraCampagna();
       let inviate = 0, fallite = 0, restanti = salvata.totale_destinatari;
+      let rifiutiDiFila = 0;
       setInvio({ inCorso: true, inviate, fallite, restanti, totale: salvata.totale_destinatari });
       for (let giro = 0; giro < 10000 && !fermati.current; giro++) {
         const { data, error } = await supabase.functions.invoke("crm-campagna-invia", { body: { campagna_id: salvata.id, lotto: 100 } });
+        // rifiuto TEMPORANEO di Resend (limite di velocita', servizio giu'): le
+        // righe sono tornate in coda, si aspetta e si riprova; dopo cinque
+        // volte di fila ci si ferma e la campagna si riprende da Campagne
+        if (data?.temporaneo) {
+          if (++rifiutiDiFila >= 5) throw new Error(data.errore || "Resend non risponde.");
+          setInvio((x) => x ? { ...x, restanti: data.restanti ?? x.restanti, attendo: true } : x);
+          await new Promise((ok) => setTimeout(ok, (data.riprova_tra || 20) * 1000));
+          continue;
+        }
+        rifiutiDiFila = 0;
+        // un'altra chiamata sta spedendo le righe rimaste: si aspetta
+        if (data?.attesa) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
         if (error || (!data?.ok && !data?.stato)) throw new Error(data?.errore || error?.message || "Invio interrotto.");
         inviate += data.inviate || 0; fallite += data.fallite || 0; restanti = data.restanti || 0;
         setInvio({ inCorso: restanti > 0, inviate, fallite, restanti, totale: salvata.totale_destinatari });
