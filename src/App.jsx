@@ -58,6 +58,7 @@ const PrezziListini = pezzo(() => import("./prezzi/PrezziListini.jsx"));
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
 import { muoviStock, muoviStockInBlocco, allineaShop, pubblicatoSuShop } from "./magazzino/stock.js";
+import { apriAllegato, scaricaBytes } from "./file/allegati.js";
 import { usePuntiMaster, useCarrelliPuntiMaster } from "./punti/RiquadriPuntiMaster.jsx";
 // ATTENZIONE: in questo file esiste gia' una stagioneCorrente() che
 // torna un NUMERO (2026), usata per gli obiettivi. Quella dei punti torna
@@ -6311,10 +6312,8 @@ function hexInRgb01(hex) {
 // scarica un file dallo storage Supabase come bytes grezzi, usato sia per
 // "Stampa diplomi" che per "Stampa Segnaposto" (template, font)
 async function scaricaBytesStorage(bucket, percorso) {
-  const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
-  const risposta = await fetch(data.publicUrl);
-  if (!risposta.ok) throw new Error(`impossibile scaricare ${percorso}`);
-  return new Uint8Array(await risposta.arrayBuffer());
+  // i secchi riservati passano da un link a scadenza (vedi src/file/allegati.js)
+  return scaricaBytes(bucket, percorso);
 }
 
 // Un file di logo porta quasi sempre un bordo vuoto suo — bianco o
@@ -27959,15 +27958,17 @@ const RIGHE_SISTEMA_DEFAULT = [
 ];
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
+//
+// Dal 31/10/2026 i secchi con documenti e allegati riservati sono PRIVATI: il
+// link non si costruisce piu' al disegno, si chiede quando si preme (vale
+// un'ora, solo con una sessione). Gli altri secchi restano pubblici.
 function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti", style, onClick }) {
-  const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
   return (
     <a
-      href={data.publicUrl}
-      target="_blank"
+      href="#apri-allegato"
       rel="noreferrer"
-      onClick={onClick}
-      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", ...style }}
+      onClick={(e) => { e.preventDefault(); onClick?.(e); apriAllegato(bucket, percorso); }}
+      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", cursor: "pointer", ...style }}
     >
       {etichetta}
     </a>
@@ -36072,67 +36073,11 @@ function VistaRicercaModelle({ param, mostraClasse, corsoDataId }) {
   );
 }
 
-// pagina pubblica di sola lettura con i biglietti di viaggio caricati per una data
-function VistaBiglietti({ param, tipo }) {
-  const [dati, setDati] = useState(null);
-  const [errore, setErrore] = useState(false);
-
-  // Come la pagina delle modelle: dal 17/09/2026 passa da biglietti_vista.
-  // Della sede escono solo le date e i file dei biglietti — prima la pagina
-  // leggeva "select *" su location, che contiene IBAN e partita IVA
-  useEffect(() => {
-    let vivo = true;
-    async function carica() {
-      const { data, error } = await supabase.rpc("biglietti_vista", { p_slug: param || null });
-      if (!vivo) return;
-      if (error || !data) { setErrore(true); return; }
-      setDati({ cd: data.cd, corso: data.corso, loc: data.loc });
-    }
-    carica();
-    return () => { vivo = false; };
-  }, [param]);
-
-  if (errore) {
-    return (
-      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, padding: 20, textAlign: "center" }}>
-        Link non valido o data non trovata.
-      </div>
-    );
-  }
-  if (!dati) {
-    return (
-      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
-        Caricamento…
-      </div>
-    );
-  }
-
-  const { cd, corso, loc } = dati;
-  const file = (tipo === "assistente" ? cd.viaggio_assistente_file : cd.viaggio_file) || [];
-
-  return (
-    <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "40px 20px" }}>
-        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
-          {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — biglietti di viaggio{tipo === "assistente" ? " (assistente)" : ""}
-        </div>
-
-        {file.length === 0 && <div style={{ color: MUTED }}>Nessun biglietto caricato.</div>}
-        {file.map((percorso, idx) => (
-          <div key={percorso} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
-            <AllegatoLink percorso={percorso} etichetta={`Biglietto ${idx + 1} — apri il file`} />
-          </div>
-        ))}
-
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
-          Pagina di sola lettura — Elitederma Academy
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// La pagina pubblica dei biglietti di viaggio (?biglietti=corso/sede/data) e'
+// stata TOLTA il 31/10/2026: il link era fatto da nome del corso, della sede
+// e dalla data, cioe' indovinabile, e restituiva i percorsi dei biglietti di
+// master e assistenti. Le master leggono i biglietti dalla loro Dashboard
+// (CardDataMaster), dentro l'app.
 
 // La pagina "Prossime contabilità": i riepiloghi amministrativi di tutte
 // le classi in ordine cronologico, uno sotto l'altro, con lo stesso
@@ -83251,11 +83196,6 @@ export default function App() {
   if (paramMaster) {
     return <VistaMaster param={paramMaster} />;
   }
-  const paramBiglietti = new URLSearchParams(window.location.search).get("biglietti");
-  if (paramBiglietti) {
-    const tipoBiglietti = new URLSearchParams(window.location.search).get("tipo");
-    return <VistaBiglietti param={paramBiglietti} tipo={tipoBiglietti} />;
-  }
   // ?consenso=<codice>: il modulo che la modella apre inquadrando il QR.
   // Come le altre tre rotte pubbliche esce di qui prima di montare
   // l'applicazione — chi arriva da quel codice non deve vedere nient'altro
@@ -86980,5 +86920,5 @@ export {
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
   calcolaVociScadenziario, vociCashRinviate,
   listaRaccoltaMateriale, RaccoltaMateriale,
-  datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA,
+  datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
 };

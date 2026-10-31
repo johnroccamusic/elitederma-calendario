@@ -115,7 +115,7 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   |---|---|
   | `?master=` | `master_vista`, `master_segna_incassato` |
   | `?modelle=` | `modelle_vista`, `modelle_leggi_trattamenti`, `modelle_salva_trattamenti` |
-  | `?biglietti=` | `biglietti_vista` |
+  | `?biglietti=` | **tolta il 31/10/2026** |
   | `?ricevuta=` | `ricevuta_pos` |
   | `?modulo=` | `modulo_vista`, `modulo_salva` + caricamento su `moduli-iscrizione` |
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
@@ -1334,7 +1334,27 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   nella nota) non e' un difetto da correggere. Prove in
   `prove/quota-venditore-nello-scadenziario.test.js`.
 
-**Ancora aperto**, in ordine: 18 secchi pubblici.
+- **Allegati riservati: link a scadenza e secchi privati** (31/10/2026,
+  migrazione `20261031210000`). `allegati-iscritti` (moduli cartacei,
+  schermate di bonifici e acconti, biglietti di viaggio), `master-documenti`,
+  `venditori-documenti` e `leve-assistenti-documenti` sono ora PRIVATI.
+  `AllegatoLink` e `scaricaBytesStorage` non costruiscono piu' un indirizzo
+  pubblico: `src/file/allegati.js` (`apriAllegato`, `urlAllegato`,
+  `scaricaBytes`) chiede un link che vale un'ora e apre la finestra subito,
+  nel gesto. Un secchio nuovo con dati riservati si aggiunge a
+  `BUCKET_RISERVATI`. **La pagina pubblica dei biglietti
+  (`?biglietti=corso/sede/data`) e' stata TOLTA**: il link era indovinabile
+  (nome del corso, della sede e data) e restituiva i percorsi dei biglietti;
+  le master li leggono dalla Dashboard (`biglietti_vista` revocata a tutti).
+  **Restano pubblici**, perche' senza dati personali: shop-immagini,
+  locandine-corsi, loghi-*, diploma-*, intestazione-societa, sfondi-app,
+  stampe-packaging, master-foto, venditori-foto, leve-assistenti-foto.
+  **Da fare: `spese-allegati`** (78 fatture, 66 righe con l'URL pubblico
+  intero in `spese.allegato_path`; il lettore tollerante e' gia' in
+  `percorsoDaValore`, restano da convertire gli 8 punti del codice). Prove in
+  `prove/allegati-riservati.test.jsx`.
+
+**Ancora aperto**, in ordine: `spese-allegati`.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
 
