@@ -284,3 +284,12 @@ describe("modulo di iscrizione", () => {
     expect(p.testo()).not.toMatch(/Manca ancora:.*Taglia divisa/);
   });
 });
+
+describe("un rifiuto di modulo_salva che non chiude l'iscrizione", () => {
+  it("resta un errore sopra il modulo: la pagina non diventa «Iscrizione già confermata»", async () => {
+    const { leggiRifiuto } = await import("../src/iscrizione/rifiuti.js");
+    expect(leggiRifiuto({ ok: false, motivo: "senza_documento", errore: "Manca la foto del documento (fronte)." })).toEqual({ chiude: false, testo: "Manca la foto del documento (fronte)." });
+    expect(leggiRifiuto({ ok: false, motivo: "gia_inviato" })).toEqual({ chiude: true, motivo: "gia_inviato" });
+    expect(leggiRifiuto({ ok: false, motivo: "confermato" })).toEqual({ chiude: true, motivo: "confermato" });
+  });
+});

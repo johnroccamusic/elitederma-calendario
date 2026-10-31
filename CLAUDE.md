@@ -1204,6 +1204,44 @@ L'ordine delle righe non cambia mentre si spunta. È una lista di
 raccolta, non un movimento: il magazzino scende come prima, a «Materiale
 preparato». Prove in `prove/raccolta-materiale.test.jsx`.
 
+### Il controllo di sicurezza del 31/10/2026, e cosa ha chiuso
+
+Advisor di Supabase, policy, funzioni pubbliche e quattro revisioni del
+codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
+**Fatto, una correzione alla volta:**
+
+- **Viste aperte agli anonimi.** `v_consensi_allievi` dava a chiunque
+  avesse la chiave pubblicabile 273 righe con nome, cognome ed email;
+  `v_prezzi_listini` costi e margini; `v_punti_master(_righe)` i punti di
+  ogni master. Ora `security_invoker` e niente SELECT ad `anon`, anche
+  sulle altre quattro viste del gruppo. Dall'esterno 401.
+- **`recesso_registra` e `modulo_riaperto` solo `service_role`.** Il
+  commento di `modulo-recesso` lo prometteva, ma sul database vivo `anon`
+  aveva EXECUTE: con il gettone del recesso si scioglieva il contratto
+  senza ricevuta né avvisi. **Lezione: i grant di default di Supabase su
+  `public` danno EXECUTE ad `anon`; una funzione riservata va revocata
+  esplicitamente, e la migrazione che lo dichiara non basta, va letto
+  `pg_proc.proacl` sul database vivo.**
+- **`modulo-ricevuto`: `prova` e `soloPdf` solo con sessione di staff.**
+  Con il gettone del modulo la prova restituiva la mail intera, link di
+  recesso compreso, cioè il gettone di un altro diritto.
+- **`modulo_salva`**: i file devono stare nella cartella del gettone e non
+  contenere `..` (prima si poteva indicare il documento di un'altra
+  iscrizione); i documenti obbligatori si controllano anche sul server;
+  il contratto deve avere la forma di un contratto. **Aperto, e deciso dal
+  titolare:** il testo del regolamento lo manda ancora il browser, perché
+  `modulo_iscrizione_testi` è vuota e l'originale sta nel codice; fissarlo
+  sul server vuol dire portare quel testo nel database.
+- La pagina del modulo chiudeva su **qualunque** `motivo` del rifiuto
+  («Iscrizione già confermata» al posto del modulo, anche per una taglia
+  mancante): ora chiudono solo `gia_inviato` e `confermato`.
+
+**Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
+atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
+venditore dopo «Disponi pagamenti», campagne (doppi invii, rifiuti
+temporanei), funzioni di servizio chiamabili da `anon`, upload anonimi
+senza tetto, 18 secchi pubblici.
+
 ### Il cash rinviato segue il Riepilogo (30/10/2026)
 
 Udine, LAMINAZIONE BASE del 28/10: lo Scadenzario passivo mostrava per

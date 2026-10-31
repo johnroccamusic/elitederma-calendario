@@ -28,6 +28,7 @@
 // la fotocamera e non lascia scegliere; senza, iPhone e Android offrono
 // galleria, fotocamera e file. E si accettano anche i PDF, perche' da
 // computer un documento scansionato e' quasi sempre un PDF.
+import { leggiRifiuto } from "./rifiuti.js";
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
 import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
@@ -773,7 +774,14 @@ export default function PaginaModulo({ token }) {
       // il modulo risulta gia' arrivato (due dita sul tasto, o la stessa
       // pagina aperta due volte): non e' un errore da mostrare in rosso,
       // e' la stessa risposta che si da' a chi riapre il link
-      if (!data?.ok && data?.motivo) { setChiusoDopo(data.motivo); return; }
+      // SOLO questi due motivi chiudono la pagina. Prima bastava un motivo
+      // qualunque: `senza_firma`, `senza_taglia` e, dal 31/10/2026,
+      // `senza_documento`, `senza_contratto` e `percorso_non_valido`
+      // facevano comparire «Iscrizione già confermata» al posto del
+      // modulo, cioe' l'allieva perdeva la pagina per una cosa che
+      // poteva correggere. Gli altri restano errori sopra il modulo.
+      const rifiuto = leggiRifiuto(data);
+      if (rifiuto?.chiude) { setChiusoDopo(rifiuto.motivo); return; }
       if (!data?.ok) throw new Error(data?.errore || "Non è stato possibile inviare il modulo.");
       // il modulo e' scritto: la bozza non serve piu' e non deve restare
       // su un telefono che magari non e' nemmeno suo
