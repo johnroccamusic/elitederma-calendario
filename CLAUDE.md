@@ -1244,11 +1244,19 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   `apri_confezione`, `aggiorna_quote_coordinatore`, `identita_da_accesso`:
   via `anon`, restano a `authenticated` (le usa l'app).
 
+- **Upload anonimi con un tetto** (31/10/2026, migrazione `20261031160000`).
+  `consensi-documenti` non aveva limiti: ora 5 MB e solo immagini, e un
+  anonimo scrive solo in `<uuid>/(fronte|retro|firma).(jpg|png|webp)`.
+  `moduli-iscrizione` aveva peso e tipi ma non il percorso: ora l'anonimo
+  scrive solo in `<gettone>/<nome>-<n>.<est>` di un modulo **non ancora
+  tornato** (`modulo_cartella_valida`, security definer). Lo staff resta
+  libero (carica anche in `_azienda/` e i PDF). Provato in transazione
+  annullata: gettone falso, `..` e nomi storti rifiutati; i percorsi veri passano.
+
 **Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
 atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
 venditore dopo «Disponi pagamenti», campagne (doppi invii, rifiuti
-temporanei), upload anonimi
-senza tetto, 18 secchi pubblici.
+temporanei), 18 secchi pubblici.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
 
