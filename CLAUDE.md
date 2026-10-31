@@ -1285,6 +1285,18 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   di un destinatario solo in avanti (inviata < consegnata < aperta <
   rimbalzata < segnalata): un avviso in ritardo non lo riporta indietro.
 
+- **Stock atomico: passi 1 e 2 fatti** (31/10/2026, migrazione
+  `20261031190000`). `stock_muovi(righe, origine, nota, riferimento, utente)`
+  blocca i prodotti in ordine di id, rifiuta TUTTO il blocco se uno solo
+  scenderebbe sotto zero (nessuna scrittura), applica `quantita + delta` nel
+  database e scrive i movimenti nella stessa transazione. In `stock.js`
+  `muoviStockInBlocco(righe, contesto)` la chiama e riallinea WooCommerce
+  dopo il commit. **`muoviStock` (un prodotto, scrittura assoluta, sito
+  prima) non e' ancora cambiato**: restano da convertire, una alla volta,
+  `eliminaVendita`, il ripristino dal cestino, lo scarico kit
+  (`applicaScarichi`), la rettifica e i rientri. Prima di convertire serve la
+  decisione del titolare sull'ordine con il sito (database prima, sito dopo).
+
 **Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
 atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
 venditore dopo «Disponi pagamenti», 18 secchi pubblici.

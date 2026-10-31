@@ -63,3 +63,37 @@ export async function muoviStock(prodotto, delta, { origine, nota = null, riferi
   });
   return null;
 }
+
+// Un'operazione su PIU' prodotti, tutta insieme o per niente (31/10/2026).
+// Chiama `stock_muovi`, che nel database blocca i prodotti, rifiuta
+// l'intero blocco se uno solo scenderebbe sotto zero e scrive giacenze e
+// movimenti nella stessa transazione. Prima un reso di otto righe si poteva
+// fermare alla terza e un secondo tentativo rimetteva a posto le prime due
+// una seconda volta.
+//
+// `righe`: [{ prodotto, delta, collegatoProdottoId? }]. Restituisce null se
+// e' andata bene, altrimenti la frase da mostrare — stessa convenzione di
+// muoviStock. WooCommerce si riallinea DOPO il commit, senza bloccare e
+// senza far fallire niente: il giro notturno e il tasto «Aggiorna lo shop»
+// coprono un sito che non risponde.
+export async function muoviStockInBlocco(righe, { origine, nota = null, riferimento = null, utente = null } = {}) {
+  const valide = (righe || []).filter((r) => r?.prodotto?.id && r.delta);
+  if (valide.length === 0) return null;
+  const { data, error } = await supabase.rpc("stock_muovi", {
+    p_righe: valide.map((r) => ({
+      prodotto_id: r.prodotto.id, delta: r.delta,
+      ...(r.collegatoProdottoId ? { collegato_prodotto_id: r.collegatoProdottoId } : {}),
+    })),
+    p_origine: origine, p_nota: nota, p_riferimento: riferimento, p_utente: utente,
+  });
+  if (error) return `Magazzino non aggiornato, nessun prodotto e' stato toccato: ${error.message}`;
+  if (!data?.ok) {
+    if (data?.motivo === "insufficiente") {
+      return (data.prodotti || []).map((p) => `"${p.nome}": ci sono ${p.disponibili} pezzi, non posso scaricarne ${p.richiesti}.`).join("\n")
+        + "\nNessun prodotto e' stato toccato.";
+    }
+    return `Magazzino non aggiornato, nessun prodotto e' stato toccato: ${data?.errore || data?.motivo || "risposta vuota"}`;
+  }
+  allineaShop(valide.filter((r) => r.prodotto.woo_product_id).map((r) => r.prodotto.id));
+  return null;
+}
