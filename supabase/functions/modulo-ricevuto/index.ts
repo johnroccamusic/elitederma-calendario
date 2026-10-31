@@ -48,6 +48,22 @@ const json = (corpo: unknown, status = 200) =>
 
 const emailValida = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 
+// CHI HA UNA SESSIONE DELLO STAFF. La pagina pubblica del modulo chiama questa
+// funzione con la sola chiave pubblicabile (che e' un JWT valido ma di
+// `anon`: getUser lo rifiuta); il gestionale la chiama con la sessione di una
+// persona. `prova` e `soloPdf` sono gesti di chi lavora dentro, non di chi ha
+// ricevuto un link: con il gettone del modulo la prova restituiva la mail
+// intera, e dentro la mail c'e' il link del recesso, cioe' il gettone di un
+// ALTRO diritto (31/10/2026, trovato dal controllo di sicurezza). E soloPdf
+// riscriveva a ogni chiamata la copia archiviata, da fuori.
+async function eStaff(req: Request): Promise<boolean> {
+  const gettone = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!gettone) return false;
+  if (gettone === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return true;
+  const { data, error } = await admin.auth.getUser(gettone);
+  return !error && !!data?.user?.email;
+}
+
 // AVVISA CHI HA VENDUTO, APPENA IL MODULO ARRIVA.
 //
 // Chi ha chiuso l'iscrizione e' l'unico che sa se quei dati sono quelli
@@ -144,6 +160,9 @@ Deno.serve(async (req) => {
   // non tocca il registro degli invii.
   const soloPdf = corpo.soloPdf === true;
   if (token.length < 12) return json({ ok: false, errore: "Link non valido." }, 400);
+  if ((prova || soloPdf) && !(await eStaff(req))) {
+    return json({ ok: false, errore: "Serve avere fatto accesso al gestionale." }, 403);
+  }
 
   const { data: isc, error: erroreIscritto } = await admin
     .from("iscritti").select("*").eq("token_modulo", token).maybeSingle();
