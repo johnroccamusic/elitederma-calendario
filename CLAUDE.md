@@ -1234,10 +1234,20 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   («Iscrizione già confermata» al posto del modulo, anche per una taglia
   mancante): ora chiudono solo `gia_inviato` e `confermato`.
 
+- **Funzioni di servizio chiuse agli anonimi** (31/10/2026, migrazione
+  `20261031150000`). Lette le definizioni: `recupera_vendite_qr_in_ritardo`
+  e `riprova_vendite_pos_in_attesa` *registravano vendite*,
+  `controlla_saldi_magazzino` scriveva saldi, `fic_avvia_sync` e
+  `sincronizza_*` chiamavano le edge function con la chiave di servizio del
+  vault. Le usa solo pg_cron (come postgres): revocate a `public`, `anon` e
+  `authenticated`. `registra_vendita_pos`, `registra_vendita_da_pagamento`,
+  `apri_confezione`, `aggiorna_quote_coordinatore`, `identita_da_accesso`:
+  via `anon`, restano a `authenticated` (le usa l'app).
+
 **Ancora aperto**, in ordine: lo stock dal browser (scarichi a metà e non
 atomici), vendite annullate ancora contate in busta/cassa/eventi, quota
 venditore dopo «Disponi pagamenti», campagne (doppi invii, rifiuti
-temporanei), funzioni di servizio chiamabili da `anon`, upload anonimi
+temporanei), upload anonimi
 senza tetto, 18 secchi pubblici.
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
