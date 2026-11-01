@@ -5822,7 +5822,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
         <select
           title="Aliquota IVA"
           aria-label="Aliquota IVA"
-          style={{ ...campo, flex: "0 0 auto", minWidth: 0, width: stretto ? 70 : 84, fontWeight: 600, background: "#F1EDE4", padding: stretto ? "8px 18px 8px 8px" : "11px 20px 11px 10px" }}
+          style={{ ...campo, flex: "0 0 auto", minWidth: 0, boxSizing: "border-box", width: stretto ? 56 : 60, fontWeight: 600, background: "#F1EDE4", padding: stretto ? "8px 14px 8px 7px" : "11px 16px 11px 8px" }}
           value={aliquotaEStandard ? String(Number(aliquota)) : "altra"}
           onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
         >
