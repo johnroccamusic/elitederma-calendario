@@ -59274,6 +59274,8 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
     setAllineandoShop(false);
   }
   const [filtroRapido, setFiltroRapido] = useState("tutti");
+  // le due liste dei conti che non tornano stanno dietro al loro riquadro
+  const [mostraNonTornano, setMostraNonTornano] = useState(false);
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
   const [paginaMagazzino, setPaginaMagazzino] = useState(0);
   // due modi di guardare lo stesso magazzino, nella stessa pagina: la
@@ -60324,8 +60326,6 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
                 magazzino, questo e' il magazzino che contraddice la sua
                 storia. Non e' una categoria in piu', e' un dubbio su
                 tutto quello che c'e' sotto. */}
-            <PannelloScostamenti scostamenti={scostamenti} prodottiPerId={prodottiPerId} isMobile={isMobile} />
-            <PannelloScartiShop scarti={scartiShop} prodottiPerId={prodottiPerId} isMobile={isMobile} />
             <div style={stileRigaSegnalatori(isMobile)}>
               {[
                 { chiave: "sottoscorta", Icona: IconaAllarmeTriangolo, tinta: "#E0A800", etichetta: "Prodotti sotto scorta", valore: sottoScorta.length, unita: "prodotti", filtro: true },
@@ -60353,8 +60353,11 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
                     azione: onApriAdvisor, sfondo: `${tinta}12`, bordo: `${tinta}44`,
                   };
                 })(),
+                // I conti che non tornano (giacenza contro registro, app
+                // contro sito) non aprono piu' la pagina: stanno qui dietro
+                { chiave: "nontornano", Icona: IconaAllarmeTriangolo, tinta: scostamenti.length + scartiShop.length ? "#C0392B" : "#2E7D32", etichetta: "Conti che non tornano", valore: scostamenti.length + scartiShop.length, unita: scostamenti.length + scartiShop.length === 1 ? "prodotto" : "prodotti", azione: () => setMostraNonTornano((v) => !v) },
               ].map((c) => {
-                const scelto = c.filtro && filtroRapido === c.chiave;
+                const scelto = c.chiave === "nontornano" ? mostraNonTornano : c.filtro && filtroRapido === c.chiave;
                 const tintaDisco = c.tinta === "#C0392B" ? "#C0392B" : c.tinta === "#2E7D32" ? "#2E7D32" : (c.tinta === MUTED ? "#6E7391" : "#B8860B");
                 const sfondoRiquadro = c.sfondo && !c.sfondo.endsWith("12") ? c.sfondo : (scelto ? BG : "#FFFFFF");
                 return (
@@ -60367,6 +60370,15 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
                 );
               })}
             </div>
+            {mostraNonTornano && (
+              <div style={{ marginTop: 14 }}>
+                {scostamenti.length + scartiShop.length === 0 && (
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Tutti i conti tornano: nessuna differenza fra registro, magazzino e sito.</div>
+                )}
+                <PannelloScostamenti scostamenti={scostamenti} prodottiPerId={prodottiPerId} isMobile={isMobile} />
+                <PannelloScartiShop scarti={scartiShop} prodottiPerId={prodottiPerId} isMobile={isMobile} />
+              </div>
+            )}
           </div>
         )}
 
