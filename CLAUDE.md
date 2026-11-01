@@ -16,7 +16,7 @@ contabilità. Nessun utente finale anonimo.
 | UI | React 18.3, nessun router, nessuna libreria di stato |
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
-| Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
+| Storage | 22 bucket Supabase, dieci privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`, `progetti-allegati`, `allegati-iscritti`, `master-documenti`, `venditori-documenti`, `leve-assistenti-documenti`, `spese-allegati`) |
 | Backend | 49 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
