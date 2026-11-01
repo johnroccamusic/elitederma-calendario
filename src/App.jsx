@@ -58193,6 +58193,11 @@ const COLONNE_MAGAZZINO = [
 // significherebbe perdere quello che l'utente ci ha gia' sistemato sopra
 // — la colonna finirebbe in fondo alla tabella, larga come al primo
 // giorno. Qui il vecchio nome continua a valere per quel che e' salvato
+// la casella dei prodotti a uso interno: piena di grigio, cosi' si capisce
+// da lontano che e' bloccata (una casella spenta sbiadita sembra solo vuota)
+function CasellaBloccata() {
+  return <span aria-disabled="true" style={{ display: "inline-block", width: 16, height: 16, borderRadius: 4, background: "#C4C4C4", border: "1px solid #A9A9A9", verticalAlign: "middle", cursor: "not-allowed" }} />;
+}
 const USO_INTERNO_TITOLO = "Prodotto a uso interno: per metterlo in vendita cambia la natura nella scheda del prodotto";
 const COLONNE_MAGAZZINO_RINOMINATE = { "Non sul POS": "Sul POS", "No POS": "Sul POS", "Solo offline": "Online", "No shop": "Online", "Margine €": "Ricavo lordo", "Cedibile €": "Somma massima cedibile", "Cedibile carta/shop": "Somma massima cedibile", "Guadagno netto teorico": "Somma massima cedibile", "Punti": "Punti totali prodotto", "Punti carta/shop": "Punti totali prodotto" };
 const COLONNE_MAGAZZINO_NOME_VECCHIO = Object.fromEntries(
@@ -58685,12 +58690,12 @@ function RigaProdottoMagazzino({ prodotto: p, fotoUrl = null, onApriModifica, ri
     // cambia solo il verso in cui la casella si legge e si scrive.
     "Sul POS": (
         <td style={tdStyle} title={p.usoInterno ? USO_INTERNO_TITOLO : p.forzatoEscludi ? "Escluso da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Spuntata: il prodotto si vende al banco (POS). Tolta: resta fuori dal POS"}>
-          <input type="checkbox" checked={!(p.usoInterno || p.forzatoEscludi || p.escludi_vendita_diretta)} disabled={p.usoInterno || p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(!e.target.checked)} style={{ width: 16, height: 16, cursor: p.usoInterno || p.forzatoEscludi ? "default" : "pointer" }} />
+          {p.usoInterno ? <CasellaBloccata /> : <input type="checkbox" checked={!(p.forzatoEscludi || p.escludi_vendita_diretta)} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(!e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />}
         </td>
     ),
     "Online": (
         <td style={tdStyle} title={p.usoInterno ? USO_INTERNO_TITOLO : p.forzatoSoloOffline ? "Escluso da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Spuntata: il prodotto può andare anche sullo shop online. Tolta: non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
-          <input type="checkbox" checked={!(p.usoInterno || p.forzatoSoloOffline || p.solo_offline)} disabled={p.usoInterno || p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(!e.target.checked)} style={{ width: 16, height: 16, cursor: p.usoInterno || p.forzatoSoloOffline ? "default" : "pointer" }} />
+          {p.usoInterno ? <CasellaBloccata /> : <input type="checkbox" checked={!(p.forzatoSoloOffline || p.solo_offline)} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(!e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />}
         </td>
     ),
     /* stato e avvisi ("Riordina dal fornitore", "Apri confezione") al
