@@ -132,7 +132,7 @@ export const SEZIONI = [
           "titolo": "PUNTO 6 – MODELLE E MODELLI",
           "punti": [
             "a) Le modelle sono reperite dall’allievo/a a propria cura e spese, salvo il servizio previsto al Punto 7. Devono presentarsi negli orari comunicati dall’organizzazione. Cambi di orario sono ammessi solo se autorizzati almeno 15 giorni prima del corso.",
-            "b) Se l’allievo/a non trova una modella, o se la modella non si presenta o non può partecipare per qualsiasi motivo, e di conseguenza l’allievo/a non può svolgere la parte pratica, nessuna responsabilità è attribuibile a Elitederma Srl. L’allievo/a può recuperare la pratica in una sessione successiva, versando un contributo organizzativo di € 180 per ciascuna modella.",
+            "b) Modella personale. L’allievo/a che porta una propria modella si assume la responsabilità della sua presenza. Se non trova una modella, o se la modella personale non si presenta o non può partecipare per qualsiasi motivo, e di conseguenza non può svolgere la parte pratica, nessuna responsabilità è attribuibile a Elitederma Srl. In tali casi non sono previsti la modella condivisa né il ritorno gratuito: per svolgere la pratica l’allievo/a può partecipare a una sessione successiva, versando il contributo organizzativo di € 180 per ciascuna modella.",
             "c) Le modelle devono essere maggiorenni.",
             "d) Modelle e accompagnatori non possono assistere alle lezioni né sostare in aula.",
             "e) Le modelle devono essere in buona salute e, per microblading e trucco permanente, non devono avere lavori precedenti sulla zona da trattare.",
@@ -146,11 +146,19 @@ export const SEZIONI = [
             "a) Solo se l'allievo/a proviene da una città diversa da quella del corso, a più di 50 km di distanza, può chiedere a Elitederma Srl di reperire le modelle per le esercitazioni, al costo di:",
             "- € 60 per modella, se la richiesta arriva più di 7 giorni prima dell'inizio del corso;",
             "- € 100 per modella, se la richiesta arriva nei 7 giorni precedenti l'inizio del corso.",
-            "Il servizio non è disponibile per il corso di tricopigmentazione, per il quale vale il Punto 6, lett. g).",
-            "b) Il reperimento dipende dalla disponibilità delle modelle e non è garantito. Se Elitederma Srl non riesce a reperire la modella richiesta, il costo del servizio è rimborsato. In nessun caso è dovuto il rimborso della quota del corso.",
+            "Il servizio non è mai previsto per i corsi di Tricopigmentazione, Laminazione, Extension ciglia, Hennè, Needling, Evolution Hairstrokes, Elite PMU Advanced, Colori e Correzioni, Areolart, Paramedicale, Nude Liner, Sexyline Velvet e Gemme Dentali, né in generale per i corsi di dermopigmentazione avanzati: in questi corsi l'allievo/a reperisce autonomamente le proprie modelle, secondo il Punto 6. Per la tricopigmentazione vale inoltre il Punto 6, lett. g).",
+            "b) Natura del servizio. Chi richiede il servizio affida a Elitederma Srl la ricerca della modella. Il costo del reperimento copre il servizio di ricerca e non garantisce la presenza effettiva della modella al corso: il reperimento dipende dalla disponibilità delle modelle.",
             "c) Le modelle sono selezionate in base alla disponibilità: non sono ammesse obiezioni sulle loro caratteristiche estetiche o fisiche.",
             "d) Se, dopo aver richiesto il servizio, l'allievo/a trova una modella per proprio conto, il servizio resta dovuto, a copertura delle spese di ricerca già sostenute.",
-            "e) Il servizio si paga la mattina del primo giorno di corso. In mancanza di pagamento le modelle reperite sono disdette e non è dovuto alcun rimborso."
+            "e) Il servizio si paga la mattina del primo giorno di corso. In mancanza di pagamento le modelle reperite sono disdette e non è dovuto alcun rimborso.",
+            "f) Modella reperita da Elitederma Srl che non si presenta. La quota di reperimento non viene rimborsata. L'allievo/a può scegliere tra:",
+            "- pratica durante il corso su modella condivisa, se disponibile e se un'altra allieva accetta volontariamente la condivisione (lett. h);",
+            "- ritorno gratuito a un corso successivo, con nuova ricerca della modella a carico di Elitederma Srl.",
+            "g) Incarico di reperimento non andato a buon fine. Quando Elitederma Srl non riesce a reperire la modella, la quota di reperimento non è rimborsata in denaro e l'allievo/a può scegliere tra:",
+            "- pratica durante il corso su modella condivisa, se disponibile (lett. h), con riconoscimento in prodotti pari al 50% della quota di reperimento pagata;",
+            "- ritorno gratuito a un corso successivo, con nuova ricerca della modella a carico di Elitederma Srl. In questo caso non è previsto alcun rimborso in prodotti.",
+            "Il riconoscimento del 50% resta invariato anche quando sia stato l'allievo/a a individuare personalmente una compagna disponibile alla condivisione.",
+            "h) Modella condivisa. È una soluzione eccezionale, riservata esclusivamente agli allievi/e che hanno acquistato il servizio di reperimento (per la tricopigmentazione vale il Punto 6, lett. g). Può essere concessa solo se un'altra allieva accetta volontariamente di condividere la propria modella: nessuna allieva è obbligata a farlo. La condivisione è autorizzata e organizzata da Elitederma Srl durante il corso e non può essere promessa prima di aver ottenuto il consenso dell'allieva che dispone della modella. Le condizioni restano invariate sia che la condivisione sia proposta dal master sia che sia richiesta direttamente dall'allievo/a."
           ]
         },
         {
@@ -496,8 +504,8 @@ export const CONSENSI = {
         "Punto 3, lett. b), c), d), g): non rimborsabilità di acconto e quota pre corso dopo il termine di recesso; penale di € 150 per il rinvio; perdita del recesso per iscrizioni a meno di 15 giorni dal corso; nessun rimborso per assenze o rinunce;",
         "Punto 4, lett. a), d), e), f): esclusione di responsabilità per strumenti non forniti; nessun reintegro del kit; responsabilità su kit e dermografo;",
         "Punto 5, lett. b), e), f): mancato rilascio dell’attestato; nessun rimborso dopo l’avvio del corso; allontanamento senza rimborso;",
-        "Punto 6, lett. a), b): reperimento delle modelle a carico dell’allievo/a; contributo di € 180 per modella per il recupero della pratica;",
-        "Punto 7, lett. b), c), d), e): servizio modelle senza garanzia di disponibilità, dovuto anche se non utilizzato;",
+        "Punto 6, lett. a), b): reperimento delle modelle a carico dell’allievo/a; nessuna responsabilità di Elitederma Srl se la modella personale non si presenta; contributo di € 180 per modella per il recupero della pratica;",
+        "Punto 7, lett. a), b), c), d), e), f), g), h): servizio modelle escluso per alcuni corsi, senza garanzia di presenza o disponibilità e dovuto anche se non utilizzato; nessun rimborso in denaro della quota di reperimento se la modella non si presenta o non viene reperita; riconoscimento in prodotti del 50% o ritorno gratuito; modella condivisa solo con il consenso di un’altra allieva;",
         "Punto 8, lett. b), c), d), e): responsabilità personale dell’allievo/a e limitazioni di responsabilità di Elitederma Srl;",
         "Punto 11, lett. c): foro di Roma per chi si iscrive con partita IVA."
       ]

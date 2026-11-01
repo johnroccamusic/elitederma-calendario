@@ -1,7 +1,7 @@
 // LA CASSA CONTANTI SI LEGGE UN MESE ALLA VOLTA (28/10/2026): riporto dal
 // mese prima, parziali del mese, saldo a fine mese. Niente totali di
 // entrate e uscite dall'apertura in poi. Il saldo in cassa resta.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
 import { PannelloCassaContanti } from "../src/App.jsx";
 import { monta, clicca, attendi } from "./aiuto.js";
@@ -10,6 +10,10 @@ import { rispondiCon } from "./preparazione.js";
 const vuoti = { corsiDate: [], iscritti: [], corsiDateDocenti: [], master: [], masterCorsi: [], assistente: [], assistenteCorsi: [], leva: [], location: [], hotel: [], quoteVenditoriSplit: [], spese: [], venditeShop: [], corsi: [] };
 
 describe("Cassa contanti per mese", () => {
+  // i dati sono di ottobre 2026: la prova non puo' dipendere dal mese in cui gira
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-31T12:00:00")); });
+  afterEach(() => { vi.useRealTimers(); });
+
   it("mostra riporto, parziali e saldo del mese, e scorrendo indietro il mese prima", async () => {
     rispondiCon({
       "cassa_contanti_impostazioni": { aperta_il: "2026-09-01", saldo_iniziale: 1000 },
