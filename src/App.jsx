@@ -74650,12 +74650,12 @@ function SpInterruttore({ acceso, onCambia, titolo }) {
 }
 
 // la riga-scheda delle caselle (Conta nel magazzino...) e delle scelte di canale
-const spRigaCard = { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: SP_GRIGIO, border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: "11px 13px", ...fontBody, fontSize: 14, fontWeight: 600, color: SP_TESTO, boxShadow: "inset 0 1px 0 rgba(255,255,255,.7)" };
+const spRigaCard = { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: SP_GRIGIO, border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: "11px 13px", ...fontBody, fontSize: 16, fontWeight: 600, color: SP_TESTO, boxShadow: "inset 0 1px 0 rgba(255,255,255,.7)" };
 
 /** Un blocco della scheda: icona (o numero), titolo, spiegazione, contenuto, in una scheda col suo rilievo. */
-function SpBlocco({ icona, titolo, sottotitolo, azione, lato = 44, dimTitolo = 15.5, numero, children, style }) {
+function SpBlocco({ icona, titolo, sottotitolo, azione, lato = 52, dimTitolo = 22, numero, piatto = false, children, style }) {
   return (
-    <div style={{ marginBottom: 16, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF8F2 100%)", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "18px 20px", boxShadow: "0 6px 18px rgba(92,70,32,.10), 0 1px 2px rgba(92,70,32,.06)", ...style }}>
+    <div style={piatto ? { marginTop: 16, ...style } : { marginBottom: 16, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF8F2 100%)", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "18px 20px", boxShadow: "0 6px 18px rgba(92,70,32,.10), 0 1px 2px rgba(92,70,32,.06)", ...style }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: sottotitolo ? 12 : 10 }}>
         {numero ? <SpNumero n={numero} lato={lato} /> : <SpIcona lato={lato}>{icona}</SpIcona>}
         <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
@@ -76360,7 +76360,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
       )}
       <SpBlocco
-        lato={52} dimTitolo={19} numero={1}
+        numero={1}
         icona={<SpIcoCubo s={26} />}
         titolo="Disponibilità e vendite"
         sottotitolo="Gestisci la visibilità del prodotto e la quantità disponibile."
@@ -76408,53 +76408,28 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             categoria a tenerlo fuori, sceglierlo qui chiede prima il permesso
             di riaprire anche la categoria: altrimenti la casella direbbe una
             cosa e il prodotto resterebbe invisibile lo stesso */}
-        <div style={{ border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
-            <SpIcona lato={48}><SpIcoCarrello s={24} /></SpIcona>
-            <div style={{ ...fontDisplay, fontSize: 15.5, fontWeight: 700, color: SP_TESTO }}>Vendite</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: "5px 12px", ...(calcoloPrezzi.vaSuWoo && prodottoForm.stato !== "private" ? { color: "#2E7D32", background: "#E7F4EA" } : prodottoForm.stato === "private" ? { color: "#3B6FA0", background: "#E7EEF5" } : { color: SP_SPENTO, background: SP_GRIGIO }) }}>
-                {calcoloPrezzi.varianteNonPubblicabile
-                  ? "Sullo shop tramite la vetrina"
-                  : prodottoForm.stato === "private" && calcoloPrezzi.vaSuWoo
-                    ? "Sul sito, ma privato"
-                    : calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
-              </span>
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: "5px 12px", ...(calcoloPrezzi.nonSulPos ? { color: SP_SPENTO, background: SP_GRIGIO } : { color: "#2E7D32", background: "#E7F4EA" }) }}>
-                {calcoloPrezzi.nonSulPos ? "Non sul POS" : "In vendita sul POS"}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "stretch" }}>
-            <div style={{ ...spRigaCard, cursor: "default" }}>
-              <SpIcona lato={46}><SpIcoRegistratore s={22} /></SpIcona>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: SP_TESTO }}>Vendita al banco (POS)</div>
-                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 400, color: SP_SPENTO, marginTop: 2 }}>Vendita in sede / Front Office</div>
-              </div>
-              <SpInterruttore acceso={!calcoloPrezzi.nonSulPos} onCambia={(acceso) => scegliCanalePos(!acceso)} titolo="Vendita al banco (POS)" />
-            </div>
-
-            <div style={{ ...spRigaCard, cursor: "default" }}>
-              <SpIcona lato={46}><SpIcoSchermo s={22} /></SpIcona>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: SP_TESTO }}>Shop online</div>
-                {calcoloPrezzi.varianteNonPubblicabile ? (
-                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 400, color: SP_SPENTO, lineHeight: 1.45, marginTop: 2 }}>
-                    Sullo shop questa taglia non è un prodotto a sé: il cliente la sceglie dal menu dentro la vetrina
-                    {prodottoForm.prodottoPadreId ? ` "${(prodottiShop || []).find((pp) => pp.id === prodottoForm.prodottoPadreId)?.nome || ""}"` : ""}.
-                    È lì che si pubblica. Qui la variante conta per magazzino, POS e scarico dei kit.
-                  </div>
-                ) : (
-                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 400, color: SP_SPENTO, marginTop: 2 }}>Pubblicazione e ordini web</div>
-                )}
-              </div>
+        <div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <label style={{ ...spRigaCard, flex: "1 1 220px", minWidth: 0 }}>
+              <SpIcona lato={40}><SpIcoRegistratore s={20} /></SpIcona>
+              <span style={{ flex: 1, minWidth: 0 }}>Pubblica su POS</span>
+              <input type="checkbox" checked={!calcoloPrezzi.nonSulPos} onChange={(e) => scegliCanalePos(!e.target.checked)} style={spSpunta} />
+            </label>
+            <label style={{ ...spRigaCard, flex: "1 1 220px", minWidth: 0, ...(calcoloPrezzi.varianteNonPubblicabile ? { cursor: "default" } : {}) }}>
+              <SpIcona lato={40}><SpIcoSchermo s={20} /></SpIcona>
+              <span style={{ flex: 1, minWidth: 0 }}>Pubblica su shop</span>
               {!calcoloPrezzi.varianteNonPubblicabile && (
-                <SpInterruttore acceso={!calcoloPrezzi.soloOffline} onCambia={(acceso) => scegliCanaleOnline(!acceso)} titolo="Shop online" />
+                <input type="checkbox" checked={!calcoloPrezzi.soloOffline} onChange={(e) => scegliCanaleOnline(!e.target.checked)} style={spSpunta} />
               )}
-            </div>
+            </label>
           </div>
+          {calcoloPrezzi.varianteNonPubblicabile && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: SP_SPENTO, lineHeight: 1.45, marginTop: 10 }}>
+              Sullo shop questa taglia non è un prodotto a sé: il cliente la sceglie dal menu dentro la vetrina
+              {prodottoForm.prodottoPadreId ? ` "${(prodottiShop || []).find((pp) => pp.id === prodottoForm.prodottoPadreId)?.nome || ""}"` : ""}.
+              È lì che si pubblica. Qui la variante conta per magazzino, POS e scarico dei kit.
+            </div>
+          )}
 
           {(prodottoForm.sbloccaOffline || []).length > 0 && (
             <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginTop: 12, lineHeight: 1.45 }}>
@@ -76493,9 +76468,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                   <option key={c.id} value={c.id}>{c.profondita > 0 ? "— " : ""}{c.nome}</option>
                 ))}
               </select>
-            </SpBlocco>
             {(extraIds.length > 0 || opzioniExtra.length > 0) && (
-              <SpBlocco icona={<SpIcoCatena s={21} />} titolo="Compare anche in (opzionale)" dimTitolo={14.5}>
+              <SpBlocco piatto lato={44} icona={<SpIcoCatena s={21} />} titolo="Compare anche in (opzionale)" dimTitolo={15.5}>
                 <div style={{ display: isMobile ? "block" : "flex", gap: 12, alignItems: "flex-start" }}>
                   {extraIds.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: "1 1 40%", marginBottom: isMobile ? 8 : 0 }}>
@@ -76550,6 +76524,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 </div>
               </SpBlocco>
             )}
+            </SpBlocco>
           </>
         );
       })()}
