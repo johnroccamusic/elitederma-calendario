@@ -61607,7 +61607,13 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
     }
     return righe;
   }, [bloccanti, ordineBloccanti]);
-  const bloccantiVisti = bloccantiOrdinati.slice(0, MAX_BLOCCANTI);
+  const [tuttiBloccanti, setTuttiBloccanti] = useState(false);
+  const bloccantiVisti = tuttiBloccanti ? bloccantiOrdinati : bloccantiOrdinati.slice(0, MAX_BLOCCANTI);
+  // premere una pastiglia apre l'elenco e porta alla sua parte
+  function apriSezione(id) {
+    setAvvisiAperti(true);
+    setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }
   const thStyle = { ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" };
   const tdStyle = { padding: "8px 10px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "center", ...fontBody, fontSize: 12.5, color: NAVY };
 
@@ -61634,9 +61640,10 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
   // le tre pastiglie col medaglione piccolo, come gli avvisi di
   // Contabilita' (16/09/2026): disco colorato con l'icona bianca, il
   // numero e le due righe di testo
-  function Pastiglia({ Icona, colore, bordo, sfondo, numero, righe }) {
+  function Pastiglia({ Icona, colore, bordo, sfondo, numero, righe, vaA }) {
     return (
-      <div style={{
+      <div role="button" tabIndex={0} title="Premi per vedere l'elenco" onClick={() => apriSezione(vaA)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apriSezione(vaA); } }} style={{
+        cursor: "pointer",
         display: "flex", alignItems: "center", gap: isMobile ? 5 : 8,
         ...superficieCuscino(sfondo), borderRadius: 14,
         padding: isMobile ? "6px 8px" : "6px 12px 6px 8px",
@@ -61674,10 +61681,10 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
           {/* ogni pastiglia porta la sua icona e il testo su due righe: a
               colpo d'occhio si distinguono senza leggerle */}
           {bloccanti.length > 0 && (
-            <Pastiglia Icona={IconaScatolaErp} colore="#C0392B" bordo="#C0392B" sfondo="#FBE4E1" numero={bloccanti.length} righe={["bloccano", "un corso"]} />
+            <Pastiglia Icona={IconaScatolaErp} colore="#C0392B" bordo="#C0392B" sfondo="#FBE4E1" numero={bloccanti.length} righe={["bloccano", "un corso"]} vaA="avvisi-bloccanti" />
           )}
-          <Pastiglia Icona={IconaResetCircolare} colore="#C0392B" bordo="#F0C9C2" sfondo="#FDF3F1" numero={daRiordinare.length} righe={["da", "riordinare"]} />
-          <Pastiglia Icona={IconaScatolaErp} colore="#B8860B" bordo="#EBD9AE" sfondo="#FDF8EC" numero={daAprire.length} righe={["pacchi", "da aprire"]} />
+          <Pastiglia Icona={IconaResetCircolare} colore="#C0392B" bordo="#F0C9C2" sfondo="#FDF3F1" numero={daRiordinare.length} righe={["da", "riordinare"]} vaA="avvisi-riordino" />
+          <Pastiglia Icona={IconaScatolaErp} colore="#B8860B" bordo="#EBD9AE" sfondo="#FDF8EC" numero={daAprire.length} righe={["pacchi", "da aprire"]} vaA="avvisi-pacchi" />
         </div>
       </div>
 
@@ -61707,7 +61714,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
           urgenza con una data: la scorta minima dice "sta finendo", questa
           dice "senza, il corso del 10 non si fa" */}
       {bloccanti.length > 0 && (
-        <div style={{ padding: "0 12px 12px" }}>
+        <div id="avvisi-bloccanti" style={{ padding: "0 12px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px", flexWrap: "wrap" }}>
             <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 12, fontWeight: 700 }}>!</span>
             <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Servono per i corsi in arrivo</span>
@@ -61805,12 +61812,20 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
                 a cui e' stato calcolato non dice se e' di adesso o di ieri */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 14px" }}>
               {bloccanti.length > MAX_BLOCCANTI ? (
-                <button
-                  onClick={onApriAdvisor}
-                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer" }}
-                >
-                  e altri {bloccanti.length - MAX_BLOCCANTI} — aprili nell'Advisor ›
-                </button>
+                <span style={{ display: "inline-flex", gap: 14, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => setTuttiBloccanti((v) => !v)}
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                  >
+                    {tuttiBloccanti ? `Mostra solo i primi ${MAX_BLOCCANTI} ‹` : `Mostra tutti e ${bloccanti.length} ›`}
+                  </button>
+                  <button
+                    onClick={onApriAdvisor}
+                    style={{ ...fontBody, fontSize: 12.5, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    apri l'Advisor
+                  </button>
+                </span>
               ) : <span />}
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Ultimo aggiornamento: {oraAggiornamento}</span>
@@ -61831,7 +61846,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
       )}
 
       {daRiordinare.length > 0 && (
-        <div style={{ padding: "0 12px 12px" }}>
+        <div id="avvisi-riordino" style={{ padding: "0 12px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
             <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 12, fontWeight: 700 }}>!</span>
             <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Sotto la scorta minima</span>
@@ -61916,7 +61931,7 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0
       )}
 
       {daAprire.length > 0 && (
-        <div style={{ padding: "0 12px 12px" }}>
+        <div id="avvisi-pacchi" style={{ padding: "0 12px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
             <IconaScatolaErp size={18} color="#B8860B" />
             <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#B8860B", textTransform: "uppercase", letterSpacing: 0.6 }}>Pacchi da aprire</span>
