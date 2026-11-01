@@ -76375,7 +76375,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         )}
       >
         {dispAperta && (<>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr)", gap: 12, alignItems: "start", marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "start", marginBottom: 16 }}>
           <div>
             <div style={spEtichetta}>Disponibilità</div>
             {/* gli stessi stati di WooCommerce: pubblicato lo vedono tutti,
@@ -76393,16 +76393,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             <input
               style={{ ...spCampo, ...(prodottoForm.giacenzaPropria ? {} : { background: "#F1F2F5", color: SP_SPENTO }) }}
               inputMode="numeric" value={prodottoForm.qtaStock} placeholder="0" disabled={!prodottoForm.giacenzaPropria}
+              title={prodottoForm.giacenzaPropria
+                ? (calcoloPrezzi.vaSuWoo
+                    ? "Pezzi fisicamente presenti. È lo stesso valore che lo shop online vende (sincronizzato con WooCommerce)."
+                    : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
+                : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
               onChange={(e) => aggiornaForm({ qtaStock: e.target.value })}
             />
           </div>
-          <SpNota>
-            {prodottoForm.giacenzaPropria
-              ? (calcoloPrezzi.vaSuWoo
-                  ? "Pezzi fisicamente presenti. È lo stesso valore che lo shop online vende (sincronizzato con WooCommerce)."
-                  : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
-              : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
-          </SpNota>
         </div>
 
         {/* dove si vende questo prodotto: le due scelte sono indipendenti —
