@@ -75902,6 +75902,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // una spunta sotto la tendina, e chi non lo sapeva non trovava mai i
   // campi "pezzi per confezione" e "sfuso collegato".
   function cambiaTipo(nuovo) {
+    // "interno" non e' un tipo del database: e' un semplice con la giacenza
+    // propria, fuori dal POS e fuori dallo shop, e senza incassi. Vale per
+    // il materiale dei kit di formazione che non si vende mai: le due
+    // caselle si spengono da sole, e rimessa in vendita una delle due la
+    // tendina torna a leggerlo come semplice.
+    // uscendo da "interno" le due caselle tornano in vendita: restano
+    // modificabili a mano, ma non devono rimanere spente senza che si veda
+    if (naturaMostrata === "interno" && nuovo !== "interno") aggiornaForm({ nonSulPos: false, soloOffline: false });
+    if (nuovo === "interno") { aggiornaForm({ tipoProdotto: "semplice", bundleFisica: false, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false, nonSulPos: true, soloOffline: true }); return; }
     if (nuovo === "confezione") { aggiornaForm({ tipoProdotto: "semplice", bundleFisica: true, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true }); return; }
     if (nuovo === "bundle") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: true, costo: "" });
     // "sfuso" e "componente" vivono nello stesso modo: hanno una giacenza
@@ -75915,7 +75924,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     else aggiornaForm({ tipoProdotto: nuovo, bundleFisica: false, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
   }
   const naturaMostrata = prodottoForm?.tipoProdotto === "semplice" && prodottoForm?.bundleFisica
-    ? "confezione" : prodottoForm?.tipoProdotto;
+    ? "confezione"
+    : prodottoForm?.tipoProdotto === "semplice" && prodottoForm?.nonSulPos && prodottoForm?.soloOffline && !prodottoForm?.contaIncassi
+      ? "interno" : prodottoForm?.tipoProdotto;
   function cambiaBundleFisica(attiva) {
     if (attiva) aggiornaForm({ bundleFisica: true, contaMagazzino: true, giacenzaPropria: true });
     else if (prodottoForm?.tipoProdotto === "bundle") aggiornaForm({ bundleFisica: false, contaMagazzino: false, giacenzaPropria: false, costo: "" });
@@ -76496,6 +76507,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           <option value="sfuso">Sfuso — pezzo singolo ricavato aprendo una confezione, usato come componente nei kit</option>
           <option value="bundle">Bundle — kit venduto come un pezzo unico, composto da altri prodotti che vengono scaricati insieme</option>
           <option value="componente">Componente — fa parte di un bundle, non si vende singolarmente</option>
+          <option value="interno">Uso interno — prodotto o componente dei kit di formazione, non in vendita (né sul POS né sullo shop)</option>
           <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
           <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
         </select>
