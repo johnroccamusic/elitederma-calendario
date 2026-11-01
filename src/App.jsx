@@ -76736,7 +76736,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
       {prodottoForm.giacenzaPropria && (
         <div style={{ marginBottom: 16 }}>
-        <div style={{ background: "#F8F9FB", border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+        <div style={{ marginBottom: 12 }}>
           <SpBlocco
             icona={<SpIcoGrafico s={22} />} numero={4}
             titolo="Scorta e riordino"
@@ -76890,7 +76890,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         const inVendita = sulloShop || alBanco;
         const dove = sulloShop && alBanco ? "sullo shop e al banco" : sulloShop ? "sullo shop" : "al banco";
         return (
-      <div style={{ background: "#F8F9FB", border: `1px solid ${SP_BORDO}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
         <SpBlocco
           icona={<SpIcoCarrello s={22} />}
           titolo="Ordinabile senza scorte (back order)"
