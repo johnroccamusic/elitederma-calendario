@@ -1361,9 +1361,10 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   vecchia migrazione del 30/10 li ricreerebbe con `if not exists`, quindi non
   rieseguirla); revocato EXECUTE ad `anon` e `authenticated` sulle due funzioni
   trigger `movimenti_banca_spesa_cancellata` e `riapri_impegno_se_spesa_cancellata`.
-  **Restano, voluti o da decidere:** 12 policy permissive doppie su
-  `impostazioni_magazzino` e `movimenti_magazzino` e su un'altra tabella (si
-  fondono mostrando prima il testo), 128 chiavi esterne senza indice, `pg_net` in
+  Le 12 policy doppie (tre tabelle del magazzino con «accesso interno» e
+  «accesso staff» identiche) sono state fuse in una (`20261101180000`, rollback
+  scritto nel file).
+  **Restano, voluti o da decidere:** 128 chiavi esterne senza indice, `pg_net` in
   `public` (spostarlo puo' rompere i cron), password compromesse spente in Auth
   (impostazione del pannello Supabase).
 
