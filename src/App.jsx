@@ -59859,7 +59859,7 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
       forzatoEscludi,
       forzatoSoloOffline,
       // stessa regola della tendina "Natura": semplice, fuori da POS e shop, nessun incasso
-      usoInterno: p.tipo_prodotto === "semplice" && !!p.escludi_vendita_diretta && !!p.solo_offline && p.conta_incassi === false && !p.bundle_con_giacenza_fisica,
+      usoInterno: p.tipo_prodotto === "componente" || p.tipo_prodotto === "sfuso" || (p.tipo_prodotto === "semplice" && !!p.escludi_vendita_diretta && !!p.solo_offline && p.conta_incassi === false && !p.bundle_con_giacenza_fisica),
       sfusoCollegato: sfusoCollegato ? { id: sfusoCollegato.id, nome: sfusoCollegato.nome, stock: (sfusoCollegato.quantita || 0) } : null,
       boxCollegato,
     };
@@ -75962,7 +75962,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // diventa 20 pezzi) — e tenerli distinti serve a sapere, guardando
     // l'anagrafica, quali pezzi esistono solo perche' qualcuno ha aperto
     // un pacco.
-    else if (nuovo === "componente" || nuovo === "sfuso") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false });
+    else if (nuovo === "componente" || nuovo === "sfuso") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false, nonSulPos: true, soloOffline: true });
     else if (nuovo === "vetrina") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: false, costo: "" });
     else aggiornaForm({ tipoProdotto: nuovo, bundleFisica: false, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
   }
