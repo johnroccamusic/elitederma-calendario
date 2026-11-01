@@ -59838,6 +59838,11 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
       // partito. I consumabili dei corsi e il materiale interno finivano
       // tutti li' dentro e coprivano quelli che davvero non si vendono.
       inVendita: vendibile,
+      // Per "Fermi da oltre 90 giorni" non basta poter vendere sulla carta:
+      // un prodotto che non conta negli incassi (componenti, materiale di
+      // corso) o che sul sito e' in bozza/privato non e' in vendita, quindi
+      // non puo' essere fermo
+      inVenditaReale: vendibile && p.conta_incassi !== false && !["draft", "private", "pending", "trash"].includes(p.stato),
       stockTotale,
       riordinoCompleto: p.soglia_riordino != null && p.lead_time_giorni != null && !!p.fornitore_id,
       sottoScorta: p.conta_magazzino !== false && p.soglia_riordino != null && stockTotale != null && stockTotale < p.soglia_riordino,
@@ -59871,7 +59876,7 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
   // una distinta da riparare — e intanto quel kit al banco non si sconta.
   // Per questo hanno un avviso loro, col nome del componente da sistemare.
   const kitSenzaCosto = prodottiConStato.filter((p) => p.isBundle && p.costo_acquisto == null);
-  const fermi = prodottiConStato.filter((p) => p.inVendita && p.giorniFermo > 90);
+  const fermi = prodottiConStato.filter((p) => p.inVenditaReale && p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
   const giaOrdinatiMag = useMemo(
     () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
@@ -59925,7 +59930,7 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
   if (filtroRapido === "sottoscorta") prodottiVisti = prodottiVisti.filter((p) => p.sottoScorta);
   if (filtroRapido === "esauriti") prodottiVisti = prodottiVisti.filter((p) => p.esaurito);
   if (filtroRapido === "senzacosto") prodottiVisti = prodottiVisti.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
-  if (filtroRapido === "fermi") prodottiVisti = prodottiVisti.filter((p) => p.inVendita && p.giorniFermo > 90);
+  if (filtroRapido === "fermi") prodottiVisti = prodottiVisti.filter((p) => p.inVenditaReale && p.giorniFermo > 90);
   // "Confezioni e sfusi": i pacchi che si aprono e i pezzi che ne escono,
   // insieme. Sono due anagrafiche legate da un filo (prodotto_sfuso_id) e
   // si guardano in coppia — quanti pacchi sigillati restano, quanti pezzi
