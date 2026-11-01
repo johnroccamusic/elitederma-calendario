@@ -76865,7 +76865,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         return (
       <div style={{ marginBottom: 16 }}>
         <SpBlocco
-          icona={<SpIcoCarrello s={22} />}
+          icona={<SpIcoCarrello s={22} />} numero={5}
           titolo="Ordinabile senza scorte (back order)"
           sottotitolo={inVendita
             ? `Il cliente può ordinarlo anche quando i pezzi sono zero, ${dove}.`
