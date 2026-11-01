@@ -60696,7 +60696,8 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="magazzino-corpo">
+                <style>{".magazzino-corpo > tr:nth-child(5n) > td { border-bottom: 2px solid #B9AE92 !important; }"}</style>
                 {prodottiPaginaMagazzino.map((p) => (
                   <RigaProdottoMagazzino key={p.id} prodotto={p} fotoUrl={immaginePerProdottoMagazzino[p.id] || p.foto_url || null} mostraContanti={mostraRigaContanti} onApriModifica={() => apriScheda(p, true)} evidenziata={schedaAperta === p.id} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} onOrdina={apriAssociaEOrdina} ordineAperto={giaOrdinatiMag.has(p.id)} colonne={colonneMagazzino} sicurezzaPunti={sicurezzaPunti} margineOperativoPct={margineOperativoPct} moltiplicatoreConsigliato={moltiplicatoreConsigliato} incidenzaCostiPct={incidenzaCostiPct} onIncidenzaCosti={cambiaIncidenzaCosti} pctQuotaColonna={pctQuotaColonna} euroQuota={euroQuota} />
                 ))}
@@ -74655,7 +74656,7 @@ const spRigaCard = { display: "flex", alignItems: "center", gap: 12, cursor: "po
 /** Un blocco della scheda: icona (o numero), titolo, spiegazione, contenuto, in una scheda col suo rilievo. */
 function SpBlocco({ icona, titolo, sottotitolo, azione, lato = 52, dimTitolo = 22, numero, piatto = false, children, style }) {
   return (
-    <div style={piatto ? { marginTop: 16, ...style } : { marginBottom: 16, background: "linear-gradient(180deg, #FFFFFF 0%, #FBF8F2 100%)", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "18px 20px", boxShadow: "0 6px 18px rgba(92,70,32,.10), 0 1px 2px rgba(92,70,32,.06)", ...style }}>
+    <div style={piatto ? { marginTop: 16, ...style } : { marginBottom: 16, background: "linear-gradient(180deg, #FCFAF5 0%, #F3ECDD 100%)", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "18px 20px", boxShadow: "0 6px 18px rgba(92,70,32,.10), 0 1px 2px rgba(92,70,32,.06)", ...style }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: sottotitolo ? 12 : 10 }}>
         {numero ? <SpNumero n={numero} lato={lato} /> : <SpIcona lato={lato}>{icona}</SpIcona>}
         <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
@@ -76411,15 +76412,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <label style={{ ...spRigaCard, flex: "1 1 220px", minWidth: 0 }}>
-              <SpIcona lato={40}><SpIcoRegistratore s={20} /></SpIcona>
+              <SpIcona lato={40}><SpIcoRegistratore s={34} /></SpIcona>
               <span style={{ flex: 1, minWidth: 0 }}>Pubblica su POS</span>
-              <input type="checkbox" checked={!calcoloPrezzi.nonSulPos} onChange={(e) => scegliCanalePos(!e.target.checked)} style={spSpunta} />
+              <input type="checkbox" checked={!calcoloPrezzi.nonSulPos} onChange={(e) => scegliCanalePos(!e.target.checked)} style={{ ...spSpunta, width: 36, height: 36 }} />
             </label>
             <label style={{ ...spRigaCard, flex: "1 1 220px", minWidth: 0, ...(calcoloPrezzi.varianteNonPubblicabile ? { cursor: "default" } : {}) }}>
-              <SpIcona lato={40}><SpIcoSchermo s={20} /></SpIcona>
+              <SpIcona lato={40}><SpIcoSchermo s={34} /></SpIcona>
               <span style={{ flex: 1, minWidth: 0 }}>Pubblica su shop</span>
               {!calcoloPrezzi.varianteNonPubblicabile && (
-                <input type="checkbox" checked={!calcoloPrezzi.soloOffline} onChange={(e) => scegliCanaleOnline(!e.target.checked)} style={spSpunta} />
+                <input type="checkbox" checked={!calcoloPrezzi.soloOffline} onChange={(e) => scegliCanaleOnline(!e.target.checked)} style={{ ...spSpunta, width: 36, height: 36 }} />
               )}
             </label>
           </div>
