@@ -131,7 +131,7 @@ export const SEZIONI = [
         {
           "titolo": "PUNTO 6 – MODELLE E MODELLI",
           "punti": [
-            "a) Le modelle sono reperite dall’allievo/a a propria cura e spese, salvo il servizio previsto al Punto 7 (€ 60 per modella, € 100 per modella se la richiesta arriva nei 7 giorni precedenti l’inizio del corso). Devono presentarsi negli orari comunicati dall’organizzazione. Cambi di orario sono ammessi solo se autorizzati almeno 15 giorni prima del corso.",
+            "a) Le modelle sono reperite dall’allievo/a a propria cura e spese, salvo il servizio previsto al Punto 7 (€ 60 per modella; € 100 per modella se la richiesta arriva nei 7 giorni precedenti l’inizio del corso, e solo se Elitederma Srl accetta l’incarico). Devono presentarsi negli orari comunicati dall’organizzazione. Cambi di orario sono ammessi solo se autorizzati almeno 15 giorni prima del corso.",
             "b) Modella personale. L’allievo/a che porta una propria modella si assume la responsabilità della sua presenza. Se non trova una modella, o se la modella personale non si presenta o non può partecipare per qualsiasi motivo, e di conseguenza non può svolgere la parte pratica, nessuna responsabilità è attribuibile a Elitederma Srl. In tali casi, salvo quanto previsto alla lett. g) per la tricopigmentazione, non sono previsti la modella condivisa né il ritorno gratuito: per svolgere la pratica l’allievo/a può partecipare a una sessione successiva, versando il contributo organizzativo di € 180 per ciascuna modella.",
             "c) Le modelle devono essere maggiorenni.",
             "d) Modelle e accompagnatori non possono assistere alle lezioni né sostare in aula.",
@@ -146,6 +146,7 @@ export const SEZIONI = [
             "a) Solo se l'allievo/a proviene da una città diversa da quella del corso, a più di 50 km di distanza, può chiedere a Elitederma Srl di reperire le modelle per le esercitazioni, al costo di:",
             "- € 60 per modella, se la richiesta arriva più di 7 giorni prima dell'inizio del corso;",
             "- € 100 per modella, se la richiesta arriva nei 7 giorni precedenti l'inizio del corso.",
+            "Le richieste che arrivano nei 7 giorni precedenti l'inizio del corso non sono accolte automaticamente: Elitederma Srl può accettare o rifiutare l'incarico, a propria discrezione, in base alla possibilità di reperire una modella in tempo utile. L'incarico si intende accettato solo con conferma di Elitederma Srl all'allievo/a. Il servizio e il relativo costo sono dovuti solo se l'incarico è accettato; in caso di rifiuto nulla è dovuto e l'allievo/a reperisce autonomamente la modella ai sensi del Punto 6, senza diritto a modella condivisa, ritorno gratuito, riconoscimento in prodotti o altro indennizzo.",
             "Il servizio non è mai previsto per i corsi di Tricopigmentazione, Laminazione, Extension ciglia, Hennè, Needling, Evolution Hairstrokes, Elite PMU Advanced, Colori e Correzioni, Areolart, Paramedicale, Nude Liner, Sexyline Velvet e Gemme Dentali, né in generale per i corsi di dermopigmentazione avanzati: in questi corsi l'allievo/a reperisce autonomamente le proprie modelle, secondo il Punto 6. Per la tricopigmentazione vale inoltre il Punto 6, lett. g).",
             "b) Natura del servizio. Chi richiede il servizio affida a Elitederma Srl la ricerca della modella. Il costo del reperimento copre il servizio di ricerca e non garantisce la presenza effettiva della modella al corso: il reperimento dipende dalla disponibilità delle modelle.",
             "c) Le modelle sono selezionate in base alla disponibilità: non sono ammesse obiezioni sulle loro caratteristiche estetiche o fisiche.",
@@ -366,7 +367,7 @@ export const SEZIONI = [
         "obbligatorio": true,
         "voci": [
           "Cercherò io le modelle per il corso",
-          "Ho chiesto che mi vengano trovate pagando la tariffa di 60 euro a modella (100 euro se la richiesta arriva nei 7 giorni precedenti l’inizio del corso)"
+          "Ho chiesto che mi vengano trovate pagando la tariffa di 60 euro a modella (100 euro se la richiesta arriva nei 7 giorni precedenti l’inizio del corso, solo se Elitederma Srl accetta l’incarico)"
         ],
         "nota": "Bonifico\nContanti"
       },
@@ -505,7 +506,7 @@ export const CONSENSI = {
         "Punto 4, lett. a), d), e), f): esclusione di responsabilità per strumenti non forniti; nessun reintegro del kit; responsabilità su kit e dermografo;",
         "Punto 5, lett. b), c), e), f): mancato rilascio dell’attestato; iscrizione non cedibile; nessun rimborso dopo l’avvio del corso; allontanamento senza rimborso;",
         "Punto 6, lett. a), b): reperimento delle modelle a carico dell’allievo/a; nessuna responsabilità di Elitederma Srl se la modella personale non si presenta; contributo di € 180 per modella per il recupero della pratica;",
-        "Punto 7, lett. a), b), c), d), e), f), g), h): servizio modelle escluso per alcuni corsi, senza garanzia di presenza o disponibilità e dovuto anche se non utilizzato; nessun rimborso in denaro della quota di reperimento se la modella non si presenta o non viene reperita; riconoscimento in prodotti del 50% o ritorno gratuito; modella condivisa solo con il consenso di un’altra allieva;",
+        "Punto 7, lett. a), b), c), d), e), f), g), h): servizio modelle escluso per alcuni corsi, senza garanzia di presenza o disponibilità e dovuto anche se non utilizzato; nessun rimborso in denaro della quota di reperimento se la modella non si presenta o non viene reperita; riconoscimento in prodotti del 50% o ritorno gratuito; possibilità per Elitederma Srl di rifiutare l’incarico se richiesto negli ultimi 7 giorni; modella condivisa solo con il consenso di un’altra allieva;",
         "Punto 8, lett. b), c), d), e): responsabilità personale dell’allievo/a e limitazioni di responsabilità di Elitederma Srl;",
         "Punto 11, lett. c): foro di Roma per chi si iscrive con partita IVA."
       ]
