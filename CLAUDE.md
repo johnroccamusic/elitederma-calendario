@@ -1354,6 +1354,19 @@ codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
   e `percorsoDaValore` lo legge lo stesso (dati non toccati). Prove in
   `prove/allegati-riservati.test.jsx`.
 
+- **Punti minori chiusi** (01/11/2026, migrazione `20261101170000`).
+  `search_path` fisso (`public, extensions, pg_temp`) sulle 13 funzioni che non
+  lo avevano (`gettone_sicuro` usa `gen_random_bytes`, che sta in `extensions`);
+  quattro indici doppi di `crm_contatti` tolti (restano quelli col nome nudo; la
+  vecchia migrazione del 30/10 li ricreerebbe con `if not exists`, quindi non
+  rieseguirla); revocato EXECUTE ad `anon` e `authenticated` sulle due funzioni
+  trigger `movimenti_banca_spesa_cancellata` e `riapri_impegno_se_spesa_cancellata`.
+  **Restano, voluti o da decidere:** 12 policy permissive doppie su
+  `impostazioni_magazzino` e `movimenti_magazzino` e su un'altra tabella (si
+  fondono mostrando prima il testo), 128 chiavi esterne senza indice, `pg_net` in
+  `public` (spostarlo puo' rompere i cron), password compromesse spente in Auth
+  (impostazione del pannello Supabase).
+
 **Ancora aperto**: nulla di questo elenco (restano i punti minori: `search_path` su 14 funzioni, indici su chiavi esterne, indici duplicati su `crm_contatti`).
 
 ### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
