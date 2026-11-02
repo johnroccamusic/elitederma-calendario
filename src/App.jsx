@@ -16881,7 +16881,42 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
   // navigator.clipboard.write chiamato subito, senza await prima —
   // altrimenti Safari perde il "gesto utente" e la copia fallisce in
   // silenzio
+  // un PDF non si incolla come un'immagine: i browser non lasciano scrivere
+  // application/pdf negli appunti, quindi si prova, e se non si puo' si apre
+  // la condivisione del telefono (WhatsApp, Mail...) o, sul computer, si
+  // scarica il file da trascinare nella chat
+  async function copiaPdf(locandina) {
+    setCopiandoNome(locandina.nome);
+    try {
+      const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
+      if (error) throw error;
+      const pdf = new Blob([data], { type: "application/pdf" });
+      try {
+        if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined" && ClipboardItem.supports?.("application/pdf")) {
+          await navigator.clipboard.write([new ClipboardItem({ "application/pdf": pdf })]);
+          setCopiatoNome(locandina.nome);
+          setTimeout(() => setCopiatoNome((c) => (c === locandina.nome ? null : c)), 1500);
+          setMessaggioCopia("PDF copiato.");
+          setTimeout(() => setMessaggioCopia((c) => (c === "PDF copiato." ? "" : c)), 2200);
+          return;
+        }
+      } catch { /* si ripiega sulla condivisione */ }
+      const file = new File([pdf], locandina.nome, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: locandina.titolo });
+        return;
+      }
+      scaricaBlob(pdf, locandina.nome);
+      setMessaggioCopia("Il browser non copia i PDF: l'ho scaricato, trascinalo nella chat.");
+      setTimeout(() => setMessaggioCopia(""), 4000);
+    } catch (e) {
+      if (e?.name !== "AbortError") window.alert("Non riesco a copiare il PDF: " + (e?.message || e));
+    } finally {
+      setCopiandoNome(null);
+    }
+  }
   async function copiaNegliAppunti(locandina) {
+    if (eUnPdf(locandina.nome)) return copiaPdf(locandina);
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       window.alert("Il tuo browser non supporta la copia diretta dell'immagine. Usa il download.");
       return;
@@ -17025,7 +17060,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                       </svg>
                     </button>
-                    {!eUnPdf(l.nome) && <button
+                    <button
                       onClick={() => copiaNegliAppunti(l)}
                       title="Copia l'immagine (incollala dove ti serve, es. WhatsApp)"
                       style={{
@@ -17045,7 +17080,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                           <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
                         </svg>
                       )}
-                    </button>}
+                    </button>
                     <button
                       onClick={() => scaricaOCondividi(l)}
                       title="Scarica"
