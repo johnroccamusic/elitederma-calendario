@@ -93,6 +93,7 @@ import { modelloUsabile as modelloUsabileEmail, componiDaModello as componiDaMod
 import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
+import { statoSincronizzazione, ultimoGiroRiuscito, minutiDa, daQuanto, MINUTI_MASSIMI_SENZA_SYNC } from "../supabase/functions/_shared/sync-vigilanza.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -53945,10 +53946,16 @@ export function ModaleDettaglioOrdine({ vendita, onChiudi, corsi = [], corsiDate
 
 // ---------- Quando abbiamo parlato col sito l'ultima volta ----------
 //
-// La sincronizzazione con WooCommerce gira ogni ora. Queste due cose le
-// usano sia "Ordini in arrivo" (la riga in cima) sia "Vendite Shop
-// Online" (il semaforo): stanno qui, prima di tutte e due.
-const ORE_MASSIME_SENZA_SYNC = 8; // il cron gira ogni ora: otto sono gia' troppe
+// La sincronizzazione con WooCommerce gira ogni quarto d'ora (dal
+// 2/11/2026; prima ogni ora). Queste due cose le usano sia "Ordini in
+// arrivo" (la riga in cima) sia "Vendite Shop Online" (il semaforo):
+// stanno qui, prima di tutte e due.
+//
+// LA SOGLIA NON E' PIU' QUI. Quanti minuti di silenzio vogliano dire
+// "ferma" lo dice `_shared/sync-vigilanza.js`, insieme al testo
+// dell'avviso: la stessa regola la legge Deno per decidere se mandare la
+// notifica. Due numeri diversi vorrebbero dire un riquadro verde e un
+// telefono che squilla, e nessuno dei due creduto piu'.
 // Postgres restituisce "2026-09-25 08:31:00.53+00": con lo spazio al
 // posto della T e l'offset a due cifre Safari risponde Invalid Date, e
 // sul telefono la riga sarebbe diventata rossa da sola.
@@ -53958,16 +53965,10 @@ function dataDaPostgres(valore) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d;
 }
-function oreDaAllora(valore) {
-  const d = dataDaPostgres(valore);
-  return d ? (Date.now() - d.getTime()) / 3600000 : Infinity;
-}
 // l'ultimo giro ANDATO A BUON FINE: e' l'unico momento di cui si possa
 // dire "qui i dati erano quelli del sito". Un giro fallito non aggiorna
-// niente, e scriverne l'ora sarebbe una bugia gentile.
-function ultimoSyncRiuscito(esiti) {
-  return (esiti || []).find((e) => e.esito === "ok" || e.esito === "parziale") || null;
-}
+// niente, e scriverne l'ora sarebbe una bugia gentile. La funzione sta
+// in `_shared/sync-vigilanza.js` perche' la usa anche la vigilanza.
 function dataOraSync(valore) {
   const d = dataDaPostgres(valore);
   return d ? d.toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
@@ -53977,9 +53978,9 @@ function dataOraSync(valore) {
 // fresca, rossa quando non lo e': chi prepara i pacchi deve accorgersi
 // da solo che sta guardando una fotografia vecchia.
 function UltimoAggiornamentoShop({ esiti = [], isMobile }) {
-  const ultimo = ultimoSyncRiuscito(esiti);
+  const ultimo = ultimoGiroRiuscito(esiti);
   const quando = dataOraSync(ultimo?.ts);
-  const vecchio = oreDaAllora(ultimo?.ts) > ORE_MASSIME_SENZA_SYNC;
+  const vecchio = minutiDa(ultimo?.ts) > MINUTI_MASSIMI_SENZA_SYNC;
   return (
     <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, fontWeight: 700, color: vecchio ? "#C0392B" : MUTED, letterSpacing: 0.2, marginBottom: isMobile ? 8 : 10 }}>
       {quando
@@ -55989,16 +55990,20 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
 // Adesso ogni giro lascia una riga in "sync_shop_esiti" e qui si vede
 // com'e' andato l'ultimo. Rosso vuol dire che gli ordini che vedi sotto
 // potrebbero non essere tutti: e' l'unica cosa che conta saperla subito.
-function SemaforoSyncShop({ esiti = [], isMobile }) {
+function SemaforoSyncShop({ esiti = [], isMobile, puoAmministrare = false }) {
   const ultimo = (esiti || [])[0] || null;
-  // un giro "parziale" i dati li ha aggiornati lo stesso, solo non tutti:
-  // conta come riuscito, o il riquadro direbbe "mai" con la sync viva
-  const ultimoOk = ultimoSyncRiuscito(esiti);
+  // La stessa regola che fa partire la notifica, letta dallo stesso file:
+  // un giro "parziale" i dati li ha aggiornati lo stesso e conta come
+  // riuscito, e il silenzio pesa piu' di qualunque riga.
+  const vigile = statoSincronizzazione(esiti);
+  const ultimoOk = vigile.ultimoOk;
   const quandoBreve = (ts) => dataOraSync(ts) || "mai";
-  const oreDaOk = oreDaAllora(ultimoOk?.ts);
-  const vecchio = oreDaOk > ORE_MASSIME_SENZA_SYNC;
 
-  const stato = !ultimo ? "muto" : ultimo.esito === "errore" || vecchio ? "rosso" : ultimo.esito === "parziale" ? "giallo" : "verde";
+  // Il semaforo diventa rosso al PRIMO giro fallito; la notifica aspetta
+  // il secondo. Non e' un'incoerenza: qui davanti c'e' una persona che
+  // puo' premere "Recupera ordini mancanti" adesso, mentre un avviso che
+  // suona per un intoppo che si rimedia da solo si impara a spegnere.
+  const stato = !ultimo ? "muto" : (vigile.stato === "guasto" || ultimo.esito === "errore") ? "rosso" : ultimo.esito === "parziale" ? "giallo" : "verde";
   const colori = {
     verde: { testo: "#2E7D32", sfondo: "#EAF5EA", bordo: "#C7E3C7", pallino: "#2E7D32" },
     giallo: { testo: "#8A6D1D", sfondo: "#FDF8EC", bordo: "#EBD9AE", pallino: "#C9A227" },
@@ -56013,17 +56018,172 @@ function SemaforoSyncShop({ esiti = [], isMobile }) {
   const frase = !ultimo
     ? "Non risulta ancora nessuna sincronizzazione registrata. Premi “Recupera ordini mancanti” per farne una."
     : stato === "rosso"
-      ? (errori.length
-          ? `Ultima sincronizzazione ${quando}: non riuscita. ${errori.join(" · ")}`
-          : `L’ultima sincronizzazione riuscita è di ${Math.round(oreDaOk)} ore fa (${quandoBreve(ultimoOk?.ts)}). Gli ordini qui sotto potrebbero non essere tutti.`)
+      ? (vigile.motivo === "silenzio"
+          ? `L’ultima sincronizzazione riuscita è ${daQuanto(vigile.minutiDaOk)} (${quandoBreve(ultimoOk?.ts)}). Gli ordini qui sotto potrebbero non essere tutti.`
+          : errori.length
+            ? `Ultima sincronizzazione ${quando}: non riuscita. ${errori.join(" · ")}`
+            : `Ultima sincronizzazione ${quando}: non riuscita.`)
       : stato === "giallo"
         ? `Sincronizzato il ${quando}, ma ${scartati.length} ordin${scartati.length === 1 ? "e è rimasto" : "i sono rimasti"} fuori: ${scartati.slice(0, 5).map((s) => s.ordine).join(", ")}${scartati.length > 5 ? "…" : ""}.`
         : `Sincronizzato con WooCommerce il ${quando}: ${ultimo.ordini_importati} ordini controllati, ${ultimo.ordini_riallineati} stati riallineati.`;
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: colori.sfondo, border: `1px solid ${colori.bordo}`, borderRadius: 12, padding: isMobile ? "10px 12px" : "11px 14px", marginBottom: 16 }}>
-      <span style={{ width: 9, height: 9, borderRadius: "50%", background: colori.pallino, flexShrink: 0, marginTop: 5 }} />
-      <span style={{ ...fontBody, fontSize: isMobile ? 12 : 12.5, fontWeight: 600, color: colori.testo, lineHeight: 1.5 }}>{frase}</span>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: colori.sfondo, border: `1px solid ${colori.bordo}`, borderRadius: 12, padding: isMobile ? "10px 12px" : "11px 14px" }}>
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: colori.pallino, flexShrink: 0, marginTop: 5 }} />
+        <span style={{ ...fontBody, fontSize: isMobile ? 12 : 12.5, fontWeight: 600, color: colori.testo, lineHeight: 1.5 }}>{frase}</span>
+      </div>
+      <VigilanzaSyncShop isMobile={isMobile} puoAmministrare={puoAmministrare} />
+    </div>
+  );
+}
+
+// CHI VIENE AVVISATO QUANDO IL SITO SI FERMA, e la prova che l'avviso
+// arriva davvero.
+//
+// Il riquadro qui sopra si vede solo se qualcuno apre questa pagina. La
+// vigilanza (un cron ogni quarto d'ora che chiama `sync-shop-vigilanza`)
+// guarda la stessa cosa anche quando non la guarda nessuno, e manda una
+// notifica e una mail. Qui si vede che e' viva — `ultimo_controllo_il` —
+// e si decide a chi scrive.
+//
+// Perche' l'ultimo controllo e' scritto in chiaro: un sorvegliante
+// morto, senza, e' indistinguibile da tutto a posto. E' lo stesso guasto
+// da cui e' nata, un piano piu' in su.
+function VigilanzaSyncShop({ isMobile, puoAmministrare = false }) {
+  const [riga, setRiga] = useState(null);
+  const [aperto, setAperto] = useState(false);
+  const [dispositivi, setDispositivi] = useState([]);
+  const [occupato, setOccupato] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const { data } = await supabase.from("sync_shop_vigilanza").select("*").eq("id", 1).maybeSingle();
+      if (vivo) setRiga(data || null);
+    })();
+    return () => { vivo = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!aperto || dispositivi.length) return;
+    (async () => {
+      const { data } = await supabase.from("push_iscrizioni").select("utente, dispositivo, attiva").eq("attiva", true);
+      setDispositivi(data || []);
+    })();
+  }, [aperto, dispositivi.length]);
+
+  if (!riga) return null;
+
+  const utenti = Array.isArray(riga.push_utenti) ? riga.push_utenti : [];
+  const mail = Array.isArray(riga.email_avviso) ? riga.email_avviso : [];
+  const normalizza = (s) => String(s || "").trim().toLowerCase();
+  // i nomi scelti che oggi NON hanno nessun telefono acceso: e' la cosa
+  // che fa credere di essere avvisati quando non lo si e'
+  const scelti = new Set(utenti.map(normalizza));
+  const accesi = dispositivi.filter((d) => scelti.has(normalizza(d.utente)));
+  const nomiAccesi = [...new Set(accesi.map((d) => d.utente))];
+  const senzaTelefono = aperto ? utenti.filter((u) => !accesi.some((d) => normalizza(d.utente) === normalizza(u))) : [];
+
+  const quandoControllo = riga.ultimo_controllo_il ? dataOraSync(riga.ultimo_controllo_il) : null;
+  const vigilanzaMuta = minutiDa(riga.ultimo_controllo_il) > 60;
+
+  async function salva(cambi) {
+    setOccupato("salva"); setMsg("");
+    const { error } = await supabase.from("sync_shop_vigilanza").update(cambi).eq("id", 1).select("id");
+    setOccupato("");
+    if (error) { setMsg("Non salvato: " + testoErrore(error)); return; }
+    setRiga({ ...riga, ...cambi });
+    setMsg("Salvato.");
+    setTimeout(() => setMsg(""), 2500);
+  }
+
+  async function mandaProva() {
+    setOccupato("prova"); setMsg("");
+    const { data, error } = await supabase.functions.invoke("sync-shop-vigilanza", { body: { mandaProva: true } });
+    setOccupato("");
+    if (error) { setMsg("Prova non riuscita: " + (error.message || String(error))); return; }
+    const push = data?.push || {};
+    const posta = data?.mail || {};
+    setMsg([
+      push.dispositivi ? `Notifica mandata a ${push.inviate} dispositiv${push.inviate === 1 ? "o" : "i"} su ${push.dispositivi}.` : "Nessun telefono fra i destinatari: la notifica non è partita.",
+      posta.mandata ? `Mail mandata a ${(posta.a || []).join(", ")}.` : `Mail NON mandata: ${posta.errore || "motivo non detto"}.`,
+    ].join(" "));
+  }
+
+  const riepilogo = [
+    riga.acceso === false ? "spenta" : "attiva",
+    mail.length ? `mail a ${mail.join(", ")}` : "nessuna mail",
+    nomiAccesi.length ? `notifica a ${nomiAccesi.join(", ")}` : (utenti.length ? `notifica a ${utenti.join(", ")}` : "nessuna notifica"),
+  ].join(" · ");
+
+  return (
+    <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, color: MUTED, marginTop: 6, paddingLeft: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span>
+          Avviso automatico: <strong style={{ color: riga.acceso === false ? "#C0392B" : NAVY }}>{riepilogo}</strong>
+          {quandoControllo
+            ? <> · ultimo controllo {quandoControllo}{vigilanzaMuta ? " (la vigilanza stessa non si fa viva da più di un'ora)" : ""}</>
+            : " · non ha ancora fatto nessun controllo"}
+        </span>
+        {puoAmministrare && (
+          <button onClick={() => setAperto((v) => !v)} style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, background: "none", border: "none", color: NAVY, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
+            {aperto ? "chiudi" : "cambia"}
+          </button>
+        )}
+      </div>
+
+      {aperto && puoAmministrare && (
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: isMobile ? 10 : 12, marginTop: 8, background: "#fff" }}>
+          <Field label="Indirizzi a cui scrivere (separati da virgola)" compatto>
+            <input
+              defaultValue={mail.join(", ")}
+              onBlur={(e) => {
+                const nuovi = e.target.value.split(",").map((x) => x.trim()).filter(Boolean);
+                if (nuovi.join(",") !== mail.join(",")) salva({ email_avviso: nuovi });
+              }}
+              style={{ ...inputStyle, fontSize: 13 }}
+            />
+          </Field>
+          <Field label="Telefoni da avvisare" compatto>
+            {dispositivi.length === 0
+              ? <div style={{ fontSize: 12 }}>Nessun dispositivo ha le notifiche accese. Si accendono da Notifiche push, sul telefono di chi deve riceverle.</div>
+              : [...new Set(dispositivi.map((d) => d.utente))].map((u) => (
+                  <label key={u} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: NAVY, marginBottom: 3, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={scelti.has(normalizza(u))}
+                      onChange={(e) => {
+                        const restanti = utenti.filter((x) => normalizza(x) !== normalizza(u));
+                        salva({ push_utenti: e.target.checked ? [...restanti, u] : restanti });
+                      }}
+                    />
+                    {u} <span style={{ color: MUTED }}>({dispositivi.filter((d) => normalizza(d.utente) === normalizza(u)).map((d) => d.dispositivo).join(", ")})</span>
+                  </label>
+                ))}
+            {senzaTelefono.length > 0 && (
+              <div style={{ fontSize: 11.5, color: "#C0392B", marginTop: 4 }}>
+                {senzaTelefono.join(", ")}: scelt{senzaTelefono.length === 1 ? "o" : "i"} per l’avviso ma senza nessun telefono acceso — la notifica non arriverà.
+              </div>
+            )}
+          </Field>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: NAVY, cursor: "pointer" }}>
+              <input type="checkbox" checked={riga.acceso !== false} onChange={(e) => salva({ acceso: e.target.checked })} />
+              Avvisa quando la sincronizzazione si ferma
+            </label>
+            <Button variant="ghost" onClick={mandaProva} disabled={!!occupato} style={{ fontSize: 12.5, padding: "7px 12px" }}>
+              {occupato === "prova" ? "Mando…" : "Mandami una prova"}
+            </Button>
+          </div>
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+            L’avviso parte quando non arriva un giro riuscito da più di {MINUTI_MASSIMI_SENZA_SYNC} minuti, o dopo due giri falliti di fila, e si ripete al massimo ogni {Number(riga.ore_fra_avvisi ?? 6)} ore. Quando riprende arriva un messaggio solo per dirlo.
+            {riga.ultimo_esito_avviso ? <> Ultimo avviso: {riga.ultimo_esito_avviso}.</> : null}
+          </div>
+        </div>
+      )}
+      {msg && <div style={{ fontSize: 11.5, color: msg.startsWith("Non") || msg.includes("NON") ? "#C0392B" : "#2E7D32", marginTop: 5 }}>{msg}</div>}
     </div>
   );
 }
@@ -56117,6 +56277,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // dell'amministrazione: chi vende al banco non manda link di
   // pagamento su vendite gia' chiuse
   const puoRiscuotere = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  // chi puo' decidere a chi arriva l'avviso quando il sito si ferma: e'
+  // una scelta di chi amministra, non di chi guarda gli ordini
+  const puoAmministrare = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
   // Cancellare una vendita: non deve restarne niente. Sparisce la riga (e
   // con lei prima nota, cassa, provvigioni, statistiche, che la leggono
   // da li'), spariscono la spedizione e le righe preparate, spariscono
@@ -56650,7 +56813,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
 
         {cestinoAperto && <CestinoVendite origine={origine} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} ricarica={ricarica} onChiudi={() => setCestinoAperto(false)} />}
 
-        {origine === "woocommerce" && <SemaforoSyncShop esiti={syncEsiti} isMobile={isMobile} />}
+        {origine === "woocommerce" && <SemaforoSyncShop esiti={syncEsiti} isMobile={isMobile} puoAmministrare={puoAmministrare} />}
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
