@@ -34,6 +34,29 @@ const PER_PAGE = 100;
 const MASSIMO_PAGINE = 200; // tetto di sicurezza: 200 x 100 = 20.000 ordini
 const GIORNI_SOVRAPPOSIZIONE = 3; // margine prima dell'ultimo ordine noto, per sicurezza
 
+// Ogni chiamata a WooCommerce ha un tetto di tempo, e tutto il giro ha un
+// budget. Dal 1/11/2026 le importazioni orarie si appendevano senza
+// finire e senza lasciare traccia (pg_net scade a 120 secondi e dice solo
+// "Timeout"): gli ordini del sito non arrivavano piu' e nessuno lo
+// sapeva. Un sito che non risponde ora diventa un errore scritto in
+// sync_shop_esiti, non un silenzio.
+const TETTO_CHIAMATA_MS = 25_000;
+const BUDGET_GIRO_MS = 110_000;
+let inizioGiro = Date.now(); // riparte a ogni richiesta (vedi Deno.serve)
+const budgetFinito = () => Date.now() - inizioGiro > BUDGET_GIRO_MS;
+async function chiediWoo(url: string, auth: string): Promise<Response> {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), TETTO_CHIAMATA_MS);
+  try {
+    return await fetch(url, { headers: { Authorization: auth }, signal: ac.signal });
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") throw new Error(`WooCommerce non ha risposto in ${TETTO_CHIAMATA_MS / 1000} secondi`);
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // senza queste intestazioni il browser blocca la risposta (CORS) e il
 // client Supabase fallisce con "Failed to send a request to the Edge
 // Function" ancora prima che la funzione faccia qualunque cosa
@@ -126,6 +149,7 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  inizioGiro = Date.now();
   const siteUrl = Deno.env.get("WC_SITE_URL");
   const consumerKey = Deno.env.get("WC_CONSUMER_KEY");
   const consumerSecret = Deno.env.get("WC_CONSUMER_SECRET");
@@ -149,6 +173,13 @@ Deno.serve(async (req) => {
   const { data: ultimo } = await supabase
     .from("vendite_shop")
     .select("data_ordine")
+    // Solo ordini veri con una data. In Postgres l'ordine decrescente mette
+    // i NULL PER PRIMI: l'1/11/2026 e' comparsa una riga vuota (senza
+    // numero ordine ne' data), il cursore e' diventato nullo e ogni giro
+    // ha riletto tutto lo storico (1300+ ordini) fino a esaurire le
+    // risorse della funzione. E' la causa degli ordini non arrivati.
+    .not("woo_order_id", "is", null)
+    .not("data_ordine", "is", null)
     .order("data_ordine", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -160,6 +191,12 @@ Deno.serve(async (req) => {
     const soglia = new Date(ultimo.data_ordine as string);
     soglia.setUTCDate(soglia.getUTCDate() - GIORNI_SOVRAPPOSIZIONE);
     after = soglia.toISOString().slice(0, 19); // WooCommerce vuole ISO8601 senza offset, in GMT
+  } else {
+    // senza cursore NON si rilegge tutto lo storico: 30 giorni bastano a
+    // recuperare un buco, e non fanno esaurire le risorse. Il passato
+    // lontano si chiede apposta con {"dopo": "..."}.
+    const trentaGiorni = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    after = trentaGiorni.toISOString().slice(0, 19);
   }
 
   let pagina = 1;
@@ -177,14 +214,19 @@ Deno.serve(async (req) => {
     });
     if (after) parametri.set("after", after);
     const url = `${siteUrl}/wp-json/wc/v3/orders?${parametri.toString()}`;
-    const risposta = await fetch(url, { headers: { Authorization: auth } });
+    if (budgetFinito()) { erroriLotto.push(`tempo esaurito alla pagina ${pagina}: il resto al prossimo giro`); break; }
+    let risposta: Response;
+    try {
+      risposta = await chiediWoo(url, auth);
+    } catch (e) {
+      erroriLotto.push(`pagina ${pagina}: ${e instanceof Error ? e.message : String(e)}`);
+      break;
+    }
 
     if (!risposta.ok) {
       const testo = await risposta.text();
-      return new Response(
-        JSON.stringify({ errore: `WooCommerce ha risposto ${risposta.status} alla pagina ${pagina}`, dettaglio: testo, ordiniImportati, pagina }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      erroriLotto.push(`WooCommerce ha risposto ${risposta.status} alla pagina ${pagina}: ${testo.slice(0, 200)}`);
+      break;
     }
 
     const ordini = await risposta.json();
@@ -226,11 +268,31 @@ Deno.serve(async (req) => {
     .select("woo_order_id")
     .not("woo_order_id", "is", null)
     .in("stato", ["processing", "on-hold", "pending"]);
-  const idsAperti = (aperti || []).map((r: any) => r.woo_order_id).filter(Boolean);
-  for (let i = 0; i < idsAperti.length; i += PER_PAGE) {
-    const lotto = idsAperti.slice(i, i + PER_PAGE);
-    const url = `${siteUrl}/wp-json/wc/v3/orders?per_page=${PER_PAGE}&include=${lotto.join(",")}`;
-    const risposta = await fetch(url, { headers: { Authorization: auth } });
+  // Dal 2/11/2026 rileggere TUTTI gli ordini aperti (57) in un colpo solo
+  // faceva uscire la funzione con 546 WORKER_RESOURCE_LIMIT: ogni ordine
+  // porta con se' il suo JSON intero, e a settantacinque ordini per giro
+  // si superava il tetto di calcolo. Gli ordini NUOVI si salvano nella
+  // prima passata, che resta intera e viene per prima; qui se ne
+  // riallineano pochi a caso per giro. Girando ogni quarto d'ora tutti
+  // gli aperti si rileggono comunque nel giro di un'ora.
+  const PER_GIRO_RIALLINEA = 15;
+  const tuttiAperti = (aperti || []).map((r: any) => r.woo_order_id).filter(Boolean);
+  const idsAperti = tuttiAperti
+    .map((id: number) => ({ id, k: Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .slice(0, PER_GIRO_RIALLINEA)
+    .map((x) => x.id);
+  for (let i = 0; i < idsAperti.length; i += PER_GIRO_RIALLINEA) {
+    const lotto = idsAperti.slice(i, i + PER_GIRO_RIALLINEA);
+    const url = `${siteUrl}/wp-json/wc/v3/orders?per_page=${PER_GIRO_RIALLINEA}&include=${lotto.join(",")}`;
+    if (budgetFinito()) break;
+    let risposta: Response;
+    try {
+      risposta = await chiediWoo(url, auth);
+    } catch (e) {
+      erroriLotto.push(`riallineamento: ${e instanceof Error ? e.message : String(e)}`);
+      break;
+    }
     // se il sito non risponde si esce senza errore: la prima passata è già
     // salvata, e questa è una rifinitura che si riproverà al giro dopo
     if (!risposta.ok) break;

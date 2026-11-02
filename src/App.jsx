@@ -16809,6 +16809,8 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
       return {
         nome: f.name,
         titolo: titoloDaNomeFile(f.name),
+        // il tipo vero lo dice il file, non il nome: ce n'e' uno chiamato .png che e' un PDF
+        pdf: f.metadata?.mimetype === "application/pdf" || eUnPdf(f.name),
         url: versione ? `${base}?v=${encodeURIComponent(versione)}` : base,
       };
     }));
@@ -16914,12 +16916,13 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
           return;
         }
       } catch { /* si ripiega sulla condivisione */ }
-      const file = new File([pdf], locandina.nome, { type: "application/pdf" });
+      const nomePdf = locandina.nome.replace(/\.[^.]+$/, "") + ".pdf";
+      const file = new File([pdf], nomePdf, { type: "application/pdf" });
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: locandina.titolo });
         return;
       }
-      scaricaBlob(pdf, locandina.nome);
+      scaricaBlob(pdf, nomePdf);
       setMessaggioCopia("Il browser non copia i PDF: l'ho scaricato, trascinalo nella chat.");
       setTimeout(() => setMessaggioCopia(""), 4000);
     } catch (e) {
@@ -16929,7 +16932,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
     }
   }
   async function copiaNegliAppunti(locandina) {
-    if (eUnPdf(locandina.nome)) return copiaPdf(locandina);
+    if (locandina.pdf) return copiaPdf(locandina);
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       window.alert("Il tuo browser non supporta la copia diretta dell'immagine. Usa il download.");
       return;
@@ -16961,7 +16964,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
       const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
       if (error) throw error;
       if (isMobile && navigator.share && navigator.canShare) {
-        const file = new File([data], locandina.nome, { type: data.type || (eUnPdf(locandina.nome) ? "application/pdf" : "image/jpeg") });
+        const file = new File([data], locandina.nome, { type: data.type || (locandina.pdf ? "application/pdf" : "image/jpeg") });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: locandina.titolo });
           return;
@@ -17058,7 +17061,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                       </button>
                     </div>
                   )}
-                  {eUnPdf(l.nome) ? <AnteprimaPdf url={l.url} titolo={l.titolo} /> : <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+                  {l.pdf ? <AnteprimaPdf url={l.url} titolo={l.titolo} /> : <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
                   <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
                     <button
                       onClick={() => setIngranditaNome(l.nome)}
@@ -17178,7 +17181,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
             {/* la foto intera, mai tagliata: "contain" la fa stare tutta
                 nello schermo, in verticale come in orizzontale. Il clic
                 sulla foto non chiude, cosi' si puo' guardare con calma */}
-            {eUnPdf(ingrandita.nome) ? (
+            {ingrandita.pdf ? (
               <iframe
                 src={ingrandita.url} title={ingrandita.titolo}
                 onClick={(e) => e.stopPropagation()}
@@ -29894,6 +29897,7 @@ function PannelloRiepilogoAmministrativo({
     totaleCashDaPagare: totaleCashDaPagareClasse, cassaContanti: cassaContantiClasse, cashMancante: cashMancanteClasse,
     cashPresoDallaBusta: cashPresoDallaBustaClasse, cashRinviati: cashRinviatiClasse, cashDaDisporre: cashDaDisporreClasse, cashRegistrato: cashRegistratoBustaClasse,
     daIncassareAncora: daIncassareAncoraClasse,
+    ricaviPienoNetto: ricaviPienoNettoClasse, speseNettePienoIva: speseNetteClasse, margineCorso: margineCorsoClasse,
   } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -30198,6 +30202,29 @@ function PannelloRiepilogoAmministrativo({
 
             {costiAperto && (
               <div style={{ padding: isMobile ? "0 14px 16px" : "0 20px 20px" }}>
+                {/* il quadro generale, in cima: ricavi e spese a incasso e
+                    pagamento completi, e se la classe e' attiva o passiva */}
+                <div style={{ border: `1px solid ${margineCorsoClasse >= 0 ? "#C7E3C7" : "#F0C8C2"}`, background: margineCorsoClasse >= 0 ? "#F3FAF3" : "#FDF3F1", borderRadius: 14, padding: isMobile ? "12px 12px" : "16px 18px", marginBottom: 18 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                    <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 1 }}>Bilancio del corso</div>
+                    <span style={{ ...fontBody, fontSize: 12, fontWeight: 800, letterSpacing: 1, borderRadius: 12, padding: "4px 12px", color: "#fff", background: margineCorsoClasse >= 0 ? "#2E7D32" : "#C0392B" }}>{margineCorsoClasse >= 0 ? "ATTIVO" : "PASSIVO"}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 8 : 14 }}>
+                    {[
+                      { e: "Ricavi totali", v: ricaviPienoNettoClasse, c: NAVY },
+                      { e: "Spese totali", v: speseNetteClasse, c: NAVY },
+                      { e: "Guadagno", v: margineCorsoClasse, c: margineCorsoClasse >= 0 ? "#2E7D32" : "#C0392B" },
+                    ].map((x) => (
+                      <div key={x.e} style={{ minWidth: 0 }}>
+                        <div style={{ ...fontBody, fontSize: isMobile ? 9.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>{x.e}</div>
+                        <ValoreAdattato base={isMobile ? 15 : 20} minimo={10} style={{ ...fontDisplay, fontWeight: 700, color: x.c, marginTop: 2 }}>{euroRiepilogo(x.v)}</ValoreAdattato>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: MUTED, lineHeight: 1.45, marginTop: 10 }}>
+                    A incasso e pagamento completi, al netto dell'IVA. Ricavi: tutto il pattuito degli iscritti (anche il saldo non ancora incassato), modelle e vendite al corso. Spese: tutto quello che la classe costa, pagato o da pagare; compensi, quote e righe automatiche restano all'importo registrato, senza scorporo.
+                  </div>
+                </div>
                 {isMobile ? (
                   <div style={{ marginBottom: 14 }}>
                     <BloccoValoriRiepilogoMobile titolo="Incassi" voci={[
@@ -36558,7 +36585,40 @@ function contiRiepilogoClasse({
   const cashRinviati = round2(righeSpeseTutte.reduce((s, r) => s + (r.cashRinviato ? (r.cash || 0) : 0) + (r.cashRinviatoImporto || 0), 0));
   const totaleCashDaPagare = round2(cashDaDisporre + cashRinviati + cashRegistrato);
   const daIncassare = round2(contanti + pos);
+  // BILANCIO DEL CORSO, a incasso e pagamento completi (richiesto dal
+  // titolare il 2/11/2026): serve a capire se la classe e' attiva o passiva
+  // PRIMA che tutti abbiano pagato. Ricavi = tutto il pattuito di ogni
+  // iscritto (acconto, pre corso, saldo, rate extra, modelle) anche se
+  // non ancora incassato, piu' altri incassi e vendite al corso. Al netto
+  // dell'IVA con gli imponibili gia' scritti sulle schede; le modelle e gli
+  // altri incassi non hanno un imponibile registrato e restano al loro
+  // importo. Spese = tutto quello che la classe costa, pagato o no: dove la
+  // spesa ha un imponibile si usa quello, le righe automatiche (compensi,
+  // quote, alloggio) restano all'importo registrato.
+  const ricaviPienoLordo = round2(
+    listaIscritti.reduce((s, i) => s
+      + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0)
+      + ["acconto", "precorso"].reduce((t, f) => t + (Array.isArray(i[`${f}_extra`]) ? i[`${f}_extra`] : []).reduce((u, r) => u + (r.totale || 0) + (r.metodo === "APPago" ? (r.interessi || 0) : 0), 0), 0)
+      + modelleTotaleDi(i), 0)
+    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+    + venditeLordo
+  );
+  const ricaviPienoNetto = round2(
+    listaIscritti.reduce((s, i) => s
+      + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0)
+      + ["acconto", "precorso"].reduce((t, f) => t + (Array.isArray(i[`${f}_extra`]) ? i[`${f}_extra`] : []).reduce((u, r) => u + (r.imponibile || 0), 0), 0)
+      + modelleTotaleDi(i), 0)
+    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+    + venditeImponibile
+  );
+  const speseNettePienoIva = round2(
+    totaleSpeseAutomaticheClasse
+    + speseClasse.filter((x) => !x.origine_scadenziario_chiave).reduce((s, x) => s + (x.imponibile != null ? x.imponibile : (x.totale || 0)), 0)
+    + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+  );
+  const margineCorso = round2(ricaviPienoNetto - speseNettePienoIva);
   return {
+    ricaviPienoLordo, ricaviPienoNetto, speseNettePienoIva, margineCorso,
     incassoLordo, incassoNetto, iva: round2(incassoLordo - incassoNetto),
     cashPrimaDelCorso: round2(tutteLeQuote.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)),
     contoCorrente: round2(tutteLeQuote.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0) + incassiExtraPos + venditePos),
@@ -87072,7 +87132,7 @@ export {
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
-  calcolaVociScadenziario, vociCashRinviate,
+  calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
 };
