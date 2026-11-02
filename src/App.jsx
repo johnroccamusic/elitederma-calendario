@@ -16516,7 +16516,34 @@ function PaginaGestioneModelle({ eventi = [], onApriEvento,
   );
 }
 
-const ESTENSIONI_LOCANDINE = /\.(jpe?g|png|webp|gif)$/i;
+const ESTENSIONI_LOCANDINE = /\.(jpe?g|png|webp|gif|pdf)$/i;
+const eUnPdf = (nome) => /\.pdf$/i.test(String(nome || ""));
+// la prima pagina di un PDF disegnata su canvas: stessa anteprima delle
+// locandine immagine, senza dipendere dal lettore PDF del telefono
+function AnteprimaPdf({ url, titolo }) {
+  const ref = React.useRef(null);
+  const [errore, setErrore] = useState(false);
+  useEffect(() => {
+    let annullato = false;
+    setErrore(false);
+    (async () => {
+      try {
+        const pdfjs = await getPdfjsLib();
+        const doc = await pdfjs.getDocument({ url }).promise;
+        const pagina = await doc.getPage(1);
+        const base = pagina.getViewport({ scale: 1 });
+        const viewport = pagina.getViewport({ scale: Math.min(2, 900 / base.width) });
+        const canvas = ref.current;
+        if (annullato || !canvas) return;
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await pagina.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      } catch { if (!annullato) setErrore(true); }
+    })();
+    return () => { annullato = true; };
+  }, [url]);
+  if (errore) return <div style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "center", padding: 12, display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>PDF: anteprima non disponibile. Usa «Ingrandisci» per aprirlo.</div>;
+  return <canvas ref={ref} aria-label={titolo} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", background: "#fff" }} />;
+}
 
 // il titolo sotto ogni locandina viene dal nome del file (nessuna tabella
 // di appoggio): tolta l'estensione, trattini/underscore diventano spazi,
@@ -16791,7 +16818,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
 
   async function caricaFile(fileList) {
     if (!programmatore) return;
-    const file = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+    const file = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
     if (!file.length) return;
     setCaricandoUpload({ fatti: 0, totale: file.length });
     const nomiEsistenti = new Set(locandine.map((l) => l.nome));
@@ -16819,7 +16846,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
   // sostituisce l'immagine mantenendo lo stesso nome file (quindi stessa
   // posizione nell'ordine e stesso titolo, a meno di rinominarla dopo)
   async function sostituisciLocandina(nome, file) {
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file || !(file.type.startsWith("image/") || file.type === "application/pdf")) return;
     setSostituendoNome(nome);
     const { error } = await supabase.storage.from("locandine-corsi").upload(nome, file, { upsert: true, contentType: file.type });
     setSostituendoNome(null);
@@ -16886,7 +16913,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
       const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
       if (error) throw error;
       if (isMobile && navigator.share && navigator.canShare) {
-        const file = new File([data], locandina.nome, { type: data.type || "image/jpeg" });
+        const file = new File([data], locandina.nome, { type: data.type || (eUnPdf(locandina.nome) ? "application/pdf" : "image/jpeg") });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: locandina.titolo });
           return;
@@ -16983,7 +17010,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                       </button>
                     </div>
                   )}
-                  <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  {eUnPdf(l.nome) ? <AnteprimaPdf url={l.url} titolo={l.titolo} /> : <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
                   <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
                     <button
                       onClick={() => setIngranditaNome(l.nome)}
@@ -16998,7 +17025,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                       </svg>
                     </button>
-                    <button
+                    {!eUnPdf(l.nome) && <button
                       onClick={() => copiaNegliAppunti(l)}
                       title="Copia l'immagine (incollala dove ti serve, es. WhatsApp)"
                       style={{
@@ -17018,7 +17045,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                           <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
                         </svg>
                       )}
-                    </button>
+                    </button>}
                     <button
                       onClick={() => scaricaOCondividi(l)}
                       title="Scarica"
@@ -17084,11 +17111,19 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
             {/* la foto intera, mai tagliata: "contain" la fa stare tutta
                 nello schermo, in verticale come in orizzontale. Il clic
                 sulla foto non chiude, cosi' si puo' guardare con calma */}
+            {eUnPdf(ingrandita.nome) ? (
+              <iframe
+                src={ingrandita.url} title={ingrandita.titolo}
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "min(100%, 900px)", height: "100%", border: "none", borderRadius: 6, background: "#fff", boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
+              />
+            ) : (
             <img
               src={ingrandita.url} alt={ingrandita.titolo}
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block", borderRadius: 6, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
             />
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); setIngranditaNome(null); }}
               title="Riduci"
@@ -17110,7 +17145,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
           <input
             ref={inputFileRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             style={{ display: "none" }}
             onChange={(e) => { caricaFile(e.target.files); e.target.value = ""; }}
@@ -17120,7 +17155,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
           <input
             ref={inputSostituzioneRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             style={{ display: "none" }}
             onChange={(e) => { sostituisciLocandina(nomeSostituzioneRef.current, e.target.files?.[0]); e.target.value = ""; }}
           />
