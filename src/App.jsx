@@ -16821,13 +16821,17 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
     const file = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
     if (!file.length) return;
     setCaricandoUpload({ fatti: 0, totale: file.length });
-    const nomiEsistenti = new Set(locandine.map((l) => l.nome));
     for (const f of file) {
       const { baseSicura, estensione } = nomeFileSicuro(f.name);
-      const nomeFinale = nomeFileUnico(baseSicura, estensione, nomiEsistenti);
-      nomiEsistenti.add(nomeFinale);
-      const { error } = await supabase.storage.from("locandine-corsi").upload(nomeFinale, f, { contentType: f.type });
+      // stesso nome (anche con altra estensione, o con un "-2" di un
+      // caricamento di prima) = e' la versione nuova di quel file: resta
+      // solo l'ultima, la vecchia si toglie dopo che la nuova e' salita
+      const nomeFinale = `${baseSicura}${estensione}`;
+      const radice = (n) => n.replace(/\.[^.]+$/, "").replace(/-\d+$/, "");
+      const vecchi = locandine.map((l) => l.nome).filter((n) => n !== nomeFinale && radice(n) === baseSicura);
+      const { error } = await supabase.storage.from("locandine-corsi").upload(nomeFinale, f, { upsert: true, contentType: f.type });
       if (error) window.alert(`Errore nel caricare ${f.name}: ${error.message}`);
+      else if (vecchi.length) await supabase.storage.from("locandine-corsi").remove(vecchi);
       setCaricandoUpload((prev) => (prev ? { ...prev, fatti: prev.fatti + 1 } : null));
     }
     setCaricandoUpload(null);
