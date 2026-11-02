@@ -1806,6 +1806,42 @@ giro, che è anche la prova del ramo nuovo. Restano fuori, e **correttamente**:
 `stock_quantity`, `backorders`, tipo e stato: senza, perché un prodotto non
 sia comprabile non si vede da fuori e si va a tentativi.
 
+**E da qui in avanti: quello che un cliente può vedere svuota tutto**
+(deciso dal titolare la sera stessa). Il salvataggio di un prodotto
+(`woo-gestisci-prodotto`) svuotava tutto solo per stato e categorie, e per
+prezzo, nome e foto si limitava alle pagine del prodotto — «quelli vivono
+sulla scheda e sugli archivi, che il purge mirato copre già». Quella frase
+era sbagliata, ed è costata un cliente che non comprava. Ora quel
+salvataggio svuota sempre tutto, e `woo-aggiorna-prodotto` fa lo stesso
+quando cambia il **prezzo** (che sta scritto sotto ogni riquadro delle
+griglie) oltre che quando la disponibilità attraversa lo zero. Resta
+mirata la sola quantità che non tocca lo zero: quel numero nelle griglie
+non compare.
+
+`woo-allinea-margini` **non** svuota, ed è voluto: scrive solo campi
+nascosti (`_ed_margine_pct`, `_ed_cedibile_eur`, `_ed_blocco`) che servono
+al calcolo delle fasce nel carrello, e nelle pagine in cache non si vede
+niente di loro.
+
+**Il conto di questa scelta, misurato il 2/11/2026**: una pagina di
+categoria servita dalla cache impiega **0,11 s**, costruita da PHP **2,2 s**.
+Svuotare tutto costa quei due secondi al primo visitatore di ogni pagina,
+una volta sola. Mostrare un prezzo o una disponibilità falsi costa un
+cliente. Non è uno scambio alla pari.
+
+**Quello che resta, e non si risolve da qui**: su ogni pagina del sito
+arriva `cache-control: s-maxage=2592000`, trenta giorni, perfino sul
+carrello che WordPress dichiara `no-store` — la mette l'infrastruttura di
+Cloudways, non WordPress, ed è il motivo per cui lo snippet
+`elitederma-cache-breve-prodotti.php` (scritto apposta per accorciarla)
+**non fa effetto**. Si corregge solo dal pannello Cloudways, a cui il
+titolare **non ha accesso**: l'account è di chi ha montato il sito. Finché
+è così, il sito vive di svuotamenti; e, cache a parte, un negozio il cui
+server è in mano a un terzo è un rischio suo. La buona notizia del
+2/11/2026 è che lo svuotamento **arriva fino a Cloudflare**
+(`cloudflare_attivo: true`, `costanti_cdn: true`, passo `cloudflare:sì`):
+la documentazione precedente diceva il contrario, e non è più vero.
+
 ## 5. Comandi
 
 ```bash

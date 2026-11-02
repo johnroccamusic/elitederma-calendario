@@ -151,10 +151,17 @@ Deno.serve(async (req) => {
   // tornato disponibile alle 18:02 e per cinque ore i clienti hanno
   // continuato a leggere "Leggi tutto", convinti che fosse esaurito.
   // Un numero che cambia senza toccare lo zero le griglie non le cambia.
+  // E IL PREZZO E' VISIBILE QUANTO LA DISPONIBILITA' (2/11/2026): sta
+  // scritto sotto ogni riquadro delle griglie, e li' la pulizia mirata
+  // non arriva. Quindi: prezzo cambiato, oppure disponibilita' che
+  // attraversa lo zero, si svuota tutto. Una quantita' che scende da 6 a
+  // 5 no: nelle griglie quel numero non compare, e la scheda del
+  // prodotto — l'unica che lo mostra — la pulizia mirata la copre.
   const eraEsaurito = Number(prodotto.quantita ?? 0) <= 0;
   const oraEsaurito = Number(quantita ?? 0) <= 0;
   const passaggioDisponibilita = cambiaGiacenza && eraEsaurito !== oraEsaurito;
+  const visibileInGriglia = cambiaPrezzo || passaggioDisponibilita;
   const avvisoCache = await svuotaCacheSito(
-    passaggioDisponibilita ? { tutto: true } : { prodottiWooIds: [prodotto.woo_product_id] });
+    visibileInGriglia ? { tutto: true } : { prodottiWooIds: [prodotto.woo_product_id] });
   return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, quantita: cambiaGiacenza ? quantita : undefined, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

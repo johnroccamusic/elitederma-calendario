@@ -299,18 +299,21 @@ Deno.serve(async (req) => {
     // clienti e' in cache (Breeze + Cloudflare, fino a 30 giorni): va
     // svuotata adesso, altrimenti il sito continua a mostrare quelle vecchie.
     //
-    // Due pesi diversi, per la ragione spiegata in "crea": cambiare lo
-    // stato (pubblicato/bozza) o le categorie cambia DOVE il prodotto
-    // compare, e quindi anche le pagine vetrina costruite a mano, che il
-    // purge mirato non raggiunge. Prezzo, nome e foto no: quelli vivono
-    // sulla scheda e sugli archivi, che il purge mirato copre gia'. E il
-    // purge mirato va difeso, perche' da qui passa anche il cambio di
-    // stato in blocco: svuotare tutto a ogni singola foto sarebbe uno
-    // spreco su un sito che sta dietro Cloudflare.
-    const cambiaDoveCompare = stato != null || categorieIds !== undefined;
-    const avvisoCache = cambiaDoveCompare
-      ? await svuotaCacheSito({ tutto: true })
-      : await svuotaCacheSito({ prodottiWooIds: [prodottoEsistente.woo_product_id] });
+    // SI SVUOTA TUTTO, SEMPRE (2/11/2026, deciso dal titolare).
+    //
+    // Qui c'erano due pesi: tutto il sito per stato e categorie, le sole
+    // pagine del prodotto per prezzo, nome e foto — "quelli vivono sulla
+    // scheda e sugli archivi, che il purge mirato copre gia'". Quella
+    // frase era sbagliata, e per scoprirlo e' servito un cliente che non
+    // comprava: il purge mirato NON copre le griglie. Il 2/11 "N2 Fixa"
+    // e' rimasto cinque ore con scritto "Leggi tutto" su un prodotto
+    // disponibile, e prezzo, nome e foto stanno in quelle stesse griglie.
+    //
+    // Il risparmio che difendeva il purge mirato e' una manciata di
+    // pagine da ricostruire, due secondi l'una, una volta sola. Il suo
+    // costo e' un cliente che vede il falso e se ne va. Non e' uno
+    // scambio alla pari.
+    const avvisoCache = await svuotaCacheSito({ tutto: true });
     return new Response(JSON.stringify({ ok: true, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ errore: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
