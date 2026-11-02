@@ -1758,6 +1758,54 @@ millisecondi di distanza. Il cron è uno e scatta una volta, quindi è un
 rinvio del runtime: non duplica dati, perché l'importazione è idempotente,
 è lavoro doppio.
 
+### «Leggi tutto» al posto del tasto per comprare (2/11/2026)
+
+Il titolare: «N2 Fixa è presente sul sito e ordinabile ma ai clienti
+appare "Leggi di più" e tutti pensano che è esaurito e non lo comprano».
+
+**«Leggi tutto» vuol dire una cosa sola**: WooCommerce non considera quel
+prodotto acquistabile — niente prezzo, oppure esaurito, oppure un tipo che
+non si compra direttamente (`grouped`). Il prezzo c'era, quindi era la
+disponibilità.
+
+Com'è andata. Il **31/10 alle 02:00** due ordini online hanno preso gli
+ultimi due pezzi: giacenza a zero, «Leggi tutto», ed era giusto. Il **2/11
+alle 18:02** una rettifica in Gestione magazzino ha rimesso 6 pezzi e
+l'app li ha spinti sul sito. Alle **23:06** il cliente leggeva ancora
+«Leggi tutto»: **il dato era giusto da cinque ore, la pagina no**. La
+griglia di `/product-category/laminazione/` veniva da Breeze + Cloudflare,
+che tengono una copia fino a 30 giorni.
+
+**La regola che ne esce**: un giro mirato di `woo-riallinea-shop` (quello
+che parte dopo ogni movimento di magazzino) svuotava **solo le pagine dei
+prodotti toccati**. Giusto per un prezzo o per un numero che scende da 6 a
+5; sbagliato quando un prodotto **attraversa lo zero**, perché lì cambiano
+anche le **griglie** — shop, categorie, correlati, pagina iniziale — e a
+quelle la pulizia mirata non arriva. Ora, prima di scrivere, un giro
+mirato chiede al sito com'era (`stock_status`, `stock_quantity`) e se anche
+un solo prodotto passa lo zero in un verso o nell'altro svuota tutto il
+sito; se il sito non risponde svuota tutto lo stesso, che costa di più e
+non sbaglia. Stessa regola in `woo-aggiorna-prodotto`, che per il «prima»
+usa la giacenza che aveva in archivio.
+
+**Era già successo, ed è la parte che insegna di più.** A settembre la
+stessa pagina `/laminazione/` aveva lo stesso sintomo; la correzione di
+allora — la PURGE regex su Varnish — è finita **solo nel ramo "svuota
+tutto"** dello snippet `wordpress/elitederma-svuota-cache.php`, e il ramo
+mirato è rimasto quello di prima. Una correzione messa su una sola delle
+due strade che portano allo stesso posto non è una correzione.
+
+Trovato strada facendo: **«Kit laminazione combo» era componibile (1
+pezzo) e il sito lo dava esaurito** — rimesso in vendita dallo stesso
+giro, che è anche la prova del ramo nuovo. Restano fuori, e **correttamente**:
+`Mascara Kerafill Espositore 10pz` (ne servono 10, ce ne sono 7),
+`Ring Lamp 14` e `Camice` (zero in app), e `T-Shirt EliteDerma`, che è
+`grouped` — la vetrina delle taglie, non si compra da sé.
+
+`ispeziona-prodotto` ora risponde anche con `acquistabile`, `stock_status`,
+`stock_quantity`, `backorders`, tipo e stato: senza, perché un prodotto non
+sia comprabile non si vede da fuori e si va a tentativi.
+
 ## 5. Comandi
 
 ```bash
