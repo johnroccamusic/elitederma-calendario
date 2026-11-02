@@ -16743,6 +16743,9 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
   const [trascinaSopra, setTrascinaSopra] = useState(false);
   const [eliminandoNome, setEliminandoNome] = useState(null);
   const [sostituendoNome, setSostituendoNome] = useState(null);
+  // quando il file caricato non ha lo stesso nome di nessuno, si chiede quale
+  // vecchio rimpiazza: i prezzi sono univoci, due versioni non devono restare
+  const [chiediSostituito, setChiediSostituito] = useState(null); // { file, scegli }
   // la locandina aperta a tutto schermo: nella griglia i prezzi non si
   // leggono, ne' da telefono ne' da scrivania. Si apre con le due frecce
   // che si allontanano, si chiude con quelle che si avvicinano, con Esc,
@@ -16828,7 +16831,13 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
       // solo l'ultima, la vecchia si toglie dopo che la nuova e' salita
       const nomeFinale = `${baseSicura}${estensione}`;
       const radice = (n) => n.replace(/\.[^.]+$/, "").replace(/-\d+$/, "");
-      const vecchi = locandine.map((l) => l.nome).filter((n) => n !== nomeFinale && radice(n) === baseSicura);
+      let vecchi = locandine.map((l) => l.nome).filter((n) => n !== nomeFinale && radice(n) === baseSicura);
+      if (vecchi.length === 0 && !locandine.some((l) => l.nome === nomeFinale) && locandine.length > 0) {
+        const scelto = await new Promise((risolvi) => setChiediSostituito({ file: f.name, scegli: risolvi }));
+        setChiediSostituito(null);
+        if (scelto === "annulla") { setCaricandoUpload((prev) => (prev ? { ...prev, fatti: prev.fatti + 1 } : null)); continue; }
+        if (scelto) vecchi = [scelto];
+      }
       const { error } = await supabase.storage.from("locandine-corsi").upload(nomeFinale, f, { upsert: true, contentType: f.type });
       if (error) window.alert(`Errore nel caricare ${f.name}: ${error.message}`);
       else if (vecchi.length) await supabase.storage.from("locandine-corsi").remove(vecchi);
@@ -17135,6 +17144,25 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {chiediSostituito && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(14,27,51,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: 20, width: "min(100%, 460px)", maxHeight: "85vh", overflowY: "auto", ...fontBody }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Quale file sostituisce?</div>
+              <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.5, marginBottom: 12 }}>
+                «{chiediSostituito.file}» ha un nome nuovo. I prezzi sono univoci: scegli la versione vecchia che va tolta, verrà cancellata appena questo file è caricato.
+              </div>
+              {locandineOrdinate.map((l) => (
+                <button key={l.nome} type="button" onClick={() => chiediSostituito.scegli(l.nome)}
+                  style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, color: NAVY }}>
+                  {l.titolo} <span style={{ fontWeight: 400, color: MUTED }}>({l.nome})</span>
+                </button>
+              ))}
+              <button type="button" onClick={() => chiediSostituito.scegli(null)} style={{ display: "block", width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 10, border: `1px dashed ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", fontSize: 13, color: NAVY }}>Nessuno: è una locandina nuova</button>
+              <button type="button" onClick={() => chiediSostituito.scegli("annulla")} style={{ display: "block", width: "100%", marginTop: 6, padding: "10px 12px", border: "none", background: "none", cursor: "pointer", fontSize: 13, color: "#C0392B" }}>Annulla il caricamento</button>
+            </div>
           </div>
         )}
 
