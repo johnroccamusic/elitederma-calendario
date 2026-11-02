@@ -1842,6 +1842,45 @@ server è in mano a un terzo è un rischio suo. La buona notizia del
 (`cloudflare_attivo: true`, `costanti_cdn: true`, passo `cloudflare:sì`):
 la documentazione precedente diceva il contrario, e non è più vero.
 
+### Il bilancio di una classe, kit compresi (2/11/2026)
+
+In cima alla sezione **Costi** del riepilogo di una classe c'è **«Bilancio
+del corso»**: ricavi, spese, guadagno e la pastiglia **ATTIVO / PASSIVO**.
+Serve a sapere se una classe è in pari **prima** che tutti abbiano pagato —
+il riquadro «Incassi» conta solo quello che è entrato, quindi fino alla
+fine del corso ogni classe sembra in perdita.
+
+- **Ricavi**: tutto il pattuito di ogni iscritta — acconto, pre corso,
+  saldo, rate extra, modelle — **anche non incassato**, più altri incassi e
+  vendite al corso. Al netto dell'IVA con gli imponibili **già scritti**
+  sulle schede: non si scorpora niente di nuovo. Dove l'imponibile non c'è
+  quella quota vale zero (oggi 25 acconti su 268), ed è la stessa
+  convenzione del riquadro «Incassi», non una regola nuova.
+- **Spese**: tutto quello che la classe costa, pagato o da pagare;
+  compensi, quote e righe automatiche restano all'importo registrato.
+
+**E i kit** (aggiunti il 2/11/2026, segnalati dal titolare): il materiale
+consegnato all'allieva è merce comprata, ed è un costo del corso — ma non
+ha una riga in `spese`, perché si è comprata prima, a magazzino. Senza, una
+classe risultava più ricca di quanto fosse. Lo conta
+`costoKitDellaClasse`, che per i pezzi chiama **`quantitaInviataPerProdotto`,
+la stessa funzione di «Prodotti usati per i kit»** in Gestione magazzino:
+due conti diversi sullo stesso materiale darebbero due numeri, e quello
+sbagliato sarebbe sempre quello che si guarda. Si usa il **costo netto
+d'acquisto**, e il riquadro dice quanto pesa.
+
+**Un prodotto senza costo d'acquisto resta fuori dal totale e viene
+nominato in rosso**, invece di valere zero: sommare zeri farebbe sembrare
+la classe più redditizia di quello che è — lo stesso errore che «Costo dei
+kit» aveva già imparato a non fare. Oggi riguarda tre prodotti: *Box
+Anellini x i Kit 10 pz* (in 13 kit), *Aftercare post trattamento vit A+D
+25pz* (12 kit), *Strisce colori* (2 kit).
+
+Il numero è lo stesso aprendo la classe dal calendario o da «Prossime
+contabilità»: i tre elenchi (`kitDefinizioni`, `corsiKitProdotti`,
+`logisticaKitEdizioni`) arrivano al pannello da tutte e due le strade.
+Prove in `prove/bilancio-del-corso.test.js`.
+
 ## 5. Comandi
 
 ```bash

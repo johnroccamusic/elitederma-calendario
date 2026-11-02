@@ -14816,6 +14816,48 @@ function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitPr
   });
   return mappa;
 }
+
+// QUANTO COSTA IL MATERIALE CHE ESCE PER UNA CLASSE.
+//
+// Il kit consegnato all'allieva e' merce comprata: e' un costo del corso
+// come il compenso della master o l'albergo, ma non ha una riga in
+// "spese" perche' non si paga una fattura per quel corso — si e'
+// comprata prima, a magazzino. Fino al 2/11/2026 il Bilancio del corso
+// non lo contava, e una classe risultava piu' ricca di quanto fosse.
+//
+// I pezzi li conta `quantitaInviataPerProdotto`, la STESSA funzione che
+// alimenta "Prodotti usati per i kit" in magazzino: contenuto dei kit
+// richiesti dagli iscritti, accessori didattica e prodotti extra. Due
+// conti diversi sullo stesso materiale vorrebbero dire due numeri, e
+// quello sbagliato sarebbe sempre quello che si guarda.
+//
+// Si usa il costo NETTO d'acquisto, perche' il Bilancio ragiona al netto
+// dell'IVA. Un prodotto senza costo d'acquisto NON vale zero: resta
+// fuori e viene nominato. Sommare zeri farebbe sembrare la classe piu'
+// redditizia di quello che e', ed e' lo stesso errore che "Costo dei
+// kit" ha gia' imparato a non fare.
+function costoKitDellaClasse(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop) {
+  const vuoto = { netto: 0, pezzi: 0, senzaCosto: [] };
+  if (!corsoData) return vuoto;
+  const quantita = quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti);
+  const perId = Object.fromEntries((prodottiShop || []).map((x) => [x.id, x]));
+  let netto = 0;
+  let pezzi = 0;
+  const senzaCosto = [];
+  Object.entries(quantita).forEach(([prodottoId, qta]) => {
+    const q = Number(qta) || 0;
+    if (q <= 0) return;
+    pezzi += q;
+    const prodotto = perId[prodottoId];
+    const costo = prodotto?.costo_acquisto;
+    if (costo == null || costo === "" || !Number.isFinite(Number(costo))) {
+      senzaCosto.push(prodotto?.nome || "prodotto sconosciuto");
+      return;
+    }
+    netto += Number(costo) * q;
+  });
+  return { netto: round2(netto), pezzi, senzaCosto };
+}
 // elenco causali dell'Inventario Post Corso — "Da verificare"/"Non so"
 // esistono apposta per non bloccare la master quando non ha la
 // risposta: il pezzo resta segnato aperto/da chiarire, non sparisce
@@ -29270,6 +29312,9 @@ const CHIAVE_VENDITE_CORSO_APERTE = "riepilogo_vendite_al_corso_aperte";
 
 function PannelloRiepilogoAmministrativo({
   corsoData, iscritti, spese, venditeShop, prodottiShop, corsi = [],
+  // servono al costo del materiale uscito per questa classe (Bilancio del
+  // corso): gli stessi tre elenchi che usa "Prodotti usati per i kit"
+  kitDefinizioni = [], corsiKitProdotti = [], logisticaKitEdizioni = [],
   corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel,
   costiCategorie, costiSottocategorie, quoteVenditoriSplit, locationPrezzi = [], ricarica, onMessaggio, onIntestazione,
   // il Quadro impegni: serve a sapere quali quote in contanti sono gia'
@@ -29884,9 +29929,16 @@ function PannelloRiepilogoAmministrativo({
   // piu' formule proprie, cosi' i due posti non possono divergere. Gli
   // ingressi sono quelli "vivi" della scheda — spese e voci libere con le
   // correzioni appena fatte, non ancora ricaricate dal database.
+  // Il materiale dei kit uscito per questa classe. Niente useMemo: e' una
+  // somma su poche decine di righe, e un hook in mezzo a una funzione
+  // lunga come questa e' un modo noto di spegnere la pagina.
+  const kitDellaClasse = costoKitDellaClasse(
+    corsoData, (corsi || []).find((c) => c.id === corsoData?.corso_id) || null,
+    kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop);
   const contiClasse = contiRiepilogoClasse({
     incassiExtra, listaIscritti, venditeAlCorso,
     speseClasse, costiExtra, righeSpeseTutte, totaleSpeseAutomaticheClasse,
+    costoKitClasse: kitDellaClasse.netto,
   });
   const {
     incassoLordo: incassoLordoClasse, incassoNetto: incassoNettoClasse, iva: ivaClasse,
@@ -29899,6 +29951,7 @@ function PannelloRiepilogoAmministrativo({
     cashPresoDallaBusta: cashPresoDallaBustaClasse, cashRinviati: cashRinviatiClasse, cashDaDisporre: cashDaDisporreClasse, cashRegistrato: cashRegistratoBustaClasse,
     daIncassareAncora: daIncassareAncoraClasse,
     ricaviPienoNetto: ricaviPienoNettoClasse, speseNettePienoIva: speseNetteClasse, margineCorso: margineCorsoClasse,
+    costoKitClasse: costoKitDiQuestaClasse,
   } = contiClasse;
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -30222,8 +30275,18 @@ function PannelloRiepilogoAmministrativo({
                       </div>
                     ))}
                   </div>
+                  {(costoKitDiQuestaClasse > 0 || kitDellaClasse.senzaCosto.length > 0) && (
+                    <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: NAVY, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${margineCorsoClasse >= 0 ? "#C7E3C7" : "#F0C8C2"}` }}>
+                      Nelle spese ci sono <strong>{euroRiepilogo(costoKitDiQuestaClasse)}</strong> di kit e materiale didattico{kitDellaClasse.pezzi > 0 ? ` (${kitDellaClasse.pezzi} pezzi)` : ""}: merce comprata a magazzino, che per questo corso non ha una fattura sua.
+                      {kitDellaClasse.senzaCosto.length > 0 && (
+                        <span style={{ color: "#C0392B" }}>
+                          {" "}Fuori dal conto {kitDellaClasse.senzaCosto.length === 1 ? "un prodotto senza costo d'acquisto" : `${kitDellaClasse.senzaCosto.length} prodotti senza costo d'acquisto`}: {[...new Set(kitDellaClasse.senzaCosto)].slice(0, 4).join(", ")}{kitDellaClasse.senzaCosto.length > 4 ? "…" : ""}. Finché manca, la classe sembra più redditizia di quello che è.
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: MUTED, lineHeight: 1.45, marginTop: 10 }}>
-                    A incasso e pagamento completi, al netto dell'IVA. Ricavi: tutto il pattuito degli iscritti (anche il saldo non ancora incassato), modelle e vendite al corso. Spese: tutto quello che la classe costa, pagato o da pagare; compensi, quote e righe automatiche restano all'importo registrato, senza scorporo.
+                    A incasso e pagamento completi, al netto dell'IVA. Ricavi: tutto il pattuito degli iscritti (anche il saldo non ancora incassato), modelle e vendite al corso. Spese: tutto quello che la classe costa, pagato o da pagare — compensi, quote e righe automatiche all'importo registrato, più i kit usciti dal magazzino al loro costo d'acquisto.
                   </div>
                 </div>
                 {isMobile ? (
@@ -31078,7 +31141,7 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
-export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = "", puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = "", puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, corsiKitProdotti = [], logisticaKitEdizioni = [], prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -33910,6 +33973,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
       {vista === "lista" && costiAperto && (
         <PannelloRiepilogoAmministrativo
           quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegni={impegni} corsi={corsi}
+          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           corsoData={corsoData} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
           corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -36215,6 +36279,9 @@ function VistaRicercaModelle({ param, mostraClasse, corsoDataId }) {
 // corso, nome e citta', e il tasto per entrare nella classe.
 function PaginaProssimeContabilita({
   quoteVenditoriSplit, impegni = [],
+  // per il costo del materiale nel Bilancio del corso, che si apre da qui
+  // come dalla scheda della classe: lo stesso numero, o non sarebbe uno
+  kitDefinizioni = [], corsiKitProdotti = [], logisticaKitEdizioni = [],
   corsi, corsiDate, location, iscritti, spese, venditeShop, prodottiShop, corsiDateDocenti,
   master, masterCorsi, assistente, assistenteCorsi, leva, hotel,
   costiCategorie, costiSottocategorie, locationPrezzi = [], ricarica,
@@ -36272,6 +36339,7 @@ function PaginaProssimeContabilita({
           speseClasse: speseDellaPrimaBusta(spese, cd.id),
           costiExtra: Array.isArray(cd.costi_extra) ? cd.costi_extra : [],
           righeSpeseTutte, totaleSpeseAutomaticheClasse,
+          costoKitClasse: costoKitDellaClasse(cd, corsoPerId[cd.corso_id] || null, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop).netto,
         });
         return { cd, corso: corsoPerId[cd.corso_id] || null, loc: locPerId[cd.location_id] || null, conti };
       });
@@ -36461,6 +36529,7 @@ function PaginaProssimeContabilita({
               <div style={{ marginTop: 14 }}>
                 <PannelloRiepilogoAmministrativo
                   quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegni={impegni} corsi={corsi}
+                  kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
                   corsoData={cd} iscritti={iscritti} spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop}
                   corsiDateDocenti={corsiDateDocenti} master={master} masterCorsi={masterCorsi}
                   assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} location={location} hotel={hotel}
@@ -36523,6 +36592,10 @@ function quotePagateDiIscritto(i) {
 function contiRiepilogoClasse({
   incassiExtra = [], listaIscritti = [], venditeAlCorso = [],
   speseClasse = [], costiExtra = [], righeSpeseTutte = [], totaleSpeseAutomaticheClasse = 0,
+  // il materiale uscito dal magazzino per questa classe, al costo netto
+  // d'acquisto: lo calcola `costoKitDellaClasse` e lo passa chi chiama,
+  // perche' qui dentro non si legge niente, entrano valori ed escono conti
+  costoKitClasse = 0,
 }) {
   // Incassi lordo/netto: la somma dei VERI campi "totale" (con IVA) e
   // "imponibile" (senza IVA) di ogni fase, piu' modelle e incassi extra.
@@ -36616,10 +36689,14 @@ function contiRiepilogoClasse({
     totaleSpeseAutomaticheClasse
     + speseClasse.filter((x) => !x.origine_scadenziario_chiave).reduce((s, x) => s + (x.imponibile != null ? x.imponibile : (x.totale || 0)), 0)
     + costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+    // il materiale dei kit: comprato prima, a magazzino, quindi senza una
+    // riga di spesa su questo corso - ma uscito per questa classe
+    + (Number(costoKitClasse) || 0)
   );
   const margineCorso = round2(ricaviPienoNetto - speseNettePienoIva);
   return {
     ricaviPienoLordo, ricaviPienoNetto, speseNettePienoIva, margineCorso,
+    costoKitClasse: round2(Number(costoKitClasse) || 0),
     incassoLordo, incassoNetto, iva: round2(incassoLordo - incassoNetto),
     cashPrimaDelCorso: round2(tutteLeQuote.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)),
     contoCorrente: round2(tutteLeQuote.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0) + incassiExtraPos + venditePos),
@@ -83491,7 +83568,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
 // callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
 // qui, perché in questa vista non esiste una cronologia condivisa tra le
 // colonne — "← Indietro" in alto chiude l'intera vista e basta
-function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, puoAssegnareModelle = false, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop = [], accontiDaVerificare, ricarica, onBack }) {
+function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, puoAssegnareModelle = false, corsi, location, corsiDate, iscritti, master, utentiApp, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, corsiKitProdotti = [], logisticaKitEdizioni = [], prodottiShop, venditeShop = [], accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
@@ -83524,7 +83601,7 @@ function VistaSchedeAffiancate({ quoteVenditoriSplit, locationPrezzi = [], iscri
                   master={master} fontDiplomi={fontDiplomi}
                   segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
                   spese={spese} impegni={impegni} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
-                  venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
+                  venditori={venditori} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
                   accontiDaVerificare={accontiDaVerificare}
                   ricarica={ricarica}
                   onBack={() => {}}
@@ -86219,7 +86296,7 @@ function Gestionale() {
           master={master} fontDiplomi={fontDiplomi}
           segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
-          venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
+          venditori={venditori} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
           accontiDaVerificare={accontiDaVerificare}
           ricarica={fetchDati}
           onBack={() => setView("verificaacconti")}
@@ -86817,6 +86894,7 @@ function Gestionale() {
         </div>
         <PaginaProssimeContabilita
           quoteVenditoriSplit={quoteVenditoriSplit} locationPrezzi={locationPrezzi} impegni={impegnoTabella}
+          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           spese={spese} venditeShop={venditeShop} prodottiShop={prodottiShop} corsiDateDocenti={corsiDateDocenti}
           master={master} masterCorsi={masterCorsi} assistente={assistente} assistenteCorsi={assistenteCorsi}
@@ -87229,7 +87307,7 @@ function Gestionale() {
           chiOpera={operatoreApp?.nome || utenteLoggato?.nome || ""}
           puoAssegnareModelle={puoAprireVista("gestionemodelle")}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
-          kitDefinizioni={kitDefinizioni}
+          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           corsoData={corsoDataApertaObj}
           corsi={corsi}
           location={location}
@@ -87295,7 +87373,7 @@ export {
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
-  calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse,
+  calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse, costoKitDellaClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
 };
