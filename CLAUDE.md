@@ -1685,6 +1685,79 @@ edge function, e questo è peggio di una colonna morta: sembra viva, e chi apre
 la tabella ci ragiona sopra. Dal 19/10 non si scrivono più. **Non sono ancora
 state cancellate**: prima si guarda per qualche giorno che nessuno le cerchi.
 
+### Gli ordini del sito si sono fermati, e adesso c'è un sorvegliante (2/11/2026)
+
+Dall'**1/11/2026 alle 10:01 UTC** gli ordini dello shop non entravano più
+in app, e non se n'è accorto nessuno per un giorno e mezzo. La catena, che
+vale la pena leggere per intero perché ogni anello ha insegnato una cosa:
+
+1. in `vendite_shop` è comparsa **una riga con `origine = 'woocommerce'` e
+   nient'altro** — nessun numero d'ordine, nessuna data, `payload_raw`
+   nullo, quindi non veniva dal sito. **Chi l'ha scritta non è accertato**;
+2. il cursore della sincronizzazione cercava l'ultimo ordine con
+   `order by data_ordine desc limit 1`, e **in Postgres il decrescente
+   mette i NULL per primi**: «l'ultimo ordine» è diventato `null`;
+3. senza cursore `woo-import-storico` chiedeva a WooCommerce **lo storico
+   intero** (14 pagine, 1.300 ordini col loro JSON) più tutti i 57 ordini
+   aperti in un colpo: usciva con **546 WORKER_RESOURCE_LIMIT**, uccisa a
+   metà;
+4. e il cron diceva `succeeded`, perché `net.http_post` è asincrona:
+   spedisce la richiesta e non aspetta la risposta.
+
+**Le difese, una per anello.** Il database rifiuta righe `woocommerce`
+senza numero e senza data (`vendite_shop_woocommerce_vuole_numero_e_data`,
+convalidato su 4.248 righe); il cursore salta comunque le righe senza
+numero e senza data; senza cursore si guardano **30 giorni** e non tutto
+lo storico (il passato lontano si chiede con `{"dopo": "..."}`); ogni
+chiamata a WooCommerce ha **25 secondi** e il giro un budget di **110**;
+gli ordini aperti si riallineano **quindici a caso per giro** invece di
+tutti; quello che non riesce finisce in `sync_shop_esiti` invece di non
+lasciare traccia; e il cron passa **da un'ora a un quarto d'ora**, così un
+giro fallito costa quindici minuti. La riga vuota è stata cancellata con
+la sua copia nel commento di `20261102190000`.
+
+**Il sorvegliante (`sync-shop-vigilanza`), e perché sta fuori.** Un
+controllo dentro la cosa controllata non vede il caso in cui la cosa
+controllata muore: quel giorno la funzione non arrivava a scrivere il
+proprio esito, e non sarebbe arrivata a mandare un avviso su se stessa.
+Quindi un cron a parte (`vigila_sync_shop`, ai minuti 8/23/38/53) chiama
+una edge function che guarda **il silenzio** da fuori — non «l'ultimo giro
+è andato male», ma «da quanto non ne arriva uno riuscito». Si autentica col
+gettone nato in Postgres, come il lavoro notturno delle email (gettone
+sbagliato: 403, provato).
+
+Manda **notifica push e mail**: guasto nuovo subito, guasto che dura di
+nuovo ogni sei ore (un avviso ripetuto ogni quarto d'ora è un avviso che
+si spegne), e un messaggio solo al rientro. La soglia — **70 minuti** senza
+un giro riuscito, oppure **due giri falliti di fila** — e il testo
+dell'avviso stanno in **`_shared/sync-vigilanza.js`**, condiviso fra il
+browser e Deno come `email.js`: due copie vorrebbero dire riquadro verde e
+telefono che squilla. Il semaforo in app diventa rosso al **primo** giro
+fallito e la notifica aspetta il secondo, e non è un'incoerenza: davanti
+alla pagina c'è una persona che può premere «Recupera ordini mancanti»
+adesso.
+
+Destinatari in **`sync_shop_vigilanza`** (una riga sola, si cambia da
+Vendite shop): mail a `commerciale.elitederma@gmail.com`, notifica a chi
+amministra, scelti dal titolare. I telefoni si nominano **per utente** e
+non per endpoint, che cambia a ogni reinstallazione. **Oggi non
+corrisponde nessun dispositivo**, perché l'iPhone di GianLuca Rocca ha la
+riga delle push spenta (`attiva = false`): va riaccesa da Notifiche push,
+e finché non lo è arriva solo la mail — la pagina lo scrive in rosso
+invece di far credere il contrario. C'è «Mandami una prova» per verificare
+la catena fino al telefono.
+
+E la vigilanza scrive `ultimo_controllo_il` a ogni giro, anche quando non
+avvisa, e l'app lo mostra: **un sorvegliante morto, senza, è
+indistinguibile da tutto a posto** — che è lo stesso guasto, un piano più
+in su. Prove in `prove/vigilanza-sync-shop.test.js`.
+
+**Resta da capire**: a volte la sincronizzazione viene invocata **due
+volte nello stesso minuto** (17:00, 18:00 e 16:01 del 2/11), a pochi
+millisecondi di distanza. Il cron è uno e scatta una volta, quindi è un
+rinvio del runtime: non duplica dati, perché l'importazione è idempotente,
+è lavoro doppio.
+
 ## 5. Comandi
 
 ```bash
