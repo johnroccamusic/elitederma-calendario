@@ -201,6 +201,39 @@ Deno.serve(async (req) => {
       impegnati_in_sospesi: giacenze.filter((g) => g.promessi > 0) });
   }
 
+  // COM'ERA IL SITO PRIMA DI SCRIVERE, nei giri mirati.
+  //
+  // Serve a una cosa sola: sapere se un prodotto PASSA da esaurito a
+  // disponibile o viceversa. Quel passaggio non cambia solo la sua
+  // pagina, cambia le GRIGLIE — nell'elenco il tasto "Aggiungi al
+  // carrello" diventa "Leggi tutto", e viceversa — e le griglie stanno
+  // in una cache che la pulizia pagina-per-pagina non raggiunge (vedi
+  // sotto). Il 2/11/2026 una rettifica di magazzino ha rimesso 6 pezzi
+  // di "N2 Fixa" alle 18:02 e alle 23:06 i clienti leggevano ancora
+  // "Leggi tutto": pensavano fosse esaurito e non lo compravano.
+  //
+  // Si chiede al sito e non al nostro archivio perche' la domanda e'
+  // "cosa stava mostrando il sito", non "cosa avevamo noi". Se la
+  // richiesta non riesce si sceglie la pulizia completa: costa di piu'
+  // e non sbaglia.
+  const eraEsauritoSulSito = new Map<number, boolean>();
+  let lettoIlPrima = false;
+  if (soloQuesti && daAggiornare.length) {
+    try {
+      const ids = daAggiornare.map((r) => r.id).join(",");
+      const r = await fetch(`${siteUrl}/wp-json/wc/v3/products?include=${ids}&per_page=100&_fields=id,stock_status,stock_quantity`, { headers: { Authorization: auth } });
+      if (r.ok) {
+        const elenco = await r.json();
+        if (Array.isArray(elenco)) {
+          for (const p of elenco) {
+            eraEsauritoSulSito.set(Number(p.id), p.stock_status !== "instock" || Number(p.stock_quantity ?? 0) <= 0);
+          }
+          lettoIlPrima = true;
+        }
+      }
+    } catch { /* il sito non risponde: si svuotera' tutto, che non sbaglia */ }
+  }
+
   let scritti = 0;
   const falliti: string[] = [];
   const riusciti = new Set<number>();
@@ -246,9 +279,27 @@ Deno.serve(async (req) => {
   // diceva gia' "Disponibile". Su un giro completo si svuota tutto, che
   // e' l'unica strada che risulta arrivare anche a Cloudflare; su un giro
   // mirato — dopo una vendita, dopo un carrello sospeso — restano le
-  // singole pagine, che e' giusto e costa molto meno.
+  // singole pagine, che costa molto meno.
+  //
+  // CON UN'ECCEZIONE, dal 2/11/2026: se un prodotto PASSA da esaurito a
+  // disponibile (o viceversa) si svuota tutto anche in un giro mirato.
+  // Quel passaggio cambia le griglie di tutte le pagine che mostrano
+  // quel prodotto — shop, categorie, prodotti correlati, pagina
+  // iniziale — e la pulizia pagina-per-pagina a quelle non arriva: a
+  // "N2 Fixa" sono bastate cinque ore di "Leggi tutto" su un prodotto
+  // che il sito dava gia' disponibile, con i clienti convinti che fosse
+  // esaurito. Un numero che scende da 6 a 5 le griglie non le tocca, e
+  // li' la pulizia leggera resta quella giusta.
+  // solo dove il "prima" lo abbiamo letto davvero: senza, ogni riga
+  // risulterebbe cambiata (undefined non e' mai uguale a un booleano) e
+  // l'elenco qui sotto direbbe che tutto il catalogo ha cambiato
+  // disponibilita'. Il giro completo svuota tutto comunque.
+  const passaggiDiDisponibilita = lettoIlPrima
+    ? giacenze.filter((g) => riusciti.has(g.woo) && eraEsauritoSulSito.get(g.woo) !== (g.quantita <= 0))
+    : [];
+  const svuotaTutto = !soloQuesti || !lettoIlPrima || passaggiDiDisponibilita.length > 0;
   const avvisoCache = riusciti.size
-    ? await svuotaCacheSito(soloQuesti ? { prodottiWooIds: [...riusciti] } : { tutto: true })
+    ? await svuotaCacheSito(svuotaTutto ? { tutto: true } : { prodottiWooIds: [...riusciti] })
     : null;
 
   return json({
@@ -256,5 +307,7 @@ Deno.serve(async (req) => {
     scritti, nascosti: nascostiDavvero.length, giacenze: giacenze.length, saltati: saltati.length,
     dettaglio_nascosti: nascostiDavvero.map((n) => n.nome),
     falliti, avviso_cache: avvisoCache,
+    cache_svuotata: riusciti.size ? (svuotaTutto ? "tutto il sito" : "le pagine dei prodotti toccati") : "niente da svuotare",
+    disponibilita_cambiata: passaggiDiDisponibilita.map((g) => `${g.nome}: ${g.quantita <= 0 ? "ora esaurito" : "ora disponibile"}`),
   });
 });
