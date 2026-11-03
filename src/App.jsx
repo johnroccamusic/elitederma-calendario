@@ -57941,7 +57941,7 @@ function useFiltroPeriodoStatistiche(venditeShop, iniziale = "30giorni") {
   return { range, barra, periodo };
 }
 
-function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, origine, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
+function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, origine, prodottiShop = [], categorieProdotti = [], prodottiCategorie = [], onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
   const { range, barra: barraPeriodo } = useFiltroPeriodoStatistiche(venditeShop);
 
@@ -57950,14 +57950,84 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
     return d && d >= range.inizio && d <= range.fine;
   });
 
+  // IL FILTRO PER CATEGORIA (3/11/2026, chiesto dal titolare).
+  //
+  // Una categoria non e' una proprieta' dell'ordine, e' una proprieta'
+  // delle RIGHE: in uno scontrino ci sono un pigmento e un paio di
+  // guanti. Quindi scegliendo un reparto non si filtrano gli ordini e si
+  // continua a sommare il loro totale — si tengono le sole righe di quel
+  // reparto, e incasso e pezzi sono quelli. Altrimenti «laminazione»
+  // mostrerebbe il fatturato degli ordini che CONTENGONO laminazione,
+  // che e' un altro numero e sembra lo stesso.
+  //
+  // Senza filtro non cambia niente: l'incasso resta il totale
+  // dell'ordine, spedizione compresa, com'era prima.
+  //
+  // La riga si riporta al prodotto con prodottoDellaRiga, mai per nome
+  // (un prodotto rinominato spezzerebbe la storia in due, e gli ordini
+  // dallo shop portano woo_product_id e non il nostro id), e le
+  // categorie si leggono con i padri: chi sceglie un reparto si aspetta
+  // dentro anche le sue sottocategorie.
+  const [categoria, setCategoria] = useState("");
+  const indiciStat = useMemo(() => indiciProdotti(prodottiShop), [prodottiShop]);
+  const categorieDelProdotto = useMemo(() => {
+    const per = {};
+    collegamentiConPadri(prodottiCategorie, categorieProdotti).forEach((pc) => { (per[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+    return per;
+  }, [prodottiCategorie, categorieProdotti]);
+  // la tendina rispecchia l'albero dello shop, coi figli rientrati: in
+  // ordine alfabetico piatto un reparto e le sue sottocategorie finiscono
+  // lontanissimi
+  const opzioniCategorie = useMemo(() => {
+    const figliDi = costruisciAlberoCategorie(categorieProdotti);
+    const righe = [];
+    const scendi = (lista, profondita) => (lista || []).forEach((c) => {
+      righe.push({ id: c.id, nome: `${"\u00a0\u00a0".repeat(profondita)}${profondita ? "\u2014 " : ""}${c.nome}` });
+      scendi(figliDi[c.id], profondita + 1);
+    });
+    scendi(figliDi._root, 0);
+    return righe;
+  }, [categorieProdotti]);
+
+  // ogni vendita del canale col suo pezzo di categoria: righe, pezzi e
+  // importo che CONTANO per il filtro scelto. Senza filtro e' la vendita
+  // intera
+  const venditeFiltrate = useMemo(() => {
+    const dentro = (r) => {
+      if (r?.spedizione) return false;
+      const prodotto = prodottoDellaRiga(r, indiciStat);
+      const ids = prodotto ? (categorieDelProdotto[prodotto.id] || []) : [];
+      return categoria === "__senza" ? ids.length === 0 : ids.includes(categoria);
+    };
+    return righeCanale.map((v) => {
+      const prodotti = Array.isArray(v.prodotti) ? v.prodotti : [];
+      if (!categoria) {
+        return { v, prodotti, pezzi: prodotti.reduce((s, r) => s + (r.quantita || 0), 0), importo: v.totale || 0, parziale: false };
+      }
+      const righe = prodotti.filter(dentro);
+      if (righe.length === 0) return null;
+      return {
+        v,
+        prodotti: righe,
+        pezzi: righe.reduce((s, r) => s + (r.quantita || 0), 0),
+        importo: round2(righe.reduce((s, r) => s + (r.totale_riga || 0), 0)),
+        parziale: righe.length !== prodotti.length,
+      };
+    }).filter(Boolean);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [righeCanale, categoria, indiciStat, categorieDelProdotto]);
+  const nomeCategoria = categoria === "__senza"
+    ? "righe senza categoria"
+    : (categorieProdotti || []).find((c) => c.id === categoria)?.nome || "";
+
   const kpi = {
-    incasso: round2(righeCanale.reduce((s, v) => s + (v.totale || 0), 0)),
-    pezzi: righeCanale.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
-    vendite: righeCanale.filter((v) => v.tipo_movimento === "vendita").length,
+    incasso: round2(venditeFiltrate.reduce((s, x) => s + x.importo, 0)),
+    pezzi: venditeFiltrate.reduce((s, x) => s + x.pezzi, 0),
+    vendite: venditeFiltrate.filter((x) => x.v.tipo_movimento === "vendita").length,
   };
 
   const perProdotto = {};
-  righeCanale.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+  venditeFiltrate.forEach((x) => x.prodotti.forEach((p) => {
     const chiave = (p.nome || "").trim();
     if (!chiave) return;
     if (!perProdotto[chiave]) perProdotto[chiave] = { nome: chiave, pezzi: 0, ricavo: 0 };
@@ -57977,12 +58047,12 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
   // codice, resta fuori da questa tabella così come dallo shop online in
   // generale, non è un errore
   const perOperatore = {};
-  righeCanale.forEach((v) => {
+  venditeFiltrate.forEach(({ v, importo, pezzi }) => {
     if (!v.operatore_id) return;
     const chiave = `${v.operatore_tipo}:${v.operatore_id}`;
     if (!perOperatore[chiave]) perOperatore[chiave] = { tipo: v.operatore_tipo, id: v.operatore_id, nome: v.operatore_nome, incasso: 0, pezzi: 0 };
-    perOperatore[chiave].incasso += (v.totale || 0);
-    perOperatore[chiave].pezzi += (Array.isArray(v.prodotti) ? v.prodotti.reduce((s, p) => s + (p.quantita || 0), 0) : 0);
+    perOperatore[chiave].incasso += importo;
+    perOperatore[chiave].pezzi += pezzi;
   });
   const righeOperatori = Object.values(perOperatore).map((o) => ({ ...o, incasso: round2(o.incasso) })).sort((a, b) => b.incasso - a.incasso);
 
@@ -58000,7 +58070,7 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
   }
   // l'elenco in ordine di tempo, dal piu' recente: le righe sono gia'
   // filtrate sul canale e sul periodo scelto
-  const righeCronologiche = [...righeCanale].sort((a, b) => String(b.data_ordine || "").localeCompare(String(a.data_ordine || "")));
+  const righeCronologiche = [...venditeFiltrate].sort((a, b) => String(b.v.data_ordine || "").localeCompare(String(a.v.data_ordine || "")));
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -58015,8 +58085,34 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
 
         {barraPeriodo}
 
+        {/* IL REPARTO, accanto al periodo: sono le due domande che si
+            fanno insieme («come e' andata la laminazione a ottobre»).
+            Quando e' scelto, la riga sotto dice che i numeri sono quelli
+            delle sole righe di quel reparto: un incasso che cambia senso
+            senza dirlo e' peggio di un filtro che manca. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: -8, marginBottom: 20 }}>
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>Categoria</span>
+          <select data-campo="categoria" style={{ ...inputStyle, width: "auto", maxWidth: "100%" }} value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            <option value="">Tutte le categorie</option>
+            {opzioniCategorie.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            <option value="__senza">Righe senza categoria (e non a catalogo)</option>
+          </select>
+          {categoria && (
+            <button type="button" onClick={() => setCategoria("")}
+              style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "6px 12px", cursor: "pointer" }}>
+              Togli il filtro
+            </button>
+          )}
+        </div>
+        {categoria && (
+          <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 18, lineHeight: 1.55 }}>
+            Numeri delle sole righe di <b>{nomeCategoria}</b>, sottocategorie comprese: incasso e pezzi sono quelli del reparto, non il totale degli ordini che lo contengono — e la spedizione resta fuori.
+            «Vendite» conta gli ordini in cui c'e' almeno una riga di questo reparto.
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
-          <RiquadroKpi compatto={isMobile} etichetta="Incasso netto" valore={fmtEuroErp2(kpi.incasso)} />
+          <RiquadroKpi compatto={isMobile} etichetta={categoria ? "Incasso della categoria" : "Incasso netto"} valore={fmtEuroErp2(kpi.incasso)} />
           <RiquadroKpi compatto={isMobile} etichetta="Vendite" valore={kpi.vendite} />
           <RiquadroKpi compatto={isMobile} etichetta="Pezzi (netti)" valore={kpi.pezzi} />
         </div>
@@ -58041,10 +58137,10 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
         {vista === "cronologico" && (
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
             {righeCronologiche.length === 0 ? (
-              <div style={{ padding: 20, ...fontBody, fontSize: 13, color: MUTED }}>Nessuna vendita nel periodo selezionato.</div>
-            ) : righeCronologiche.map((v) => {
-              const prodotti = Array.isArray(v.prodotti) ? v.prodotti : [];
-              const pezzi = prodotti.reduce((s, r) => s + (r.quantita || 0), 0);
+              <div style={{ padding: 20, ...fontBody, fontSize: 13, color: MUTED }}>
+                {categoria ? "Nessuna vendita di questa categoria nel periodo selezionato." : "Nessuna vendita nel periodo selezionato."}
+              </div>
+            ) : righeCronologiche.map(({ v, prodotti, pezzi, importo, parziale }) => {
               const reso = v.tipo_movimento && v.tipo_movimento !== "vendita";
               return (
                 <div key={v.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap", padding: "12px 16px", borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -58059,14 +58155,17 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
                     </span>
                     <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, display: "block", lineHeight: 1.4 }}>
                       {prodotti.map((r) => `${r.quantita || 1}× ${r.nome || "—"}`).join(" · ") || "—"}
+                      {/* l'ordine conteneva anche altro: l'importo qui e'
+                          la parte di questa categoria, e va detto */}
+                      {parziale && <span style={{ color: GOLD, fontWeight: 700 }}> · parte dell'ordine</span>}
                     </span>
                     {v.operatore_nome && (
                       <span style={{ ...fontBody, fontSize: 11.5, color: GOLD, fontWeight: 700, display: "block" }}>{toTitleCase(v.operatore_nome)}</span>
                     )}
                   </span>
                   <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{pezzi} pz</span>
-                  <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: (v.totale || 0) < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap", minWidth: 84, textAlign: "right" }}>
-                    {fmtEuroErp2(v.totale || 0)}
+                  <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: importo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap", minWidth: 84, textAlign: "right" }}>
+                    {fmtEuroErp2(importo)}
                   </span>
                 </div>
               );
@@ -84588,11 +84687,13 @@ function Gestionale() {
     crmcontatti: [],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti", "categorie_prodotti", "prodotti_categorie"],
-    statvenditeshop: ["vendite_shop_storico", "woo_coupon"],
+    // prodotti e categorie servono al filtro per categoria (3/11/2026):
+    // senza, la tendina sarebbe vuota e non lo direbbe nessuno
+    statvenditeshop: ["vendite_shop_storico", "woo_coupon", "prodotti_shop", "categorie_prodotti", "prodotti_categorie"],
     // gli ordini con codice li legge la pagina da sola (vista); anagrafica
     // e regole del coupon d'aula servono per simulare i punti
     statanalisicodici: ["corsi", "location", "corsi_date", "master", "prodotti_shop", "regole_referral_automatico"],
-    statvenditealbanco: ["vendite_shop_storico"],
+    statvenditealbanco: ["vendite_shop_storico", "prodotti_shop", "categorie_prodotti", "prodotti_categorie"],
     statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop_storico"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "impegno", "eventi", "documento_fornitore", "location_prezzi", "quote_venditori_split"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "vendite_shop"],
@@ -86632,6 +86733,7 @@ function Gestionale() {
       {view === "statvenditeshop" && (
         <PaginaStatisticheVenditeCanale
           venditeShop={venditeShop} wooCoupon={wooCoupon} ricarica={fetchDati}
+          prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
           origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")}
           onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
         />
@@ -86640,6 +86742,7 @@ function Gestionale() {
       {view === "statvenditealbanco" && (
         <PaginaStatisticheVenditeCanale
           venditeShop={venditeShop} origine="pos" onBack={() => setView("statistichevenditeprodotti")}
+          prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
           onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
         />
       )}

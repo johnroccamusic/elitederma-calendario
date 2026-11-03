@@ -2047,6 +2047,94 @@ finito di scrivere. Vuol dire SSE dalla edge function fino al browser, ed
 
 Prove in `prove/assistente-sui-dati.test.js` (36).
 
+### Il materiale dell'evento: la spunta a sinistra, e una casella in meno (3/11/2026)
+
+In Gestione eventi → scheda dell'evento → **Materiali**, la spunta del
+rientro (`rientro_verificato_il`) era in fondo alla riga, 16 px e
+attaccata alla frase che dice quanti pezzi devono tornare. Chi gira fra
+gli scaffali con lo scatolone in mano cerca **un quadrato da toccare**,
+non una riga da leggere: ora è il primo elemento della riga, a sinistra
+della foto, 40×40 di area premibile con la casella da 24, verde quando è
+spuntata. La frase resta sotto, allineata alla foto: la spunta si tocca,
+il conto si legge.
+
+E le caselle numeriche sono **una sola**, «Da portare». «Partito» era il
+posto per scrivere a mano una quantità uscita diversa da quella da
+portare — mai usata, mentre il tasto «Partito» in cima fa la stessa cosa
+per tutte le righe insieme. Il dato (`quantita_portata`) resta e lo
+scrive quel tasto; **cambia che non si corregge più riga per riga**: se
+dalla sede esce una quantità diversa, va corretto il «Da portare» prima
+di premere Partito. Due frasi che mandavano a quella casella sono state
+riscritte.
+
+### La banca si interroga indietro nel tempo, guardando prima (3/11/2026)
+
+Il titolare: «collegandoti al servizio che gestisce la connessione con la
+banca, risali a tutti i bonifici a MT.DERM fino a oggi». Non si poteva: il
+collegamento Lunch Flow è nato il **13/10/2026**, il primo giro ha preso
+novanta giorni e `lunchflow-sync` sapeva chiedere solo «dall'ultimo
+movimento meno cinque giorni» oppure «novanta giorni». Sotto il
+**30/07/2026** l'estratto conto in app non esiste, e metà anno non aveva
+dati su cui rispondere.
+
+Ora la funzione accetta il periodo, e sa **guardare senza scrivere**:
+
+```
+{ dal: "2026-01-01" }                          lo chiede e lo importa
+{ dal: "2026-01-01", prova: true }             lo chiede e NON scrive
+{ dal: "...", prova: true, cerca: "mt.derm" }  e dice quali righe, col totale
+```
+
+La prova viene prima perché **la risposta non è garantita**: un consenso
+PSD2 spesso si ferma a novanta giorni, quindi la prima cosa da sapere è
+se la banca quella storia ce l'ha. In prova non si scrive niente — né
+movimenti, né saldo, né l'ora dell'ultimo giro, nemmeno in caso di
+errore. Il periodo lungo si chiede **un mese alla volta** e ogni mese
+torna col suo conto: non sappiamo se l'aggregatore tronchi una risposta
+troppo grande, e una risposta troncata in silenzio è peggio di un errore.
+
+In Riconciliazione banca, accanto a «Aggiorna ora», c'è **«Risali nel
+tempo»**: la data, un filtro facoltativo sulla controparte, «Guarda cosa
+c'è». Il tasto che importa **compare solo dopo la risposta** e passa da
+una conferma che dice cosa entra in prima nota — mesi di movimenti sono
+una decisione, non l'effetto collaterale di una domanda.
+
+Quello che si sapeva il 3/11/2026 su MT.DERM, nel periodo coperto: **un
+solo bonifico, 2.175,00 €** il 24/09/2026 (più 1,00 € di commissione),
+riconciliato con «Acquisto pigmenti vecchia fattura»; e 94,50 € il
+07/10/2026, ma via PayPal.
+
+### Le statistiche di canale si filtrano per categoria (3/11/2026)
+
+Chiesto dal titolare per **Statistiche Vendite al Banco** e **Statistiche
+Vendite Shop Online** (`PaginaStatisticheVenditeCanale`, una pagina per
+tutti e due i canali). La tendina sta accanto alla barra del periodo —
+sono le due domande che si fanno insieme, «come è andata la laminazione a
+ottobre» — e rispecchia l'albero dello shop, coi figli rientrati.
+
+**La regola che decide i numeri:** una categoria non è una proprietà
+dell'ordine, è una proprietà delle **righe** — in uno scontrino ci sono un
+kit di laminazione e un pigmento. Quindi scegliendo un reparto non si
+filtrano gli ordini continuando a sommarne il totale (sarebbe «il
+fatturato degli ordini che contengono laminazione», un altro numero che
+sembra lo stesso): si tengono **le sole righe di quel reparto**, e
+incasso, pezzi e classifica sono quelli. La spedizione resta fuori,
+«Vendite» conta gli ordini con almeno una riga dentro, e una riga che è
+solo una parte dell'ordine lo dice («parte dell'ordine»). **Senza filtro
+non cambia niente**: l'incasso resta il totale dell'ordine, com'era.
+
+Le categorie si leggono **con i padri** (`collegamentiConPadri`): chi
+sceglie un reparto si aspetta dentro le sue sottocategorie. La riga si
+riporta al prodotto con `prodottoDellaRiga` e **mai per nome**. C'è anche
+«Righe senza categoria (e non a catalogo)», che al banco è dove finiscono
+gli acconti e i saldi dei corsi battuti a mano.
+
+Le tre tabelle (`prodotti_shop`, `categorie_prodotti`,
+`prodotti_categorie`) sono state aggiunte alle due viste nella mappa di
+`App.jsx`: senza, la tendina sarebbe vuota e non lo direbbe nessuno.
+Prove in `prove/statistiche-filtro-categoria.test.jsx`, che montano l'app
+vera, navigano fino alle due pagine e controllano i numeri sotto filtro.
+
 ## 5. Comandi
 
 ```bash
