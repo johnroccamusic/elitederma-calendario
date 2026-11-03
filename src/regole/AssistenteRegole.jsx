@@ -1,13 +1,62 @@
-// L'ASSISTENTE DEI REGOLAMENTI (25/10/2026): l'icona flottante in basso a
-// destra, in tutta l'app, per chi ha fatto accesso. Si apre, si scrive la
-// domanda, la risposta arriva con il nome delle regole da cui viene. Se
-// nessuna regola risponde lo dice — e la domanda resta registrata per chi
-// scrive le regole. La funzione dietro e' `assistente-regole`.
+// L'ASSISTENTE DELL'APP (25/10/2026; dal 3/11/2026 risponde anche sui
+// dati): l'icona flottante, in tutta l'app, per chi ha fatto accesso. Si
+// apre, si scrive la domanda — o si parla — e la risposta arriva dicendo
+// SEMPRE da dove viene: dalle regole scritte (con il nome delle schede),
+// dalla guida dell'app, dai dati (con i numeri e il conto sotto, da
+// aprire), oppure come ragionamento, che e' l'unico caso in cui niente di
+// deciso risponde. La funzione dietro e' `assistente-regole`.
+//
+// `permessi` sono le caselle delle aree della Home di chi ha fatto
+// accesso, e vanno passati: decidono quali aree dell'app l'assistente
+// puo' spiegare e quali dati puo' guardare. Senza, risponde solo su
+// regole, calendario e catalogo dei corsi — le aree aperte a tutti.
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay } from "../ui/stile.js";
 import { voceDisponibile, leggi, leggiNaturale, zittisci, ascoltaUnaFrase } from "./voce.js";
 import { DESTINATARI } from "./PaginaRegolamenti.jsx";
+
+// I NUMERI E IL CONTO, sotto una risposta presa dai dati. Chiusi, perche'
+// chi chiede «che corso c'e' a Bari» vuole la risposta; apribili, perche'
+// un numero che non si puo' controllare non vale niente — e' la stessa
+// regola di «Chiedi ai dati» in Statistiche.
+function Numeri({ righe, totale, sql, nota }) {
+  const [apertoNumeri, setApertoNumeri] = useState(false);
+  const [apertoConto, setApertoConto] = useState(false);
+  const quante = righe?.length || 0;
+  if (!sql && !quante) return null;
+  const tasto = { all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 };
+  return (
+    <div data-campo="numeri-risposta" style={{ marginTop: 6, display: "grid", gap: 4 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {quante > 0 && (
+          <button type="button" style={tasto} onClick={() => setApertoNumeri((v) => !v)}>
+            {apertoNumeri ? "▾" : "▸"} I numeri ({totale ?? quante})
+          </button>
+        )}
+        <button type="button" style={tasto} onClick={() => setApertoConto((v) => !v)}>
+          {apertoConto ? "▾" : "▸"} Come l'ho calcolato
+        </button>
+      </div>
+      {apertoNumeri && quante > 0 && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: GRAFITE, background: "#FAFAF7", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 6, maxHeight: 180, overflow: "auto" }}>
+          {righe.slice(0, 30).map((r, i) => (
+            <div key={i} style={{ borderBottom: i < Math.min(quante, 30) - 1 ? `1px solid ${CREAM_BORDER}` : "none", padding: "3px 0" }}>
+              {Object.entries(r).filter(([k]) => k !== "id").map(([k, v]) => `${k}: ${v === null || v === "" ? "—" : v}`).join(" · ")}
+            </div>
+          ))}
+          {quante > 30 && <div style={{ paddingTop: 4, color: MUTED }}>…e altre {quante - 30}</div>}
+        </div>
+      )}
+      {apertoConto && (
+        <div style={{ ...fontBody, fontSize: 11, color: GRAFITE, background: "#FAFAF7", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 6, overflowX: "auto" }}>
+          {nota && <div style={{ marginBottom: 4 }}>{nota}</div>}
+          <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "ui-monospace, monospace", fontSize: 10.5 }}>{sql}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Testo({ testo }) {
   const righe = String(testo || "").split("\n");
@@ -19,7 +68,20 @@ function Testo({ testo }) {
   </div>;
 }
 
-export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile = false, onApriRegolamenti = null }) {
+// Da dove viene una risposta si legge a colpo d'occhio, senza doverla
+// rileggere: «dalle regole» e' oro (una decisione presa), i dati sono
+// verdi (un numero vero, controllabile qui sotto), la guida e' navy, il
+// ragionamento e' azzurro e dichiara di non essere una regola.
+const BORDO_REGISTRO = { regole: GOLD, misto: GOLD, dati: "#2F7D63", guida: NAVY, conversazione: CREAM_BORDER, ragionamento: "#8FA3C9" };
+const ETICHETTA_REGISTRO = {
+  misto: "In parte dalle regole, in parte un ragionamento",
+  ragionamento: "Un ragionamento, non una regola scritta",
+  dati: "Dai dati dell'app, adesso",
+  guida: "Come funziona l'app",
+};
+const COLORE_ETICHETTA = { dati: "#2F7D63", guida: NAVY, misto: "#4C6A9A", ragionamento: "#4C6A9A" };
+
+export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi = [], isMobile = false, onApriRegolamenti = null }) {
   const [aperto, setAperto] = useState(false);
   // LA SCHEDA PROPOSTA: quando chi amministra da' una disposizione in
   // dialogo, l'assistente la rimanda gia' scritta come regola. Resta qui,
@@ -67,12 +129,18 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
     setOccupato(true);
     const cronologia = scambiRef.current.filter((s) => s.risposta).slice(-3).map((s) => ({ domanda: s.domanda, risposta: s.risposta }));
     try {
-      const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, cronologia } });
+      const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, permessi, cronologia } });
       if (error || !data?.ok) {
         const errore = data?.errore || error?.message || "Nessuna risposta.";
         setScambi((s) => [...s, { domanda: d, errore }]); return errore;
       }
-      setScambi((s) => [...s, { domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta, registro: data.registro || (data.citati?.length ? "regole" : "ragionamento") }]);
+      setScambi((s) => [...s, {
+        domanda: d, risposta: data.risposta, citati: data.citati || [], senza: !!data.senza_risposta,
+        registro: data.registro || (data.citati?.length ? "regole" : "ragionamento"),
+        // per le risposte dai dati: le righe e la query che le ha
+        // calcolate. Un conto che non si puo' controllare non e' un conto
+        sql: data.sql || null, nota: data.nota || null, righe: data.righe || null, totaleRighe: data.totale_righe ?? null,
+      }]);
       if (data.proposta_regola) setProposta(data.proposta_regola);
       return data.risposta;
     } catch (err) {
@@ -150,7 +218,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
   return (
     <>
       {!aperto && (
-        <button type="button" data-campo="assistente-regole" onClick={() => setAperto(true)} title="Chiedi ai regolamenti" aria-label="Chiedi ai regolamenti"
+        <button type="button" data-campo="assistente-regole" onClick={() => setAperto(true)} title="Chiedi all'assistente" aria-label="Chiedi all'assistente"
           style={{ ...base, width: 48, height: 48, borderRadius: "50%", border: "2px solid #fff", cursor: "pointer", background: NAVY, color: "#fff", boxShadow: "0 6px 20px rgba(14,27,51,0.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
           {/* un punto interrogativo bianco, grande e tondo: e' quello che
               il titolare ha chiesto, e si capisce da lontano */}
@@ -161,15 +229,21 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
         <div data-campo="pannello-assistente" style={{ ...base, ...(isMobile ? { top: "calc(env(safe-area-inset-top, 0px) + 56px)", transform: "none", right: 8 } : {}), width: "min(380px, calc(100vw - 32px))", maxHeight: isMobile ? "calc(100dvh - 150px)" : "min(560px, calc(100dvh - 48px))", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 16px 48px rgba(14,27,51,0.28)", overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: NAVY, color: "#fff" }}>
             <div>
-              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700 }}>Chiedi ai regolamenti</div>
-              <div style={{ ...fontBody, fontSize: 11, opacity: 0.75 }}>Risponde solo con le regole scritte</div>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700 }}>Chiedi</div>
+              <div style={{ ...fontBody, fontSize: 11, opacity: 0.75 }}>Regole, come funziona l'app, e i dati che vedi tu</div>
             </div>
             <button type="button" onClick={() => { spegniVoce(); setAperto(false); }} aria-label="Chiudi" style={{ all: "unset", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "grid", gap: 10, alignContent: "start" }}>
             {scambi.length === 0 && (
               <div style={{ ...fontBody, fontSize: 13, color: GRAFITE, lineHeight: 1.5 }}>
-                Chiedi come ci si comporta: «quanto sconto posso fare in aula?», «l'allieva vuole le modelle dopo aver firmato, cosa faccio?». Quello che è deciso te lo dice dalle regole; sul resto ragiona con te, e ti dice che è un ragionamento.
+                Chiedi quello che ti serve, in tre direzioni:
+                <div style={{ marginTop: 6, display: "grid", gap: 3 }}>
+                  <div>• <b>le regole</b> — «quanto sconto posso fare in aula?»</div>
+                  <div>• <b>come funziona l'app</b> — «dove segno il modulo ricevuto?»</div>
+                  <div>• <b>i dati</b> — «che corso c'è a novembre a Bari?», «chi tiene il PMU di Milano?», «quanto costa il kit laminazione?»</div>
+                </div>
+                <div style={{ marginTop: 6 }}>Dice sempre da dove viene la risposta: dalle regole, dalla guida, dai dati (con i numeri sotto, da aprire) o come ragionamento. Vede solo le aree che vedi tu, e non ha i dati personali delle allieve.</div>
                 {onApriRegolamenti && <div style={{ marginTop: 8 }}><button type="button" onClick={() => { setAperto(false); onApriRegolamenti(); }} style={{ all: "unset", cursor: "pointer", color: NAVY, textDecoration: "underline", fontSize: 12.5 }}>Leggi tutte le regole</button></div>}
               </div>
             )}
@@ -178,15 +252,17 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
                 <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Tu: {s.domanda}</div>
                 {s.errore
                   ? <div style={{ ...fontBody, fontSize: 13, color: "#B3261E" }}>{s.errore}</div>
-                  : <div style={{ borderLeft: `3px solid ${s.registro === "regole" || s.registro === "misto" ? GOLD : s.registro === "conversazione" ? CREAM_BORDER : "#8FA3C9"}`, paddingLeft: 10 }}>
-                      {/* due registri, sempre distinti: quello che e' deciso e
-                          quello che e' un aiuto a ragionare */}
-                      {(s.registro === "ragionamento" || s.registro === "misto") && (
-                        <div data-campo="etichetta-ragionamento" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#4C6A9A", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
-                          {s.registro === "misto" ? "In parte dalle regole, in parte un ragionamento" : "Un ragionamento, non una regola scritta"}
+                  : <div style={{ borderLeft: `3px solid ${BORDO_REGISTRO[s.registro] || "#8FA3C9"}`, paddingLeft: 10 }}>
+                      {/* quattro registri, sempre distinti: quello che e'
+                          deciso, come funziona l'app, quello che dicono i
+                          dati, e quello che e' solo un aiuto a ragionare */}
+                      {ETICHETTA_REGISTRO[s.registro] && (
+                        <div data-campo={`etichetta-${s.registro}`} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: COLORE_ETICHETTA[s.registro] || "#4C6A9A", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                          {ETICHETTA_REGISTRO[s.registro]}
                         </div>
                       )}
                       <Testo testo={s.risposta} />
+                      {s.registro === "dati" && <Numeri righe={s.righe} totale={s.totaleRighe} sql={s.sql} nota={s.nota} />}
                       {s.citati?.length > 0 && (
                         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>
                           Dalle regole: {s.citati.map((c) => c.titolo).join(" · ")}
@@ -197,7 +273,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", isMobile =
             ))}
             {voce && (
               <div data-campo="stato-voce" onClick={interrompi} style={{ ...fontBody, fontSize: 12.5, color: voce === "ascolto" ? "#B3261E" : GRAFITE, fontStyle: "italic", cursor: voce === "parlo" ? "pointer" : "default" }}>
-                {voce === "ascolto" ? (parziale ? `«${parziale}»` : "Ti ascolto…") : voce === "penso" ? "Cerco nelle regole…" : "Sto rispondendo… tocca per interrompere"}
+                {voce === "ascolto" ? (parziale ? `«${parziale}»` : "Ti ascolto…") : voce === "penso" ? "Ci penso…" : "Sto rispondendo… tocca per interrompere"}
               </div>
             )}
             <div ref={fondo} />

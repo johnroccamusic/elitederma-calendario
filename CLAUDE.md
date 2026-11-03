@@ -668,7 +668,10 @@ programmatore e amministratore la vedono comunque). Chi amministra
 la riempie lui, scheda per scheda.
 
 L'**icona flottante** in basso a destra (`AssistenteRegole.jsx`) c'è per
-chiunque abbia fatto accesso, tranne il profilo kiosk. La edge function
+chiunque abbia fatto accesso, tranne il profilo kiosk. **Dal 3/11/2026
+risponde anche su come funziona l'app e sui dati delle aree che quella
+persona vede**: vedi «L'assistente risponde anche sull'app e sui dati»
+più avanti. La edge function
 `assistente-regole` (Haiku, `getUser` obbligatorio: senza sessione 401,
 verificato) passa al modello **solo** le schede attive visibili a quel
 ruolo e la domanda — niente dati di allievi né di vendite — e gli impone di
@@ -1880,6 +1883,87 @@ Il numero è lo stesso aprendo la classe dal calendario o da «Prossime
 contabilità»: i tre elenchi (`kitDefinizioni`, `corsiKitProdotti`,
 `logisticaKitEdizioni`) arrivano al pannello da tutte e due le strade.
 Prove in `prove/bilancio-del-corso.test.js`.
+
+### L'assistente risponde anche sull'app e sui dati (3/11/2026)
+
+Il titolare: «il tasto dell'intelligenza artificiale, oltre a rispondere
+sui regolamenti, deve rispondere anche sulle funzionalita' e sui dati
+dell'app, pero' solo limitatamente alle funzioni che ciascun utente
+vede». I registri del tondo con il punto interrogativo diventano
+**quattro**, e la risposta dice sempre quale sta usando (bordo e
+etichetta): **dalle regole** (le schede di `regolamenti`, oro), **come
+funziona l'app** (navy), **dai dati dell'app, adesso** (verde, con «I
+numeri» e «Come l'ho calcolato» da aprire sotto), **un ragionamento**
+(azzurro, e dichiara di non essere una regola).
+
+**Sui dati non risponde a memoria**: usa il motore di «Chiedi ai dati» —
+il modello scrive UNA select, Postgres la esegue, il modello scrive la
+risposta dalle righe tornate. Quindi «che corso c'e' a novembre a Bari»,
+«chi tiene il PMU di Milano», «quanti posti restano», «quanto costa il
+kit laminazione», «cosa c'e' dentro il kit» hanno una risposta vera e
+controllabile, non plausibile.
+
+**Sei viste nuove** (`20261103100000`), nessuna con dati personali di
+allievi: `analisi_calendario` (classi, master, assistenti, posti liberi,
+sede: nessuna cifra di denaro), `analisi_corsi`, `analisi_kit`,
+`analisi_kit_prodotti`, `analisi_prodotti` (prezzi e disponibilita'),
+`analisi_prodotti_costi` (costi e margini, a parte). Due avvertenze sono
+scritte **dentro il catalogo**, perche' sono i due punti su cui
+l'assistente sbaglierebbe da solo: il **prezzo di un corso non esiste nei
+dati** (sta nelle locandine di «Prezzi corsi» e, iscritta per iscritta,
+nel pattuito), e su un **bundle** si guarda `disponibilita` e non
+`giacenza` — altrimenti direbbe «esaurito» su tutti i kit dello shop, che
+hanno giacenza zero e sono in vendita.
+
+**Come si tiene il limite per persona.** Ogni area dichiara con quali
+permessi della Home si apre (`AREE_DATI` in `_shared/analisi.js`,
+`AREE_GUIDA` in `_shared/guida-app.js`): `permessi: []` vuol dire
+«chiunque sia entrato» — il calendario e il catalogo dei corsi, che in app
+li vede chiunque. La pagina manda i permessi, la edge function ricava
+l'elenco delle viste ammesse e lo passa a **`analisi_esegui(p_sql,
+p_viste)`**, che rifiuta qualunque altra vista anche se il modello la
+nominasse. La firma a un argomento resta e delega a quella nuova: «Chiedi
+ai dati» non cambia di una riga.
+
+**Cos'e' e cos'non e' questo limite, detto con precisione**: decide COSA
+L'ASSISTENTE MOSTRA, non cosa la sessione potrebbe leggere. Finche'
+l'account Supabase e' uno per tutti i permessi li sa solo la pagina, e dal
+browser le tabelle si leggono comunque (vedi «UN SOLO ACCOUNT SUPABASE PER
+TUTTI» nel § 4): diventa una serratura il giorno che il ruolo passa dal
+JWT. Quello che invece **e' una serratura gia' oggi** e' il motore: al
+database arriva una sola SELECT su viste di sola lettura, 300 righe, 8
+secondi, qualunque cosa chieda il modello.
+
+**Nessun dato personale, ed e' una decisione, non una dimenticanza.** Non
+ci sono nomi, email, telefoni o residenze di allieve, clienti o modelle.
+Alla domanda «chi e' iscritta al corso di…» l'assistente risponde quante
+sono e dove si leggono i nomi. Il motivo non e' solo il GDPR: domanda e
+risposta passano da un modello di terze parti, e mandargli l'anagrafica di
+un'allieva e' una decisione del titolare — da prendere, non da dare per
+presa.
+
+**La guida alle funzioni dice dove si fa una cosa, mai quanto costa.**
+Nessuna cifra: ne' prezzi, ne' percentuali, ne' soglie. Le cifre vivono in
+due posti soli, e in tutti e due le ha messe qualcuno che le ha decise: le
+schede di «Regolamenti» e i dati. Una percentuale scritta nella guida
+invecchierebbe senza che nessuno se ne accorga, e verrebbe creduta perche'
+detta dall'app. Una prova del banco la impedisce (cerca `€`, `%`, «euro»,
+«per cento» nella guida intera), e altre due controllano che ogni area
+della guida sia un tasto vero della Home **e che nessun tasto resti senza
+guida** — una chiave scritta male e' un'area che nessuno vedra' mai.
+
+**Una domanda sui dati non e' una regola che manca.** La decisione di cosa
+finisce fra «le domande senza risposta» in fondo a Regolamenti e' uscita
+dalla edge function e sta in `_shared/assistente.js` (`senzaRisposta`),
+dove il banco la prova: ci finisce solo una domanda **di regola** che
+nessuna scheda copriva. Un dato, una spiegazione dell'app, una chiacchiera
+e una disposizione che sta diventando scheda no — un elenco che si riempie
+di roba che non c'entra nessuno lo guarda piu'.
+
+Il registro delle domande (`regolamenti_domande`) tiene adesso anche
+`registro`, `sql`, `righe` e `aree`: `aree` dice **cosa quella persona
+poteva vedere** quando ha chiesto, non cosa ha chiesto. Prove in
+`prove/assistente-sui-dati.test.js` (24).
 
 ## 5. Comandi
 

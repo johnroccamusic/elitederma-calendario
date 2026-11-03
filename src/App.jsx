@@ -85781,14 +85781,18 @@ function Gestionale() {
           onTogli={preferitiRisolti[slotPreferitoInScelta] ? () => { togliPreferito(slotPreferitoInScelta); setSlotPreferitoInScelta(null); } : null}
         />
       )}
-      {/* l'assistente dei regolamenti: per chiunque abbia fatto accesso,
-          tranne il profilo kiosk. Il ruolo decide quali regole gli
-          valgono; chi amministra le vede tutte */}
+      {/* l'assistente: per chiunque abbia fatto accesso, tranne il profilo
+          kiosk. Il ruolo decide quali regole gli valgono (chi amministra
+          le vede tutte); i PERMESSI decidono quali aree dell'app puo'
+          spiegare e quali dati puo' guardare — sono le stesse caselle che
+          accendono le tessere della Home, quindi l'assistente non parla
+          mai di una pagina che quella persona non trova */}
       {utenteLoggato && !utenteLoggato.soloCalendarioLettura && (
         <Suspense fallback={null}>
           <AssistenteRegole
             isMobile={isMobile}
             chi={operatoreApp?.nome || ""}
+            permessi={utenteLoggato.permessi || []}
             ruolo={ruoloUtente === "programmatore" || ruoloUtente === "amministratore" ? "amministrazione"
               : utenteLoggato.masterId ? "master" : utenteLoggato.assistenteId ? "assistenti"
               : (venditoreLoggato || utenteLoggato.venditoreId) ? "venditori" : "tutti"}
