@@ -625,6 +625,27 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
              sotto al nome, che e' l'unico modo di tenerle leggibili. */
           <div key={r.id} style={{ padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              {/* LA SPUNTA STA A SINISTRA, GRANDE (3/11/2026, chiesta dal
+                  titolare). Era in fondo alla riga, piccola e attaccata a
+                  una frase: chi gira fra gli scaffali con lo scatolone in
+                  mano cerca un quadrato da toccare, non una riga da
+                  leggere. Il flag e' lo stesso di prima
+                  (`rientro_verificato_il`), e la frase che dice quanti
+                  pezzi devono tornare resta sotto: la spunta si tocca, il
+                  conto si legge. */}
+              <label title={verificato ? "Verificato — tocca per togliere la spunta" : "Spunta quando hai contato i pezzi"}
+                style={{
+                  alignSelf: "center", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, cursor: "pointer", width: 40, height: 40, borderRadius: 11,
+                  background: verificato ? "#EAF5EA" : BG_CHIARO,
+                  border: `1px solid ${verificato ? "#C7E3C7" : CREAM_BORDER}`,
+                }}>
+                <input
+                  type="checkbox" checked={verificato} data-campo="rientro_verificato"
+                  onChange={(e) => spuntaRientro(r, e.target.checked)}
+                  style={{ width: 24, height: 24, margin: 0, cursor: "pointer", accentColor: "#2E7D32" }}
+                />
+              </label>
               <span style={{ alignSelf: "center", display: "inline-flex" }}>{foto(r)}</span>
               <span style={{ flex: "1 1 150px", minWidth: 0 }}>
                 <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
@@ -670,17 +691,10 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
                 dice quanti ne sono usciti al POS e quanti devono tornare,
                 e chi apre lo scatolone spunta. Solo verifica sulle
                 quantita' — il magazzino non si muove da qui. */}
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, lineHeight: 1.4, color: verificato ? "#2E7D32" : MUTED }}>
-              <input
-                type="checkbox" checked={verificato} data-campo="rientro_verificato"
-                onChange={(e) => spuntaRientro(r, e.target.checked)}
-                style={{ width: 16, height: 16, margin: 0, flexShrink: 0, accentColor: "#2E7D32" }}
-              />
-              <span>
-                Venduti all'evento <b>{rientro.usciti}</b>{rientro.omaggiati > 0 && ` (di cui ${rientro.omaggiati} in omaggio)`}, ne riporti in magazzino <b>{rientro.attesi}</b>
-                {verificato ? " · verificato" : " · spunta quando li hai contati"}
-              </span>
-            </label>
+            <div style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.4, color: verificato ? "#2E7D32" : MUTED, marginTop: 5, paddingLeft: 48 }}>
+              Venduti all'evento <b>{rientro.usciti}</b>{rientro.omaggiati > 0 && ` (di cui ${rientro.omaggiati} in omaggio)`}, ne riporti in magazzino <b>{rientro.attesi}</b>
+              {verificato ? " · verificato" : " · spunta a sinistra quando li hai contati"}
+            </div>
             {rientro.inEccesso > 0 && (
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>
                 Non torna: il POS ne ha registrati {rientro.inEccesso} più di quanti ne risultino partiti. Controlla «Partito».
