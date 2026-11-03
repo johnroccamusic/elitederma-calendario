@@ -34,13 +34,17 @@ function seduta(permessi = TUTTI) {
 }
 
 // il database finto: GET torna l'elenco, POST torna la riga scritta
-function preparaDati(elenco, scritture) {
+function preparaDati(elenco, scritture, metodi = []) {
   rispondiCon({
     clienti_registrati: (corpo, indirizzo) => {
       if (corpo) {
         scritture.push({ indirizzo, corpo });
-        return { id: `c${scritture.length}`, registrato_il: "2026-11-03T12:00:00Z", ...corpo };
+        // l'id di una correzione sta nell'indirizzo (?id=eq.xxx): si
+        // rimanda indietro quello, come farebbe PostgREST
+        const id = (/id=eq\.([^&]+)/.exec(indirizzo) || [])[1] || `c${scritture.length}`;
+        return { id, registrato_il: "2026-11-03T12:00:00Z", ...corpo };
       }
+      metodi.push(indirizzo);
       return elenco;
     },
   });
@@ -217,6 +221,79 @@ describe("Registrazione clienti: la pagina", () => {
     await scrivi(dentro(p, "cerca"), "milano");
     expect(pulito(p)).toContain("LUCIA VERDI");
     expect(pulito(p)).not.toContain("ANNA BIANCHI");
+    await p.smonta();
+  });
+
+  it("la matita porta la riga nel modulo e salvando aggiorna quella, non ne crea una nuova", async () => {
+    const scritture = [];
+    const elenco = [{
+      id: "a", nome: "ANNA", cognome: "BIANCHI", citta: "ALTAMURA", provincia: "BA", cap: "70022", regione: "Puglia",
+      email: "anna@b.it", telefono: "+393331112223", registrato_il: "2026-11-01T09:00:00Z", registrato_da: "GINA",
+    }];
+    const p = await apriRegistrazione(elenco, scritture);
+    await clicca(p.tasto("Clienti registrati"));
+    await attendi(150);
+
+    const matita = p.nodo.querySelector('[data-campo="modifica"]');
+    expect(matita).toBeTruthy();
+    await clicca(matita);
+    await attendi(150);
+    // la riga è dentro il modulo, e il +39 non è raddoppiato
+    expect(dentro(p, "nome").value).toBe("ANNA");
+    expect(dentro(p, "citta").value).toBe("ALTAMURA");
+    expect(dentro(p, "regione").value).toBe("Puglia");
+    expect(dentro(p, "telefono").value).toBe("3331112223");
+    expect(pulito(p)).toContain("Modifica cliente");
+    expect(pulito(p)).toContain("correggendo una scheda già registrata");
+
+    // risalvata identica non si rifiuta da sola («utente già registrato»
+    // sarebbe lei stessa)
+    await scrivi(dentro(p, "email"), "anna.bianchi@b.it");
+    await clicca(p.tasto("Salva le modifiche"));
+    await attendi(150);
+    expect(scritture.length).toBe(1);
+    expect(scritture[0].indirizzo).toContain("id=eq.a");
+    expect(scritture[0].corpo).toMatchObject({ nome: "ANNA", email: "anna.bianchi@b.it", modificato_da: "KATIA" });
+    // chi ha registrato la scheda non si riscrive: è la storia della riga
+    expect(scritture[0].corpo.registrato_da).toBeUndefined();
+    expect(pulito(p)).toContain("ANNA BIANCHI è stato aggiornato");
+    await p.smonta();
+  });
+
+  it("il cestino chiede conferma col nome e cancella la riga", async () => {
+    const scritture = [];
+    const elenco = [{
+      id: "a", nome: "ANNA", cognome: "BIANCHI", citta: "BARI", provincia: "BA", cap: "70121", regione: "Puglia",
+      email: "anna@b.it", telefono: "+393331112223", registrato_il: "2026-11-01T09:00:00Z", registrato_da: "GINA",
+    }];
+    const chiesto = [];
+    window.confirm = (t) => { chiesto.push(t); return true; };
+    const p = await apriRegistrazione(elenco, scritture);
+    await clicca(p.tasto("Clienti registrati"));
+    await attendi(150);
+    await clicca(p.nodo.querySelector('[data-campo="cancella"]'));
+    await attendi(150);
+    expect(chiesto.join(" ")).toContain("ANNA BIANCHI");
+    expect(chiesto.join(" ")).toContain("non si recupera");
+    expect(pulito(p)).toContain("ANNA BIANCHI è stato cancellato");
+    expect(pulito(p)).not.toContain("anna@b.it");
+    await p.smonta();
+  });
+
+  it("il cestino non cancella niente se si annulla la conferma", async () => {
+    const elenco = [{
+      id: "a", nome: "ANNA", cognome: "BIANCHI", citta: "BARI", provincia: "BA", cap: "70121", regione: "Puglia",
+      email: "anna@b.it", telefono: "+393331112223", registrato_il: "2026-11-01T09:00:00Z", registrato_da: "GINA",
+    }];
+    window.confirm = () => false;
+    const p = await apriRegistrazione(elenco, []);
+    await clicca(p.tasto("Clienti registrati"));
+    await attendi(150);
+    await clicca(p.nodo.querySelector('[data-campo="cancella"]'));
+    await attendi(150);
+    expect(pulito(p)).toContain("ANNA BIANCHI");
+    expect(pulito(p)).not.toContain("cancellato");
+    window.confirm = () => true;
     await p.smonta();
   });
 

@@ -2200,11 +2200,29 @@ confrontava le cifre grezze, quindi «333 111 2223» appena battuto e
 il doppione e lo fermava solo il database, dando il messaggio giusto per
 il motivo sbagliato. Ora il telefono passa prima dal `+39`.
 
-Prove in `prove/registrazione-clienti.test.jsx` (10): le regole una per
+**La matita e il cestino** (stesso giorno, chiesti subito dopo). Ogni riga
+dell'elenco ha due tastini da 44×44 a destra: **modifica** porta la riga
+dentro lo stesso modulo — un modulo gemello vorrebbe dire due posti dove
+cambiare una regola — e salvando **aggiorna quella scheda**, non ne crea
+una nuova; **cancella** chiede conferma **col nome davanti** e la toglie.
+
+Tre dettagli che sono il punto: la scheda in correzione è esclusa dal
+controllo del doppione (`giaRegistrato(..., esclusoId)`), altrimenti si
+rifiuterebbe da sola — «utente già registrato» sarebbe lei; il `+39` si
+toglie dal valore che si vede, o rientrerebbe due volte; e **chi ha
+registrato la riga non si riscrive**, è la storia di quella riga —
+la correzione aggiunge `modificato_il` / `modificato_da` (migrazione
+`20261103180000`) e l'elenco lo mostra accanto. La cancellazione invece
+**non lascia traccia e non ha un cestino**: se servisse ripescare, è un
+lavoro a parte come `vendite_cestino`.
+
+Prove in `prove/registrazione-clienti.test.jsx` (13): le regole una per
 una, e la pagina montata per davvero — si scrive la città, si preme il
 suggerimento, si controlla che provincia/regione/CAP si siano riempiti, si
 salva, si rilegge il doppione, si cambia il telefono e la seconda persona
-entra.
+entra; poi la matita (la riga torna nel modulo, il telefono senza prefisso
+doppio, l'update sull'id giusto) e il cestino, con la conferma annullata
+che non cancella niente.
 
 ## 5. Comandi
 

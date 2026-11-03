@@ -61,9 +61,13 @@ export function chiaveIdentita(c) {
 }
 
 // Il cliente già in elenco che è la stessa persona, se c'è.
-export function giaRegistrato(cliente, elenco = []) {
+//
+// `esclusoId` serve alla modifica: una scheda che si corregge e si
+// risalva e' sempre uguale a se stessa, e senza questo si rifiuterebbe
+// da sola («utente già registrato»: quell'utente e' lui).
+export function giaRegistrato(cliente, elenco = [], esclusoId = null) {
   const chiave = chiaveIdentita(cliente);
-  return (elenco || []).find((x) => chiaveIdentita(x) === chiave) || null;
+  return (elenco || []).find((x) => x?.id !== esclusoId && chiaveIdentita(x) === chiave) || null;
 }
 
 // IL LUOGO SI TIRA FUORI DALLA CITTA', con lo stesso elenco ISTAT che

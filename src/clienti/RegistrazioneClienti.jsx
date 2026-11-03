@@ -25,6 +25,7 @@ import { supabase } from "../supabase.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, BG_CHIARO, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
 import CampoComune from "../iscrizione/CampoComune.jsx";
+import { capDiComune } from "../comuni-regioni.js";
 import {
   chiaveIdentita, clienteDaSalvare, giaRegistrato, luogoDaComune,
   problemiCliente, telefonoIta, testoPulito,
@@ -36,6 +37,35 @@ function dataOra(ts) {
   if (!ts) return "";
   const d = new Date(ts);
   return d.toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// I DUE TASTINI DELLA RIGA (3/11/2026, chiesti dal titolare: «mettere
+// l'icona del cancellino e anche quella di modifica»). Stanno a destra
+// della riga, 44x44 di area premibile: su un telefono un'icona piu'
+// piccola si prende con l'unghia.
+function TastoMatita({ onClick, titolo }) {
+  return (
+    <button type="button" onClick={onClick} title={titolo} data-campo="modifica" style={{
+      width: 44, height: 44, flexShrink: 0, background: "none", border: "none", cursor: "pointer",
+      color: NAVY, display: "inline-flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 20h4l10-10-4-4L4 16v4z" /><path d="M14 6l4 4" />
+      </svg>
+    </button>
+  );
+}
+function TastoCestino({ onClick, titolo }) {
+  return (
+    <button type="button" onClick={onClick} title={titolo} data-campo="cancella" style={{
+      width: 44, height: 44, flexShrink: 0, background: "none", border: "none", cursor: "pointer",
+      color: "#C0392B", display: "inline-flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 6h16M9 6V4h6v2M7 6l1 14h8l1-14" />
+      </svg>
+    </button>
+  );
 }
 
 export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Registrazione clienti" }) {
@@ -50,6 +80,11 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
   // intero, perché «utente già registrato» senza dire QUALE lascia il
   // dubbio che sia un altro
   const [doppione, setDoppione] = useState(null);
+  // la scheda che si sta correggendo (il suo id) oppure null: lo stesso
+  // modulo serve a registrare e a modificare, perche' i campi e i
+  // controlli sono gli stessi — due moduli gemelli vorrebbero dire due
+  // posti dove cambiare una regola
+  const [inModifica, setInModifica] = useState(null);
 
   const leggi = useCallback(async () => {
     const { data, error } = await supabase.from("clienti_registrati")
@@ -80,6 +115,39 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
     if (l.provincia) { setCapPossibili(l.capPossibili || []); setC((p) => ({ ...p, provincia: l.provincia, regione: l.regione, cap: l.cap })); }
   };
 
+  // LA MATITA porta la riga dentro il modulo. I CAP si ricalcolano dal
+  // comune: una scheda vecchia di una citta' con molti CAP deve poter
+  // cambiare anche quello.
+  function apriModifica(x) {
+    const caps = x.citta && x.provincia ? capDiComune(x.provincia, x.citta) : [];
+    setCapPossibili(caps);
+    setC({
+      nome: x.nome || "", cognome: x.cognome || "", citta: x.citta || "", provincia: x.provincia || "",
+      cap: x.cap || "", regione: x.regione || "", email: x.email || "",
+      // il +39 si toglie da quello che si vede: il prefisso sta fuori
+      // dalla casella, e dentro ci andrebbe due volte
+      telefono: String(x.telefono || "").replace(/^\+39/, ""), note: x.note || "",
+    });
+    setInModifica(x.id);
+    setVista("nuovo");
+    setMsg(null); setDoppione(null);
+  }
+  function annullaModifica() {
+    setInModifica(null); setC(VUOTO); setCapPossibili([]); setMsg(null); setDoppione(null);
+  }
+
+  // IL CESTINO. Chiede conferma col nome davanti, perche' una riga
+  // cancellata qui non va in nessun cestino da cui ripescarla: se
+  // servisse, e' un lavoro a parte come quello delle vendite.
+  async function cancella(x) {
+    if (!window.confirm(`Cancellare ${x.nome} ${x.cognome}?\n\nLa scheda viene eliminata e non si recupera. Se serve, si potrà registrare di nuovo.`)) return;
+    const { error } = await supabase.from("clienti_registrati").delete().eq("id", x.id);
+    if (error) { setMsg({ tipo: "errore", testo: `Non cancellato: ${error.message}` }); return; }
+    setElenco((p) => (p || []).filter((r) => r.id !== x.id));
+    if (inModifica === x.id) annullaModifica();
+    setMsg({ tipo: "ok", testo: `${x.nome} ${x.cognome} è stato cancellato.` });
+  }
+
   const problemi = problemiCliente(c);
   const pronto = problemi.length === 0;
 
@@ -90,10 +158,33 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
       // il controllo prima di scrivere serve a dare il messaggio con la
       // riga davanti; la serratura vera è l'indice unico della tabella,
       // che prende anche due venditori che premono Salva insieme
-      const gia = giaRegistrato(c, elenco || []);
+      // in modifica la scheda e' sempre uguale a se stessa: senza
+      // escluderla si rifiuterebbe da sola
+      const gia = giaRegistrato(c, elenco || [], inModifica);
       if (gia) { setDoppione(gia); setMsg({ tipo: "avviso", testo: "Utente già registrato." }); setSalvando(false); return; }
 
       const riga = clienteDaSalvare(c, chi);
+      if (inModifica) {
+        // la correzione non riscrive chi ha registrato: quello resta la
+        // storia della riga. Scrive chi l'ha corretta e quando.
+        const { registrato_da: _nonSiTocca, ...campi } = riga;
+        const { data, error } = await supabase.from("clienti_registrati")
+          .update({ ...campi, modificato_il: new Date().toISOString(), modificato_da: testoPulito(chi) || null })
+          .eq("id", inModifica).select().single();
+        if (error) {
+          if (error.code === "23505" || /duplicate key|clienti_registrati_identita/i.test(error.message || "")) {
+            await leggi();
+            setMsg({ tipo: "avviso", testo: "Utente già registrato: con questi dati esiste già un'altra scheda." });
+            setSalvando(false); return;
+          }
+          throw new Error(error.message);
+        }
+        setElenco((p) => (p || []).map((r) => (r.id === inModifica ? (data || r) : r)));
+        setInModifica(null); setC(VUOTO); setCapPossibili([]);
+        setMsg({ tipo: "ok", testo: `${riga.nome} ${riga.cognome} è stato aggiornato.` });
+        setSalvando(false); setVista("elenco");
+        return;
+      }
       const { data, error } = await supabase.from("clienti_registrati").insert(riga).select().single();
       if (error) {
         // 23505 = l'indice unico: è la stessa persona, arrivata due volte
@@ -145,7 +236,7 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
 
         <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
           {[
-            { chiave: "nuovo", testo: "Registra un cliente" },
+            { chiave: "nuovo", testo: inModifica ? "Modifica cliente" : "Registra un cliente" },
             { chiave: "elenco", testo: `Clienti registrati${elenco ? ` (${elenco.length})` : ""}` },
           ].map((t) => (
             <button key={t.chiave} type="button" onClick={() => { setVista(t.chiave); setMsg(null); }}
@@ -181,6 +272,12 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {vista === "nuovo" && inModifica && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 12, lineHeight: 1.55 }}>
+            Stai <b>correggendo una scheda già registrata</b>: salvando si aggiorna quella, non se ne crea una nuova. Chi l'ha registrata resta scritto; accanto comparirà chi l'ha corretta.
           </div>
         )}
 
@@ -258,7 +355,10 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
             </Field>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "4px 0 16px" }}>
-              <Button onClick={salva} disabled={!pronto || salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+              <Button onClick={salva} disabled={!pronto || salvando}>
+                {salvando ? "Salvo…" : inModifica ? "Salva le modifiche" : "Salva"}
+              </Button>
+              {inModifica && <Button variant="ghost" onClick={annullaModifica}>Annulla</Button>}
               {!pronto && (
                 <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
                   Manca ancora {problemi.join(", ")}.
@@ -290,20 +390,35 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
                 </div>
               )}
               {visibili.map((x, i) => (
-                <div key={x.id} style={{ padding: "11px 14px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
-                    {x.nome} {x.cognome}
+                <div key={x.id} style={{
+                  padding: "11px 6px 11px 14px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`,
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: inModifica === x.id ? "#FDF8EC" : "transparent",
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                      {x.nome} {x.cognome}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+                      {[x.citta && `${x.citta}${x.provincia ? ` (${x.provincia})` : ""}`, x.cap, x.regione].filter(Boolean).join(" · ")}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5, overflowWrap: "anywhere" }}>
+                      {[x.telefono, x.email].filter(Boolean).join(" · ")}
+                    </div>
+                    {x.note && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{x.note}</div>}
+                    <div style={{ ...fontBody, fontSize: 11, color: GOLD, fontWeight: 700, marginTop: 2 }}>
+                      {dataOra(x.registrato_il)}{x.registrato_da ? ` · ${x.registrato_da}` : ""}
+                      {/* una riga corretta lo dice: chi e quando. Senza,
+                          un dato cambiato non si può chiedere a nessuno */}
+                      {x.modificato_il && (
+                        <span style={{ color: MUTED, fontWeight: 400 }}>
+                          {` · corretta il ${dataOra(x.modificato_il)}${x.modificato_da ? ` da ${x.modificato_da}` : ""}`}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
-                    {[x.citta && `${x.citta}${x.provincia ? ` (${x.provincia})` : ""}`, x.cap, x.regione].filter(Boolean).join(" · ")}
-                  </div>
-                  <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
-                    {[x.telefono, x.email].filter(Boolean).join(" · ")}
-                  </div>
-                  {x.note && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{x.note}</div>}
-                  <div style={{ ...fontBody, fontSize: 11, color: GOLD, fontWeight: 700, marginTop: 2 }}>
-                    {dataOra(x.registrato_il)}{x.registrato_da ? ` · ${x.registrato_da}` : ""}
-                  </div>
+                  <TastoMatita onClick={() => apriModifica(x)} titolo={`Modifica ${x.nome} ${x.cognome}`} />
+                  <TastoCestino onClick={() => cancella(x)} titolo={`Cancella ${x.nome} ${x.cognome}`} />
                 </div>
               ))}
             </div>
