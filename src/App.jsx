@@ -49284,6 +49284,19 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   // stato letto l'ultima volta, e si puo' chiedere un giro adesso.
   const [conti, setConti] = useState([]);
   const [sincronizzando, setSincronizzando] = useState(false);
+  // RISALIRE NEL TEMPO (3/11/2026). Il collegamento e' nato il
+  // 13/10/2026 e il primo giro ha preso novanta giorni: sotto il
+  // 30/07/2026 l'estratto conto in app non esiste, e la domanda del
+  // titolare («quanto abbiamo bonificato a MT.DERM da gennaio») non
+  // aveva dati su cui rispondere. Da qui si chiede alla banca un
+  // periodo piu' lungo, e si guarda PRIMA di importare: mesi di
+  // movimenti che entrano in prima nota sono una decisione, non un
+  // effetto collaterale di una domanda.
+  const [risaliAperto, setRisaliAperto] = useState(false);
+  const [risaliDal, setRisaliDal] = useState(`${new Date().getFullYear()}-01-01`);
+  const [risaliCerca, setRisaliCerca] = useState("");
+  const [risaliEsito, setRisaliEsito] = useState(null);
+  const [risaliInCorso, setRisaliInCorso] = useState("");
   const leggiConti = React.useCallback(async () => {
     const { data } = await supabase.from("lunchflow_conti").select("*").order("nome");
     setConti(data || []);
@@ -49304,6 +49317,29 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
       setMsg(e?.message || "Sincronizzazione non riuscita.");
     }
     setSincronizzando(false);
+  }
+  // scrivi = false: la chiede e non tocca niente (la edge function in
+  // «prova» non scrive ne' movimenti, ne' saldo, ne' l'ora del giro)
+  async function risaliNelTempo(scrivi) {
+    setRisaliInCorso(scrivi ? "scarico" : "guardo"); setMsg("");
+    try {
+      const corpo = { dal: risaliDal, prova: !scrivi };
+      if (risaliCerca.trim()) corpo.cerca = risaliCerca.trim();
+      const { data, error } = await supabase.functions.invoke("lunchflow-sync", { body: corpo });
+      if (error) throw new Error(data?.errore || error.message);
+      if (data?.errore) throw new Error(data.errore);
+      setRisaliEsito(data);
+      if (scrivi) {
+        setMsg(data.nuovi > 0
+          ? `Scaricati ${data.nuovi} movimenti dal ${risaliDal}: ${data.adottati} erano gia' in archivio e sono stati riconosciuti, ${data.nuovi} sono nuovi da sistemare.`
+          : "La banca non ha dato niente che non ci fosse gia'.");
+        await leggiConti();
+        await carica();
+      }
+    } catch (e) {
+      setMsg(e?.message || "Non sono riuscito a chiedere alla banca.");
+    }
+    setRisaliInCorso("");
   }
   const [regoleAperte, setRegoleAperte] = useState(false);
   // la sottopagina: l'elenco dei movimenti oppure l'allineamento, dove si
@@ -49720,12 +49756,105 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
             </div>
           ))}
           <div style={{ flex: 1 }} />
+          <button type="button" onClick={() => setRisaliAperto((v) => !v)}
+            title="Chiede alla banca un periodo piu' lungo dei novanta giorni del primo giro"
+            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 16px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            {risaliAperto ? "Chiudi" : "Risali nel tempo"}
+          </button>
           <button type="button" onClick={sincronizzaBanca} disabled={sincronizzando}
             title="Richiede a Lunch Flow saldo e movimenti adesso. Succede comunque da solo ogni mattina alle 7."
             style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "10px 18px", cursor: sincronizzando ? "default" : "pointer", opacity: sincronizzando ? 0.5 : 1, whiteSpace: "nowrap" }}>
             {sincronizzando ? "Sto leggendo la banca…" : "Aggiorna ora"}
           </button>
       </div>
+
+      {/* RISALI NEL TEMPO: prima si guarda, poi si importa. Il tasto che
+          scrive compare solo dopo che la banca ha risposto, e dice quante
+          righe sta per far entrare: cosi' non si importano sei mesi di
+          prima nota premendo un tasto per curiosita'. */}
+      {risaliAperto && (
+        <div style={{ marginBottom: 12, padding: isMobile ? "12px 14px" : "14px 18px", borderRadius: 16, background: "#fff", border: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.6, marginBottom: 12 }}>
+            La banca e' collegata dal <b>13 ottobre 2026</b> e il primo giro ha preso novanta giorni: sotto il <b>30 luglio</b> qui non c'e' niente.
+            Da qui le si chiede un periodo piu' lungo, un mese alla volta. <b>Prima si guarda</b> cosa risponde — senza scrivere niente —
+            e solo dopo si decide di farla entrare in prima nota. Piu' indietro la storia puo' non esserci: un consenso bancario vale spesso novanta giorni.
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label style={{ flex: "0 0 auto" }}>
+              <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Dal</span>
+              <input type="date" value={risaliDal} max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => { setRisaliDal(e.target.value); setRisaliEsito(null); }}
+                style={{ ...fontBody, fontSize: 13, padding: "9px 10px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, color: NAVY, background: "#fff" }} />
+            </label>
+            <label style={{ flex: "1 1 220px", minWidth: 0 }}>
+              <span style={{ display: "block", ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Cerca una controparte (facoltativo)</span>
+              <input value={risaliCerca} onChange={(e) => { setRisaliCerca(e.target.value); setRisaliEsito(null); }}
+                placeholder="es. mt.derm — dice quali righe e quanto, senza importare"
+                style={{ ...fontBody, fontSize: 13, width: "100%", boxSizing: "border-box", padding: "9px 10px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, color: NAVY, background: "#fff" }} />
+            </label>
+            <button type="button" onClick={() => risaliNelTempo(false)} disabled={!!risaliInCorso || !risaliDal}
+              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 12, padding: "10px 18px", cursor: risaliInCorso ? "default" : "pointer", opacity: risaliInCorso ? 0.5 : 1, whiteSpace: "nowrap" }}>
+              {risaliInCorso === "guardo" ? "Sto chiedendo…" : "Guarda cosa c'e'"}
+            </button>
+          </div>
+
+          {risaliEsito && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              {(risaliEsito.periodo || []).map((pz) => (
+                <div key={pz.conto} style={{ marginBottom: 10 }}>
+                  <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+                    <b>{pz.conto}</b>: dal {pz.dal} al {pz.al} la banca ha <b>{pz.righe}</b> movimenti.
+                  </div>
+                  {(pz.per_mese || []).length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                      {pz.per_mese.map((m) => (
+                        <span key={m.mese} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: m.righe > 0 ? NAVY : MUTED, background: m.righe > 0 ? BG_CHIARO : "transparent", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "3px 9px" }}>
+                          {m.mese} · {m.righe}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {(risaliEsito.avvisi || []).map((t, i) => (
+                <div key={i} style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", marginTop: 4 }}>{t}</div>
+              ))}
+
+              {risaliCerca.trim() && (
+                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>
+                    «{risaliCerca.trim()}»: {(risaliEsito.corrispondenze || []).length} rig
+                    {(risaliEsito.corrispondenze || []).length === 1 ? "a" : "he"}
+                    {risaliEsito.corrispondenze_totale ? ` · ${fmtEuroErp2(Number(risaliEsito.corrispondenze_totale))}` : ""}
+                  </div>
+                  {(risaliEsito.corrispondenze || []).length === 0
+                    ? <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun movimento con quelle parole nel periodo.</div>
+                    : (risaliEsito.corrispondenze || []).map((c, i) => (
+                      <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.5, display: "flex", gap: 8 }}>
+                        <span style={{ flex: "0 0 auto", color: MUTED }}>{c.data}</span>
+                        <b style={{ flex: "0 0 auto" }}>{fmtEuroErp2(Number(c.importo))}</b>
+                        <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{c.descrizione}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* il tasto che scrive: compare solo dopo la prova, e dice
+                  quante righe sta per portare dentro */}
+              {risaliEsito.prova && (risaliEsito.periodo || []).some((pz) => pz.righe > 0) && (
+                <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => { if (window.confirm(`Importare i movimenti dal ${risaliDal}?\n\nQuelli che l'estratto conto ha gia' vengono riconosciuti e non si sdoppiano; i mesi che mancavano entrano come "da sistemare" e andranno riconciliati.`)) risaliNelTempo(true); }}
+                    disabled={!!risaliInCorso}
+                    style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 12, padding: "10px 18px", cursor: risaliInCorso ? "default" : "pointer", opacity: risaliInCorso ? 0.5 : 1 }}>
+                    {risaliInCorso === "scarico" ? "Sto importando…" : "Importa questo periodo"}
+                  </button>
+                  <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Finora non e' stato scritto niente: questa e' la riga che entra in prima nota.</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {[
