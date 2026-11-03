@@ -70,6 +70,7 @@ const PaginaNotifichePush = pezzo(() => import("./notifiche/PaginaNotifichePush.
 import { creaZip, siPuoCondividere } from "./file/zip.js";
 const ModelliEmail = pezzo(() => import("./email/ModelliEmail.jsx"));
 const PaginaRegolamenti = pezzo(() => import("./regole/PaginaRegolamenti.jsx"));
+const RegistrazioneClienti = pezzo(() => import("./clienti/RegistrazioneClienti.jsx"));
 const AssistenteRegole = pezzo(() => import("./regole/AssistenteRegole.jsx"));
 const AllegatiProgetto = pezzo(() => import("./progetti/AllegatiProgetto.jsx"));
 const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx"));
@@ -17743,7 +17744,7 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
     setSalvando(true);
     const numero = utentiApp.filter((u) => !u.chiave_sistema).length + 1;
     const password = Math.random().toString(36).slice(2, 8).toUpperCase();
-    const { error } = await supabase.from("utenti_app").insert({ nome: `Nuovo utente ${numero}`, password, permessi: [] });
+    const { error } = await supabase.from("utenti_app").insert({ nome: `Nuovo utente ${numero}`, password, permessi: PERMESSI_DI_PARTENZA });
     setSalvando(false);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["utenti_app"]);
@@ -27983,7 +27984,19 @@ export const TASTI_HOME = [
   // le decisioni prese (prezzi, sconti, procedure), da leggere; chi
   // amministra le scrive. E' anche la fonte dell'assistente flottante
   { chiave: "regolamenti", etichetta: "Regolamenti" },
+  // Chi incontra un cliente lo registra da qui: nasce ACCESA PER TUTTI
+  // (la migrazione 20261103170000 l'ha scritta nei permessi di tutte le
+  // righe esistenti, master comprese) e resta una casella vera, cosi' un
+  // giorno si puo' togliere a qualcuno. Un utente nuovo la trova dentro
+  // da subito: vedi PERMESSI_DI_PARTENZA.
+  { chiave: "registrazioneclienti", etichetta: "Registrazione clienti" },
 ];
+// Quello che un utente nuovo ha acceso appena nasce. Finora era una
+// lista vuota, e andava bene finche' ogni area era da concedere; la
+// registrazione clienti invece e' di tutti per decisione del titolare,
+// quindi se non stesse qui ogni utente creato domani nascerebbe senza —
+// e nessuno se ne accorgerebbe fino al giorno in cui serve.
+export const PERMESSI_DI_PARTENZA = ["registrazioneclienti"];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
 // e a quale/i tasto/i della home appartengono davvero, dedotto da dove
@@ -84759,6 +84772,9 @@ function Gestionale() {
     // in questo elenco non caricano niente
     assegnazionekit: ["iscritti", "corsi_date", "corsi", "location", "kit_definizioni"],
     regolamenti: [],
+    // la pagina legge la sua tabella da sola (come Regolamenti): niente
+    // da caricare qui
+    registrazioneclienti: [],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
@@ -86387,6 +86403,7 @@ function Gestionale() {
               // master e chi vende, ogni volta che iscrivono qualcuno —
               // due tasti di distanza erano due di troppo
               { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
+              { chiave: "registrazioneclienti", title: "Registrazione clienti", descrizione: "Registra un cliente e consulta quelli già registrati", Icona: IconaPersonaAggiungi, attivo: tastoAbilitato("registrazioneclienti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("registrazioneclienti") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "regolamenti", title: "Regolamenti", descrizione: "Prezzi, sconti, procedure: le decisioni prese, da consultare", Icona: IconaClipboardErp, attivo: tastoAbilitato("regolamenti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("regolamenti") },
@@ -87199,6 +87216,14 @@ function Gestionale() {
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {view === "registrazioneclienti" && (
+        <RegistrazioneClienti
+          chi={operatoreCorrente(utenteLoggato, venditoreLoggato)?.nome || ""}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "registrazioneclienti", "Registrazione clienti")}
         />
       )}
 

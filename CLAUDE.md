@@ -2135,6 +2135,77 @@ Le tre tabelle (`prodotti_shop`, `categorie_prodotti`,
 Prove in `prove/statistiche-filtro-categoria.test.jsx`, che montano l'app
 vera, navigano fino alle due pagine e controllano i numeri sotto filtro.
 
+### Registrazione clienti, in Home per tutti (3/11/2026)
+
+Chiesta dal titolare: una tessera in Home **visibile da tutti**, master
+comprese, dove chi incontra un cliente lo registra. Due sezioni in una
+pagina (`src/clienti/RegistrazioneClienti.jsx`): **Registra un cliente** e
+**Clienti registrati**, l'elenco di tutti, con ricerca.
+
+**Il permesso nasce acceso per tutti, e resta un permesso vero.**
+`registrazioneclienti` è in `TASTI_HOME` — quindi ha la sua casella in
+Gestione utenti, Password master, Password venditori e Password
+assistenti — e la migrazione `20261103170000` l'ha scritta nei permessi di
+**tutte le 53 righe** esistenti (7 utenti, 17 master, 21 venditori, 8
+assistenti). Un utente creato domani la trova dentro da sé, perché il
+tasto «Genera nuovo utente» ora parte da **`PERMESSI_DI_PARTENZA`** invece
+che da una lista vuota: una tessera «di tutti» che non entra nei default
+sarebbe «di tutti tranne chi arriva dopo», e nessuno se ne accorgerebbe.
+Una tessera sempre visibile a prescindere dalla casella sarebbe stata più
+breve da scrivere, ma la casella avrebbe mentito.
+
+**Il luogo non si scrive, si scegli.** La città si cerca scrivendola — lo
+stesso meccanismo del comune di nascita in Iscrizione allievi
+(`cercaComuni` sull'elenco ISTAT che l'app si porta già dietro, nessuna
+rete) — e scelta dal suggerimento riempie da sé **provincia, regione e
+CAP**. Provincia e regione sono in sola lettura: una regione battuta a mano
+diventa «Puglia», «puglia», «PUGLIA» e «Apulia», e l'elenco dei clienti
+per regione non si fa più. Dove i CAP sono molti (Roma ne ha 82) resta la
+tendina, perché quello non lo può sapere nessuno al posto di chi registra.
+`CampoComune` ha preso un `onScegli` facoltativo che restituisce la
+proposta intera — `{ nome, sigla }` — perché la sigla della provincia la
+sa solo l'elenco; chi non lo passa non cambia comportamento.
+
+**Il telefono è forzato col +39**: il prefisso sta fuori dalla casella e
+non si tocca, e in archivio finisce sempre nella stessa forma
+(`telefonoIta`: «347 123 4567», «+39 3471234567» e «0039 347-1234567»
+diventano `+393471234567`; lo zero davanti a un cellulare si toglie). Un
+numero estero oggi da qui non si registra: è una decisione da prendere,
+non un campo da allargare di nascosto.
+
+**Chi è «già registrato», che è la regola vera.** Parole del titolare: «in
+caso di omonimia l'utente va considerato già registrato se tutto
+corrisponde, anche la mail e il numero di telefono, perché se abbiamo un
+utente con lo stesso nome ma numero di telefono e mail sono diversi, per
+noi è un secondo utente». Quindi l'identità è **nome + cognome + email +
+telefono**, e la città ne resta fuori di proposito: chi trasloca non
+diventa un secondo cliente. Per questo email e telefono sono
+**obbligatori** — sono loro a distinguere due omonimi, e senza di essi la
+seconda persona con lo stesso nome verrebbe respinta come doppione.
+
+La regola sta in un **indice unico** sulla tabella (normalizzato:
+maiuscole indifferenti, spazi ripuliti, del telefono contano le sole
+cifre), non nel browser. Il controllo che la pagina fa prima di salvare
+serve a mostrare **quale** riga è già in archivio — «utente già
+registrato» senza dire chi lascia il dubbio — ma due venditori che premono
+Salva nello stesso istante li ferma solo il database, e il 23505 torna
+come lo stesso messaggio. Provato in transazione annullata: la stessa
+persona scritta in un altro modo rifiutata, l'omonimo con contatti diversi
+accettato.
+
+`chiaveIdentita` e l'indice **devono normalizzare allo stesso modo**, e
+qui il banco di prova ha trovato un difetto vero: la chiave della pagina
+confrontava le cifre grezze, quindi «333 111 2223» appena battuto e
+«+393331112223» in archivio sembravano due persone — la pagina non vedeva
+il doppione e lo fermava solo il database, dando il messaggio giusto per
+il motivo sbagliato. Ora il telefono passa prima dal `+39`.
+
+Prove in `prove/registrazione-clienti.test.jsx` (10): le regole una per
+una, e la pagina montata per davvero — si scrive la città, si preme il
+suggerimento, si controlla che provincia/regione/CAP si siano riempiti, si
+salva, si rilegge il doppione, si cambia il telefono e la seconda persona
+entra.
+
 ## 5. Comandi
 
 ```bash
