@@ -59,9 +59,11 @@ describe("il materiale di un evento resta in magazzino", () => {
     await attendi(150);
     const t = p.testo().replace(/\s+/g, " ");
     expect(t).toContain("Venduti all'evento 4 (di cui 1 in omaggio), ne riporti in magazzino 16");
-    // le caselle numeriche sono due: Da portare e Partito. «Rientrato» non c'è più
+    // la casella numerica è UNA: Da portare. «Rientrato» non c'è più dal
+    // 30/10/2026, e «Partito» dal 3/11/2026 (lo scrive il tasto in cima,
+    // non si corregge riga per riga)
     const numeriche = p.campi().filter((c) => c.type === "number");
-    expect(numeriche.length).toBe(2);
+    expect(numeriche.length).toBe(1);
     expect(t).not.toContain("Rientrato");
     const spunta = p.nodo.querySelector('input[data-campo="rientro_verificato"]');
     expect(spunta.checked).toBe(false);

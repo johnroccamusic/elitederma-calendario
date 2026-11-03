@@ -412,7 +412,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
 
   async function premiPartito() {
     if (daSegnare === 0) { setMsg({ tipo: "ok", testo: "Tutte le righe hanno già un numero in «Partito»: non c'è niente da segnare." }); return; }
-    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${daSegnare} rig${daSegnare === 1 ? "a" : "he"} da segnare: quello che è da portare diventa partito. Il magazzino non si muove — i pezzi restano in giacenza e scendono solo quando si vendono al POS. Le righe dove hai già scritto a mano un numero in "Partito" lo tengono.`)) return;
+    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${daSegnare} rig${daSegnare === 1 ? "a" : "he"} da segnare: quello che è da portare diventa partito. Il magazzino non si muove — i pezzi restano in giacenza e scendono solo quando si vendono al POS. Le righe già segnate partite restano come sono.`)) return;
     setInCorso("partito"); setMsg(null); setAvanzamento([0, righe.length]);
     try {
       const esito = await segnaPartito({ righe, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
@@ -666,23 +666,27 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
                   </span>
                 )}
               </span>
-              {[
-                ["Da portare", "quantita", r.quantita],
-                ["Partito", "quantita_portata", r.quantita_portata],
-              ].map(([etichetta, campo, valore]) => (
-                <label key={campo} style={{ flex: "0 0 auto", width: 78 }}>
-                  <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</span>
-                  <input
-                    type="number" min="0" step="1"
-                    style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right", padding: "6px 6px", fontSize: 13 }}
-                    defaultValue={valore ?? ""}
-                    onBlur={(e) => {
-                      const v = e.target.value === "" ? null : Number(e.target.value);
-                      if (v !== (valore == null ? null : Number(valore))) salvaRiga("eventi_materiali", r.id, { [campo]: v }).then(ricarica);
-                    }}
-                  />
-                </label>
-              ))}
+              {/* UNA CASELLA SOLA (3/11/2026, chiesta dal titolare: «togli
+                  la casella partito che non serve a niente»). Erano due,
+                  «Da portare» e «Partito», e la seconda era il posto per
+                  scrivere a mano una quantita' partita diversa da quella
+                  da portare: nessuno l'ha mai usata, mentre il tasto
+                  «Partito» in cima fa la stessa cosa per tutte le righe
+                  insieme. Il dato (`quantita_portata`) resta e lo scrive
+                  quel tasto — cambia solo che non si corregge piu' riga
+                  per riga. */}
+              <label style={{ flex: "0 0 auto", width: 78 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Da portare</span>
+                <input
+                  type="number" min="0" step="1"
+                  style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right", padding: "6px 6px", fontSize: 13 }}
+                  defaultValue={r.quantita ?? ""}
+                  onBlur={(e) => {
+                    const v = e.target.value === "" ? null : Number(e.target.value);
+                    if (v !== (r.quantita == null ? null : Number(r.quantita))) salvaRiga("eventi_materiali", r.id, { quantita: v }).then(ricarica);
+                  }}
+                />
+              </label>
               <span style={{ flex: "0 0 auto", paddingBottom: 4 }}>
                 <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
               </span>
@@ -697,7 +701,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
             </div>
             {rientro.inEccesso > 0 && (
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>
-                Non torna: il POS ne ha registrati {rientro.inEccesso} più di quanti ne risultino partiti. Controlla «Partito».
+                Non torna: il POS ne ha registrati {rientro.inEccesso} più di quanti ne risultino partiti — o ne è uscito dalla sede più di quanto dice l'elenco, o una vendita non è di questo evento.
               </div>
             )}
           </div>
