@@ -182,3 +182,97 @@ describe("quando una domanda è una regola che manca", () => {
     expect(registroDa(undefined, 0)).toBe("ragionamento");
   });
 });
+
+// ---------------------------------------------------------------------
+// 3/11/2026 pomeriggio — L'ASSISTENTE INDAGA, NON SI ARRENDE.
+//
+// Il titolare: «perché non ragiona come un modello Claude un po' sveglio
+// e deduttivo?». La causa non era il modello: era che aveva UNA query
+// sola, e un risultato VUOTO non è un errore — quindi doveva rispondere
+// da quel vuoto. È andata esattamente così il 3/11 alle 9:41: query
+// giusta sul costo dei kit, vista con un buco, zero righe, e «per PMU
+// Base non ho trovato nessun kit». Qui si provano le due regole che lo
+// impediscono, e stanno nel codice proprio per poter essere provate.
+import { AVVISO_ZERO_RIGHE, esitoInterrogazione, registroFinale } from "../supabase/functions/_shared/assistente.js";
+import { spezzaPerVoce } from "../src/regole/voce.js";
+
+describe("un risultato vuoto non si consegna", () => {
+  it("zero righe tornano al modello con l'ordine di non concludere", () => {
+    const esito = esitoInterrogazione([]);
+    expect(esito).toContain("NESSUNA RIGA");
+    expect(esito).toMatch(/Non concludere/);
+    // e gli si dice COME indagare, non solo che non deve arrendersi
+    expect(esito).toMatch(/distinct|ilike/);
+    expect(esito).toContain("Righe: 0");
+  });
+
+  it("con le righe non c'è nessun avviso: sono una risposta", () => {
+    const esito = esitoInterrogazione([{ kit: "KIT ELITE Completo", costo: 142.96 }]);
+    expect(esito).not.toContain("NESSUNA RIGA");
+    expect(esito).toContain("Righe: 1");
+    expect(esito).toContain("KIT ELITE Completo");
+  });
+
+  it("un elenco lunghissimo non si riversa tutto nel contesto", () => {
+    const tante = Array.from({ length: 200 }, (_, i) => ({ n: i }));
+    const esito = esitoInterrogazione(tante);
+    expect(esito).toContain("Righe: 200");
+    expect(JSON.parse(esito.slice(esito.indexOf("["))).length).toBe(60);
+  });
+
+  it("l'avviso è una frase sola, riusabile: non va riscritta nel prompt", () => {
+    expect(AVVISO_ZERO_RIGHE.length).toBeGreaterThan(40);
+  });
+});
+
+describe("il registro lo dice quello che ha fatto", () => {
+  it("se ha interrogato i dati, ha risposto dai dati — anche se dichiara altro", () => {
+    expect(registroFinale({ interrogazioni: 2, dichiarato: "ragionamento" })).toBe("dati");
+    expect(registroFinale({ interrogazioni: 1, dichiarato: "regole", quanteSchedeCitate: 1 })).toBe("dati");
+  });
+
+  it("«misto» resta misto: dati più una regola scritta è una cosa diversa", () => {
+    expect(registroFinale({ interrogazioni: 1, dichiarato: "misto" })).toBe("misto");
+  });
+
+  it("senza interrogazioni vale la regola di prima", () => {
+    expect(registroFinale({ interrogazioni: 0, dichiarato: "guida" })).toBe("guida");
+    expect(registroFinale({ interrogazioni: 0, dichiarato: null, quanteSchedeCitate: 2 })).toBe("regole");
+    expect(registroFinale({})).toBe("ragionamento");
+  });
+
+  // la conseguenza che si vede in fondo a Regolamenti: una domanda a cui
+  // hanno risposto i dati non è una regola che manca
+  it("una risposta dai dati non finisce fra le regole mancanti", () => {
+    const registro = registroFinale({ interrogazioni: 1, dichiarato: "ragionamento" });
+    expect(senzaRisposta({ registro, dichiarato: true })).toBe(false);
+  });
+});
+
+describe("la voce parte dalla prima frase", () => {
+  const risposta = "A Roma da qui a fine marzo ci sono 3 classi di PMU Base. La prima parte il 30 novembre, poi il 18 gennaio e il 2 marzo. Su quella di novembre restano 4 posti.";
+
+  it("il primo pezzo è corto: si inizia a parlare prima di avere tutto l'audio", () => {
+    const pezzi = spezzaPerVoce(risposta);
+    expect(pezzi.length).toBeGreaterThan(1);
+    expect(pezzi[0].length).toBeLessThanOrEqual(90);
+  });
+
+  it("taglia alla fine delle frasi, e non perde niente per strada", () => {
+    const pezzi = spezzaPerVoce(risposta);
+    const rimontato = pezzi.join(" ").replace(/\s+/g, " ");
+    expect(rimontato).toBe(risposta.replace(/\s+/g, " "));
+    for (const p of pezzi) expect(p).not.toMatch(/\s$/);
+  });
+
+  it("una frase sterminata si spezza sulle virgole invece di restare un blocco", () => {
+    const fiume = "ci sono " + Array.from({ length: 40 }, (_, i) => `la classe numero ${i}`).join(", ");
+    const pezzi = spezzaPerVoce(fiume);
+    expect(pezzi.length).toBeGreaterThan(2);
+  });
+
+  it("un testo corto resta un pezzo solo: nessun taglio inutile", () => {
+    expect(spezzaPerVoce("Sì, puoi farlo.")).toEqual(["Sì, puoi farlo."]);
+    expect(spezzaPerVoce("")).toEqual([]);
+  });
+});

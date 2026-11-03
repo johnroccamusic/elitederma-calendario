@@ -1962,8 +1962,90 @@ di roba che non c'entra nessuno lo guarda piu'.
 
 Il registro delle domande (`regolamenti_domande`) tiene adesso anche
 `registro`, `sql`, `righe` e `aree`: `aree` dice **cosa quella persona
-poteva vedere** quando ha chiesto, non cosa ha chiesto. Prove in
-`prove/assistente-sui-dati.test.js` (24).
+poteva vedere** quando ha chiesto, non cosa ha chiesto.
+
+### E lo stesso giorno è diventato un agente (3/11/2026, pomeriggio)
+
+Il titolare, provandolo: «perché non ragiona come un modello Claude un po'
+sveglio e deduttivo?». Aveva ragione, e **la colpa non era del modello**.
+
+Il giro era «una domanda → UNA query → la risposta», e il difetto sta in
+una riga: **un risultato vuoto non è un errore.** Se la query falliva
+l'errore gli tornava indietro e correggeva; se tornava *vuota* doveva
+rispondere da quel vuoto. Nessuna seconda mossa, nessun «strano, fammi
+guardare quali kit esistono».
+
+È successo davvero, e si legge nel registro delle domande: il 3/11 alle
+**9:41** il modello aveva scritto **da solo la query giusta** sul costo
+dei kit — kit, articoli, pezzi, somma dei costi, quanti senza costo — il
+database ha risposto **zero righe**, e lui ha detto l'unica cosa che
+poteva: «per PMU Base non ho trovato nessun kit». Il buco era in
+`analisi_kit_prodotti`: il corso lo leggeva da `corsi_kit_prodotti.corso_id`,
+valorizzato **solo sulle righe degli accessori**, mentre per il contenuto
+dei kit sta sulla definizione del kit. Corso nullo su **957 righe su
+1565**, e «il kit di PMU BASE» tornava 34 righe invece di 270.
+
+**La lezione, che vale oltre questo caso:** quando l'assistente «non
+ragiona», prima di riscrivere il prompt si guarda **la query che ha
+scritto** e si esegue a mano. Qui la query era giusta.
+
+**Com'è adesso.** Il modello ha uno strumento (`interroga_dati`) e lo può
+usare fino a cinque volte: vede le righe e decide se bastano. Tre cose le
+impone il codice, non il prompt:
+
+- **zero righe tornano con l'avviso** «non concludere: guarda prima cosa
+  esiste» (`esitoInterrogazione` in `_shared/assistente.js`) — è il passo
+  che prima non poteva fare;
+- l'errore torna scritto in italiano, così corregge la query;
+- oltre cinque interrogazioni si chiude e si risponde con quello che si ha:
+  un assistente che pensa per un minuto non serve a chi è al banco.
+
+Più il **ragionamento esteso** (1.600 token: corto, perché la risposta
+spesso si ascolta in piedi) e la **cache del prompt** — guida, catalogo e
+schede sono identici a ogni domanda, e ripagarli ogni volta era tempo di
+attesa e soldi.
+
+Due regole del prompt nate dalle risposte vere: **deduci invece di
+chiedere** («quanto costa il kit di PMU base, quello completo Elite» vuol
+dire *KIT ELITE Completo* del corso *PMU BASE*: si va a cercarlo, non si
+chiede quale kit intenda) e **i nomi li scrive chi vende, non chi
+programma** (sempre `ilike`, su pezzi di parola).
+
+**Il registro «dati» lo decide quello che ha fatto**, non quello che
+dichiara di aver fatto (`registroFinale`): se ha interrogato, ha risposto
+dai dati. «Come l'ho calcolato» mostra **tutti** i passi, anche quelli a
+vuoto: è così che si vede dove ha cercato e cosa non ha trovato.
+
+**«Quanto costa il kit X» ha una vista sua** (`analisi_kit_costi`), con lo
+stesso conto di «Costo dei kit» in Gestione magazzino: un articolo senza
+costo d'acquisto resta fuori dal totale, si conta e **si nomina**. Si
+potrebbe comporre unendo due aree, ma sono due permessi diversi e il
+conto andrebbe rifatto a ogni domanda.
+
+### La voce parte dalla prima frase (3/11/2026)
+
+Sempre il titolare: «è ancora lento nell'acquisizione dell'audio». Due
+attese, entrambe tolte:
+
+- **la lettura**: prima si mandava la risposta *intera* alla sintesi e si
+  aspettava tutto l'audio prima di aprire bocca. Ora `spezzaPerVoce` la
+  taglia in frasi — il primo pezzo corto di proposito — e mentre un pezzo
+  suona si sta già scaricando il successivo. Il tempo prima della prima
+  parola non dipende più dalla lunghezza della risposta. Se la sintesi
+  esterna manca al primo pezzo si ripiega sulla voce del telefono; se si
+  rompe a metà, il resto lo legge il telefono — meglio una voce diversa
+  che una frase mangiata.
+- **l'ascolto**: si aspettava che il browser dichiarasse la frase
+  «definitiva», e su iPhone quel momento arriva quando vuole lui. Ora il
+  riconoscimento resta aperto e **il silenzio lo misuriamo noi**: 900 ms
+  senza parole nuove e la frase parte.
+
+Resta una leva non tirata, ed è la più grossa: **la risposta in
+streaming** dal server, per iniziare a parlare prima che il modello abbia
+finito di scrivere. Vuol dire SSE dalla edge function fino al browser, ed
+è un lavoro a parte.
+
+Prove in `prove/assistente-sui-dati.test.js` (36).
 
 ## 5. Comandi
 

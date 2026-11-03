@@ -59,13 +59,25 @@ export const AREE_DATI = [
     permessi: ["gestionedate", "magazzinoshop", "logisticaprodotti", "assegnazionekit", "dashboardmaster"],
     catalogo: `analisi_kit — una riga per PACCHETTO KIT di un corso (quelli fra cui l'allieva sceglie).
   colonne: id, kit (nome), corso, dermografo_a_parte, prodotti (quanti articoli diversi), pezzi (quantita' totale).
-  Il kit del corso non si vende a parte: e' compreso nel corso, e qui non ha un prezzo. «Quanto costa il kit X» puo' voler dire due cose diverse — il MATERIALE del kit di un corso (il costo sta in analisi_prodotti_costi, articolo per articolo) oppure un KIT CHE LO SHOP VENDE come prodotto suo (analisi_prodotti, che ha il prezzo). Se non e' chiaro quale, chiederlo.`,
+  Il kit del corso non si vende a parte: e' compreso nel corso, e qui non ha un prezzo di vendita. «QUANTO COSTA IL KIT X» si risponde da **analisi_kit_costi**, che da' il costo del materiale per ogni kit (se chi chiede la puo' vedere) — non serve comporre niente a mano. Se invece si parla di un KIT CHE LO SHOP VENDE come prodotto suo, il prezzo e' in analisi_prodotti.`,
   },
   {
     vista: "analisi_kit_prodotti",
     titolo: "Cosa c'è dentro i kit",
     permessi: ["gestionedate", "magazzinoshop", "logisticaprodotti", "assegnazionekit", "dashboardmaster"],
-    catalogo: `analisi_kit_prodotti — una riga per ARTICOLO dentro un kit di corso: id, kit (null se l'articolo non sta in un pacchetto), corso, tipo ('kit' = contenuto del pacchetto, 'accessorio' = accessorio della didattica che parte comunque con la classe), prodotto, sku, quantita.`,
+    catalogo: `analisi_kit_prodotti — una riga per ARTICOLO dentro un kit di corso: id, kit (null se l'articolo non sta in un pacchetto), corso, tipo ('kit' = contenuto del pacchetto, 'accessorio' = accessorio della didattica che parte comunque con la classe), prodotto, sku, quantita.
+  Per il COSTO di un kit non serve sommare qui: c'e' analisi_kit_costi, che lo da' gia' fatto e con lo stesso conto che l'app mostra in «Costo dei kit».`,
+  },
+  {
+    vista: "analisi_kit_costi",
+    titolo: "Quanto costa il materiale di ogni kit",
+    // e' un costo, quindi la vedono le stesse aree che vedono i costi; piu'
+    // «gestionedate», perche' nel Bilancio del corso quel numero c'e' gia'
+    permessi: ["magazzinoshop", "erp", "statistiche", "gestionedate"],
+    catalogo: `analisi_kit_costi — quanto costa il MATERIALE di ogni pacchetto kit. E' la risposta diretta a «quanto costa il kit X», e da' lo stesso numero che l'app mostra in Gestione magazzino → «Costo dei kit» e nel Bilancio del corso.
+  colonne: id, kit (nome), corso, articoli (quanti articoli diversi), pezzi (quantita' totale), costo_materiale (somma dei costi d'acquisto netti), costo_materiale_ivato, articoli_senza_costo, senza_costo (i nomi di quegli articoli).
+  REGOLA: un articolo senza costo d'acquisto in anagrafica NON vale zero — e' fuori dal totale, e va DETTO nella risposta («il totale non comprende X, che non ha un costo scritto»). Sommare zeri farebbe sembrare il kit piu' economico di quello che e'.
+  I kit di un corso si chiamano come li chiama chi vende (KIT BASE, KIT PRO, KIT ELITE Completo…): confrontarli con ilike, e se chi chiede nomina il corso filtrare su corso.`,
   },
   {
     vista: "analisi_prodotti",
