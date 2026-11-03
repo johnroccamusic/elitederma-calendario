@@ -2224,6 +2224,57 @@ entra; poi la matita (la riga torna nel modulo, il telefono senza prefisso
 doppio, l'update sull'id giusto) e il cestino, con la conferma annullata
 che non cancella niente.
 
+### «Stampe»: l'elenco dei corsi per chi deve solo stampare (3/11/2026)
+
+Chiesta dal titolare per **Raffaele**: una tessera in Home con la lista
+dei corsi **in ordine cronologico** e, accanto a ogni nome, **Diplomi** e
+**Nomi**. Niente altro — non si entra nelle classi, non si modifica, non
+si cancella, non c'è il calendario. È la stessa lista di Gestione corsi
+con gli stessi filtri (corso, città, master), la stessa ricerca e le due
+tab Programmati/Passati, che qui servono più che altrove: i diplomi si
+stampano a corso finito.
+
+**Com'è fatta, e cosa NON è stata duplicata.** La pagina è `GestioneDate`
+in `soloLettura` — la modalità che esisteva già per il profilo kiosk — con
+un solo pezzo nuovo: `azioniRiga(cd)`, una prop facoltativa che arriva
+fino a `DateRaggruppatePerCitta` e mette i tasti del chiamante accanto a
+ogni riga. Chi non la passa non cambia di niente.
+
+**I due PDF li compone un solo posto.** `generaPdfDiplomi` e
+`generaPdfSegnaposti` sono usciti da dentro `SchedaData` e stanno a
+livello di modulo: li chiamano sia la scheda della classe sia «Stampe».
+Non aprono finestre e non scaricano niente — tornano i byte, l'elenco di
+chi è rimasto fuori e un `esito` che dice cosa è successo; a parlare ci
+pensa chi chiama, che sa dov'è l'utente. Due copie avrebbero voluto dire
+due diplomi diversi dallo stesso archivio, e il giorno in cui qualcuno
+sposta il nome di mezzo centimetro in un posto solo non se ne accorge
+nessuno finché il foglio non è in mano all'allieva. Le regole delicate
+non si sono toccate: il diploma viene **solo** dal pacchetto, e il motivo
+per cui non esce si dice allieva per allieva.
+
+**Il permesso è `stampe` e ce l'ha solo lui** (migrazione
+`20261103190000`: la riga `utenti_app` «Raffaele Villanno», la sua riga
+`venditori`, e il profilo Programmatore che serve a verificarla).
+**Nessun bypass per chi amministra**, a differenza di Regolamenti: chi
+amministra entra nelle classi e stampa da lì, questa pagina esiste per
+chi non ci deve entrare.
+
+**Due cose trovate dal banco di prova, e vale la pena ricordarle.** La
+prima è la trappola di questo file: i nuovi `useState` erano accanto alla
+funzione che li usa, cioè **dopo i return anticipati del gate**, e la
+pagina moriva con «Rendered more hooks than during the previous render» —
+ora stanno con gli altri stati, in cima. La seconda: in `soloLettura` la
+riga riceveva `onApriData={() => {}}`, quindi mostrava la freccina e il
+dito del mouse **per non fare niente**; adesso riceve `undefined` e non
+finge (vale anche per il profilo kiosk).
+
+Prove in `prove/stampe.test.jsx` (7): la tessera solo col permesso, i due
+tasti su ogni riga, l'assenza di matita/cestino/calendario/barra di
+Gestione corsi, la riga che premuta non apre la classe, i filtri e la
+ricerca uguali, e i due messaggi che spiegano perché un diploma non esce
+(«non ha nessun pacchetto») o che la classe è vuota — senza generare
+nessun PDF.
+
 ## 5. Comandi
 
 ```bash

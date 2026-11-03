@@ -10658,6 +10658,9 @@ function SezioneDateCorsi({
   // entrarci (Gestione corsi); dove manca, i nomi trovati restano scritti
   // ma non cliccabili
   onApriIscritto,
+  // opzionale: tasti propri accanto a ogni riga dell'elenco (vedi
+  // DateRaggruppatePerCitta). Lo passa «Stampe»
+  azioniRiga,
 }) {
   const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
@@ -10997,6 +11000,7 @@ function SezioneDateCorsi({
           iscritti={iscritti} master={master} onApriData={onApriData}
           allieviTrovati={allieviTrovatiPerData} onApriIscritto={onApriIscritto}
           onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
+          azioniRiga={azioniRiga}
         />
       ) : (
         // spostabile solo dove è già consentito modificare le date (Gestione
@@ -20430,7 +20434,7 @@ function BarraTastiGestioneCorsi({ attivo, numeroAccontiInAttesa = 0, onAggiungi
   );
 }
 
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [], onApriEvento, onApriGestioneEventi, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [], onApriEvento, onApriGestioneEventi, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriProssimeContabilita, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false, apriSubitoAggiungiCorso = false, azioniRiga }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -20581,8 +20585,12 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, eventi = [
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
         eventi={eventi} onApriEvento={onApriEvento}
-        ricarica={ricarica} onApriData={soloLettura ? () => {} : onApriData}
+        // in sola lettura la riga NON si apre, e non lo finge: prima
+        // riceveva una funzione vuota, quindi mostrava la freccina e il
+        // dito del mouse per non fare niente
+        ricarica={ricarica} onApriData={soloLettura ? undefined : onApriData}
         onApriIscritto={soloLettura ? undefined : onApriIscritto}
+        azioniRiga={azioniRiga}
         nascondiTitolo
         stickyControlli intestazioneSticky={modoDateGestione === "calendario" ? soloTastiGestioneCorsi : intestazioneGestioneCorsi}
         nascondiControlliInCalendario
@@ -26554,7 +26562,11 @@ function CardCronologico({ mesi, renderRiga }) {
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica, cronologico, allieviTrovati, onApriIscritto }) {
+// `azioniRiga(cd)` (3/11/2026): i tasti che il chiamante vuole accanto a
+// ogni riga. Serve a «Stampe», dove la riga non si apre e le uniche cose
+// che si possono fare sono stampare i diplomi e i nomi. Chi non lo passa
+// non cambia di niente.
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica, cronologico, allieviTrovati, onApriIscritto, azioniRiga }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
@@ -26623,6 +26635,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
     );
     const azioni = (
       <>
+        {azioniRiga?.(cd)}
         {onEdit && (
           <button onClick={(e) => { e.stopPropagation(); onEdit(cd); }} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
@@ -27990,6 +28003,11 @@ export const TASTI_HOME = [
   // giorno si puo' togliere a qualcuno. Un utente nuovo la trova dentro
   // da subito: vedi PERMESSI_DI_PARTENZA.
   { chiave: "registrazioneclienti", etichetta: "Registrazione clienti" },
+  // L'ELENCO DEI CORSI PER CHI DEVE SOLO STAMPARE (3/11/2026, chiesto dal
+  // titolare per Raffaele). La stessa lista di Gestione corsi — stessi
+  // filtri, stessa ricerca — senza il calendario, senza entrare nelle
+  // classi e senza niente da modificare: per riga, due tasti.
+  { chiave: "stampe", etichetta: "Stampe" },
 ];
 // Quello che un utente nuovo ha acceso appena nasce. Finora era una
 // lista vuota, e andava bene finche' ogni area era da concedere; la
@@ -31154,6 +31172,372 @@ function PannelloRiepilogoAmministrativo({
   );
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// I DUE PDF DI UNA CLASSE: i diplomi e i segnaposti (i «nomi»).
+//
+// Stanno qui, fuori da SchedaData, perche' dal 3/11/2026 li stampano in
+// DUE posti: la scheda della classe e la pagina «Stampe» — l'elenco dei
+// corsi con due tasti per riga, per chi non deve entrare nei corsi.
+//
+// Due copie vorrebbero dire due diplomi diversi dallo stesso archivio, e
+// il giorno in cui qualcuno sposta il nome di mezzo centimetro in un
+// posto solo non se ne accorge nessuno finche' il foglio non e' in mano
+// all'allieva. E' la stessa ragione per cui la composizione delle mail
+// sta in `_shared/email.js` e non in due punti.
+//
+// Qui non si apre nessuna finestra e non si scarica niente: si tornano i
+// byte e l'elenco di chi e' rimasto fuori, con un `esito` che dice cosa
+// e' successo. A parlare e a scaricare ci pensa chi chiama, che sa dove
+// si trova l'utente.
+
+// Il PDF finito diventa un file che il browser scarica. Unico punto in
+// cui succede, cosi' il nome del file lo decide chi genera.
+function scaricaPdfBytes(bytes, nomeFile) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeFile;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// «rgb» di pdf-lib arriva solo al primo utilizzo (import dinamico: vedi
+// getPdfLib in cima al file): chi genera la carica e la mette qui prima
+// di chiamare disegnaTestoDiploma. Resta una variabile condivisa perche'
+// e' la stessa funzione della stessa libreria per tutti: due stampe
+// insieme ci scrivono lo stesso valore.
+let rgbFn = null;
+  // disegna un testo su una pagina pdf-lib, convertendo la posizione da
+  // percentuale (0-100, origine in alto a sinistra, come nell'editor
+  // visivo di "Font Diplomi") a punti pdf (origine in basso a sinistra),
+  // e l'allineamento in un offset orizzontale rispetto al punto ancorato
+function disegnaTestoDiploma(page, testo, { posX, posY, fontSize, colore, allineamento, font }) {
+    if (!testo) return;
+    const { width, height } = page.getSize();
+    const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);
+    const ancoraX = (posX / 100) * width;
+    const x = allineamento === "left" ? ancoraX : allineamento === "right" ? ancoraX - larghezzaTesto : ancoraX - larghezzaTesto / 2;
+    // La percentuale dice dove sta il CENTRO del testo, non la sua
+    // baseline. Prima si scendeva di un trentacinque per cento del corpo,
+    // un numero buono per un carattere e sbagliato per un altro: e infatti
+    // firma e data — che hanno font loro — venivano stampate piu' in alto
+    // di dove si vedevano nell'anteprima, mentre il nome ci azzeccava.
+    //
+    // Ora la misura la da' il font: quanto sale sopra la baseline. Meta' di
+    // quella altezza sotto il centro chiesto ed ecco la baseline giusta,
+    // qualunque carattere sia — corsivo di firma compreso.
+    const sopraLaBaseline = typeof font.heightAtSize === "function"
+      ? font.heightAtSize(fontSize, { descender: false })
+      : fontSize * 0.7;
+    const y = height - (posY / 100) * height - sopraLaBaseline / 2;
+    const { r, g, b } = hexInRgb01(colore);
+    page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
+  }
+
+  // IL DIPLOMA VIENE SOLO DAL PACCHETTO. Nessun ripiego, nessuna
+  // eccezione. Regola dettata il 30/09/2026: "unici diplomi che valgono
+  // sono quelli associati ai pacchetti".
+  //
+  // C'erano due strade in piu', e tutte e due potevano stampare il
+  // certificato di un'altra persona: una condizione `kit.corso_id ===
+  // corso.id` che buttava via il modello del pacchetto quando il
+  // pacchetto era nato sotto un'altra definizione di corso, e un
+  // ripiego sull'"ultimo diploma caricato fra i pacchetti di questo
+  // corso". Un'allieva di Labbra + Eyeliner poteva uscire col diploma
+  // di Sopracciglia e Labbra senza che nessuno se ne accorgesse.
+  //
+  // Adesso: o il pacchetto ha il suo modello, o quell'allieva non ha un
+  // diploma e lo si dice. Meglio una stampa in meno che una sbagliata:
+  // un diploma consegnato non si ritira piu'.
+function percorsoDiplomaDi(iscritto, kitDefinizioni) {
+  const kit = iscritto?.kit_id ? (kitDefinizioni || []).find((k) => k.id === iscritto.kit_id) : null;
+  return kit?.diploma_path || null;
+}
+
+  // PERCHE' QUESTO DIPLOMA NON ESCE. Tre risposte diverse, e dirle
+  // mescolate costa un giro a vuoto a chi legge.
+  //
+  // Il 20/10/2026 l'amministrazione ha segnalato che «l'app dice che il
+  // kit non esiste». Non lo diceva: diceva «il loro pacchetto non ha un
+  // modello di diploma» a venti allieve che il pacchetto ce l'avevano
+  // scritto e il modello pure — quello che mancava era il COLLEGAMENTO
+  // (`kit_id`), e il diploma guarda solo quello. Chi leggeva andava a
+  // controllare il modello, lo trovava al suo posto, e concludeva che
+  // l'app si sbagliasse. Si sbagliava il messaggio.
+function motivoSenzaDiploma(iscritto, kitDefinizioni) {
+    if (!iscritto?.kit_id) {
+      const nome = String(iscritto?.pacchetto_kit || "").trim();
+      return nome
+        ? `il pacchetto "${nome}" è scritto nella scheda ma non collegato`
+        : "non ha nessun pacchetto";
+    }
+    const kit = (kitDefinizioni || []).find((k) => k.id === iscritto.kit_id);
+    if (!kit) return "il pacchetto collegato non esiste più";
+    if (!kit.diploma_path) return `il pacchetto "${kit.nome}" non ha un modello di diploma`;
+    return null;
+}
+
+async function generaPdfDiplomi({ listaIscritti = [], corso, corsoData, loc, master, fontDiplomi, kitDefinizioni }) {
+    if (listaIscritti.length === 0) return { esito: "nessun-iscritto" };
+    if (!listaIscritti.some((i) => percorsoDiplomaDi(i, kitDefinizioni))) {
+      // si dice il motivo di ciascuna invece di una frase sola che vale
+      // per tutte e per nessuna
+      return {
+        esito: "nessun-modello",
+        motivi: listaIscritti.map((i) => `${`${i.nome || ""} ${i.cognome || ""}`.trim()}: ${motivoSenzaDiploma(i, kitDefinizioni)}`),
+      };
+    }
+    {
+      const { PDFDocument, StandardFonts, fontkit, rgb } = await getPdfLib();
+      rgbFn = rgb;
+      // stesso motivo del merge in stampaSegnaposti: un campo mancante
+      // (colonna nuova non ancora migrata su questo database) non deve
+      // ripiegare su un valore che disattiva il limite in silenzio
+      const config = { ...CONFIG_DIPLOMI_DEFAULT, ...(fontDiplomi || {}) };
+      const masterCorso = corsoData.master_id ? (master || []).find((m) => m.id === corsoData.master_id) : null;
+      const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
+      // tolto lo spazio tra nome e cognome: con un font firma corsivo il
+      // testo deve scorrere come una firma vera, non con un vuoto in mezzo.
+      // Se la master ha "diploma già firmato" attivo, firmerà a mano: il
+      // campo firma resta vuoto, senza applicare nulla in automatico
+      const testoFirma = masterCorso && !masterCorso.diploma_gia_firmato
+        ? toTitleCase(masterCorso.nome).replace(/\s+/g, "")
+        : "";
+
+      const scaricaBytes = scaricaBytesStorage;
+
+      const outputPdf = await PDFDocument.create();
+      outputPdf.registerFontkit(fontkit);
+
+      // per ciascun font: se manca o non si riesce a caricare, ripiego su
+      // Helvetica solo per quell'elemento, senza bloccare la stampa
+      async function embedFontOFallback(percorso) {
+        if (percorso) {
+          try {
+            const bytes = await scaricaBytes("diploma-fonts", percorso);
+            return await outputPdf.embedFont(bytes);
+          } catch { /* ripiego sotto */ }
+        }
+        return await outputPdf.embedFont(StandardFonts.Helvetica);
+      }
+      const fontNome = await embedFontOFallback(config.font_allievo_path);
+      const fontData = await embedFontOFallback(config.font_data_path);
+      const fontFirma = await embedFontOFallback(config.font_firma_path);
+
+      // un file caricato una volta sola, anche se lo condividono in dieci:
+      // la cache è sul percorso, non sull'allievo
+      const cacheDoc = new Map();
+      async function docDaPercorso(percorso) {
+        if (!percorso) return null;
+        if (!cacheDoc.has(percorso)) {
+          cacheDoc.set(percorso, await PDFDocument.load(await scaricaBytes("diploma-templates", percorso)));
+        }
+        return cacheDoc.get(percorso);
+      }
+      // il modello è quello del pacchetto dell'allievo, e per ultimo quello
+      // del corso: le "eccezioni diploma" non esistono più — erano il modo
+      // di dare un foglio diverso a un allievo, e ora quel foglio ce l'ha
+      // già il suo pacchetto
+      async function docTemplatePer(iscritto) {
+        return docDaPercorso(percorsoDiplomaDi(iscritto, kitDefinizioni));
+      }
+
+      // se uno o più iscritti hanno "Ristampa solo questo" spuntato, il PDF
+      // si genera solo per loro; altrimenti (nessuno flaggato) per tutti,
+      // come sempre
+      const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
+      const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
+      const senzaModello = [];
+
+      for (const iscritto of iscrittiDaStampare) {
+        const docDaUsare = await docTemplatePer(iscritto);
+        // nessun modello né sul pacchetto né sul corso: si salta, invece di
+        // far fallire l'intera stampa per un allievo solo
+        if (!docDaUsare) {
+          senzaModello.push(`${`${iscritto.nome || ""} ${iscritto.cognome || ""}`.trim()} — ${motivoSenzaDiploma(iscritto, kitDefinizioni)}`);
+          continue;
+        }
+        const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
+        outputPdf.addPage(pagina);
+        const { width: larghezzaPaginaDiploma } = pagina.getSize();
+
+        const testoDataIscritto = testoData;
+
+        // solo il nome allievo è limitato dalle 2 linee di "Diploma di
+        // riferimento": se supera quella larghezza si rimpicciolisce
+        // solo per questo nome, non tocca città/data né firma. Il nome è
+        // centrato su nome_pos_x: il lato più stretto rispetto alle due
+        // linee è quello che vincola, raddoppiato dà la larghezza massima
+        // (la sola distanza fissa tra le due linee sbaglierebbe ogni volta
+        // che nome_pos_x non sta esattamente a metà strada tra le due)
+        const testoNome = toTitleCase(`${iscritto.nome} ${iscritto.cognome}`);
+        const spazioSxNome = (config.nome_pos_x - config.nome_limite_sx) / 100 * larghezzaPaginaDiploma;
+        const spazioDxNome = (config.nome_limite_dx - config.nome_pos_x) / 100 * larghezzaPaginaDiploma;
+        const larghezzaMaxNome = 2 * Math.min(spazioSxNome, spazioDxNome);
+        let nomeFontSize = config.nome_font_size;
+        if (larghezzaMaxNome > 0) {
+          const larghezzaTestoNome = fontNome.widthOfTextAtSize(testoNome, nomeFontSize);
+          if (larghezzaTestoNome > larghezzaMaxNome) nomeFontSize = Math.max(6, (larghezzaMaxNome / larghezzaTestoNome) * nomeFontSize);
+        }
+        disegnaTestoDiploma(pagina, testoNome, {
+          posX: config.nome_pos_x, posY: config.nome_pos_y, fontSize: nomeFontSize,
+          colore: config.nome_colore, allineamento: config.nome_allineamento, font: fontNome,
+        });
+        disegnaTestoDiploma(pagina, testoDataIscritto, {
+          posX: config.data_pos_x, posY: config.data_pos_y, fontSize: config.data_font_size,
+          colore: config.data_colore, allineamento: config.data_allineamento, font: fontData,
+        });
+        if (testoFirma) {
+          // La firma sta fra i suoi due segni: si scrive al centro fra
+          // loro, e se non ci sta il carattere scende finche' non entra.
+          // Una master che si chiama "Maria Antonietta Della Valle" e una
+          // che si chiama "Ada" devono stare tutte e due dentro la stessa
+          // riga, senza che nessuno vada a ritoccare il corpo a mano.
+          // La firma e' SEMPRE centrata sul suo punto, e cresce o cala da
+          // li': un nome corto resta dov'era il centro di uno lungo,
+          // senza spostarsi. Prima si centrava a meta' strada fra i due
+          // limiti, quindi bastava muovere un limite per veder scappare
+          // la firma da un'altra parte.
+          //
+          // Il corpo scende finche' il nome non sta dentro tutti e due i
+          // segni. La larghezza utile e' il DOPPIO del lato piu' stretto,
+          // non la distanza fra i limiti: essendo centrato, il testo si
+          // allarga in parti uguali di qua e di la', e se il centro non
+          // sta esattamente a meta' e' il lato corto a decidere. E' lo
+          // stesso conto che il nome dell'allievo fa gia'.
+          const sxFirma = Number(config.firma_limite_sx ?? 25);
+          const dxFirma = Number(config.firma_limite_dx ?? 75);
+          const centroFirma = Number(config.firma_pos_x ?? (sxFirma + dxFirma) / 2);
+          const spazioSxFirma = (centroFirma - sxFirma) / 100 * larghezzaPaginaDiploma;
+          const spazioDxFirma = (dxFirma - centroFirma) / 100 * larghezzaPaginaDiploma;
+          const larghezzaMaxFirma = 2 * Math.max(0, Math.min(spazioSxFirma, spazioDxFirma));
+          let firmaFontSize = config.firma_font_size;
+          if (larghezzaMaxFirma > 0) {
+            const larghezzaTestoFirma = fontFirma.widthOfTextAtSize(testoFirma, firmaFontSize);
+            if (larghezzaTestoFirma > larghezzaMaxFirma) {
+              firmaFontSize = Math.max(6, (larghezzaMaxFirma / larghezzaTestoFirma) * firmaFontSize);
+            }
+          }
+          disegnaTestoDiploma(pagina, testoFirma, {
+            posX: centroFirma, posY: config.firma_pos_y, fontSize: firmaFontSize,
+            colore: config.firma_colore, allineamento: "center", font: fontFirma,
+          });
+        }
+      }
+
+      if (outputPdf.getPageCount() === 0) return { esito: "niente-generato", motivi: senzaModello };
+      return {
+        esito: "ok",
+        bytes: await outputPdf.save(),
+        senzaModello,
+        nomeFile: `diplomi-${slugify(corso.nome)}-${corsoData.data_fine}.pdf`,
+      };
+    }
+}
+
+  // stampa i segnaposti (nome allievo) per tutti gli iscritti di questa
+  // classe: usa direttamente il foglio "Segnaposti di riferimento"
+  // caricato in Setting diplomi come vero e proprio template di stampa
+  // (a differenza dei diplomi, qui non c'è un template diverso per ogni
+  // corso). Se gli iscritti superano i posti di una pagina, se ne
+  // generano altre, ripartendo dal primo posto della griglia
+async function generaPdfSegnaposti({ listaIscritti = [], corso, corsoData, segnaposti }) {
+    // se la riga esiste ma manca ancora qualche colonna nuova (es.
+    // limite_sx_pos_x/limite_dx_pos_x, appena aggiunte e non ancora
+    // eseguite su questo database), il campo mancante non deve
+    // "spegnere" il limite tornando a 0/100 (praticamente nessun
+    // limite): meglio ripiegare sul valore di default vero e proprio
+    const cfg = { ...CONFIG_SEGNAPOSTI_DEFAULT, ...(segnaposti || {}) };
+    if (!cfg.riferimento_path) return { esito: "senza-foglio" };
+    if (listaIscritti.length === 0) return { esito: "nessun-iscritto" };
+    {
+      const { PDFDocument, StandardFonts, fontkit, rgb } = await getPdfLib();
+      rgbFn = rgb;
+      const templateBytes = await scaricaBytesStorage("diploma-templates", cfg.riferimento_path);
+      const templateDoc = await PDFDocument.load(templateBytes);
+
+      const outputPdf = await PDFDocument.create();
+      outputPdf.registerFontkit(fontkit);
+      let font = null;
+      if (cfg.font_path) {
+        try {
+          const bytesFont = await scaricaBytesStorage("diploma-fonts", cfg.font_path);
+          font = await outputPdf.embedFont(bytesFont);
+        } catch { /* ripiego sotto */ }
+      }
+      if (!font) font = await outputPdf.embedFont(StandardFonts.Helvetica);
+
+      // stesso comportamento di "Ristampa solo questo" nei diplomi: se
+      // qualcuno è flaggato, il foglio segnaposti si genera solo per lui
+      const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
+      const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
+      const testi = testiSegnaposto(listaIscritti);
+
+      for (let inizio = 0; inizio < iscrittiDaStampare.length; inizio += POSTI_PER_PAGINA_SEGNAPOSTI) {
+        const gruppo = iscrittiDaStampare.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
+        const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
+        outputPdf.addPage(pagina);
+        const { width: larghezzaPagina, height: altezzaPagina } = pagina.getSize();
+        // il nome si stampa sempre centrato esattamente a metà strada tra
+        // le due linee di limite (non nella posizione X di ogni singolo
+        // posto, che conta solo in verticale): così la larghezza massima è
+        // semplicemente la distanza tra le due linee, senza calcoli
+        // asimmetrici, e non può mai sforare né a sinistra né a destra
+        const posX = (cfg.limite_sx_pos_x + cfg.limite_dx_pos_x) / 2;
+        const larghezzaMax = Math.abs(cfg.limite_dx_pos_x - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
+        // riduce fontSizeBase finché "testoRiga" non entra nel limite,
+        // poi lo disegna: usata sia per un nome su una riga sola sia per
+        // ciascuna delle due righe quando il nome viene spezzato
+        function disegnaRigaConLimite(testoRiga, posY, fontSizeBase) {
+          let fontSize = fontSizeBase;
+          if (larghezzaMax > 0) {
+            const larghezzaTesto = font.widthOfTextAtSize(testoRiga, fontSize);
+            if (larghezzaTesto > larghezzaMax) fontSize = Math.max(6, (larghezzaMax / larghezzaTesto) * fontSize);
+          }
+          disegnaTestoDiploma(pagina, testoRiga, {
+            posX, posY, fontSize, colore: cfg.colore, allineamento: "center", font,
+          });
+        }
+        gruppo.forEach((iscritto, idx) => {
+          const slot = SLOT_SEGNAPOSTI[idx];
+          const posY = cfg[`${slot.chiave}_pos_y`];
+          const testo = testi.get(iscritto.id);
+          const parole = testo.trim().split(/\s+/);
+          // un nome composto da più parole (es. "GIANFRANCA ANTONELLA") che
+          // ci sta su una riga sola resta su una riga sola; solo se non ci
+          // sta si spezza su 2 righe (una parola sopra, il resto sotto)
+          // invece di rimpicciolire il font più del necessario
+          const staSuUnaRiga = larghezzaMax <= 0 || parole.length < 2 || font.widthOfTextAtSize(testo, cfg.font_size) <= larghezzaMax;
+          if (staSuUnaRiga) {
+            disegnaRigaConLimite(testo, posY, cfg.font_size);
+          } else {
+            // spezzando su 2 righe, ciascuna parola da sola ha di nuovo
+            // tutto lo spazio necessario: si scrive alla stessa dimensione
+            // usata per un nome su una riga sola, senza rimpicciolire, e le
+            // due righe restano vicine (poco più della metà di una riga
+            // sopra e sotto la posizione del posto, non un'intera riga)
+            const scostamentoPercento = ((cfg.font_size * 0.42) / altezzaPagina) * 100;
+            disegnaTestoDiploma(pagina, parole[0], {
+              posX, posY: posY - scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
+            });
+            disegnaTestoDiploma(pagina, parole.slice(1).join(" "), {
+              posX, posY: posY + scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
+            });
+          }
+        });
+      }
+
+      return {
+        esito: "ok",
+        bytes: await outputPdf.save(),
+        nomeFile: `segnaposti-${slugify(corso.nome)}-${corsoData.data_fine}.pdf`,
+      };
+    }
+}
+
 export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = "", puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, corsiKitProdotti = [], logisticaKitEdizioni = [], prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
@@ -31827,258 +32211,34 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
     sbloccaEAttiva(giaInLista ? costiAperto : false, setCostiAperto, "Codice amministratore per aprire il riepilogo amministrativo:", () => setMostraGestione(false));
   }
 
-  // "rgb" di pdf-lib arriva solo al primo utilizzo (import dinamico: vedi
-  // getPdfLib in cima al file) — stampaDiplomi/stampaSegnaposti la
-  // caricano e la mettono qui prima di chiamare disegnaTestoDiploma
-  let rgbFn = null;
-  // disegna un testo su una pagina pdf-lib, convertendo la posizione da
-  // percentuale (0-100, origine in alto a sinistra, come nell'editor
-  // visivo di "Font Diplomi") a punti pdf (origine in basso a sinistra),
-  // e l'allineamento in un offset orizzontale rispetto al punto ancorato
-  function disegnaTestoDiploma(page, testo, { posX, posY, fontSize, colore, allineamento, font }) {
-    if (!testo) return;
-    const { width, height } = page.getSize();
-    const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);
-    const ancoraX = (posX / 100) * width;
-    const x = allineamento === "left" ? ancoraX : allineamento === "right" ? ancoraX - larghezzaTesto : ancoraX - larghezzaTesto / 2;
-    // La percentuale dice dove sta il CENTRO del testo, non la sua
-    // baseline. Prima si scendeva di un trentacinque per cento del corpo,
-    // un numero buono per un carattere e sbagliato per un altro: e infatti
-    // firma e data — che hanno font loro — venivano stampate piu' in alto
-    // di dove si vedevano nell'anteprima, mentre il nome ci azzeccava.
-    //
-    // Ora la misura la da' il font: quanto sale sopra la baseline. Meta' di
-    // quella altezza sotto il centro chiesto ed ecco la baseline giusta,
-    // qualunque carattere sia — corsivo di firma compreso.
-    const sopraLaBaseline = typeof font.heightAtSize === "function"
-      ? font.heightAtSize(fontSize, { descender: false })
-      : fontSize * 0.7;
-    const y = height - (posY / 100) * height - sopraLaBaseline / 2;
-    const { r, g, b } = hexInRgb01(colore);
-    page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
-  }
-
-  // IL DIPLOMA VIENE SOLO DAL PACCHETTO. Nessun ripiego, nessuna
-  // eccezione. Regola dettata il 30/09/2026: "unici diplomi che valgono
-  // sono quelli associati ai pacchetti".
-  //
-  // C'erano due strade in piu', e tutte e due potevano stampare il
-  // certificato di un'altra persona: una condizione `kit.corso_id ===
-  // corso.id` che buttava via il modello del pacchetto quando il
-  // pacchetto era nato sotto un'altra definizione di corso, e un
-  // ripiego sull'"ultimo diploma caricato fra i pacchetti di questo
-  // corso". Un'allieva di Labbra + Eyeliner poteva uscire col diploma
-  // di Sopracciglia e Labbra senza che nessuno se ne accorgesse.
-  //
-  // Adesso: o il pacchetto ha il suo modello, o quell'allieva non ha un
-  // diploma e lo si dice. Meglio una stampa in meno che una sbagliata:
-  // un diploma consegnato non si ritira piu'.
-  const kitPerIdDiplomi = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
-  const percorsoDiplomaDi = (iscritto) => {
-    const kit = iscritto?.kit_id ? kitPerIdDiplomi[iscritto.kit_id] : null;
-    return kit?.diploma_path || null;
-  };
-
-  // PERCHE' QUESTO DIPLOMA NON ESCE. Tre risposte diverse, e dirle
-  // mescolate costa un giro a vuoto a chi legge.
-  //
-  // Il 20/10/2026 l'amministrazione ha segnalato che «l'app dice che il
-  // kit non esiste». Non lo diceva: diceva «il loro pacchetto non ha un
-  // modello di diploma» a venti allieve che il pacchetto ce l'avevano
-  // scritto e il modello pure — quello che mancava era il COLLEGAMENTO
-  // (`kit_id`), e il diploma guarda solo quello. Chi leggeva andava a
-  // controllare il modello, lo trovava al suo posto, e concludeva che
-  // l'app si sbagliasse. Si sbagliava il messaggio.
-  const motivoSenzaDiploma = (iscritto) => {
-    if (!iscritto?.kit_id) {
-      const nome = String(iscritto?.pacchetto_kit || "").trim();
-      return nome
-        ? `il pacchetto "${nome}" è scritto nella scheda ma non collegato`
-        : "non ha nessun pacchetto";
-    }
-    const kit = kitPerIdDiplomi[iscritto.kit_id];
-    if (!kit) return "il pacchetto collegato non esiste più";
-    if (!kit.diploma_path) return `il pacchetto "${kit.nome}" non ha un modello di diploma`;
-    return null;
-  };
-
+  // I DUE PDF LI COMPONE UN SOLO POSTO (vedi generaPdfDiplomi /
+  // generaPdfSegnaposti, fuori da questo componente): li stampa anche la
+  // pagina «Stampe». Qui restano gli avvisi e il tasto che gira, che sono
+  // l'unica cosa che cambia fra i due posti.
   async function stampaDiplomi() {
-    if (listaIscritti.length > 0 && !listaIscritti.some((i) => percorsoDiplomaDi(i))) {
-      // si dice il motivo di ciascuna invece di una frase sola che vale
-      // per tutte e per nessuna
-      const motivi = listaIscritti
-        .map((i) => `· ${`${i.nome || ""} ${i.cognome || ""}`.trim()}: ${motivoSenzaDiploma(i)}`)
-        .join("\n");
-      window.alert(
-        "Nessun diploma da stampare. Per ogni allieva, il motivo:\n\n" + motivi
-        + "\n\nUn pacchetto «scritto ma non collegato» si sistema da Assegnazione kit, col tasto «Collega»."
-        + "\nUn modello mancante si carica in Impostazioni → Tipologie di kit.",
-      );
-      return;
-    }
-    if (listaIscritti.length === 0) {
-      window.alert("Non ci sono iscritti in questa classe.");
-      return;
-    }
     setGenerandoDiplomi(true);
     try {
-      const { PDFDocument, StandardFonts, fontkit, rgb } = await getPdfLib();
-      rgbFn = rgb;
-      // stesso motivo del merge in stampaSegnaposti: un campo mancante
-      // (colonna nuova non ancora migrata su questo database) non deve
-      // ripiegare su un valore che disattiva il limite in silenzio
-      const config = { ...CONFIG_DIPLOMI_DEFAULT, ...(fontDiplomi || {}) };
-      const masterCorso = corsoData.master_id ? (master || []).find((m) => m.id === corsoData.master_id) : null;
-      const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
-      // tolto lo spazio tra nome e cognome: con un font firma corsivo il
-      // testo deve scorrere come una firma vera, non con un vuoto in mezzo.
-      // Se la master ha "diploma già firmato" attivo, firmerà a mano: il
-      // campo firma resta vuoto, senza applicare nulla in automatico
-      const testoFirma = masterCorso && !masterCorso.diploma_gia_firmato
-        ? toTitleCase(masterCorso.nome).replace(/\s+/g, "")
-        : "";
-
-      const scaricaBytes = scaricaBytesStorage;
-
-      const outputPdf = await PDFDocument.create();
-      outputPdf.registerFontkit(fontkit);
-
-      // per ciascun font: se manca o non si riesce a caricare, ripiego su
-      // Helvetica solo per quell'elemento, senza bloccare la stampa
-      async function embedFontOFallback(percorso) {
-        if (percorso) {
-          try {
-            const bytes = await scaricaBytes("diploma-fonts", percorso);
-            return await outputPdf.embedFont(bytes);
-          } catch { /* ripiego sotto */ }
-        }
-        return await outputPdf.embedFont(StandardFonts.Helvetica);
-      }
-      const fontNome = await embedFontOFallback(config.font_allievo_path);
-      const fontData = await embedFontOFallback(config.font_data_path);
-      const fontFirma = await embedFontOFallback(config.font_firma_path);
-
-      // un file caricato una volta sola, anche se lo condividono in dieci:
-      // la cache è sul percorso, non sull'allievo
-      const cacheDoc = new Map();
-      async function docDaPercorso(percorso) {
-        if (!percorso) return null;
-        if (!cacheDoc.has(percorso)) {
-          cacheDoc.set(percorso, await PDFDocument.load(await scaricaBytes("diploma-templates", percorso)));
-        }
-        return cacheDoc.get(percorso);
-      }
-      // il modello è quello del pacchetto dell'allievo, e per ultimo quello
-      // del corso: le "eccezioni diploma" non esistono più — erano il modo
-      // di dare un foglio diverso a un allievo, e ora quel foglio ce l'ha
-      // già il suo pacchetto
-      async function docTemplatePer(iscritto) {
-        return docDaPercorso(percorsoDiplomaDi(iscritto));
-      }
-
-      // se uno o più iscritti hanno "Ristampa solo questo" spuntato, il PDF
-      // si genera solo per loro; altrimenti (nessuno flaggato) per tutti,
-      // come sempre
-      const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
-      const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
-      const senzaModello = [];
-
-      for (const iscritto of iscrittiDaStampare) {
-        const docDaUsare = await docTemplatePer(iscritto);
-        // nessun modello né sul pacchetto né sul corso: si salta, invece di
-        // far fallire l'intera stampa per un allievo solo
-        if (!docDaUsare) {
-          senzaModello.push(`${`${iscritto.nome || ""} ${iscritto.cognome || ""}`.trim()} — ${motivoSenzaDiploma(iscritto)}`);
-          continue;
-        }
-        const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
-        outputPdf.addPage(pagina);
-        const { width: larghezzaPaginaDiploma } = pagina.getSize();
-
-        const testoDataIscritto = testoData;
-
-        // solo il nome allievo è limitato dalle 2 linee di "Diploma di
-        // riferimento": se supera quella larghezza si rimpicciolisce
-        // solo per questo nome, non tocca città/data né firma. Il nome è
-        // centrato su nome_pos_x: il lato più stretto rispetto alle due
-        // linee è quello che vincola, raddoppiato dà la larghezza massima
-        // (la sola distanza fissa tra le due linee sbaglierebbe ogni volta
-        // che nome_pos_x non sta esattamente a metà strada tra le due)
-        const testoNome = toTitleCase(`${iscritto.nome} ${iscritto.cognome}`);
-        const spazioSxNome = (config.nome_pos_x - config.nome_limite_sx) / 100 * larghezzaPaginaDiploma;
-        const spazioDxNome = (config.nome_limite_dx - config.nome_pos_x) / 100 * larghezzaPaginaDiploma;
-        const larghezzaMaxNome = 2 * Math.min(spazioSxNome, spazioDxNome);
-        let nomeFontSize = config.nome_font_size;
-        if (larghezzaMaxNome > 0) {
-          const larghezzaTestoNome = fontNome.widthOfTextAtSize(testoNome, nomeFontSize);
-          if (larghezzaTestoNome > larghezzaMaxNome) nomeFontSize = Math.max(6, (larghezzaMaxNome / larghezzaTestoNome) * nomeFontSize);
-        }
-        disegnaTestoDiploma(pagina, testoNome, {
-          posX: config.nome_pos_x, posY: config.nome_pos_y, fontSize: nomeFontSize,
-          colore: config.nome_colore, allineamento: config.nome_allineamento, font: fontNome,
-        });
-        disegnaTestoDiploma(pagina, testoDataIscritto, {
-          posX: config.data_pos_x, posY: config.data_pos_y, fontSize: config.data_font_size,
-          colore: config.data_colore, allineamento: config.data_allineamento, font: fontData,
-        });
-        if (testoFirma) {
-          // La firma sta fra i suoi due segni: si scrive al centro fra
-          // loro, e se non ci sta il carattere scende finche' non entra.
-          // Una master che si chiama "Maria Antonietta Della Valle" e una
-          // che si chiama "Ada" devono stare tutte e due dentro la stessa
-          // riga, senza che nessuno vada a ritoccare il corpo a mano.
-          // La firma e' SEMPRE centrata sul suo punto, e cresce o cala da
-          // li': un nome corto resta dov'era il centro di uno lungo,
-          // senza spostarsi. Prima si centrava a meta' strada fra i due
-          // limiti, quindi bastava muovere un limite per veder scappare
-          // la firma da un'altra parte.
-          //
-          // Il corpo scende finche' il nome non sta dentro tutti e due i
-          // segni. La larghezza utile e' il DOPPIO del lato piu' stretto,
-          // non la distanza fra i limiti: essendo centrato, il testo si
-          // allarga in parti uguali di qua e di la', e se il centro non
-          // sta esattamente a meta' e' il lato corto a decidere. E' lo
-          // stesso conto che il nome dell'allievo fa gia'.
-          const sxFirma = Number(config.firma_limite_sx ?? 25);
-          const dxFirma = Number(config.firma_limite_dx ?? 75);
-          const centroFirma = Number(config.firma_pos_x ?? (sxFirma + dxFirma) / 2);
-          const spazioSxFirma = (centroFirma - sxFirma) / 100 * larghezzaPaginaDiploma;
-          const spazioDxFirma = (dxFirma - centroFirma) / 100 * larghezzaPaginaDiploma;
-          const larghezzaMaxFirma = 2 * Math.max(0, Math.min(spazioSxFirma, spazioDxFirma));
-          let firmaFontSize = config.firma_font_size;
-          if (larghezzaMaxFirma > 0) {
-            const larghezzaTestoFirma = fontFirma.widthOfTextAtSize(testoFirma, firmaFontSize);
-            if (larghezzaTestoFirma > larghezzaMaxFirma) {
-              firmaFontSize = Math.max(6, (larghezzaMaxFirma / larghezzaTestoFirma) * firmaFontSize);
-            }
-          }
-          disegnaTestoDiploma(pagina, testoFirma, {
-            posX: centroFirma, posY: config.firma_pos_y, fontSize: firmaFontSize,
-            colore: config.firma_colore, allineamento: "center", font: fontFirma,
-          });
-        }
-      }
-
-      if (outputPdf.getPageCount() === 0) {
-        window.alert("Nessun diploma generato. Per ognuna, il motivo:\n\n· " + senzaModello.join("\n· "));
+      const r = await generaPdfDiplomi({ listaIscritti, corso, corsoData, loc, master, fontDiplomi, kitDefinizioni });
+      if (r.esito === "nessun-iscritto") { window.alert("Non ci sono iscritti in questa classe."); return; }
+      if (r.esito === "nessun-modello") {
+        window.alert(
+          "Nessun diploma da stampare. Per ogni allieva, il motivo:\n\n· " + r.motivi.join("\n· ")
+          + "\n\nUn pacchetto «scritto ma non collegato» si sistema da Assegnazione kit, col tasto «Collega»."
+          + "\nUn modello mancante si carica in Impostazioni → Tipologie di kit.",
+        );
         return;
       }
-      if (senzaModello.length > 0) {
+      if (r.esito === "niente-generato") {
+        window.alert("Nessun diploma generato. Per ognuna, il motivo:\n\n· " + r.motivi.join("\n· "));
+        return;
+      }
+      if (r.senzaModello.length > 0) {
         window.alert(
-          "Diplomi generati, tranne per queste:\n\n· " + senzaModello.join("\n· ")
+          "Diplomi generati, tranne per queste:\n\n· " + r.senzaModello.join("\n· ")
           + "\n\nSistemato il motivo, si ristampa solo per loro spuntando «Ristampa solo questo».",
         );
       }
-      const bytesFinali = await outputPdf.save();
-      const blob = new Blob([bytesFinali], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `diplomi-${slugify(corso.nome)}-${corsoData.data_fine}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      scaricaPdfBytes(r.bytes, r.nomeFile);
     } catch (e) {
       window.alert("Errore nella generazione dei diplomi: " + e.message);
     } finally {
@@ -32086,121 +32246,23 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
     }
   }
 
-  // stampa i segnaposti (nome allievo) per tutti gli iscritti di questa
-  // classe: usa direttamente il foglio "Segnaposti di riferimento"
-  // caricato in Setting diplomi come vero e proprio template di stampa
-  // (a differenza dei diplomi, qui non c'è un template diverso per ogni
-  // corso). Se gli iscritti superano i posti di una pagina, se ne
-  // generano altre, ripartendo dal primo posto della griglia
   async function stampaSegnaposti() {
-    // se la riga esiste ma manca ancora qualche colonna nuova (es.
-    // limite_sx_pos_x/limite_dx_pos_x, appena aggiunte e non ancora
-    // eseguite su questo database), il campo mancante non deve
-    // "spegnere" il limite tornando a 0/100 (praticamente nessun
-    // limite): meglio ripiegare sul valore di default vero e proprio
-    const cfg = { ...CONFIG_SEGNAPOSTI_DEFAULT, ...(segnaposti || {}) };
-    if (!cfg.riferimento_path) {
-      window.alert('Nessun foglio segnaposti di riferimento caricato — impostalo da Setting diplomi.');
-      return;
-    }
-    if (listaIscritti.length === 0) {
-      window.alert("Non ci sono iscritti in questa classe.");
-      return;
-    }
     setGenerandoSegnaposti(true);
     try {
-      const { PDFDocument, StandardFonts, fontkit, rgb } = await getPdfLib();
-      rgbFn = rgb;
-      const templateBytes = await scaricaBytesStorage("diploma-templates", cfg.riferimento_path);
-      const templateDoc = await PDFDocument.load(templateBytes);
-
-      const outputPdf = await PDFDocument.create();
-      outputPdf.registerFontkit(fontkit);
-      let font = null;
-      if (cfg.font_path) {
-        try {
-          const bytesFont = await scaricaBytesStorage("diploma-fonts", cfg.font_path);
-          font = await outputPdf.embedFont(bytesFont);
-        } catch { /* ripiego sotto */ }
+      const r = await generaPdfSegnaposti({ listaIscritti, corso, corsoData, segnaposti });
+      if (r.esito === "senza-foglio") {
+        window.alert('Nessun foglio segnaposti di riferimento caricato — impostalo da Setting diplomi.');
+        return;
       }
-      if (!font) font = await outputPdf.embedFont(StandardFonts.Helvetica);
-
-      // stesso comportamento di "Ristampa solo questo" nei diplomi: se
-      // qualcuno è flaggato, il foglio segnaposti si genera solo per lui
-      const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
-      const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
-      const testi = testiSegnaposto(listaIscritti);
-
-      for (let inizio = 0; inizio < iscrittiDaStampare.length; inizio += POSTI_PER_PAGINA_SEGNAPOSTI) {
-        const gruppo = iscrittiDaStampare.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
-        const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
-        outputPdf.addPage(pagina);
-        const { width: larghezzaPagina, height: altezzaPagina } = pagina.getSize();
-        // il nome si stampa sempre centrato esattamente a metà strada tra
-        // le due linee di limite (non nella posizione X di ogni singolo
-        // posto, che conta solo in verticale): così la larghezza massima è
-        // semplicemente la distanza tra le due linee, senza calcoli
-        // asimmetrici, e non può mai sforare né a sinistra né a destra
-        const posX = (cfg.limite_sx_pos_x + cfg.limite_dx_pos_x) / 2;
-        const larghezzaMax = Math.abs(cfg.limite_dx_pos_x - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
-        // riduce fontSizeBase finché "testoRiga" non entra nel limite,
-        // poi lo disegna: usata sia per un nome su una riga sola sia per
-        // ciascuna delle due righe quando il nome viene spezzato
-        function disegnaRigaConLimite(testoRiga, posY, fontSizeBase) {
-          let fontSize = fontSizeBase;
-          if (larghezzaMax > 0) {
-            const larghezzaTesto = font.widthOfTextAtSize(testoRiga, fontSize);
-            if (larghezzaTesto > larghezzaMax) fontSize = Math.max(6, (larghezzaMax / larghezzaTesto) * fontSize);
-          }
-          disegnaTestoDiploma(pagina, testoRiga, {
-            posX, posY, fontSize, colore: cfg.colore, allineamento: "center", font,
-          });
-        }
-        gruppo.forEach((iscritto, idx) => {
-          const slot = SLOT_SEGNAPOSTI[idx];
-          const posY = cfg[`${slot.chiave}_pos_y`];
-          const testo = testi.get(iscritto.id);
-          const parole = testo.trim().split(/\s+/);
-          // un nome composto da più parole (es. "GIANFRANCA ANTONELLA") che
-          // ci sta su una riga sola resta su una riga sola; solo se non ci
-          // sta si spezza su 2 righe (una parola sopra, il resto sotto)
-          // invece di rimpicciolire il font più del necessario
-          const staSuUnaRiga = larghezzaMax <= 0 || parole.length < 2 || font.widthOfTextAtSize(testo, cfg.font_size) <= larghezzaMax;
-          if (staSuUnaRiga) {
-            disegnaRigaConLimite(testo, posY, cfg.font_size);
-          } else {
-            // spezzando su 2 righe, ciascuna parola da sola ha di nuovo
-            // tutto lo spazio necessario: si scrive alla stessa dimensione
-            // usata per un nome su una riga sola, senza rimpicciolire, e le
-            // due righe restano vicine (poco più della metà di una riga
-            // sopra e sotto la posizione del posto, non un'intera riga)
-            const scostamentoPercento = ((cfg.font_size * 0.42) / altezzaPagina) * 100;
-            disegnaTestoDiploma(pagina, parole[0], {
-              posX, posY: posY - scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
-            });
-            disegnaTestoDiploma(pagina, parole.slice(1).join(" "), {
-              posX, posY: posY + scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
-            });
-          }
-        });
-      }
-
-      const bytesFinali = await outputPdf.save();
-      const blob = new Blob([bytesFinali], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `segnaposti-${slugify(corso.nome)}-${corsoData.data_fine}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      if (r.esito === "nessun-iscritto") { window.alert("Non ci sono iscritti in questa classe."); return; }
+      scaricaPdfBytes(r.bytes, r.nomeFile);
     } catch (e) {
       window.alert("Errore nella generazione dei segnaposti: " + e.message);
     } finally {
       setGenerandoSegnaposti(false);
     }
   }
+
 
   // carica un file nello storage "allegati-iscritti" e restituisce il percorso salvato
   async function caricaAllegato(file, prefisso) {
@@ -84340,6 +84402,23 @@ function Gestionale() {
   const [filtroCittaDate, setFiltroCittaDate] = useState("");
   const [filtroMasterDate, setFiltroMasterDate] = useState("");
   const [cronologicoDate, setCronologicoDate] = useState(false);
+  // «STAMPE»: i suoi filtri sono separati da quelli di Gestione corsi,
+  // così le due pagine non si spostano i filtri sotto i piedi a vicenda,
+  // e nascono IN ORDINE CRONOLOGICO come chiesto — chi stampa cerca la
+  // prossima classe, non la città.
+  //
+  // Stanno QUI con gli altri stati e non accanto alla funzione che li
+  // usa: in questo file i return anticipati del gate vengono prima, e un
+  // hook dichiarato dopo di loro spegne l'intera pagina al primo giro in
+  // cui il gate si apre («Rendered more hooks than during the previous
+  // render»). L'ha preso il banco di prova al primo colpo.
+  const [stampaInCorso, setStampaInCorso] = useState("");
+  const [ricercaStampe, setRicercaStampe] = useState("");
+  const [tabStampe, setTabStampe] = useState("programmazione");
+  const [filtroCorsoStampe, setFiltroCorsoStampe] = useState("");
+  const [filtroCittaStampe, setFiltroCittaStampe] = useState("");
+  const [filtroMasterStampe, setFiltroMasterStampe] = useState("");
+  const [cronologicoStampe, setCronologicoStampe] = useState(true);
   const [apriFiltroCorsoHome, setApriFiltroCorsoHome] = useState(false);
   const [apriFiltroCittaHome, setApriFiltroCittaHome] = useState(false);
   const [apriFiltroMasterHome, setApriFiltroMasterHome] = useState(false);
@@ -84682,6 +84761,10 @@ function Gestionale() {
     // o no a seconda delle pagine viste prima nella stessa sessione —
     // Magazzino e Analisi caricano `eventi`, e da li' in poi si vedeva.
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare", "impegno", "eventi"],
+    // «Stampe»: la stessa lista di Gestione corsi, piu' quello che serve
+    // ai due PDF — i pacchetti (da cui viene il modello del diploma) e le
+    // due righe di impostazioni dei font/fogli
+    stampe: ["corsi", "location", "corsi_date", "iscritti", "master", "kit_definizioni", "font_diplomi", "segnaposti_config"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "location_prezzi", "utenti_app", "impegno"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic", "quote_venditori_split", "hotel_prezzi", "hotel_periodi_speciali", "impegno", "location_prezzi"],
@@ -85420,6 +85503,45 @@ function Gestionale() {
   // entrando in "Vendite prodotti" si arriva sullo shop online: e' il
   // canale che si guarda tutti i giorni. I totali restano un tasto di
   // fianco, come le altre viste
+  // «STAMPE» (3/11/2026). Le due stampe di una classe senza entrarci: il
+  // PDF lo compone lo stesso codice della scheda della classe
+  // (generaPdfDiplomi / generaPdfSegnaposti), qui si raccolgono i dati
+  // della riga e si dice cosa e' successo.
+  async function stampaDellaClasse(cd, tipo) {
+    if (stampaInCorso) return;
+    const corso = corsi.find((c) => c.id === cd.corso_id) || null;
+    const loc = location.find((l) => l.id === cd.location_id) || null;
+    const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === cd.id);
+    const dove = `${toTitleCase(corso?.nome || "corso")} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}`;
+    setStampaInCorso(`${cd.id}:${tipo}`);
+    try {
+      if (tipo === "diplomi") {
+        const r = await generaPdfDiplomi({ listaIscritti, corso, corsoData: cd, loc, master, fontDiplomi, kitDefinizioni });
+        if (r.esito === "nessun-iscritto") { window.alert(`${dove}\n\nNon ci sono iscritti in questa classe.`); return; }
+        if (r.esito === "nessun-modello" || r.esito === "niente-generato") {
+          window.alert(
+            `${dove}\n\nNessun diploma da stampare. Per ogni allieva, il motivo:\n\n· ${r.motivi.join("\n· ")}`
+            + "\n\nSi sistema da chi amministra: un pacchetto «scritto ma non collegato» da Assegnazione kit, un modello mancante da Impostazioni → Tipologie di kit.",
+          );
+          return;
+        }
+        if (r.senzaModello.length > 0) {
+          window.alert(`${dove}\n\nDiplomi generati, tranne per queste:\n\n· ${r.senzaModello.join("\n· ")}`);
+        }
+        scaricaPdfBytes(r.bytes, r.nomeFile);
+      } else {
+        const r = await generaPdfSegnaposti({ listaIscritti, corso, corsoData: cd, segnaposti });
+        if (r.esito === "senza-foglio") { window.alert("Nessun foglio segnaposti di riferimento caricato: lo carica chi amministra da Setting diplomi."); return; }
+        if (r.esito === "nessun-iscritto") { window.alert(`${dove}\n\nNon ci sono iscritti in questa classe.`); return; }
+        scaricaPdfBytes(r.bytes, r.nomeFile);
+      }
+    } catch (e) {
+      window.alert(`${dove}\n\nNon sono riuscito a generare il PDF: ${e?.message || e}`);
+    } finally {
+      setStampaInCorso("");
+    }
+  }
+
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statvenditeshop"); }
   // raggiungibili solo dai due tasti dentro "Statistiche Vendite
   // Prodotti" (già un'area protetta): nessun secondo cancello password,
@@ -86404,6 +86526,10 @@ function Gestionale() {
               // due tasti di distanza erano due di troppo
               { chiave: "iscrizioneallievi", title: "Iscrizione Allievi", descrizione: "Come si iscrive un allievo, e il messaggio da mandargli dopo", Icona: IconaPersonaAggiungi, attivo: true, onClick: () => setView("iscrizioneallievi") },
               { chiave: "registrazioneclienti", title: "Registrazione clienti", descrizione: "Registra un cliente e consulta quelli già registrati", Icona: IconaPersonaAggiungi, attivo: tastoAbilitato("registrazioneclienti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("registrazioneclienti") },
+              // «Stampe» la vede solo chi ha quella casella: nessun
+              // bypass per chi amministra, perche' chi amministra entra
+              // nelle classi e stampa da li'
+              { chiave: "stampe", title: "Stampe", descrizione: "L'elenco dei corsi, con diplomi e nomi da stampare", Icona: IconaStampante, attivo: tastoAbilitato("stampe"), onClick: () => setView("stampe") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "regolamenti", title: "Regolamenti", descrizione: "Prezzi, sconti, procedure: le decisioni prese, da consultare", Icona: IconaClipboardErp, attivo: tastoAbilitato("regolamenti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("regolamenti") },
@@ -87216,6 +87342,52 @@ function Gestionale() {
           onBack={() => setView("home")}
           titoloIndietro="Home"
           titolo={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {/* «STAMPE»: l'elenco di Gestione corsi in sola lettura — stessi
+          filtri, stessa ricerca, nessun calendario, nessuna classe da
+          aprire, niente da modificare — con due tasti per riga. */}
+      {view === "stampe" && (
+        <GestioneDate
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          ricarica={fetchDati} onBack={() => setView("home")}
+          soloLettura
+          titolo={etichettaTasto("home", "stampe", "Stampe")}
+          ricercaDateGestione={ricercaStampe} setRicercaDateGestione={setRicercaStampe}
+          tabDateGestione={tabStampe} setTabDateGestione={setTabStampe}
+          modoDateGestione="elenco" setModoDateGestione={() => {}}
+          filtroCorsoDate={filtroCorsoStampe} setFiltroCorsoDate={setFiltroCorsoStampe}
+          filtroCittaDate={filtroCittaStampe} setFiltroCittaDate={setFiltroCittaStampe}
+          filtroMasterDate={filtroMasterStampe} setFiltroMasterDate={setFiltroMasterStampe}
+          cronologicoDate={cronologicoStampe} setCronologicoDate={setCronologicoStampe}
+          registraInterceptaIndietro={registraInterceptaIndietro}
+          azioniRiga={(cd) => (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              {[
+                { tipo: "diplomi", testo: "Diplomi", titolo: "Stampa i diplomi di questa classe" },
+                { tipo: "nomi", testo: "Nomi", titolo: "Stampa i segnaposti con i nomi di questa classe" },
+              ].map((t) => {
+                const sto = stampaInCorso === `${cd.id}:${t.tipo}`;
+                return (
+                  <button key={t.tipo} type="button" title={t.titolo}
+                    data-campo={`stampa-${t.tipo}`}
+                    onClick={(e) => { e.stopPropagation(); stampaDellaClasse(cd, t.tipo); }}
+                    disabled={!!stampaInCorso}
+                    style={{
+                      ...fontBody, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap",
+                      color: sto ? "#fff" : NAVY, background: sto ? NAVY : "#fff",
+                      border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "6px 10px",
+                      cursor: stampaInCorso ? "default" : "pointer", opacity: stampaInCorso && !sto ? 0.45 : 1,
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                    }}>
+                    <IconaStampante size={13} color={sto ? "#fff" : GOLD} />
+                    {sto ? "Genero…" : t.testo}
+                  </button>
+                );
+              })}
+            </span>
+          )}
         />
       )}
 
