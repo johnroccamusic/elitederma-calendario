@@ -62,7 +62,7 @@
 // Serve una sessione vera (getUser): `verify_jwt` accetta anche il JWT
 // anon del bundle, e non basta.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { catalogoPer, controllaSql, vistePermesse } from "../_shared/analisi.js";
+import { catalogoPer, controllaSql, leggiCopertura, vistePermesse } from "../_shared/analisi.js";
 import { guidaPer } from "../_shared/guida-app.js";
 import { esitoInterrogazione, registroFinale, senzaRisposta } from "../_shared/assistente.js";
 
@@ -202,7 +202,10 @@ Deno.serve(async (req) => {
     ruolo === "amministrazione" || (s.visibile_a || []).includes("tutti") || (s.visibile_a || []).includes(ruolo));
 
   const viste = vistePermesse({ ruolo, permessi });
-  const catalogo = catalogoPer(viste);
+  // le date di copertura entrano nel catalogo a OGNI domanda, misurate dal
+  // dato: senza, una risposta su un periodo che i dati non hanno sembra
+  // completa e non lo e' (vedi bloccoCopertura in _shared/analisi.js)
+  const catalogo = catalogoPer(viste, await leggiCopertura(admin));
   const guida = guidaPer({ ruolo, permessi });
 
   const registra = async (campi: Record<string, unknown>) => {

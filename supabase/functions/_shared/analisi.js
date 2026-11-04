@@ -144,17 +144,68 @@ export const AREE_DATI = [
     catalogo: `analisi_edizioni — una riga per classe (corso + citta' + data), con i soldi: id, corso, citta, data_inizio, data_fine, master, posti_max, iscritti (numero), pattuito (somma dei prezzi concordati), costi_scheda (costi scritti sulla scheda della classe: accademia, master, assistenti, pranzi, hotel, imprevisti, coordinatore).
   Per il calendario (posti liberi, assistenti, sede) usare analisi_calendario, che e' piu' completa e non ha i soldi.`,
   },
+  {
+    vista: "analisi_copertura",
+    titolo: "Da quando ci sono i dati",
+    // non contiene nessun importo e nessun nome: solo fonti, due date e
+    // un conteggio. La vede chiunque sia entrato, perche' serve a
+    // chiunque faccia una domanda su un periodo
+    permessi: [],
+    catalogo: `analisi_copertura — da quando esistono i dati, fonte per fonte. Misurata sul dato stesso a ogni lettura, non scritta a mano.
+  colonne: fonte, viste (quali viste copre), dal, al, righe.
+  A COSA SERVE: le fonti NON cominciano insieme, e la differenza e' di anni. Prima di rispondere su un periodo si guarda qui se quel periodo esiste per la fonte che serve. Le date di questa vista sono anche nel riquadro «DA QUANDO CI SONO I DATI» qui sotto: quello basta nella maggior parte dei casi, e questa vista si interroga quando serve il dettaglio o qualcuno chiede esplicitamente da quando ci sono i dati.`,
+  },
 ];
 
 export const VISTE_ANALISI = AREE_DATI.map((a) => a.vista);
 
 // il catalogo di un elenco di viste: solo quelle, nell'ordine di AREE_DATI
-/** @param {string[]} viste @returns {string} */
-export function catalogoPer(viste) {
+//
+// `copertura` sono le righe di analisi_copertura, lette dal database
+// dalla edge function. Quando ci sono, il catalogo finisce col riquadro
+// che dice da quando esiste ogni fonte e con la regola di dichiarare il
+// periodo. Quando non ci sono (il database non ha risposto) il catalogo
+// resta quello di prima: meglio una risposta senza l'avvertenza che
+// nessuna risposta.
+/** @param {string[]} viste @param {{fonte:string,dal:string,al:string,righe:number}[]|null} [copertura] @returns {string} */
+export function catalogoPer(viste, copertura = null) {
   const dentro = new Set(viste || []);
   const pezzi = AREE_DATI.filter((a) => dentro.has(a.vista)).map((a) => a.catalogo);
   if (!pezzi.length) return "";
-  return `${PREAMBOLO}\n\n${pezzi.join("\n\n")}`;
+  const coda = bloccoCopertura(copertura);
+  return `${PREAMBOLO}\n\n${pezzi.join("\n\n")}${coda ? `\n\n${coda}` : ""}`;
+}
+
+/**
+ * IL RIQUADRO CHE OBBLIGA A DICHIARARE IL PERIODO (4/11/2026).
+ *
+ * Nasce da una risposta vera: «quanti pigmenti da luglio?» -> «900 e
+ * passa». Il conto era giusto ma era quello di gennaio-novembre, e il
+ * periodo non era detto da nessuna parte. Una cifra plausibile col
+ * periodo sbagliato non la mette in dubbio nessuno: per questo
+ * dichiarare il periodo non e' una cortesia, e' parte della risposta.
+ *
+ * Le date non si scrivono qui: arrivano misurate da analisi_copertura,
+ * cosi' il giorno che si importa lo storico del banco il riquadro cambia
+ * da se'.
+ *
+ * @param {{fonte:string,dal:string,al:string,righe:number}[]|null} righe
+ * @returns {string}
+ */
+export function bloccoCopertura(righe) {
+  const utili = (righe || []).filter((r) => r && r.fonte && r.dal);
+  if (!utili.length) return "";
+  const elenco = utili
+    .map((r) => `  - ${r.fonte}: dal ${r.dal} al ${r.al}${r.righe != null ? ` (${r.righe} righe)` : ""}`)
+    .join("\n");
+  return `DA QUANDO CI SONO I DATI (misurato adesso, non a memoria):
+${elenco}
+
+REGOLE SUL PERIODO, e sono obbligatorie:
+  1. DICHIARA SEMPRE il periodo su cui hai contato, con le date, anche quando nessuno te l'ha chiesto: «dal 1 luglio al 4 novembre». Una cifra senza il suo periodo e' una cifra che non si puo' controllare.
+  2. SE IL PERIODO CHIESTO COMINCIA PRIMA dei dati di quella fonte, dillo e di' da quando hai potuto contare. Esempio: «da gennaio» sulle vendite al banco non esiste — il banco comincia dalla data qui sopra.
+  3. NON CONFRONTARE due periodi se la fonte non copre entrambi allo stesso modo: lo shop online ha anni che il banco non ha, e un confronto fra un canale e sette sembra un calo o una crescita e non lo e'.
+  4. DI' COSA RESTA FUORI quando conta: i pigmenti dati dentro ai kit dei corsi non sono una vendita e non stanno nelle vendite; una domanda su «quanti ne sono usciti» e una su «quanti ne abbiamo venduti» hanno due risposte diverse, e va detto quale si sta dando.`;
 }
 
 // il catalogo intero: lo usa «Chiedi ai dati», che e' per chi amministra
@@ -224,4 +275,27 @@ export function estraiJson(testo) {
   const a = t.indexOf("{"); const b = t.lastIndexOf("}");
   if (a < 0 || b <= a) return null;
   try { return JSON.parse(t.slice(a, b + 1)); } catch { return null; }
+}
+
+/**
+ * Le righe di analisi_copertura, lette col client di servizio.
+ *
+ * Non fa mai fallire la risposta: se il database non risponde torna
+ * `null` e il catalogo resta quello di prima. Un assistente che non
+ * risponde perche' non ha saputo leggere un'avvertenza sarebbe peggio di
+ * un assistente che risponde senza l'avvertenza.
+ *
+ * @param {any} admin client Supabase con la service role
+ * @returns {Promise<{fonte:string,viste:string,dal:string,al:string,righe:number}[]|null>}
+ */
+export async function leggiCopertura(admin) {
+  try {
+    const { data, error } = await admin.from("analisi_copertura").select("fonte, viste, dal, al, righe");
+    if (error || !Array.isArray(data)) return null;
+    // ordinate per data d'inizio: si legge subito quale fonte e' la piu'
+    // giovane, che e' quella che limita ogni confronto
+    return [...data].sort((a, b) => String(a?.dal || "").localeCompare(String(b?.dal || "")));
+  } catch {
+    return null;
+  }
 }

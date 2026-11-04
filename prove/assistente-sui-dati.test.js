@@ -14,6 +14,7 @@
 import { describe, it, expect } from "vitest";
 import {
   AREE_DATI, VISTE_ANALISI, CATALOGO_ANALISI, catalogoPer, vistePermesse, controllaSql,
+  bloccoCopertura, leggiCopertura,
 } from "../supabase/functions/_shared/analisi.js";
 import { AREE_GUIDA, GUIDA_GENERALE, guidaPer } from "../supabase/functions/_shared/guida-app.js";
 import { registroDa, senzaRisposta } from "../supabase/functions/_shared/assistente.js";
@@ -25,8 +26,11 @@ const magazziniere = { ruolo: "tutti", permessi: ["magazzinoshop"] };
 const amministrazione = { ruolo: "amministrazione", permessi: [] };
 
 describe("quali dati vede chi", () => {
-  it("chi è soltanto entrato vede il calendario e il catalogo dei corsi, e nient'altro", () => {
-    expect(vistePermesse(soloEntrato)).toEqual(["analisi_calendario", "analisi_corsi"]);
+  it("chi è soltanto entrato vede il calendario, il catalogo dei corsi e da quando ci sono i dati", () => {
+    // `analisi_copertura` è aperta a chiunque di proposito: non contiene
+    // nessun importo e nessun nome, solo fonti, due date e un conteggio,
+    // e serve a chiunque faccia una domanda su un periodo
+    expect(vistePermesse(soloEntrato)).toEqual(["analisi_calendario", "analisi_corsi", "analisi_copertura"]);
   });
 
   it("una master che vende al banco vede i kit e i prezzi, non i costi né gli incassi", () => {
@@ -274,5 +278,104 @@ describe("la voce parte dalla prima frase", () => {
   it("un testo corto resta un pezzo solo: nessun taglio inutile", () => {
     expect(spezzaPerVoce("Sì, puoi farlo.")).toEqual(["Sì, puoi farlo."]);
     expect(spezzaPerVoce("")).toEqual([]);
+  });
+});
+
+// ——— DICHIARARE IL PERIODO (4/11/2026) ———
+//
+// Nasce da una risposta vera: «quanti pigmenti da luglio?» → «900 e
+// passa». Il conto era giusto, il periodo no — era gennaio-novembre — e
+// il periodo non era scritto da nessuna parte. Un conto giusto sul
+// periodo sbagliato è il modo peggiore di sbagliare, perché sembra
+// giusto e nessuno lo mette in dubbio.
+const COPERTURA_FINTA = [
+  { fonte: "vendite shop online", viste: "analisi_vendite", dal: "2022-03-15", al: "2026-11-03", righe: 4250 },
+  { fonte: "spese", viste: "analisi_spese", dal: "2026-07-02", al: "2026-11-17", righe: 595 },
+  { fonte: "vendite al banco", viste: "analisi_vendite", dal: "2026-09-05", al: "2026-11-03", righe: 129 },
+];
+
+describe("da quando ci sono i dati", () => {
+  it("le date entrano nel catalogo, fonte per fonte", () => {
+    const b = bloccoCopertura(COPERTURA_FINTA);
+    expect(b).toContain("vendite al banco: dal 2026-09-05 al 2026-11-03");
+    expect(b).toContain("vendite shop online: dal 2022-03-15");
+    expect(b).toContain("595 righe");
+  });
+
+  it("obbliga a dire il periodo, e a dirlo anche quando nessuno lo chiede", () => {
+    const b = bloccoCopertura(COPERTURA_FINTA);
+    expect(b).toMatch(/DICHIARA SEMPRE il periodo/);
+    expect(b).toMatch(/anche quando nessuno te l'ha chiesto/);
+  });
+
+  it("dice le tre cose che hanno fatto sbagliare: periodo troppo indietro, confronti impari, e cosa resta fuori", () => {
+    const b = bloccoCopertura(COPERTURA_FINTA);
+    // «da gennaio» sul banco non esiste
+    expect(b).toMatch(/COMINCIA PRIMA/);
+    // 2024 contro 2026 è un canale contro sette
+    expect(b).toMatch(/NON CONFRONTARE/);
+    // i pigmenti dei kit non sono una vendita: è la domanda di Chiara
+    expect(b).toMatch(/COSA RESTA FUORI/);
+    expect(b).toMatch(/kit/);
+  });
+
+  it("finisce dentro il catalogo vero, dopo le viste", () => {
+    const c = catalogoPer(["analisi_vendite"], COPERTURA_FINTA);
+    expect(c).toContain("analisi_vendite —");
+    expect(c).toContain("DA QUANDO CI SONO I DATI");
+    expect(c.indexOf("analisi_vendite —")).toBeLessThan(c.indexOf("DA QUANDO CI SONO I DATI"));
+  });
+
+  // IL PUNTO CHE CONTA: le date NON si scrivono nel prompt. Se fossero
+  // scritte a mano, il giorno che si importa lo storico del banco
+  // resterebbero quelle di oggi e l'assistente direbbe una cosa falsa con
+  // l'aria di saperla.
+  it("le date non sono scritte nel codice: cambiano col dato", () => {
+    const sorgente = AREE_DATI.map((a) => a.catalogo).join("\n") + bloccoCopertura(null);
+    expect(sorgente).not.toMatch(/2026-09-05/);
+    expect(sorgente).not.toMatch(/2022-03-15/);
+    const dopo = bloccoCopertura([{ fonte: "vendite al banco", dal: "2024-01-01", al: "2026-11-04", righe: 9000 }]);
+    expect(dopo).toContain("dal 2024-01-01");
+    expect(dopo).not.toContain("2026-09-05");
+  });
+
+  it("se il database non risponde il catalogo resta quello di prima, non si rompe niente", () => {
+    expect(bloccoCopertura(null)).toBe("");
+    expect(bloccoCopertura([])).toBe("");
+    const c = catalogoPer(["analisi_vendite"], null);
+    expect(c).toContain("analisi_vendite —");
+    expect(c).not.toContain("DA QUANDO CI SONO I DATI");
+  });
+
+  it("le righe senza data si scartano invece di comparire vuote", () => {
+    const b = bloccoCopertura([
+      { fonte: "fonte senza niente", dal: null, al: null, righe: 0 },
+      { fonte: "spese", dal: "2026-07-02", al: "2026-11-17", righe: 595 },
+    ]);
+    expect(b).toContain("spese: dal 2026-07-02");
+    expect(b).not.toContain("fonte senza niente");
+  });
+
+  it("si leggono ordinate dalla più vecchia, così si vede subito chi limita i confronti", async () => {
+    const admin = { from: () => ({ select: async () => ({ data: [
+      { fonte: "banco", dal: "2026-09-05", al: "2026-11-03", righe: 129 },
+      { fonte: "shop", dal: "2022-03-15", al: "2026-11-03", righe: 4250 },
+    ] }) }) };
+    const righe = await leggiCopertura(admin);
+    expect(righe.map((r) => r.fonte)).toEqual(["shop", "banco"]);
+  });
+
+  it("un errore del database non diventa un'eccezione in faccia a chi ha chiesto", async () => {
+    const rotto = { from: () => ({ select: async () => ({ error: { message: "giù" }, data: null }) }) };
+    expect(await leggiCopertura(rotto)).toBe(null);
+    const esplode = { from: () => { throw new Error("niente rete"); } };
+    expect(await leggiCopertura(esplode)).toBe(null);
+  });
+
+  it("la vista è dichiarata nel catalogo e aperta a chiunque sia entrato", () => {
+    const area = AREE_DATI.find((a) => a.vista === "analisi_copertura");
+    expect(area).toBeTruthy();
+    expect(area.permessi).toEqual([]);
+    expect(area.catalogo).toMatch(/non cominciano insieme|NON cominciano insieme/);
   });
 });
