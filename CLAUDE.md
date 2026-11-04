@@ -2346,6 +2346,61 @@ zero, la scheda mentirebbe a chi la apre.
 Prove in `prove/bundle-backorder.test.js` (18), sui numeri veri del
 mascara e sui casi che la farebbero sbagliare.
 
+**Pubblicata e verificata lo stesso giorno**, su quattro funzioni — i due
+moduli condivisi stanno dentro il pacchetto di ognuna, quindi
+`woo-riallinea-shop`, `woo-webhook`, `woo-import-storico` e
+`assistente-regole` sono state ripubblicate insieme. **Erano tre, non
+uno:** il giro in prova ha trovato da riaprire anche **Kit laminazione
+essential** e **Excellentia Siero ricrescita Ciglia — Espositore 10pz**,
+fermi per lo stesso motivo e senza che nessuno lo sapesse. Dopo il
+riallineamento, sul sito tutti e tre risultano `onbackorder`,
+`backorders: notify`, quantità **0** e acquistabili.
+
+### Lo svuotamento di Varnish non funziona, e si sa perché (4/11/2026)
+
+Verificando gli espositori è venuto fuori il guasto che sta **sotto** a
+tre casi già visti. Sull'espositore del mascara: WooCommerce e la Store
+API dicono «su ordinazione, acquistabile»; la **pagina servita a un
+cliente** diceva ancora **«Esaurito», senza tasto per comprare**, ed era
+la copia generata alle 01:21 — prima del riallineamento. La stessa
+pagina chiesta con un parametro qualsiasi in coda (che aggira la cache)
+rispondeva **«Disponibile su ordinazione»** col tasto. Quindi: dato
+giusto, pagina vecchia.
+
+Uno svuotamento completo lanciato a mano risponde `ok` ma non cambia
+niente, e nei passi che restituisce c'è il colpevole:
+
+```
+passi: [..., "varnish:regex:400", "varnish:200 pagine", "cloudflare:si", ...]
+```
+
+**La PURGE «a tappeto» su Varnish torna 400.** L'ipotesi, da verificare
+appena si tocca lo snippet: `wordpress/elitederma-svuota-cache.php`
+manda quella richiesta a `home_url('/')`, cioè all'indirizzo
+**pubblico** del sito — esce su internet, passa da **Cloudflare**, che
+non sa cosa sia una PURGE e risponde 400. Varnish, che sta sul server,
+non la vede nemmeno. Va mandata al server stesso (`127.0.0.1`) con
+l'intestazione `Host` del dominio, che è quello che fa il ripiego
+pagina-per-pagina — l'unico passo che non fallisce, e che però copre
+solo 200 indirizzi e non prende tutto.
+
+Cloudflare si svuota (`cloudflare_attivo: true`, `cloudflare:si`), ma
+non basta: la copia vecchia è **all'origine**. È il motivo per cui le
+pagine «si sistemano da sole» dopo qualche ora — scadono, non vengono
+svuotate.
+
+**Cosa spiega**: le descrizioni e le foto del microblading corrette il
+3/11 e invisibili per sei ore; «N2 Fixa» del 2/11 con «Leggi tutto» per
+cinque ore; gli espositori di oggi. Tre sintomi, una causa.
+
+**Perché non è ancora corretto**: lo snippet vive in Code Snippets su
+WordPress, dove da qui non si scrive — le chiavi WooCommerce sanno
+toccare prodotti e ordini, non codice. La correzione va importata a
+mano (il `.json`, non incollata: su uno snippet lungo l'editor rovina il
+testo). Per renderlo autonomo servirebbe una password per applicazioni
+di un amministratore, cioè la facoltà di **eseguire PHP** sul negozio:
+decisione del titolare, non presa.
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
