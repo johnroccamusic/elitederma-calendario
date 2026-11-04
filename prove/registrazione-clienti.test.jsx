@@ -260,7 +260,10 @@ describe("Registrazione clienti: la pagina", () => {
     await p.smonta();
   });
 
-  it("il cestino chiede conferma col nome e cancella la riga", async () => {
+  // AGGIORNATA IL 4/11/2026: la conferma non dice più «non si recupera»
+  // e il tasto non cancella più — mette nel cestino, da cui si ripesca
+  // per sei mesi. La riga esce dall'elenco esattamente come prima.
+  it("il cestino chiede conferma col nome e porta la riga nel cestino", async () => {
     const scritture = [];
     const elenco = [{
       id: "a", nome: "ANNA", cognome: "BIANCHI", citta: "BARI", provincia: "BA", cap: "70121", regione: "Puglia",
@@ -274,8 +277,9 @@ describe("Registrazione clienti: la pagina", () => {
     await clicca(p.nodo.querySelector('[data-campo="cancella"]'));
     await attendi(150);
     expect(chiesto.join(" ")).toContain("ANNA BIANCHI");
-    expect(chiesto.join(" ")).toContain("non si recupera");
-    expect(pulito(p)).toContain("ANNA BIANCHI è stato cancellato");
+    expect(chiesto.join(" ")).toContain("nel cestino");
+    expect(chiesto.join(" ")).toContain("sei mesi");
+    expect(pulito(p)).toContain("ANNA BIANCHI è nel cestino");
     expect(pulito(p)).not.toContain("anna@b.it");
     await p.smonta();
   });
@@ -304,6 +308,179 @@ describe("Registrazione clienti: la pagina", () => {
     const p = await monta(<App />);
     await attendi(250);
     expect(p.tasto("Registrazione clienti")).toBeFalsy();
+    await p.smonta();
+  });
+});
+
+// ——— IL CESTINO (4/11/2026) ———
+//
+// Prima di oggi il cestino sulla riga cancellava e basta. È la stessa
+// forma del guasto del 26/10, quando tre vendite incassate sono sparite
+// dal banco senza una copia e senza il nome di chi aveva premuto.
+//
+// Quello che queste prove difendono: la riga esce dall'elenco, la copia
+// si vede nel cestino col nome di chi l'ha cancellata, si rimette, e il
+// caso che conta — la stessa persona registrata di nuovo nel frattempo —
+// torna con la frase del database e NON con un elenco che si svuota
+// come se fosse andata bene.
+function preparaConCestino({ elenco, cestino, scritture, errore = null }) {
+  rispondiCon({
+    "rpc/cliente_cestina": (corpo) => {
+      scritture.push({ cosa: "cestina", corpo });
+      const x = elenco.find((r) => r.id === corpo.p_id);
+      return { id: x.id, nome: x.nome, cognome: x.cognome, email: x.email, telefono: x.telefono,
+        riga: x, cestinato_il: "2026-11-04T09:00:00Z", cestinato_da: corpo.p_chi };
+    },
+    "rpc/cliente_ripristina": (corpo) => {
+      scritture.push({ cosa: "ripristina", corpo });
+      if (errore) return { message: errore, code: "P0001" };
+      const x = (cestino || []).find((r) => r.id === corpo.p_id);
+      return x.riga;
+    },
+    clienti_cestino: () => cestino,
+    clienti_registrati: (corpo) => (corpo ? { id: "nuovo", ...corpo } : elenco),
+  });
+}
+
+const UNA = {
+  id: "a", nome: "MARIA", cognome: "ROSSI", citta: "BARI", provincia: "BA", cap: "70100",
+  regione: "Puglia", email: "maria@example.com", telefono: "+393331112223",
+  registrato_il: "2026-11-03T12:00:00Z", registrato_da: "KATIA",
+};
+
+describe("Il cestino dei clienti cancellati", () => {
+  it("cancellare mette nel cestino: la riga esce dall'elenco e la linguetta compare col conteggio", async () => {
+    const scritture = [];
+    seduta();
+    preparaConCestino({ elenco: [UNA], cestino: [], scritture });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(250);
+    await clicca(p.tasto("Registrazione clienti"));
+    await attendi(200);
+    await clicca(p.tasto("Clienti registrati (1)"));
+    await attendi(120);
+    expect(pulito(p)).toMatch(/maria rossi/i);
+
+    window.confirm = () => true;
+    await clicca(dentro(p, "cancella"));
+    await attendi(200);
+
+    // è passata dalla funzione del database, non da una delete
+    const cestinata = scritture.find((x) => x.cosa === "cestina");
+    expect(cestinata).toBeTruthy();
+    expect(cestinata.corpo.p_id).toBe("a");
+    // e porta il nome di chi ha premuto: è la cosa che mancava sulle vendite
+    expect(cestinata.corpo.p_chi).toBeTruthy();
+    const t = pulito(p);
+    expect(t).toContain("è nel cestino");
+    expect(t).toContain("Cestino (1)");
+    await p.smonta();
+  });
+
+  it("la conferma annullata non cancella niente", async () => {
+    const scritture = [];
+    seduta();
+    preparaConCestino({ elenco: [UNA], cestino: [], scritture });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(250);
+    await clicca(p.tasto("Registrazione clienti"));
+    await attendi(200);
+    await clicca(p.tasto("Clienti registrati (1)"));
+    await attendi(120);
+    window.confirm = () => false;
+    await clicca(dentro(p, "cancella"));
+    await attendi(150);
+    expect(scritture.filter((x) => x.cosa === "cestina")).toEqual([]);
+    expect(pulito(p)).not.toContain("Cestino (");
+    window.confirm = () => true;
+    await p.smonta();
+  });
+
+  it("dentro il cestino si legge chi l'ha cancellata e quando, e «Rimetti» la riporta in archivio", async () => {
+    const scritture = [];
+    const inCestino = [{
+      id: "a", nome: "MARIA", cognome: "ROSSI", email: "maria@example.com", telefono: "+393331112223",
+      riga: UNA, cestinato_il: "2026-11-04T09:00:00Z", cestinato_da: "STEFANO",
+    }];
+    seduta();
+    preparaConCestino({ elenco: [], cestino: inCestino, scritture });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(250);
+    await clicca(p.tasto("Registrazione clienti"));
+    await attendi(300);
+    // la linguetta c'è perché il cestino non è vuoto
+    await clicca(dentro(p, "tab-cestino"));
+    await attendi(200);
+    const t = pulito(p);
+    expect(t).toContain("STEFANO");
+    expect(t).toMatch(/cancellata il/);
+    expect(t).toContain("sei mesi");
+
+    await clicca(dentro(p, "ripristina"));
+    await attendi(200);
+    const rimessa = scritture.find((x) => x.cosa === "ripristina");
+    expect(rimessa.corpo.p_id).toBe("a");
+    expect(pulito(p)).toContain("è tornato fra i clienti registrati");
+    await p.smonta();
+  });
+
+  it("se nel frattempo la persona è stata registrata di nuovo, il rifiuto del database si vede e la riga resta nel cestino", async () => {
+    const scritture = [];
+    const inCestino = [{
+      id: "a", nome: "MARIA", cognome: "ROSSI", email: "maria@example.com", telefono: "+393331112223",
+      riga: UNA, cestinato_il: "2026-11-04T09:00:00Z", cestinato_da: "STEFANO",
+    }];
+    seduta();
+    preparaConCestino({ elenco: [], cestino: inCestino, scritture });
+    // Un rifiuto di PostgREST NON è un 200 con dentro un messaggio: è uno
+    // stato 4xx, ed è l'unico modo in cui il client Supabase lo riconosce
+    // come errore. Avvolgendo la finta si riproduce quello vero — con un
+    // 200 la pagina avrebbe creduto che fosse andata bene, che è
+    // precisamente il guasto da cui questa prova difende.
+    const finta = globalThis.fetch;
+    globalThis.fetch = async (url, opzioni) => {
+      if (String(url).includes("rpc/cliente_ripristina")) {
+        scritture.push({ cosa: "ripristina", corpo: JSON.parse(opzioni.body) });
+        return new Response(JSON.stringify({
+          code: "P0001",
+          message: "Non la rimetto: MARIA ROSSI risulta già registrato con la stessa email e lo stesso telefono.",
+        }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+      return finta(url, opzioni);
+    };
+    globalThis.window.fetch = globalThis.fetch;
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(250);
+    await clicca(p.tasto("Registrazione clienti"));
+    await attendi(300);
+    await clicca(dentro(p, "tab-cestino"));
+    await attendi(200);
+    await clicca(dentro(p, "ripristina"));
+    await attendi(200);
+    const t = pulito(p);
+    // la frase del database, non una mia traduzione
+    expect(t).toContain("Non la rimetto");
+    expect(t).toContain("già registrato");
+    // e soprattutto: la riga NON è sparita dal cestino
+    expect(dentro(p, "ripristina")).toBeTruthy();
+    expect(t).not.toContain("è tornato fra i clienti registrati");
+    await p.smonta();
+  });
+
+  it("col cestino vuoto la linguetta non c'è: una linguetta sempre vuota non la guarda nessuno", async () => {
+    const scritture = [];
+    seduta();
+    preparaConCestino({ elenco: [UNA], cestino: [], scritture });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(250);
+    await clicca(p.tasto("Registrazione clienti"));
+    await attendi(300);
+    expect(dentro(p, "tab-cestino")).toBeFalsy();
     await p.smonta();
   });
 });

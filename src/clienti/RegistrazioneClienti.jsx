@@ -85,6 +85,14 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
   // controlli sono gli stessi — due moduli gemelli vorrebbero dire due
   // posti dove cambiare una regola
   const [inModifica, setInModifica] = useState(null);
+  // IL CESTINO. Si legge solo quando si apre: è l'elenco di quello che
+  // non c'è più, e nella pagina normale non serve a nessuno.
+  const [cestino, setCestino] = useState(null);
+  // Parte da zero e non da «non lo so»: se la domanda sul conteggio non
+  // torna, cancellare un cliente lo porta a 1 e la linguetta compare
+  // comunque. Con «non lo so» la linguetta sarebbe rimasta nascosta
+  // proprio nel momento in cui serve — appena qualcuno ha cancellato.
+  const [quantiCestinati, setQuantiCestinati] = useState(0);
 
   const leggi = useCallback(async () => {
     const { data, error } = await supabase.from("clienti_registrati")
@@ -92,7 +100,27 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
     if (error) { setMsg({ tipo: "errore", testo: `Non riesco a leggere l'elenco: ${error.message}` }); setElenco([]); return; }
     setElenco(data || []);
   }, []);
+  const leggiCestino = useCallback(async () => {
+    const { data, error } = await supabase.from("clienti_cestino")
+      .select("*").order("cestinato_il", { ascending: false }).limit(2000);
+    if (error) { setMsg({ tipo: "errore", testo: `Non riesco a leggere il cestino: ${error.message}` }); setCestino([]); return; }
+    setCestino(data || []);
+    setQuantiCestinati((data || []).length);  // qui il numero è quello vero: le righe in mano
+  }, []);
   useEffect(() => { leggi(); }, [leggi]);
+  // Il numero accanto al tasto: si chiedono i soli id, così si sa che c'è
+  // qualcosa da ripescare senza portarsi dietro le schede.
+  //
+  // NON con `head: true`: lì il conteggio arriva in un'intestazione HTTP
+  // (Content-Range), e dove quell'intestazione non c'è il numero resta
+  // sconosciuto e la linguetta non compare — cioè proprio quando il
+  // cestino è pieno. Gli id tornano nel corpo e si contano sempre.
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("clienti_cestino").select("id").limit(2000)
+      .then(({ data }) => { if (vivo && Array.isArray(data)) setQuantiCestinati(data.length); });
+    return () => { vivo = false; };
+  }, []);
 
   const scrivi = (campo, valore) => { setC((p) => ({ ...p, [campo]: valore })); setMsg(null); setDoppione(null); };
 
@@ -136,16 +164,43 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
     setInModifica(null); setC(VUOTO); setCapPossibili([]); setMsg(null); setDoppione(null);
   }
 
-  // IL CESTINO. Chiede conferma col nome davanti, perche' una riga
-  // cancellata qui non va in nessun cestino da cui ripescarla: se
-  // servisse, e' un lavoro a parte come quello delle vendite.
+  // IL CESTINO (4/11/2026). Prima di oggi questo tasto cancellava e
+  // basta, e la pagina lo diceva: «non si recupera». Ora la scheda va nel
+  // cestino, da cui si ripesca per sei mesi — stessa regola delle
+  // vendite, e stesso motivo: una riga cancellata per sbaglio non deve
+  // dipendere dalla memoria di chi l'ha premuta.
+  //
+  // La conferma resta, col nome davanti: un cestino non è una scusa per
+  // far cancellare le cose con leggerezza.
+  //
+  // Copia e cancellazione stanno in una funzione del database
+  // (`cliente_cestina`), quindi o avvengono entrambe o nessuna: dal
+  // browser sarebbero due scritture di fila, e una riga cancellata senza
+  // la sua copia è esattamente quello che il cestino esiste per evitare.
   async function cancella(x) {
-    if (!window.confirm(`Cancellare ${x.nome} ${x.cognome}?\n\nLa scheda viene eliminata e non si recupera. Se serve, si potrà registrare di nuovo.`)) return;
-    const { error } = await supabase.from("clienti_registrati").delete().eq("id", x.id);
+    if (!window.confirm(`Cancellare ${x.nome} ${x.cognome}?\n\nLa scheda va nel cestino, e da lì si può rimettere per sei mesi.`)) return;
+    const { data, error } = await supabase.rpc("cliente_cestina", { p_id: x.id, p_chi: chi || null });
     if (error) { setMsg({ tipo: "errore", testo: `Non cancellato: ${error.message}` }); return; }
     setElenco((p) => (p || []).filter((r) => r.id !== x.id));
     if (inModifica === x.id) annullaModifica();
-    setMsg({ tipo: "ok", testo: `${x.nome} ${x.cognome} è stato cancellato.` });
+    setQuantiCestinati((n) => n + 1);
+    // se il cestino è già aperto, la riga ci compare subito: la risposta
+    // della funzione è la copia appena fatta
+    setCestino((p) => (p === null ? p : [data, ...p].filter(Boolean)));
+    setMsg({ tipo: "ok", testo: `${x.nome} ${x.cognome} è nel cestino. Da lì si può rimettere.` });
+  }
+
+  // RIPESCARE. Il caso che conta non è il successo: è quando nel
+  // frattempo la stessa persona è stata registrata di nuovo. Lì il
+  // database rifiuta — l'identità è unica — e la frase che torna dice
+  // cosa fare, quindi si mostra quella invece di tradurla a modo mio.
+  async function ripristina(x) {
+    const { data, error } = await supabase.rpc("cliente_ripristina", { p_id: x.id });
+    if (error) { setMsg({ tipo: "errore", testo: error.message }); return; }
+    setCestino((p) => (p || []).filter((r) => r.id !== x.id));
+    setQuantiCestinati((n) => Math.max(0, n - 1));
+    setElenco((p) => (p === null ? p : [data, ...p].filter(Boolean)));
+    setMsg({ tipo: "ok", testo: `${x.nome} ${x.cognome} è tornato fra i clienti registrati.` });
   }
 
   const problemi = problemiCliente(c);
@@ -238,8 +293,12 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
           {[
             { chiave: "nuovo", testo: inModifica ? "Modifica cliente" : "Registra un cliente" },
             { chiave: "elenco", testo: `Clienti registrati${elenco ? ` (${elenco.length})` : ""}` },
+            // il cestino compare solo se c'è qualcosa dentro: una
+            // linguetta sempre vuota è una linguetta che nessuno guarda
+            ...(quantiCestinati ? [{ chiave: "cestino", testo: `Cestino (${quantiCestinati})` }] : []),
           ].map((t) => (
-            <button key={t.chiave} type="button" onClick={() => { setVista(t.chiave); setMsg(null); }}
+            <button key={t.chiave} type="button" data-campo={`tab-${t.chiave}`}
+              onClick={() => { setVista(t.chiave); setMsg(null); if (t.chiave === "cestino") leggiCestino(); }}
               style={{
                 ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 999, cursor: "pointer",
                 border: `1px solid ${vista === t.chiave ? NAVY : CREAM_BORDER}`,
@@ -419,6 +478,49 @@ export default function RegistrazioneClienti({ chi = "", onBack, titolo = "Regis
                   </div>
                   <TastoMatita onClick={() => apriModifica(x)} titolo={`Modifica ${x.nome} ${x.cognome}`} />
                   <TastoCestino onClick={() => cancella(x)} titolo={`Cancella ${x.nome} ${x.cognome}`} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {vista === "cestino" && (
+          <>
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>
+              Le schede cancellate. Si possono rimettere fra i clienti registrati per sei mesi;
+              dopo, si cancellano da sé.
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, overflow: "hidden" }}>
+              {cestino === null && <div style={{ padding: 18, ...fontBody, fontSize: 13, color: MUTED }}>Carico…</div>}
+              {cestino !== null && cestino.length === 0 && (
+                <div style={{ padding: 18, ...fontBody, fontSize: 13, color: MUTED }}>Il cestino è vuoto.</div>
+              )}
+              {(cestino || []).map((x, i) => (
+                <div key={x.id} style={{
+                  padding: "11px 14px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`,
+                  display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                      {x.nome} {x.cognome}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5, overflowWrap: "anywhere" }}>
+                      {[x.telefono, x.email].filter(Boolean).join(" · ")}
+                    </div>
+                    {/* chi l'ha cancellata e quando: è la cosa che il 26
+                        ottobre, sulle vendite di Elia, non c'era */}
+                    <div style={{ ...fontBody, fontSize: 11, color: GOLD, fontWeight: 700, marginTop: 2 }}>
+                      cancellata il {dataOra(x.cestinato_il)}{x.cestinato_da ? ` da ${x.cestinato_da}` : ""}
+                    </div>
+                  </div>
+                  <button type="button" data-campo="ripristina" onClick={() => ripristina(x)}
+                    title={`Rimetti ${x.nome} ${x.cognome} fra i clienti registrati`}
+                    style={{
+                      ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 14px", borderRadius: 999,
+                      border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer",
+                    }}>
+                    Rimetti
+                  </button>
                 </div>
               ))}
             </div>

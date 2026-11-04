@@ -2230,11 +2230,42 @@ rifiuterebbe da sola — «utente già registrato» sarebbe lei; il `+39` si
 toglie dal valore che si vede, o rientrerebbe due volte; e **chi ha
 registrato la riga non si riscrive**, è la storia di quella riga —
 la correzione aggiunge `modificato_il` / `modificato_da` (migrazione
-`20261103180000`) e l'elenco lo mostra accanto. La cancellazione invece
-**non lascia traccia e non ha un cestino**: se servisse ripescare, è un
-lavoro a parte come `vendite_cestino`.
+`20261103180000`) e l'elenco lo mostra accanto.
 
-Prove in `prove/registrazione-clienti.test.jsx` (13): le regole una per
+**E dal 4/11/2026 la cancellazione ha il suo cestino** (migrazione
+`20261104110000`), chiesto dal titolare. Prima cancellava e basta — era
+scritto nella pagina, «non si recupera», ed era la stessa forma del
+guasto del 26/10 sulle vendite di Elia Cito: nessuna copia e nessun nome
+di chi aveva premuto. Ora `cliente_cestina(id, chi)` copia la riga in
+**`clienti_cestino`** e la cancella **nella stessa transazione**, e
+`cliente_ripristina(id)` la rimette com'era; un cron alle 04:25 svuota
+quello che ha più di sei mesi, come il cestino delle vendite alle 04:20.
+
+Tre cose decise lì dentro, e ognuna per un motivo:
+
+- **la copia è la riga intera in jsonb**, non colonna per colonna: il
+  giorno che `clienti_registrati` prende una colonna nuova, una copia a
+  colonne la perderebbe in silenzio, e un ripristino che restituisce una
+  scheda incompleta è peggio di nessun ripristino. Accanto restano nome,
+  cognome, email e telefono in chiaro, perché il cestino si deve poter
+  leggere senza aprire il jsonb;
+- **il ripristino può essere rifiutato, ed è giusto**: se nel frattempo
+  la stessa persona è stata registrata di nuovo, l'indice unico
+  sull'identità non lo lascia passare. La funzione traduce quel rifiuto
+  in una frase che dice cosa fare, e la pagina mostra **quella** invece
+  di una traduzione propria. Provato in transazione annullata: cestina,
+  ripristina, ripristino rifiutato dopo una nuova registrazione, e
+  cestinare una riga che non esiste;
+- **la linguetta «Cestino (N)» compare solo se c'è qualcosa dentro**, e
+  il conteggio si chiede sugli **id nel corpo** della risposta e non con
+  `head: true`. Con `head` il numero arriva in un'intestazione HTTP
+  (`Content-Range`): dove quella non c'è il numero resta sconosciuto e
+  la linguetta non compare — cioè proprio quando il cestino è pieno.
+
+La conferma col nome davanti resta: un cestino non è una scusa per far
+cancellare le cose con leggerezza.
+
+Prove in `prove/registrazione-clienti.test.jsx` (18): le regole una per
 una, e la pagina montata per davvero — si scrive la città, si preme il
 suggerimento, si controlla che provincia/regione/CAP si siano riempiti, si
 salva, si rilegge il doppione, si cambia il telefono e la seconda persona
@@ -2355,6 +2386,55 @@ essential** e **Excellentia Siero ricrescita Ciglia — Espositore 10pz**,
 fermi per lo stesso motivo e senza che nessuno lo sapesse. Dopo il
 riallineamento, sul sito tutti e tre risultano `onbackorder`,
 `backorders: notify`, quantità **0** e acquistabili.
+
+### L'assistente dichiara il periodo, e le date se le misura (4/11/2026)
+
+Nasce dalla risposta che Chiara si è sentita dare: «quanti pigmenti da
+luglio?» → «900 e passa». Il conto era giusto, il **periodo** no — 936
+boccette è gennaio-novembre, da luglio sono 274 — e il periodo non era
+scritto da nessuna parte. **Un conto giusto sul periodo sbagliato è il
+modo peggiore di sbagliare, perché sembra giusto** e nessuno lo mette in
+dubbio.
+
+Sotto, misurato, c'era di peggio: **le fonti non cominciano insieme.**
+
+| Fonte | I dati cominciano |
+|---|---|
+| Shop online, incassi di prodotti | 15/03/2022 |
+| Acconti dei corsi | 30/08/2025 |
+| Spese | 02/07/2026 |
+| Iscrizioni | 29/07/2026 |
+| Classi in calendario | 08/08/2026 |
+| Vendite al banco | 05/09/2026 |
+| Pre corso e saldi | 16/09/2026 |
+
+Quattro anni e mezzo fra la più vecchia e la più giovane. «Com'è andato
+maggio» dà una risposta che **sembra** completa e contiene solo lo shop;
+confrontare il 2024 col 2026 vuol dire confrontare un canale con sette.
+
+**La vista `analisi_copertura`** (migrazione `20261104100000`) misura
+quelle date **sul dato stesso a ogni lettura** — 61 ms — e il catalogo
+che il modello legge finisce col riquadro «DA QUANDO CI SONO I DATI» più
+quattro regole obbligatorie: dichiara sempre il periodo con le date
+anche se nessuno l'ha chiesto; se il periodo chiesto comincia prima dei
+dati di quella fonte, dillo; non confrontare due periodi che la fonte
+non copre allo stesso modo; di' cosa resta fuori (i pigmenti dati dentro
+ai kit dei corsi non sono una vendita, e «quanti ne sono usciti» e
+«quanti ne abbiamo venduti» sono due domande diverse).
+
+**Le date NON stanno nel prompt, e una prova lo impedisce.** Scritte a
+mano invecchierebbero senza che nessuno se ne accorga: il giorno che si
+importa lo storico del banco resterebbero quelle di oggi, e l'assistente
+direbbe una cosa falsa con l'aria di saperla. Se il database non
+risponde il catalogo resta quello di prima — meglio una risposta senza
+l'avvertenza che nessuna risposta.
+
+Vale per **entrambi** i registri, l'assistente flottante e «Chiedi ai
+dati», perché il catalogo è uno: per questo `analisi-domanda` costruisce
+il suo prompt a ogni domanda invece di tenerlo in una costante di
+modulo. `analisi_copertura` è anche interrogabile, con `permessi: []`,
+perché non contiene nessun importo e nessun nome: solo fonti, due date e
+un conteggio. Prove in `prove/assistente-sui-dati.test.js` (46).
 
 ### Lo svuotamento di Varnish non funziona, e si sa perché (4/11/2026)
 
