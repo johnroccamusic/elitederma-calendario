@@ -2563,6 +2563,26 @@ sh controlla-funzioni.sh     # tipi delle edge function (Deno), prima di pubblic
 **Prima di ogni push: `npm run lint`, `npm test`, `npm run build`.** Tutti e tre
 a zero. Prima di pubblicare una edge function, anche `sh controlla-funzioni.sh`.
 
+**Un push non garantisce una pubblicazione (4/11/2026).** Il commit
+`cd55723` («Gli sconti della fiera si copiano anche dalle master») era su
+GitHub dalle 10:56, e alle 20:45 il sito serviva ancora `8937c43`, di
+un'ora prima: il collegamento GitHub -> Vercel non ha preso quel commit,
+e non ha lasciato nemmeno una build fallita. Il titolare cercava un tasto
+che nel codice c'era e online no.
+
+Come si riconosce, perche' da fuori sembra un difetto della pagina: si
+confronta `git ls-remote origin main` con lo sha dell'ultima
+pubblicazione in produzione, e nel dubbio si scarica il bundle servito e
+ci si cerca dentro una frase nuova (qui bastava «referral personale delle
+master»: assente). Un tasto che manca a video e c'e' nel sorgente e'
+quasi sempre una delle due cose, e vanno escluse in quest'ordine: la
+pubblicazione che non e' partita, e la scheda aperta da ore (il punto qui
+sotto).
+
+Quindi: **dopo un push che deve arrivare a qualcuno, si controlla che lo
+sha pubblicato sia il proprio.** La ripartenza si fa dal pannello Vercel
+(Redeploy) o con un commit nuovo, che fa ripartire il collegamento.
+
 **Pubblicare pianta le schede rimaste aperte (22/10/2026).** L'app è divisa in
 pezzi caricati a richiesta, e ognuno ha il nome col codice del contenuto
 (`index-BxhQZihE.js`): a ogni pubblicazione quel codice cambia e il file di
