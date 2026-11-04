@@ -843,6 +843,18 @@ function serieScontoScritta(v) {
   if (Array.isArray(v)) return v.length > 0;
   return !!(v && Array.isArray(v.gruppi) && v.gruppi.length > 0);
 }
+// "c'e' qualcosa da RICOPIARE?" — che non e' la stessa domanda.
+//
+// Una serie puo' esistere ed essere tutta a zero: quella delle master
+// nasce cosi' (FASCE_SCONTO_DEFAULT sono sei scaglioni con percentuale
+// zero), quindi `serieScontoScritta` dice sempre di si' anche quando
+// nessuno ha mai scritto un numero. Un tasto "Copia da master" acceso li'
+// sopra prometterebbe di ricopiare una tabella e invece azzererebbe lo
+// sconto della fiera, in silenzio e con un gesto solo.
+function serieScontoConPercentuali(v) {
+  if (!serieScontoScritta(v)) return false;
+  return gruppiFasceValidi(v).gruppi.some((g) => g.some((f) => Number(f.percentuale) > 0));
+}
 // Si restituisce la serie INTERA, non le sei percentuali: dentro ci sono
 // le quattro fasce di spesa, e chi calcola lo sconto sceglie la sua in
 // base a quanto vale il carrello
@@ -42096,12 +42108,27 @@ function SchedaFasceCodiceAula({
   // Da dove si puo' ricopiare una tabella gia' fatta. Una serie nuova
   // nasce vuota, e riscrivere a mano ventiquattro numeri per poi
   // cambiarne due e' il modo migliore per sbagliarne uno.
-  copiaDa = null, onCopiaCarta = null, onCopiaContanti = null, copiando = false,
+  //
+  // E' un ELENCO e non una fonte sola perche' le tabelle da cui vale la
+  // pena partire sono piu' d'una: gli eventi nascono dai corsi o dagli
+  // sconti del referral delle master, e quale delle due somigli di piu'
+  // alla fiera lo sa chi la fa, non chi programma. Ogni voce e'
+  // { nome, carta, contanti }, e una funzione mancante vuol dire "di la'
+  // non c'e' niente da copiare": il tasto non compare, invece di
+  // comparire e ricopiare una tabella vuota.
+  fontiCopia = [], copiando = false,
 }) {
   const [fasceCartaSalvate, salvaFasceCarta] = useImpostazioneCondivisa(chiaveCarta, null);
+  // Niente serie scritta e nessuna regola da cui partire: per una serie
+  // CON codici vuol dire che la regola non e' ancora arrivata, e si
+  // aspetta. Per una serie SENZA codici — gli eventi — una regola non
+  // esiste proprio, quindi null vuol dire "mai scritta" e si mostra la
+  // tabella vuota. Prima si restava su "Caricamento regole…" per sempre,
+  // e con essa sparivano i tasti "Copia da…": cioe' erano invisibili
+  // esattamente la prima volta, che e' l'unica volta in cui servono.
   const fasceCorso = serieScontoScritta(fasceCartaSalvate)
     ? fasceCartaSalvate
-    : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : null);
+    : (regoleReferralAutomatico ? gruppiFasceValidi(regoleReferralAutomatico.fasce_sconto) : (senzaCodici ? gruppiFasceValidi(null) : null));
   // la seconda serie, per chi paga in contanti al POS dell'app: si salva
   // appena la si tocca, come il referral personale. Vuota = come la carta
   const [fasceContantiSalvate, salvaFasceContanti] = useImpostazioneCondivisa(chiaveContanti, []);
@@ -42251,13 +42278,13 @@ function SchedaFasceCodiceAula({
         <>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Carta e shop online</div>
-            {onCopiaCarta && (
-              <button onClick={onCopiaCarta} disabled={copiando}
-                title={`Ricopia qui questa tabella come sta in ${copiaDa}, soglie comprese. Poi la cambi solo dove serve.`}
+            {fontiCopia.filter((f) => f?.carta).map((f) => (
+              <button key={f.nome} onClick={f.carta} disabled={copiando}
+                title={`Ricopia qui questa tabella come sta in ${f.nome}, soglie comprese. Poi la cambi solo dove serve.`}
                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "3px 11px", cursor: copiando ? "default" : "pointer" }}>
-                {copiando ? "Copio…" : `Copia da ${copiaDa}`}
+                {copiando ? "Copio…" : `Copia da ${f.nome}`}
               </button>
-            )}
+            ))}
           </div>
           <FasceDiSpesa senzaWoo={senzaCodici} valore={fasceCorso} onCambia={cambiaFasceCorso} prodottiShop={prodottiShop} isMobile={isMobile} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 22 }}>
@@ -42286,13 +42313,13 @@ function SchedaFasceCodiceAula({
           )}
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 800, color: "#8A6A1B", textTransform: "uppercase", letterSpacing: 0.6 }}>Contanti o buono Amazon dal POS dell'app</div>
-            {onCopiaContanti && (
-              <button onClick={onCopiaContanti} disabled={copiando}
-                title={`Ricopia qui la serie dei contanti come sta in ${copiaDa}. Se di là è vuota — cioè uguale a carta e shop — resta vuota anche qui.`}
+            {fontiCopia.filter((f) => f?.contanti).map((f) => (
+              <button key={f.nome} onClick={f.contanti} disabled={copiando}
+                title={`Ricopia qui la serie dei contanti come sta in ${f.nome}. Se di là è vuota — cioè uguale a carta e shop — resta vuota anche qui.`}
                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "none", border: "1px solid #EBD9AE", borderRadius: 20, padding: "3px 11px", cursor: copiando ? "default" : "pointer" }}>
-                {copiando ? "Copio…" : `Copia da ${copiaDa}`}
+                {copiando ? "Copio…" : `Copia da ${f.nome}`}
               </button>
-            )}
+            ))}
           </div>
           <FasceDiSpesa senzaWoo valore={fasceContantiCorso} onCambia={(v) => salvaFasceContanti(v)} prodottiShop={prodottiShop} isMobile={isMobile} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -42634,9 +42661,11 @@ function PannelloCodiciNeedling({ regoleNeedling, prodottiShop, coupon, corsi, c
 
       <SchedaFasceCodiceAula
         serie="needling"
-        copiaDa="corsi generici"
-        onCopiaCarta={sePuoCopiare ? copiaCartaDaiCorsi : null}
-        onCopiaContanti={sePuoCopiare ? copiaContantiDaiCorsi : null}
+        fontiCopia={[{
+          nome: "corsi generici",
+          carta: sePuoCopiare ? copiaCartaDaiCorsi : null,
+          contanti: sePuoCopiare ? copiaContantiDaiCorsi : null,
+        }]}
         copiando={copiando}
         chiaveCarta={CHIAVE_FASCE_NEEDLING_CARTA}
         chiaveContanti={CHIAVE_FASCE_NEEDLING_CONTANTI}
@@ -42925,10 +42954,15 @@ function PannelloCodiciAcquistoMaster({ master, coupon, couponAcquistoPerMasterI
 // alzare di un punto per una fiera lo alzava anche a tutte le classi, e
 // nessuno se ne sarebbe accorto prima di leggere un incasso.
 //
-// Il punto di partenza pero' sono proprio quelle dei corsi: il tasto
-// "Copia da corsi" le ricopia qui dentro, soglie comprese, e da li' si
-// cambia solo dove serve. Una serie che nasce vuota si riempie a mano,
+// Il punto di partenza pero' e' una tabella gia' fatta: "Copia da corsi"
+// e "Copia da master" la ricopiano qui dentro, soglie comprese, e da li'
+// si cambia solo dove serve. Una serie che nasce vuota si riempie a mano,
 // ventiquattro numeri, ed e' il modo migliore per sbagliarne uno.
+//
+// Due fonti e non una (4/11/2026): dai corsi si prende lo sconto che la
+// scuola fa ai suoi allievi, dalle master quello del referral personale,
+// cioe' lo sconto a un cliente qualunque. Al banco di una fiera il
+// cliente e' quello, quindi spesso e' la seconda a somigliare di piu'.
 //
 // Qui non c'e' niente che riguardi i codici: una fiera non ha un codice
 // d'aula da riscrivere e non ha una vetrina sul sito. Al banco le pesca
@@ -42938,13 +42972,31 @@ function PannelloScontiEventi({ prodottiShop, coupon, corsi, corsiDate, ricarica
   const [, salvaEventiContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CONTANTI, []);
   const [fasceCorsiCarta] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CARTA, null);
   const [fasceCorsiContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_CORSI_CONTANTI, []);
+  // La seconda fonte da cui partire: lo sconto del referral personale
+  // delle master (4/11/2026, chiesto dal titolare). Non e' un doppione
+  // del tasto dei corsi: il codice d'aula e' lo sconto che la scuola fa
+  // ai suoi allievi, il referral e' quello che una master fa a un cliente
+  // qualunque — e un cliente qualunque e' esattamente chi passa davanti
+  // al banco di una fiera. Spesso e' da li' che conviene partire.
+  const [regolaReferralMaster] = useImpostazioneCondivisa(CHIAVE_REGOLA_REFERRAL_MASTER, { tipo: "fasce", fasce: FASCE_SCONTO_DEFAULT });
+  const [fasceReferralContanti] = useImpostazioneCondivisa(CHIAVE_FASCE_REFERRAL_CONTANTI, []);
   const sePuoCopiare = serieScontoScritta(fasceCorsiCarta);
+  // Qui NON basta "la serie esiste": quella delle master esiste sempre,
+  // perche' nasce con sei zeri. Si guarda che dentro ci sia almeno una
+  // percentuale, altrimenti il tasto azzererebbe la fiera.
+  const sePuoCopiareDalleMaster = serieScontoConPercentuali(regolaReferralMaster?.fasce);
   // Copiare qui non tocca niente di la': si scrive solo l'impostazione
   // degli eventi. Nessun coupon da riallineare, nessuna riga di base da
   // riscrivere — quelle servono ai codici, e qui codici non ce ne sono.
   const copiaCartaDaiCorsi = () => { if (sePuoCopiare) salvaEventiCarta(gruppiFasceValidi(fasceCorsiCarta)); };
   const copiaContantiDaiCorsi = () => {
     salvaEventiContanti(serieScontoScritta(fasceCorsiContanti) ? gruppiFasceValidi(fasceCorsiContanti) : []);
+  };
+  const copiaCartaDalleMaster = () => { if (sePuoCopiareDalleMaster) salvaEventiCarta(gruppiFasceValidi(regolaReferralMaster.fasce)); };
+  // Come per i corsi: di la' vuoto vuol dire "uguale a carta e shop", e
+  // allora anche qui si rimette vuoto invece di ricopiare la carta.
+  const copiaContantiDalleMaster = () => {
+    salvaEventiContanti(serieScontoScritta(fasceReferralContanti) ? gruppiFasceValidi(fasceReferralContanti) : []);
   };
   return (
     <div>
@@ -42955,16 +43007,24 @@ function PannelloScontiEventi({ prodottiShop, coupon, corsi, corsiDate, ricarica
         e chi si contratta il prezzo, e quella scelta resta a chi sta al banco.
         <br />
         Sono separate da quelle dei corsi apposta: qui si può alzare o abbassare senza toccare quello che la scuola
-        sconta ai suoi allievi. Il tasto <b style={{ color: NAVY }}>Copia da corsi</b> serve a partire da lì la prima
-        volta.
+        sconta ai suoi allievi. I tasti <b style={{ color: NAVY }}>Copia da corsi</b> e
+        <b style={{ color: NAVY }}> Copia da master</b> servono a partire da una tabella già fatta invece che da
+        ventiquattro caselle vuote: il primo ricopia lo sconto del codice d'aula, il secondo quello del referral
+        personale delle master — che è lo sconto a un cliente qualunque, come chi passa al banco. Copiano qui e
+        basta: di là non cambia niente.
       </div>
 
       <SchedaFasceCodiceAula
         senzaCodici
         serie="eventi"
-        copiaDa="corsi"
-        onCopiaCarta={sePuoCopiare ? copiaCartaDaiCorsi : null}
-        onCopiaContanti={copiaContantiDaiCorsi}
+        fontiCopia={[
+          { nome: "corsi", carta: sePuoCopiare ? copiaCartaDaiCorsi : null, contanti: copiaContantiDaiCorsi },
+          {
+            nome: "master",
+            carta: sePuoCopiareDalleMaster ? copiaCartaDalleMaster : null,
+            contanti: sePuoCopiareDalleMaster ? copiaContantiDalleMaster : null,
+          },
+        ]}
         chiaveCarta={CHIAVE_FASCE_EVENTI_CARTA}
         chiaveContanti={CHIAVE_FASCE_EVENTI_CONTANTI}
         titolo="Sconto agli eventi, al banco della fiera"
@@ -87802,7 +87862,7 @@ function Gestionale() {
 // invece del codice.
 export {
   testiSegnaposto,
-  scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento,
+  scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento, serieScontoConPercentuali,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,

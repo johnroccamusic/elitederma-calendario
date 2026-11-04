@@ -2481,6 +2481,51 @@ testo). Per renderlo autonomo servirebbe una password per applicazioni
 di un amministratore, cioè la facoltà di **eseguire PHP** sul negozio:
 decisione del titolare, non presa.
 
+### Gli sconti della fiera si copiano anche dalle master (4/11/2026)
+
+Il titolare, guardando «Sconto agli eventi, al banco della fiera»: «in
+questa area dobbiamo mettere anche il pulsante di copia dagli sconti
+master». C'era solo **Copia da corsi**; ora ce n'è uno per fonte, su
+tutte e due le serie (carta e contanti).
+
+**Non è un doppione, ed è il motivo per cui ne servono due.** Il codice
+d'aula è lo sconto che la scuola fa ai **suoi allievi**; il referral
+personale è quello che una master fa a un **cliente qualunque** — e al
+banco di una fiera il cliente è proprio quello. Quale delle due tabelle
+somigli di più alla fiera lo sa chi la fa, non chi programma.
+
+Tre cose decise lì dentro:
+
+- **Si copia qui e basta.** Premere il tasto scrive solo l'impostazione
+  degli eventi: nessun coupon da riallineare, nessuna riga di base da
+  riscrivere — quelle servono ai codici, e una fiera un codice non ce
+  l'ha. Le **soglie di spesa viaggiano con la tabella**, o la fascia
+  copiata finirebbe su un carrello diverso da quello di là.
+- **Da una tabella tutta a zero non si copia** (`serieScontoConPercentuali`).
+  Qui `serieScontoScritta` sarebbe la domanda sbagliata: la serie delle
+  master **nasce già fatta, con sei zeri** (`FASCE_SCONTO_DEFAULT`),
+  quindi «esiste» sempre. Un tasto acceso lì sopra prometterebbe di
+  ricopiare una tabella e invece azzererebbe lo sconto della fiera, in
+  silenzio e con un gesto solo. Niente da copiare = niente tasto.
+- **Una serie senza codici mai scritta mostra la tabella vuota**, non
+  «Caricamento regole…». Per una serie *con* codici quel null vuol dire
+  «la regola non è ancora arrivata» e si aspetta; per gli eventi una
+  regola non esiste proprio, quindi vuol dire «mai scritta». Prima si
+  restava su quella frase per sempre, e con essa **sparivano i tasti
+  Copia da…**: erano invisibili esattamente la prima volta, che è
+  l'unica volta in cui servono.
+
+`SchedaFasceCodiceAula` non ha più una fonte sola (`copiaDa` /
+`onCopiaCarta` / `onCopiaContanti`) ma un **elenco** `fontiCopia` di
+`{ nome, carta, contanti }`; una funzione mancante vuol dire «di là non
+c'è niente da copiare» e il tasto non compare. La serie needling passa
+la sua unica fonte da quel nuovo elenco. Prove in
+`prove/sconti-eventi-copia.test.jsx` (2): il pannello montato per
+davvero, i quattro tasti premuti uno per uno, e il controllo che le due
+fonti scrivano **numeri diversi** — se copiassero la stessa tabella,
+averne due sarebbe peggio che averne uno, perché sembrerebbe una scelta
+e non lo sarebbe.
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
