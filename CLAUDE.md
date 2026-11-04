@@ -2099,10 +2099,28 @@ c'è». Il tasto che importa **compare solo dopo la risposta** e passa da
 una conferma che dice cosa entra in prima nota — mesi di movimenti sono
 una decisione, non l'effetto collaterale di una domanda.
 
-Quello che si sapeva il 3/11/2026 su MT.DERM, nel periodo coperto: **un
-solo bonifico, 2.175,00 €** il 24/09/2026 (più 1,00 € di commissione),
-riconciliato con «Acquisto pigmenti vecchia fattura»; e 94,50 € il
+**Pubblicata il 4/11/2026** (versione 15; fino a quel momento in
+produzione c'era ancora quella del 13/10, che `prova` non la leggeva —
+cioè il tasto «Guarda cosa c'è» avrebbe **scritto**. Una funzione non
+pubblicata non è un ramo che non si usa: è un tasto che fa un'altra
+cosa).
+
+**E la domanda ha una risposta, misurata lo stesso giorno in prova.**
+Verso MT.DERM è uscito **un solo bonifico: 2.175,00 €** il 24/09/2026
+(più 1,00 € di commissione), «Invoices RO 5003, RO 5004», riconciliato
+con la spesa «Acquisto pigmenti vecchia fattura»; e 94,50 € il
 07/10/2026, ma via PayPal.
+
+**Da gennaio a luglio non si può sapere, e adesso è un fatto e non
+un'ipotesi**: interrogata mese per mese, la banca ha risposto **zero
+righe** per tutti e sette i mesi, e 93/195/205/17 da agosto a novembre.
+Il consenso PSD2 non arriva sotto **agosto 2026**. In app l'estratto
+conto copre dal 01/07/2026 (645 righe dal file, 128 da Lunch Flow),
+quindi tutto quello che la banca possiede è già dentro e non c'è niente
+da importare. Per gennaio–giugno le strade sono fuori dall'app: il
+portale della banca, o le fatture passive di MT.DERM su Fatture in
+Cloud. Che qualcosa prima ci sia lo suggerisce il bonifico stesso, che
+si chiama «vecchia fattura» e ne salda due insieme.
 
 ### Le statistiche di canale si filtrano per categoria (3/11/2026)
 
