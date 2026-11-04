@@ -43,6 +43,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { svuotaCacheSito } from "../_shared/cacheSito.ts";
+// la regola del back order ereditato dai componenti: la stessa che usa
+// il giro degli ordini online, in un posto solo (vedi _shared/bundle.js)
+import { bundleOrdinabileAZero, campiBackorderBundle, messaggioBackorderBundle } from "../_shared/bundle.js";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -107,16 +110,26 @@ Deno.serve(async (req) => {
     // TUTTI, anche quelli fuori dallo shop: un componente senza id su
     // WooCommerce non si pubblica, ma i suoi pezzi contano lo stesso per
     // il bundle che lo contiene. Chi non ha l'id si salta nel giro sotto.
-    .select("id, nome, woo_product_id, stato, attivo, solo_offline, quantita, tipo_prodotto, bundle_con_giacenza_fisica");
+    .select("id, nome, woo_product_id, stato, attivo, solo_offline, quantita, tipo_prodotto, bundle_con_giacenza_fisica, backorder_attivo, backorder_messaggio");
   if (error) return json({ errore: "Lettura prodotti: " + error.message }, 500);
 
-  const perIdProdotto: Record<string, { quantita: unknown }> = {};
-  for (const p of prodotti || []) perIdProdotto[p.id as string] = p as { quantita: unknown };
+  // porta anche il back order: senza, la distinta di un bundle non
+  // saprebbe se i pezzi che mancano si possono riordinare
+  const nomePerId = new Map<string, string>();
+  const perIdProdotto: Record<string, { quantita: unknown; backorder_attivo?: boolean; backorder_messaggio?: string }> = {};
+  for (const p of prodotti || []) {
+    perIdProdotto[p.id as string] = p as { quantita: unknown; backorder_attivo?: boolean; backorder_messaggio?: string };
+    nomePerId.set(p.id as string, String(p.nome || ""));
+  }
+  const nomeDi = (id: string) => nomePerId.get(id) || "prodotto sconosciuto";
 
   const daAggiornare: Record<string, unknown>[] = [];
   const nascosti: { id: string; nome: string; woo: number }[] = [];
   const giacenze: { nome: string; woo: number; quantita: number; in_casa: number; promessi: number }[] = [];
   const saltati: { nome: string; perche: string }[] = [];
+  // i bundle il cui back order ereditato e' cambiato: si scrive in
+  // locale solo DOPO che il sito ha confermato, come per i nascosti
+  const backorderDaScrivere: { id: string; woo: number; acceso: boolean }[] = [];
 
   for (const p of prodotti || []) {
     if (soloQuesti && !soloQuesti.has(p.id)) continue;
@@ -138,6 +151,10 @@ Deno.serve(async (req) => {
 
     const virtuale = p.tipo_prodotto === "bundle" && !p.bundle_con_giacenza_fisica;
     let quantita: number;
+    // il back order che il bundle EREDITA dai suoi componenti: si decide
+    // qui dentro e si manda al sito piu' sotto, insieme al numero
+    let ereditaBackorder: boolean | null = null;
+    let messaggioEreditato = "";
     if (virtuale) {
       const pezzi = componentiDi[p.id] || [];
       if (pezzi.length === 0) { saltati.push({ nome: p.nome, perche: "bundle senza distinta" }); continue; }
@@ -145,15 +162,29 @@ Deno.serve(async (req) => {
       // prima, con i suoi pezzi gia' al netto di quelli promessi
       let interi = Infinity;
       let mancante = "";
+      const distinta: { per: number; giacenza: number; backorder: boolean; messaggio: string }[] = [];
       for (const c of pezzi) {
         const comp = perIdProdotto[c.id];
         const in_casa = Number(comp?.quantita);
         if (!comp || !Number.isFinite(in_casa)) { interi = NaN; mancante = c.id; break; }
         const liberi = Math.max(0, in_casa - (promessi[c.id] || 0));
         interi = Math.min(interi, Math.floor(liberi / c.per));
+        distinta.push({
+          per: c.per, giacenza: liberi,
+          backorder: comp.backorder_attivo === true,
+          messaggio: String(comp.backorder_messaggio || ""),
+        });
       }
       if (!Number.isFinite(interi)) { saltati.push({ nome: p.nome, perche: `componente senza giacenza (${mancante})` }); continue; }
       quantita = interi;
+      // SEGNALATO DAL TITOLARE IL 4/11/2026: il Mascara 1pz aveva il
+      // back order acceso e l'Espositore 10pz risultava indisponibile,
+      // perche' 7 pezzi su 10 fanno zero espositori e di quel back order
+      // qui non si sapeva niente. La regola sta in _shared/bundle.js,
+      // perche' la stessa decisione la prende anche il giro degli ordini
+      // online (`sincronizzaDisponibilitaBundle`).
+      ereditaBackorder = bundleOrdinabileAZero(distinta);
+      messaggioEreditato = messaggioBackorderBundle(p.backorder_messaggio, distinta);
     } else {
       const in_casa = Number(p.quantita);
       if (!Number.isFinite(in_casa)) { saltati.push({ nome: p.nome, perche: "giacenza non scritta" }); continue; }
@@ -180,12 +211,26 @@ Deno.serve(async (req) => {
     const impegnati = promessi[p.id] || 0;
     const disponibile = Math.max(0, quantita - impegnati);
 
-    // solo la quantita', esattamente come fa woo-aggiorna-prodotto a ogni
-    // movimento: toccare anche manage_stock o stock_status vorrebbe dire
-    // cambiare il modo in cui il sito gestisce quel prodotto, e questo
-    // tasto serve ad allineare un numero, non a riconfigurare il negozio.
-    // Il back order, per dire, vive proprio li' sopra.
-    daAggiornare.push({ id: woo, stock_quantity: disponibile });
+    // Su un prodotto normale si manda SOLO la quantita', esattamente come
+    // fa woo-aggiorna-prodotto a ogni movimento: toccare anche
+    // manage_stock o stock_status vorrebbe dire cambiare il modo in cui il
+    // sito gestisce quel prodotto, e questo tasto serve ad allineare un
+    // numero, non a riconfigurare il negozio. Il back order di un prodotto
+    // normale e' una scelta di chi apre la scheda, e resta sua.
+    //
+    // SUL BUNDLE VIRTUALE E' DIVERSO, dal 4/11/2026: il suo back order non
+    // lo sceglie nessuno, si DEDUCE dai componenti (decisione del
+    // titolare), quindi qui non si sta riconfigurando niente — si sta
+    // scrivendo un valore calcolato, come la quantita' accanto. E va
+    // scritto proprio qui: questo giro e' l'unico che parte anche dopo una
+    // vendita al banco, e senza di lui un espositore resterebbe
+    // indisponibile fino al prossimo ordine online.
+    if (ereditaBackorder === null) {
+      daAggiornare.push({ id: woo, stock_quantity: disponibile });
+    } else {
+      daAggiornare.push({ id: woo, stock_quantity: disponibile, ...campiBackorderBundle(ereditaBackorder, messaggioEreditato) });
+      if (p.backorder_attivo !== ereditaBackorder) backorderDaScrivere.push({ id: p.id as string, woo, acceso: ereditaBackorder });
+    }
     giacenze.push({ nome: p.nome, woo, quantita: disponibile, in_casa: quantita, promessi: impegnati });
   }
 
@@ -198,6 +243,10 @@ Deno.serve(async (req) => {
     // resto della risposta.
     return json({ prova: true, da_nascondere: nascosti.length, giacenze_da_spingere: giacenze.length,
       saltati: saltati.length, dettaglio_saltati: saltati, dettaglio_nascosti: nascosti,
+      // i bundle che cambierebbero back order: un espositore che si apre
+      // o si chiude e' una cosa che chi guarda la prova vuole vedere
+      // prima, non scoprire dal sito
+      backorder_da_cambiare: backorderDaScrivere.map((b) => `${nomeDi(b.id)}: ${b.acceso ? "diventa ordinabile a zero" : "non piu' ordinabile a zero"}`),
       impegnati_in_sospesi: giacenze.filter((g) => g.promessi > 0) });
   }
 
@@ -272,6 +321,15 @@ Deno.serve(async (req) => {
     await supabase.from("prodotti_shop").update({ stato: "private" }).in("id", nascostiDavvero.map((n) => n.id));
   }
 
+  // E il back order ereditato dei bundle, con la stessa regola: in app la
+  // scheda deve dire quello che dice il sito, altrimenti chi apre
+  // l'espositore legge "back order spento" su un prodotto che il sito sta
+  // vendendo a scorte zero.
+  const backorderScritti = backorderDaScrivere.filter((b) => riusciti.has(b.woo));
+  for (const b of backorderScritti) {
+    await supabase.from("prodotti_shop").update({ backorder_attivo: b.acceso }).eq("id", b.id);
+  }
+
   // La cache. Svuotare le pagine UNA PER UNA non basta quando si e'
   // toccato tutto il catalogo: Breeze svuota la sua, ma Cloudflare ha
   // continuato a servire una copia vecchia di oltre un'ora, e sulla
@@ -309,5 +367,6 @@ Deno.serve(async (req) => {
     falliti, avviso_cache: avvisoCache,
     cache_svuotata: riusciti.size ? (svuotaTutto ? "tutto il sito" : "le pagine dei prodotti toccati") : "niente da svuotare",
     disponibilita_cambiata: passaggiDiDisponibilita.map((g) => `${g.nome}: ${g.quantita <= 0 ? "ora esaurito" : "ora disponibile"}`),
+    backorder_ereditato: backorderScritti.map((b) => `${nomeDi(b.id)}: ${b.acceso ? "ordinabile a zero (i componenti sono su back order)" : "non piu' ordinabile a zero"}`),
   });
 });

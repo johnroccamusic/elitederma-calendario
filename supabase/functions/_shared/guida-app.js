@@ -145,6 +145,28 @@ C'e' «Bolla di accompagnamento», che genera il documento di trasporto in PDF c
     titolo: "Regolamenti",
     testo: `REGOLAMENTI — le decisioni prese: prezzi, sconti, procedure, cosa fare quando. Chi amministra scrive le schede (titolo, argomento, testo, per chi vale, da quando e' decisa); gli altri le leggono. E' la fonte da cui questo assistente risponde quando dice «dalle regole»: se una scheda manca, la domanda resta registrata come domanda senza risposta, ed e' da li' che si capisce quali regole vanno ancora scritte.`,
   },
+  {
+    chiave: "registrazioneclienti",
+    titolo: "Registrazione clienti",
+    testo: `REGISTRAZIONE CLIENTI — si registra chi si incontra: nome, cognome, citta', email e telefono. La tessera e' in Home per tutti, master comprese. Due sezioni: «Registra un cliente» per inserirlo e «Clienti registrati» per consultare l'elenco, con la ricerca.
+
+Il luogo NON si scrive, si scegli: si comincia a battere la citta', l'app la suggerisce dall'elenco ISTAT e scegliendola riempie da se' provincia, regione e CAP. Provincia e regione restano in sola lettura, perche' una regione battuta a mano diventa quattro modi di scrivere la stessa cosa e l'elenco per regione non si fa piu'. Dove i CAP sono molti (le grandi citta') la tendina resta da scegliere.
+
+Il telefono e' forzato col prefisso +39, che sta fuori dalla casella e non si tocca; un numero estero da qui oggi non si registra. Email e telefono sono OBBLIGATORI, e il motivo e' la regola del doppione.
+
+CHI E' «GIA' REGISTRATO»: nome + cognome + email + telefono. In caso di omonimia la persona e' la stessa solo se corrisponde tutto, contatti compresi: stesso nome con telefono o mail diversi e' un secondo cliente. La citta' resta fuori di proposito, perche' chi trasloca non diventa un'altra persona. Se si prova a salvare un doppione l'app dice «utente gia' registrato» e mostra quale riga c'e' gia'.
+
+Ogni riga dell'elenco ha due tastini: la matita porta la scheda dentro lo stesso modulo e salvando aggiorna quella riga (non ne crea una nuova), il cestino la cancella dopo una conferma che nomina la persona. Chi ha registrato la riga resta scritto e non si riscrive; una correzione aggiunge chi l'ha fatta e quando. La cancellazione non ha cestino: una riga tolta non si ripesca.`,
+  },
+  {
+    chiave: "stampe",
+    titolo: "Stampe",
+    testo: `STAMPE — l'elenco dei corsi in ordine cronologico con, accanto a ogni classe, due tasti: «Diplomi» e «Nomi». Serve a chi deve solo stampare: da qui non si entra nelle classi, non si modifica e non si cancella niente, e non c'e' la vista a calendario.
+
+Ci sono gli stessi filtri di Gestione corsi — corso, citta', master — la stessa ricerca e le due linguette Programmati e Passati, che qui servono piu' che altrove perche' i diplomi si stampano a corso finito.
+
+«Diplomi» compone il PDF dei diplomi della classe e «Nomi» il foglio dei segnaposti. Il diploma viene SOLO dal pacchetto dell'allieva: se un'allieva non ce l'ha, o il suo pacchetto non ha il modello di diploma, il suo foglio non esce e l'app lo dice allieva per allieva, con il motivo. Da qui non si puo' rimediare: va sistemato da chi amministra, in Tipologie di kit. Se la classe non ha iscritti lo dice e non genera niente.`,
+  },
 ];
 
 /**

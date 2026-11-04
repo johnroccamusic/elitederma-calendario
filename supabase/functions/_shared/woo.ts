@@ -1,4 +1,7 @@
 import { decodificaEntita } from "./testo.ts";
+// la regola del back order sui bundle sta in un posto solo, perche' la
+// usa anche woo-riallinea-shop: vedi _shared/bundle.js
+import { bundleOrdinabileAZero, campiBackorderBundle, componibiliDa, messaggioBackorderBundle } from "./bundle.js";
 // Logica condivisa tra "woo-webhook" (in tempo reale) e
 // "woo-import-storico" (una tantum): entrambi ricevono un ordine
 // WooCommerce con la stessa identica forma (è lo stesso oggetto "Order"
@@ -352,23 +355,55 @@ export async function sincronizzaDisponibilitaBundle(
 ): Promise<void> {
   const auth = "Basic " + btoa(`${consumerKey}:${consumerSecret}`);
   for (const bundleId of bundleIds) {
-    const { data: bundle } = await supabase.from("prodotti_shop").select("id, nome, woo_product_id").eq("id", bundleId).maybeSingle();
+    const { data: bundle } = await supabase.from("prodotti_shop")
+      .select("id, nome, woo_product_id, backorder_attivo, backorder_messaggio").eq("id", bundleId).maybeSingle();
     if (!bundle?.woo_product_id) continue;
     const { data: componenti } = await supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", bundleId);
     if (!componenti?.length) continue;
-    let disponibilita = Infinity;
+    // la distinta con i pezzi E il back order di ognuno: da qui escono
+    // sia quanti bundle si compongono sia se si possono ordinare quando
+    // non se ne compone nessuno (vedi _shared/bundle.js)
+    const distinta: { per: number; giacenza: number; backorder: boolean; messaggio: string }[] = [];
+    let incompleta = false;
     for (const c of componenti) {
-      const { data: comp } = await supabase.from("prodotti_shop").select("quantita").eq("id", c.componente_id).maybeSingle();
-      const giac = comp?.quantita || 0;
-      const possibili = c.quantita_per_bundle > 0 ? Math.floor(giac / c.quantita_per_bundle) : 0;
-      disponibilita = Math.min(disponibilita, possibili);
+      const { data: comp } = await supabase.from("prodotti_shop")
+        .select("quantita, backorder_attivo, backorder_messaggio").eq("id", c.componente_id).maybeSingle();
+      if (!comp) { incompleta = true; break; }
+      distinta.push({
+        per: Number(c.quantita_per_bundle) || 0,
+        giacenza: Number(comp.quantita) || 0,
+        backorder: comp.backorder_attivo === true,
+        messaggio: comp.backorder_messaggio || "",
+      });
     }
+    if (incompleta) continue;
+    const utili = distinta.filter((c) => c.per > 0);
+    if (utili.length === 0) continue;
+    const disponibilita = Math.min(...utili.map((c) => componibiliDa(c)));
     if (!Number.isFinite(disponibilita)) continue;
+
+    // IL BACK ORDER SI EREDITA (4/11/2026). La quantita' resta quella
+    // vera — zero espositori sono zero espositori — e quello che cambia
+    // e' se il sito li fa ordinare comunque, perche' i pezzi che
+    // mancano si possono riordinare. Prima questo passaggio non c'era e
+    // un espositore con il componente a back order risultava
+    // indisponibile.
+    const ordinabile = bundleOrdinabileAZero(utili);
+    const messaggio = messaggioBackorderBundle(bundle.backorder_messaggio, utili);
     const risposta = await fetch(`${siteUrl}/wp-json/wc/v3/products/${bundle.woo_product_id}`, {
       method: "PUT",
       headers: { Authorization: auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ manage_stock: true, stock_quantity: disponibilita }),
+      body: JSON.stringify({ stock_quantity: disponibilita, ...campiBackorderBundle(ordinabile, messaggio) }),
     });
-    if (!risposta.ok) console.error(`Bundle "${bundle.nome}": disponibilità non sincronizzata su WooCommerce (${risposta.status})`);
+    if (!risposta.ok) {
+      console.error(`Bundle "${bundle.nome}": disponibilità non sincronizzata su WooCommerce (${risposta.status})`);
+      continue;
+    }
+    // e la scheda in app dice la stessa cosa del sito: il flag del
+    // bundle qui e' DERIVATO, non scelto, e se restasse spento mentre il
+    // sito lo vende a scorte zero la scheda mentirebbe a chi la apre
+    if (bundle.backorder_attivo !== ordinabile) {
+      await supabase.from("prodotti_shop").update({ backorder_attivo: ordinabile }).eq("id", bundle.id);
+    }
   }
 }

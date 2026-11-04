@@ -2293,6 +2293,82 @@ ricerca uguali, e i due messaggi che spiegano perché un diploma non esce
 («non ha nessun pacchetto») o che la classe è vuota — senza generare
 nessun PDF.
 
+### Il bundle eredita il back order dai suoi pezzi (4/11/2026)
+
+Il titolare: «nonostante con il mascara abbia attivato il backorders, il
+relativo bundle del mascara da 10 pezzi, non leggendo disponibili i pezzi
+necessari per comporsi, mi risulta sempre indisponibile». Aveva ragione, e
+il caso era esatto: **Mascara Kerafill 1pz**, 7 pezzi in casa e back order
+acceso, quindi ordinabile a scorte zero; **Espositore 10pz**, bundle
+virtuale, 7 ÷ 10 = **zero componibili** → sul sito indisponibile. Il pezzo
+singolo si ordinava, l'espositore no, senza nessuna ragione perché
+fossero diversi: il conto della disponibilità guardava solo le giacenze,
+e per lui un componente a back order era un componente che non c'è.
+
+**La regola, decisa dal titolare: il bundle lo eredita.** Se ogni
+componente che lo blocca — quello che finisce prima, cioè quello che
+decide il minimo — è a sua volta ordinabile a scorte zero, il bundle va
+sul sito come ordinabile, con la frase del pezzo singolo (o la sua, se
+qualcuno l'ha scritta sull'espositore). Si accende e si spegne da sé
+seguendo i componenti: nessuna casella da ricordare su ogni bundle.
+
+**I limitanti, non tutti.** Un componente che ne ha cinquanta non blocca
+niente, e pretendere il back order anche da lui terrebbe fermo
+l'espositore per colpa di un pezzo che abbonda. Ma **basta uno** che
+manca e non si riordina perché il bundle resti chiuso: prometterlo
+vorrebbe dire prendere un ordine che non si può evadere.
+
+**E la disponibilità resta il numero vero.** Non si gonfia la quantità
+per far comparire il tasto: al sito va **zero** — quanti espositori si
+compongono davvero — e il back order di WooCommerce fa il resto («su
+ordinazione», e si compra). Dichiarare due espositori che non esistono
+vorrebbe dire prometterli a chi paga.
+
+**La regola sta in `_shared/bundle.js`, e il perché è il punto.** Il
+conto dei bundle vive in **due** posti: `sincronizzaDisponibilitaBundle`
+(`_shared/woo.ts`), che gira quando un ordine **online** muove i
+componenti, e `woo-riallinea-shop`, che gira ogni notte e dopo ogni
+movimento di magazzino — cioè dopo le vendite **al banco**. Una regola
+scritta in uno dei due sarebbe giusta per metà delle vendite, e nessuno
+saprebbe quale metà. (Le altre due copie della formula, nella scheda
+prodotto e al POS, rispondono a un'altra domanda — «quanti se ne
+compongono adesso» — e restano come sono: quel numero non cambia.)
+
+In `woo-riallinea-shop` questo è l'unico caso in cui si scrive sul sito
+qualcosa oltre alla quantità, e non contraddice la regola scritta lì
+sopra: su un prodotto normale il back order è **una scelta di chi apre la
+scheda** e resta sua, su un bundle virtuale è un **valore calcolato**,
+come la quantità accanto. Il flag viene riscritto anche in locale
+(`prodotti_shop.backorder_attivo`), dopo la conferma del sito e prodotto
+per prodotto: se restasse spento in app mentre il sito vende a scorte
+zero, la scheda mentirebbe a chi la apre.
+
+Prove in `prove/bundle-backorder.test.js` (18), sui numeri veri del
+mascara e sui casi che la farebbero sbagliare.
+
+### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
+
+Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
+ieri non è stato lanciato dopo le ultime aggiunte. Vale come promemoria:
+le tre verifiche prima del push non sono una formalità.
+
+- **Le tessere nuove non avevano la guida.** `registrazioneclienti` e
+  `stampe` erano in `TASTI_HOME` ma non in `AREE_GUIDA`, quindi
+  l'assistente non sapeva spiegarle: alla domanda «come registro un
+  cliente» non avrebbe avuto niente da dire. La prova che controlla che
+  **nessun tasto resti senza guida** esiste proprio per questo, ed era
+  rossa. Aggiunte le due schede (senza cifre: quella regola vale anche
+  qui, e c'è una prova che la fa rispettare).
+- **La prova della conversazione a voce era rimasta al patto vecchio.**
+  Dal 3/11 la frase si consegna dopo **900 ms di silenzio** e non appena
+  il browser la dichiara definitiva; la prova aspettava 120 ms e se ne
+  andava prima che la domanda fosse partita, poi dava la colpa alla
+  lettura. Ora aspetta il silenzio — e prima controlla che il silenzio
+  serva davvero, altrimenti allungare l'attesa nasconderebbe un ritorno
+  alla consegna immediata. La lettura si verifica sui pezzi **riuniti**,
+  perché la voce legge a frasi e quante frasi stiano in un pezzo dipende
+  da una soglia che può cambiare.
+
 ## 5. Comandi
 
 ```bash
