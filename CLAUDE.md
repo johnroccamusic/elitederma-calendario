@@ -2593,13 +2593,44 @@ Il POS questo difetto non l'ha mai avuto: `righeScarico` lì sta davanti a
 tutto. Prove in `prove/kit-con-bundle-si-apre.test.js` (9), sui numeri
 veri degli anellini.
 
-**Resta da decidere, ed è suo:** «Confezione Anellini Sterili 30 pz» ha
-983 in giacenza e `Copri clip box da 125 pz` 199 — sono bundle virtuali,
-quindi quei numeri non li legge nessuno. Se quelle scatole esistono
-davvero sullo scaffale vanno marcate **bundle con giacenza fisica**, che
-è un prodotto normale col suo stock; altrimenti i numeri vanno azzerati,
-perché una casella piena che nessuno guarda prima o poi qualcuno la
-guarda.
+**Un pacco sigillato e una ricetta si somigliano e sono opposti**
+(6/11/2026, deciso dal titolare guardando i due numeri rimasti). Il
+titolare: «Copriclip sono pacchi da 125 pezzi dalla fabbrica che poi noi
+apriamo per fare il pezzo singolo, quindi è giusto che abbia giacenza
+propria». **«Copri clip box da 125 pz»** era registrato come bundle
+virtuale, cioè come una ricetta che non esiste sullo scaffale: al sito
+andava `floor(24.004 / 125) = 192` disponibili mentre i pacchi chiusi
+sono **199**, e quel 199 non lo leggeva nessuno. Rimesso nella forma che
+hanno già i 18 pacchi veri — aghi, lame, cuffie, microbrush: `semplice`,
+`bundle_con_giacenza_fisica`, `prodotto_sfuso_id` verso «Copri clip 1pz»,
+125 pezzi per confezione, **nessuna riga di distinta** (lì il legame coi
+pezzi passa da «Apri confezione», non da `bundle_componenti`, e tenere
+tutte e due le dichiarazioni vuol dire che un giorno si contraddicono).
+Migrazione `20261106120000`, col rollback scritto dentro.
+
+Il costo è stato **scritto**, 1,25: finché era virtuale glielo calcolava
+`conCostoDeiBundle` dalla distinta (125 × 0,01), e da `semplice` quel
+calcolo non lo tocca più — senza, un prodotto che si vende davvero
+sarebbe rimasto «senza costo di acquisto», cioè senza margine, senza
+fascia di sconto e senza punti alla master. È lo stesso numero di prima,
+non una stima.
+
+**«Confezione Anellini Sterili 30 pz» invece è giusta così** (bundle di
+30 anellini più bustina e adesivo, confermato dal titolare). Si porta
+dietro **983 in `quantita`**, che su un bundle virtuale non legge nessuno
+— né il sito, che la disponibilità la calcola dai componenti, né
+Gestione magazzino, che su `conta_magazzino = false` quel campo non lo
+mostra. Resta scritto qui perché è una trappola per chi apre la tabella
+(ha ingannato me): azzerarlo è un movimento di rettifica, e quel gesto lo
+decide il titolare, non chi legge.
+
+**Il «Microscopio»** è un accessorio didattica di COLORI E CORREZIONI, un
+pezzo solo, non in vendita: `conta_magazzino` spento è giusto e resta
+così. Prima scendeva a zero al primo corso e dal secondo in poi avrebbe
+bloccato la preparazione come il box degli anellini; adesso semplicemente
+non si muove. Accendere quella casella vorrebbe dire sapere che il
+microscopio è in aula e non a magazzino — e bloccare un secondo corso che
+lo chiede nelle stesse date: è un'informazione vera, ma è una scelta sua.
 
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
