@@ -1,0 +1,44 @@
+-- L'HENNE' SI PAGA A TOTALE, COMUNQUE LO SI PAGHI (6/11/2026).
+--
+-- Parole del titolare, che sono la regola: «L'henne' funziona cosi'.
+-- Costa un tot e non e' importante se lo paghi con iva o cash senza
+-- iva. Devi il totale pattuito. Detto questo qualsiasi somma pagata con
+-- qualsiasi sistema somma per raggiungere il totale.»
+--
+-- Nella scheda del corso ci sono due interruttori vicini che parlano
+-- tutti e due di IVA, ed e' per quello che si confondono:
+--
+--   «Come si pattuisce il prezzo» (corsi.prezzo_iva_inclusa) decide solo
+--   da quale forma parte una scheda NUOVA — netto o gia' lordo. Non
+--   converte niente e non tocca nessun importo.
+--
+--   «Verifica sul totale pagato» (corsi.saldo_su_totale_pagato) decide
+--   invece quanto «Restano da pagare» toglie dal pattuito per ogni quota
+--   incassata: l'IMPONIBILE (spento) o il TOTALE davvero incassato
+--   (acceso). Questo i soldi li tocca, perche' e' la cifra che si chiede
+--   a una persona.
+--
+-- Sui due corsi di henne' il prezzo e' gia' lordo, e su «HENNE» i due
+-- interruttori erano d'accordo. Su «HENNE INDIVI» no: pattuito lordo e
+-- residuo calcolato sull'imponibile — l'unico corso di tutto il
+-- catalogo in cui i due si contraddicevano (verificato con un confronto
+-- su tutta la tabella il 6/11/2026).
+--
+-- COSA COSTAVA, e perche' non si era ancora visto: su quel corso c'e'
+-- una sola iscrizione, saldata «Cash no iva», dove imponibile e totale
+-- coincidono e la differenza non si vede. Sarebbe uscita alla prima
+-- persona che paga con un metodo che l'IVA ce l'ha: 550 pattuiti, 550
+-- incassati, e la scheda avrebbe continuato a chiederne 99,18 che
+-- nessuno deve.
+--
+-- NON CONVERTE E NON RISCRIVE NESSUN IMPORTO: ne' il pattuito, ne' le
+-- quote, ne' gli imponibili gia' scritti. Cambia solo come si calcola il
+-- residuo, da adesso e anche sulle schede gia' aperte di quel corso.
+--
+-- Rollback:
+--   update public.corsi set saldo_su_totale_pagato = false
+--    where id = '3e9b55ba-6e18-4d03-93a3-7513beea1151';
+
+update public.corsi
+   set saldo_su_totale_pagato = true
+ where id = '3e9b55ba-6e18-4d03-93a3-7513beea1151';  -- HENNE INDIVI

@@ -2676,6 +2676,41 @@ un prodotto **è il risultato voluto** — di là non c'è più — e scrivere
 `private` in locale. La seconda è la correzione vera e vuole una
 pubblicazione.
 
+### L'hennè si paga a totale, comunque lo si paghi (6/11/2026)
+
+Era in sospeso dal 16/10/2026. Il titolare ha dettato la regola: «Costa
+un tot e non è importante se lo paghi con iva o cash senza iva. Devi il
+totale pattuito. Qualsiasi somma pagata con qualsiasi sistema somma per
+raggiungere il totale.»
+
+Nella scheda del corso ci sono **due interruttori vicini che parlano
+tutti e due di IVA**, ed è per questo che si confondono:
+
+- **«Come si pattuisce il prezzo»** (`corsi.prezzo_iva_inclusa`) decide
+  solo da quale forma parte una scheda **nuova**, netto o già lordo. Non
+  converte e non tocca nessun importo.
+- **«Verifica sul totale pagato»** (`corsi.saldo_su_totale_pagato`)
+  decide quanto «Restano da pagare» toglie dal pattuito per ogni quota
+  incassata: l'**imponibile** (spento) o il **totale davvero incassato**
+  (acceso). Questo i soldi li tocca: è la cifra che si chiede a una
+  persona.
+
+Confrontati tutti i corsi: **uno solo** aveva i due in contraddizione, e
+era **HENNE INDIVI** — pattuito lordo, residuo calcolato sull'imponibile.
+Acceso con `20261106180000`, rollback scritto dentro; `HENNE` era già a
+posto. Nessun importo è stato convertito o riscritto.
+
+Non si era ancora visto perché su quel corso c'è **una sola iscrizione**,
+saldata «Cash no iva», dove imponibile e totale coincidono. Sarebbe
+uscito alla prima persona che paga con un metodo che l'IVA ce l'ha: 550
+pattuiti, 550 incassati, e la scheda avrebbe continuato a chiederne
+**99,18** che nessuno deve. **Un residuo sbagliato non lo mette in dubbio
+nessuno**: è scritto dall'app, davanti a chi incassa.
+
+Con l'interruttore acceso il conto è quello dettato dal titolare:
+`quantoTogliere` prende il `totale` di ogni quota segnata pagata —
+acconto, pre corso e le righe aggiunte con «+» — qualunque sia il metodo.
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
