@@ -2552,9 +2552,10 @@ cui il guasto si è fatto sentire.
 che in quella casella un numero ce l'aveva, non bloccava niente e
 scriveva una cifra falsa. **«Aftercare post trattamento vit A+D 25pz»**
 (bundle virtuale da 25 bustine, `quantita` 2) se l'è vista scalare
-**undici volte da settembre**, in tutto 161, mentre le 657 bustine vere
-non sono mai uscite dal magazzino. Il tasto funzionava, quindi nessuno ha
-controllato. Stesso giro su «Vassoi minitray monouso 25 pezzi». Quei
+**tredici volte dall'8 settembre al 27 ottobre, in tutto 184**, mentre le
+657 bustine vere non sono mai uscite dal magazzino. Il tasto funzionava,
+quindi nessuno ha controllato. Stesso giro su «Vassoi minitray monouso 25
+pezzi», sette movimenti dal 1° settembre. Quei
 movimenti restano in archivio: **le giacenze storiche non sono state
 corrette**, perché su un bundle virtuale quel numero non vuol dire niente
 e perché cosa sia davvero uscito dagli scaffali lo sa solo chi conta.

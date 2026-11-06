@@ -62963,8 +62963,9 @@ function righeScarico(prodotto, quantita, bundleComponenti, prodottiPerId) {
 //    preparazione dei kit («ci sono 0 pezzi, non posso scaricarne 8») con
 //    3.000 anellini e 110 astucci in magazzino;
 //  - «Aftercare post trattamento vit A+D 25pz», che in quella casella un
-//    numero ce l'aveva, se lo vedeva scalare in silenzio — undici movimenti
-//    da settembre — mentre le bustine vere non uscivano mai. Il secondo e'
+//    numero ce l'aveva, se lo vedeva scalare in silenzio — tredici
+//    movimenti e 184 pezzi dall'8 settembre al 27 ottobre — mentre le
+//    bustine vere non uscivano mai dal magazzino. Il secondo e'
 //    il peggiore: il magazzino diceva una cifra che nessuno metteva in
 //    dubbio perche' il tasto aveva funzionato.
 //
