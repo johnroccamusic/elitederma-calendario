@@ -31550,6 +31550,32 @@ async function generaPdfSegnaposti({ listaIscritti = [], corso, corsoData, segna
     }
 }
 
+// SI VERIFICA SUL TOTALE PAGATO? (6/11/2026)
+//
+// Decide che cosa «Restano da pagare» toglie dal pattuito per ogni quota
+// incassata: l'IMPONIBILE, oppure il TOTALE davvero entrato, qualunque
+// sia il metodo. E' la cifra che si chiede a una persona, quindi vale la
+// pena dire da dove viene.
+//
+// Lo possono dire in due, e NON si annullano a vicenda:
+//
+//   il CORSO (`corsi.saldo_su_totale_pagato`) — e' la regola di tutto il
+//   corso, accesa sui due hennè: «costa un tot e non e' importante se lo
+//   paghi con iva o cash senza iva, devi il totale pattuito»;
+//
+//   la SINGOLA ISCRIZIONE (`totale_pattuito_modo = 'totale'`), il terzo
+//   modo accanto a «netto senza IVA» e «finale IVA inclusa».
+//
+// La scheda puo' solo AGGIUNGERE la regola, mai toglierla. Se bastasse
+// scegliere «netto» su una scheda di un corso che si paga a totale, le
+// due iscrizioni gia' salvate come 'lordo' e le 189 senza niente
+// cambierebbero di colpo il residuo che mostrano — soldi diversi chiesti
+// alle stesse persone, per una riga di codice e senza che nessuno abbia
+// toccato quelle schede. Il corso resta il pavimento.
+export function siVerificaSulTotale(modoPattuito, corso) {
+  return modoPattuito === "totale" || !!corso?.saldo_su_totale_pagato;
+}
+
 export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = "", puoAssegnareModelle = true, modelleSolaLettura = false, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, utentiApp, masterCorsi, corsiDateDocenti, quoteVenditoriSplit, locationPrezzi = [], assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, impegni = [], corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, corsiKitProdotti = [], logisticaKitEdizioni = [], prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   const maniglieAttive = useManiglieAttive();
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
@@ -31881,13 +31907,25 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // qualcuno guardando questo flag — che da oggi dice, per ogni
   // iscrizione, in che modo era stato pattuito.
   //
-  // Da dove parte: una scheda NUOVA prende il predefinito del corso
-  // (`corsi.prezzo_iva_inclusa`: acceso sull'hennè, che si vende a
-  // prezzo finito). Una scheda GIA' ESISTENTE parte sempre da "netto":
-  // tutte quelle fino al 16/10/2026 sono state scritte cosi'.
+  // Da dove parte: una scheda NUOVA prende il predefinito del corso —
+  // "totale" se il corso si verifica sul totale pagato (i due hennè),
+  // altrimenti "lordo" se si vende a prezzo finito
+  // (`corsi.prezzo_iva_inclusa`), altrimenti "netto". Una scheda GIA'
+  // ESISTENTE parte sempre da "netto": tutte quelle fino al 16/10/2026
+  // sono state scritte cosi'. Che il predefinito di una scheda nuova non
+  // sia la regola di quelle vecchie e' voluto — leggi `siVerificaSulTotale`
+  // qui sopra: il corso resta il pavimento, e nessuna scheda gia' salvata
+  // cambia il residuo che mostra.
   const [modoPattuito, setModoPattuito] = useState("netto");
   const corsoDiQuestaScheda = (corsi || []).find((x) => x.id === corsoData?.corso_id) || null;
-  const modoDiSerie = corsoDiQuestaScheda?.prezzo_iva_inclusa ? "lordo" : "netto";
+  // Un corso che si paga a totale parte di suo dal terzo modo: e' la sua
+  // regola scritta, e farla riscrivere a mano su ogni scheda nuova vuol
+  // dire che prima o poi qualcuno se ne dimentica. I soldi non cambiano
+  // — quel corso sottraeva gia' il totale incassato — cambia che adesso
+  // la scheda lo dice invece di lasciarlo implicito nel corso.
+  const modoDiSerie = corsoDiQuestaScheda?.saldo_su_totale_pagato
+    ? "totale"
+    : (corsoDiQuestaScheda?.prezzo_iva_inclusa ? "lordo" : "netto");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
@@ -34340,19 +34378,34 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
               <span style={{ width: 1, alignSelf: "stretch", background: "#E6DFCE", flexShrink: 0 }} />
               <div style={{ flex: "1 1 0", minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED, marginBottom: 3, lineHeight: 1.2 }}>
-                  {modoPattuito === "lordo" ? "Totale pattuito (IVA inclusa)" : "Totale pattuito (senza IVA)"}
+                  {modoPattuito === "totale"
+                    ? "Totale pattuito (da coprire per intero)"
+                    : modoPattuito === "lordo" ? "Totale pattuito (IVA inclusa)" : "Totale pattuito (senza IVA)"}
                 </div>
                 <div style={{ position: "relative" }}>
                   <input style={{ ...campoAreaScheda, padding: isMobile ? "6px 3px" : "10px 12px", paddingRight: isMobile ? 3 : 26, textAlign: isMobile ? "center" : "left", fontWeight: 700, fontSize: isMobile ? 13 : 14 }} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                   {!isMobile && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", ...fontBody, fontSize: 12.5, color: MUTED, pointerEvents: "none" }}>€</span>}
                 </div>
-                {/* COME E' SCRITTO QUEL NUMERO. Cambia solo la lettura: in
-                    archivio va sempre l'imponibile, e sotto si vede quanto
-                    fa nell'altro modo, cosi' non si scambia una cifra per
-                    l'altra. */}
+                {/* COME E' SCRITTO QUEL NUMERO, e da oggi anche come si
+                    conta il residuo.
+
+                    «netto senza IVA» e «finale IVA inclusa» cambiano solo
+                    la lettura: in archivio finisce il numero digitato,
+                    non convertito, e il flag dice soltanto in che modo
+                    era stato pattuito.
+
+                    «verifica sul totale» fa una cosa in piu', ed e' la
+                    sola delle tre che tocca una cifra che si chiede a
+                    qualcuno: ogni quota incassata si sottrae per quello
+                    che e' entrato davvero, con IVA o senza, invece che
+                    per il suo imponibile. E' la regola dell'henne'
+                    dettata dal titolare — «costa un tot, qualsiasi somma
+                    pagata con qualsiasi sistema somma per raggiungere il
+                    totale» — che fino al 6/11/2026 si poteva dire solo
+                    sull'intero corso. */}
                 {!soloLettura && (
                   <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                    {[{ v: "netto", l: "netto senza IVA" }, { v: "lordo", l: "finale IVA inclusa" }].map((o) => {
+                    {[{ v: "netto", l: "netto senza IVA" }, { v: "lordo", l: "finale IVA inclusa" }, { v: "totale", l: "verifica sul totale" }].map((o) => {
                       const scelto = modoPattuito === o.v;
                       return (
                         <button
@@ -34825,7 +34878,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
             // Lo dice il corso, non il programma: e' una scelta di come e'
             // fatto il prezzo di quel corso, e leggerla dal nome vorrebbe
             // dire che rinominarlo cambia di nascosto il conto dei soldi.
-            const sulTotaleIncassato = !!corso?.saldo_su_totale_pagato;
+            const sulTotaleIncassato = siVerificaSulTotale(modoPattuito, corso);
             const quantoTogliere = (q) => (sulTotaleIncassato ? parseNum(q.totale) : impEffettivo(q));
             const sommaAccontiPagati = quotePagate.filter((x) => x.pagato).reduce((somma, x) => somma + quantoTogliere(x.q), 0);
             const restanoDaPagare = totalePattuito === "" ? null : round2(parseNum(totalePattuito) - sommaAccontiPagati);

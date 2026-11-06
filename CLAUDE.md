@@ -2711,6 +2711,38 @@ Con l'interruttore acceso il conto è quello dettato dal titolare:
 `quantoTogliere` prende il `totale` di ogni quota segnata pagata —
 acconto, pre corso e le righe aggiunte con «+» — qualunque sia il metodo.
 
+**E dallo stesso giorno la regola la può dire anche la singola scheda.**
+Richiesta del titolare: nei «Dati di vendita» dell'iscrizione, accanto a
+«netto senza IVA» e «finale IVA inclusa», c'è un **terzo modo — «verifica
+sul totale»** (`iscritti.totale_pattuito_modo = 'totale'`). Prima quella
+regola stava solo sul corso, quindi per applicarla a una persona sola
+bisognava cambiare l'impostazione di tutto il corso.
+
+Tre cose decise lì dentro:
+
+- **La scheda può solo accendere la regola, mai spegnerla**
+  (`siVerificaSulTotale`, fuori dal componente per poterla provare). Se
+  bastasse scegliere «netto» su una scheda di un corso che si paga a
+  totale, le due iscrizioni già salvate come `lordo` e le **189 senza
+  niente** cambierebbero di colpo il residuo che mostrano — soldi diversi
+  chiesti alle stesse persone, senza che nessuno abbia toccato quelle
+  schede. **Il corso resta il pavimento.**
+- **Una scheda nuova su un corso che si verifica sul totale parte già da
+  lì**: è la regola scritta di quel corso, e farla riscrivere a mano ogni
+  volta vuol dire che prima o poi qualcuno se ne dimentica. I soldi non
+  cambiano — quel corso sottraeva già il totale incassato; cambia che
+  adesso la scheda lo dice invece di lasciarlo implicito.
+- **Serve una migrazione per quello che sembra un bottone in più**
+  (`20261106190000`): la colonna ha un CHECK che ammetteva due soli
+  valori, e senza allargarlo PostgREST avrebbe rifiutato **l'intera**
+  scrittura della scheda, non il solo campo — lo stesso guasto del 18/10
+  sulle spedizioni POS. Nessuna riga toccata.
+
+Gli altri due modi restano quello che erano: solo la lettura del numero,
+che in archivio ci va **digitato e non convertito**. Prove in
+`prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
+dell'hennè, che devono fare residuo **zero** e non 99,18.
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
