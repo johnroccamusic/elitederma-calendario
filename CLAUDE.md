@@ -2632,6 +2632,50 @@ non si muove. Accendere quella casella vorrebbe dire sapere che il
 microscopio è in aula e non a magazzino — e bloccare un secondo corso che
 lo chiede nelle stesse date: è un'informazione vera, ma è una scelta sua.
 
+### «Aggiorna lo shop»: la risposta persa non è un lavoro fallito (6/11/2026)
+
+Il titolare preme «Aggiorna lo shop» in Gestione magazzino e legge **«Non
+riuscito: Failed to send a request to the Edge Function»**. Misurato lo
+stesso giorno da riga di comando, il giro **non fallisce**: risponde in
+**23 secondi**, scrive **182 giacenze**, svuota tutta la cache del sito.
+Il tempo si spende quasi tutto in WooCommerce — due blocchi da cento
+prodotti, circa dieci secondi l'uno; lo svuotamento completo della cache
+ne costa 3,3 (misurato tre volte). La prova a vuoto, che legge e basta,
+risponde in 0,8.
+
+Quindi **non era il riallineamento a fallire, era il viaggio di ritorno
+della risposta**. `FunctionsFetchError` vuol dire «il `fetch` non ha mai
+avuto una risposta da leggere»: non è un 500, non è un rifiuto, non c'è
+nessun codice di stato. Ventitré secondi sono tanti per un telefono che
+deve tenere aperta una connessione — basta lo schermo che si spegne, un
+cambio di app, il passaggio dal wi-fi ai dati. Escluse per prova la CORS
+(preflight e risposta portano `access-control-allow-origin: *`, anche sul
+401) e la cache del sito (3,3 secondi, costanti).
+
+**«Non riuscito» su un lavoro riuscito è peggio di un tasto che non
+risponde**: manda a cercare un guasto che non c'è, e intanto il sito è
+già aggiornato. Ora `esitoRiallineaShop` (in App.jsx, fuori dal
+componente per poterla provare) distingue i tre casi — andata bene, il
+sito ha rifiutato, la risposta non è tornata — e sull'ultimo dice quello
+che si sa davvero: che il comando era partito, che quasi sempre il sito è
+stato scritto lo stesso, e che ripremere non fa danni (il riallineamento
+riscrive gli stessi numeri, non li somma). E si rilegge `prodotti_shop`
+**anche** quando la risposta si perde: il giro può aver scritto stato e
+back order dei bundle, e la pagina deve mostrare quello che c'è adesso.
+Prove in `prove/riallinea-shop-risposta-persa.test.js` (6).
+
+**Resta da decidere, e vale la pena saperlo:** ogni giro completo si
+chiude con `ok: false` per un prodotto solo, **«Kit henne business (id
+672): ID non valido»**. In app è `attivo = false` con `stato = 'publish'`,
+quindi il riallineamento prova a metterlo in privato sul sito a ogni
+giro; su WooCommerce il prodotto 672 **non esiste più** (404, verificato).
+È un puntatore morto che continuerà a segnare rosso per sempre. Due
+strade, tutte e due da decidere: togliergli il `woo_product_id` in
+anagrafica, oppure insegnare alla funzione che un 404 mentre si nasconde
+un prodotto **è il risultato voluto** — di là non c'è più — e scrivere
+`private` in locale. La seconda è la correzione vera e vuole una
+pubblicazione.
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che

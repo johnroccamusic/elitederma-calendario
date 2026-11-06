@@ -59934,6 +59934,52 @@ function PannelloScartiShop({ scarti = [], prodottiPerId = {}, isMobile }) {
   );
 }
 
+// L'ESITO DI «AGGIORNA LO SHOP», QUANDO LA RISPOSTA NON TORNA (6/11/2026).
+//
+// Il giro completo dura una ventina di secondi: legge il magazzino,
+// scrive 182 prodotti su WooCommerce in due blocchi da cento e svuota la
+// cache del sito. Per tutto quel tempo chi ha premuto deve tenere aperta
+// la connessione, e basta poco perche' la lasci cadere — lo schermo che
+// si spegne, un cambio di app, il passaggio dal wi-fi ai dati. Allora
+// supabase-js non ha nessuna risposta da leggere e alza un
+// `FunctionsFetchError`, che finiva nel riquadro come «Non riuscito:
+// Failed to send a request to the Edge Function».
+//
+// E' la frase sbagliata, ed e' il motivo per cui questa funzione esiste:
+// il comando era partito, e il sito quasi sempre e' stato riallineato lo
+// stesso. Dire «non riuscito» su un lavoro riuscito manda a cercare un
+// guasto che non c'e' — misurato lo stesso giorno: il giro risponde in
+// 23 secondi, 182 giacenze scritte, e da riga di comando non fallisce
+// mai. Qui si dice solo quello che si sa: la risposta non e' arrivata,
+// l'esito non lo conosciamo, e ripremere non fa danni (il riallineamento
+// riscrive gli stessi numeri, non li somma).
+//
+// Sta fuori dal componente per poterla provare senza montare la pagina.
+export function esitoRiallineaShop(data, error) {
+  const rispostaPersa =
+    !!error && (error.name === "FunctionsFetchError" || /failed to (send|fetch)/i.test(error.message || ""));
+  if (rispostaPersa) {
+    return {
+      riuscito: false,
+      rispostaPersa: true,
+      testo:
+        "Non ho ricevuto la risposta. Il riallineamento dura una ventina di secondi, e in quel tempo la connessione e\u2019 caduta: basta lo schermo che si spegne, un cambio di app o il passaggio dal wi-fi ai dati. Quasi sempre il sito e\u2019 stato aggiornato lo stesso \u2014 si e\u2019 persa la risposta, non il comando. Per esserne certo premi di nuovo tenendo lo schermo acceso: ripremere riscrive gli stessi numeri e non fa danni.",
+    };
+  }
+  if (error || data?.errore) {
+    return {
+      riuscito: false,
+      rispostaPersa: false,
+      testo: "Non riuscito: " + (data?.errore || error?.message || "il sito non ha risposto come doveva."),
+    };
+  }
+  const pezzi = [`${data.giacenze} giacenze aggiornate`];
+  if (data.nascosti) pezzi.push(`${data.nascosti} tolti dal negozio (${(data.dettaglio_nascosti || []).join(", ")})`);
+  if (data.saltati) pezzi.push(`${data.saltati} saltati, fra bozze e bundle senza giacenza propria`);
+  if (data.falliti?.length) pezzi.push(`non riusciti: ${data.falliti.join("; ")}`);
+  return { riuscito: true, rispostaPersa: false, testo: pezzi.join(" \u00b7 ") };
+}
+
 function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
   // Gestione punti: le colonne dei punti la seguono
@@ -60031,15 +60077,12 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
     setAllineandoShop(true); setEsitoAllineaShop("");
     try {
       const { data, error } = await supabase.functions.invoke("woo-riallinea-shop");
-      if (error || data?.errore) setEsitoAllineaShop("Non riuscito: " + (data?.errore || error.message));
-      else {
-        const pezzi = [`${data.giacenze} giacenze aggiornate`];
-        if (data.nascosti) pezzi.push(`${data.nascosti} tolti dal negozio (${(data.dettaglio_nascosti || []).join(", ")})`);
-        if (data.saltati) pezzi.push(`${data.saltati} saltati, fra bozze e bundle senza giacenza propria`);
-        if (data.falliti?.length) pezzi.push(`non riusciti: ${data.falliti.join("; ")}`);
-        setEsitoAllineaShop(pezzi.join(" · "));
-        ricarica(["prodotti_shop"]);
-      }
+      const esito = esitoRiallineaShop(data, error);
+      setEsitoAllineaShop(esito.testo);
+      // si rilegge anche quando la risposta si e' persa: il giro puo'
+      // aver scritto lo stato e il back order dei bundle, e la pagina
+      // deve mostrare quello che c'e' adesso, non quello di prima
+      if (esito.riuscito || esito.rispostaPersa) ricarica(["prodotti_shop"]);
     } catch (e) { setEsitoAllineaShop("Non riuscito: " + (e?.message || e)); }
     setAllineandoShop(false);
   }
