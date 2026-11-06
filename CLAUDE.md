@@ -2526,6 +2526,80 @@ fonti scrivano **numeri diversi** — se copiassero la stessa tabella,
 averne due sarebbe peggio che averne uno, perché sembrerebbe una scelta
 e non lo sarebbe.
 
+### Il kit apre il bundle prima di guardare le giacenze (6/11/2026)
+
+Il titolare: «l'app non mi fa andare avanti nel confezionamento dei kit
+perché dice che mancano i box kit da 10 anellini. I box sono formati
+dagli anellini singoli, e di anellini singoli ce ne sono migliaia».
+Aveva ragione, e il caso era esatto: **«Box Anellini x i Kit 10 pz»** è
+un bundle virtuale (10 anellini + 1 astuccio), con 3.000 anellini e 110
+astucci in magazzino, e la preparazione si fermava con «ci sono 0 pezzi,
+non posso scaricarne 8». Quello zero era la giacenza **del bundle**, che
+di suo non esiste.
+
+**Il difetto era l'ORDINE di due controlli giusti.** Lo scarico dei kit
+chiedeva prima «questo prodotto conta a magazzino?» e solo dopo apriva il
+bundle nei suoi pezzi. Su un bundle virtuale `conta_magazzino = false` è
+giusto — è una ricetta, non una scatola sullo scaffale — e lo faceva
+scartare **prima** dell'apertura. Peggio: scartato di lì, finiva nel ramo
+dei rientri, che prendeva «delta positivo **oppure** non conta a
+magazzino» e quindi raccoglieva anche un delta **negativo**. Al database
+arrivava «togli 8 pezzi» su un prodotto che una giacenza non ce l'ha, e
+`stock_muovi` lo rifiutava in blocco: giustamente, ed è l'unico motivo per
+cui il guasto si è fatto sentire.
+
+**Perché il blocco è stata la fortuna.** Lo stesso difetto, su un bundle
+che in quella casella un numero ce l'aveva, non bloccava niente e
+scriveva una cifra falsa. **«Aftercare post trattamento vit A+D 25pz»**
+(bundle virtuale da 25 bustine, `quantita` 2) se l'è vista scalare
+**undici volte da settembre**, in tutto 161, mentre le 657 bustine vere
+non sono mai uscite dal magazzino. Il tasto funzionava, quindi nessuno ha
+controllato. Stesso giro su «Vassoi minitray monouso 25 pezzi». Quei
+movimenti restano in archivio: **le giacenze storiche non sono state
+corrette**, perché su un bundle virtuale quel numero non vuol dire niente
+e perché cosa sia davvero uscito dagli scaffali lo sa solo chi conta.
+
+**Com'è adesso**: `movimentiKitDaDelta` (in App.jsx, accanto a
+`righeScarico`) prende la mappa «prodotto → di quanto si muove» e
+restituisce scarichi e rientri **dopo** aver aperto i bundle. Tre cose
+decise lì dentro:
+
+- **prima si apre, poi si filtra.** Dopo l'apertura restano solo prodotti
+  veri, e `conta_magazzino = false` torna a voler dire quello che dice in
+  tutto il resto dell'app: niente giacenza, niente movimento — in
+  **nessuno dei due versi**. Il «Microscopio», che ha `1` in quella
+  casella col flag spento, prima scendeva a zero e al kit dopo avrebbe
+  bloccato la preparazione come il box degli anellini.
+- **la stessa porta la usano anche i rientri**, tutti e due
+  (`ripristinaMagazzinoDaScaricoInterno` e `ripristinaKitRientro`, che
+  prende la lista dichiarata dalla master). Correggere solo lo scarico
+  sarebbe stato peggio di non correggere niente: usciti i componenti e
+  rientrato il bundle, il magazzino si sbilanciava a ogni giro, e nel
+  verso che fa comodo — più pezzi di quelli che ci sono.
+- **i versi si sommano dopo l'apertura**, perché lo stesso componente può
+  arrivare da due bundle diversi, uno che esce e uno che rientra: due
+  righe sullo stesso prodotto sarebbero due conti separati, ognuno
+  convinto di essere solo.
+
+**E un bundle aperto a vuoto si nomina** (distinta vuota, o componenti
+fuori anagrafica): niente righe, nessun movimento, e il pacco partirebbe
+senza quei pezzi con il tasto che dice di sì. È il modo in cui questo
+guasto tornerebbe, quindi lo scarico si ferma e dice quale. Oggi non
+capita: i soli due bundle dentro ai kit sono questi due, e la distinta ce
+l'hanno.
+
+Il POS questo difetto non l'ha mai avuto: `righeScarico` lì sta davanti a
+tutto. Prove in `prove/kit-con-bundle-si-apre.test.js` (9), sui numeri
+veri degli anellini.
+
+**Resta da decidere, ed è suo:** «Confezione Anellini Sterili 30 pz» ha
+983 in giacenza e `Copri clip box da 125 pz` 199 — sono bundle virtuali,
+quindi quei numeri non li legge nessuno. Se quelle scatole esistono
+davvero sullo scaffale vanno marcate **bundle con giacenza fisica**, che
+è un prodotto normale col suo stock; altrimenti i numeri vanno azzerati,
+perché una casella piena che nessuno guarda prima o poi qualcuno la
+guarda.
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che

@@ -62949,6 +62949,59 @@ function righeScarico(prodotto, quantita, bundleComponenti, prodottiPerId) {
   }
   return [{ prodotto, quantita }];
 }
+// Un elenco "prodotto -> di quanto si muove" diventa i movimenti veri di
+// magazzino: cosa esce (da verificare) e cosa rientra. Due passaggi, e
+// l'ORDINE fra i due e' tutto il punto: PRIMA si apre il bundle nei suoi
+// pezzi (righeScarico), POI si guarda chi una giacenza ce l'ha davvero
+// (conta_magazzino).
+//
+// Al contrario — ed e' com'era fino al 6/11/2026 — un bundle virtuale non
+// arrivava mai ai suoi componenti: `conta_magazzino = false` su di lui e'
+// giusto (di suo non esiste, e' una ricetta) e lo faceva scartare PRIMA
+// dell'apertura. Da li' due guasti, uno rumoroso e uno muto:
+//  - «Box Anellini x i Kit 10 pz», giacenza propria 0, bloccava la
+//    preparazione dei kit («ci sono 0 pezzi, non posso scaricarne 8») con
+//    3.000 anellini e 110 astucci in magazzino;
+//  - «Aftercare post trattamento vit A+D 25pz», che in quella casella un
+//    numero ce l'aveva, se lo vedeva scalare in silenzio — undici movimenti
+//    da settembre — mentre le bustine vere non uscivano mai. Il secondo e'
+//    il peggiore: il magazzino diceva una cifra che nessuno metteva in
+//    dubbio perche' il tasto aveva funzionato.
+//
+// I versi si sommano DOPO l'apertura, perche' lo stesso componente puo'
+// arrivare da due bundle diversi, uno che esce e uno che rientra: due righe
+// sullo stesso prodotto sarebbero due conti separati, ognuno convinto di
+// essere solo. Un prodotto che non conta a magazzino non si muove in
+// nessuno dei due versi: non e' una giacenza, e' un'etichetta.
+function movimentiKitDaDelta(deltaPerProdotto, prodottiShop, bundleComponenti) {
+  const prodottiPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+  const perProdotto = new Map();
+  const apertiAVuoto = [];
+  Object.entries(deltaPerProdotto || {}).forEach(([prodottoId, delta]) => {
+    if (!delta) return;
+    const prodotto = prodottiPerId[prodottoId];
+    if (!prodotto) return;
+    const verso = delta < 0 ? -1 : 1;
+    const righe = righeScarico(prodotto, Math.abs(delta), bundleComponenti, prodottiPerId);
+    if (righe.length === 0 && bundleVirtuale(prodotto)) apertiAVuoto.push(prodotto.nome);
+    righe.forEach((r) => {
+      if (!r.prodotto || r.prodotto.conta_magazzino === false || !(r.quantita > 0)) return;
+      const gia = perProdotto.get(r.prodotto.id);
+      if (gia) gia.delta += verso * r.quantita;
+      else perProdotto.set(r.prodotto.id, { prodotto: r.prodotto, delta: verso * r.quantita });
+    });
+  });
+  const tutti = [...perProdotto.values()].filter((v) => v.delta !== 0);
+  return {
+    scarichi: tutti.filter((v) => v.delta < 0).map((v) => ({ prodotto: v.prodotto, quantita: -v.delta })),
+    rientri: tutti.filter((v) => v.delta > 0).map((v) => ({ prodotto: v.prodotto, delta: v.delta })),
+    // un bundle aperto a vuoto: la distinta e' vuota, o i suoi componenti
+    // non sono in anagrafica. Niente riga, niente movimento — e nessuno se
+    // ne accorgerebbe, perche' il tasto funziona e il pacco parte senza
+    // quei pezzi. Chi chiama lo dice, invece di lasciarlo cadere.
+    apertiAVuoto,
+  };
+}
 // verifica un elenco di scarichi e restituisce i piani da applicare,
 // oppure null se l'operazione va annullata (pezzi insufficienti, o
 // conferma negata per scendere sotto la scorta minima dello shop). Le
@@ -79711,19 +79764,15 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // prodotto è il pezzo sfuso di un box sigillato, la mossa non è
     // comprare: è aprire una confezione (azione fisica che qualcuno deve
     // compiere davvero, mai automatica)
-    // ogni riga passa da righeScarico: un prodotto che si porta dietro del
-    // materiale (il dermografo col suo manuale) fa uscire anche quello,
-    // senza doverlo ricordare a mano nella distinta di ogni kit
-    const prodottiPerIdLog = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
-    const righeKit = [];
-    Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
-      if (delta >= 0) return;
-      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      if (!prodotto || prodotto.conta_magazzino === false) return;
-      righeScarico(prodotto, -delta, bundleComponenti, prodottiPerIdLog).forEach((r) => {
-        if (r.prodotto && r.prodotto.conta_magazzino !== false) righeKit.push(r);
-      });
-    });
+    // ogni riga passa da movimentiKitDaDelta: il bundle virtuale si apre nei
+    // suoi componenti e un prodotto che si porta dietro del materiale (il
+    // dermografo col suo manuale) fa uscire anche quello, senza doverlo
+    // ricordare a mano nella distinta di ogni kit
+    const { scarichi: righeKit, rientri, apertiAVuoto } = movimentiKitDaDelta(deltaPerProdotto, prodottiShop, bundleComponenti);
+    if (apertiAVuoto.length > 0) {
+      mostraAvviso(`Non so di cosa ${apertiAVuoto.length === 1 ? "è fatto" : "sono fatti"}: ${apertiAVuoto.join(", ")}.\n\nSono kit composti, e la loro distinta base è vuota: senza, dal magazzino non uscirebbe niente e il pacco partirebbe senza quei pezzi. Scrivi la distinta in Gestione magazzino → scheda del prodotto, e riprova. Il magazzino non è stato toccato.`);
+      return false;
+    }
     // Le giacenze e le soglie si rileggono adesso, non si prendono da
     // quelle in memoria: su quei numeri si decide se un corso si puo'
     // allestire, e la pagina puo' averli in pancia da mezz'ora. Il 9
@@ -79754,22 +79803,17 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     });
     if (!pianiKit) return false;
 
-    // i rientri (delta positivo) e i prodotti che non contano a magazzino
-    // tornano dritti in stock; gli scarichi veri passano dal piano qui
-    // sopra, che si ferma alla soglia di riordino. Tutto, in ogni caso,
-    // passa da muoviStock: storico dei movimenti e WooCommerce riallineato
-    const rientri = Object.entries(deltaPerProdotto).filter(([prodottoId, delta]) => {
-      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      return prodotto && (delta > 0 || prodotto.conta_magazzino === false);
-    });
+    // i rientri (delta positivo) tornano dritti in stock, senza passare dal
+    // piano: non c'e' niente da verificare, una giacenza che sale non va
+    // sotto zero. Gli scarichi veri passano dal piano qui sopra, che si
+    // ferma alla soglia di riordino. Tutto, in ogni caso, passa da
+    // muoviStock: storico dei movimenti e WooCommerce riallineato.
     // UN BLOCCO SOLO (31/10/2026): rientri e scarichi del kit insieme, o
     // tutti o nessuno. Prima erano due giri in fila senza controllare gli
     // errori dei rientri: un guasto a meta' lasciava il magazzino spostato
     // a pezzi, con lo scarico non registrato e quindi ripetibile.
     const righeBlocco = [
-      ...rientri.map(([prodottoId, delta]) => ({
-        prodotto: prodottiShop.find((p) => p.id === prodottoId), delta, nota: "Rientro/rettifica preparazione kit",
-      })),
+      ...rientri.map(({ prodotto, delta }) => ({ prodotto, delta, nota: "Rientro/rettifica preparazione kit" })),
       ...(pianiKit || []).filter(({ piano }) => piano.daScaricare)
         .map(({ prodotto, piano }) => ({ prodotto, delta: -piano.daScaricare, nota: "Scarico kit per il corso" })),
     ];
@@ -79816,16 +79860,21 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const prodottoId = chiave.split("::")[1];
       if (prodottoId && giaScaricato) deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + giaScaricato;
     });
-    if (Object.keys(deltaPerProdotto).length > 0) {
-      const voci = Object.entries(deltaPerProdotto);
-      setAvanzamentoScarico({ fatti: 0, totale: voci.length });
+    // DALLA STESSA PORTA DELLO SCARICO (6/11/2026): il bundle si apre nei suoi
+    // pezzi anche quando si torna indietro. Rimettere a scaffale il bundle
+    // mentre lo scarico aveva tolto i componenti lascerebbe il magazzino
+    // sbilanciato a ogni giro, e nel verso che fa comodo: piu' pezzi di
+    // quelli che ci sono.
+    const { rientri: righeRientro } = movimentiKitDaDelta(deltaPerProdotto, prodottiShop, bundleComponenti);
+    if (righeRientro.length > 0) {
+      setAvanzamentoScarico({ fatti: 0, totale: righeRientro.length });
       // in un blocco solo; se il database rifiuta NON si azzera il registro
       // di cosa era stato scaricato, o il rientro non si potrebbe ripetere
       const erroreRientro = await muoviStockInBlocco(
-        voci.map(([prodottoId, delta]) => ({ prodotto: prodottiShop.find((p) => p.id === prodottoId), delta })),
+        righeRientro.map(({ prodotto, delta }) => ({ prodotto, delta })),
         { origine: "kit_corso", nota: "Prodotti rientrati dal corso", riferimento: corsoData.id });
       if (erroreRientro) { mostraAvviso("Rientro NON eseguito, nessun prodotto e' stato toccato — " + erroreRientro); return; }
-      setAvanzamentoScarico({ fatti: voci.length, totale: voci.length });
+      setAvanzamentoScarico({ fatti: righeRientro.length, totale: righeRientro.length });
     }
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
   }
@@ -79855,10 +79904,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         const prodotto = prodottoDermografo(prodottiShop, modello);
         if (prodotto) delta[prodotto.id] = (delta[prodotto.id] || 0) + q;
       });
-      const voci = Object.entries(delta).filter(([, q]) => q > 0);
+      // anche qui il bundle si apre nei suoi pezzi, come allo scarico: la
+      // master dichiara «un box di anellini», a scaffale tornano i dieci
+      // anellini e l'astuccio
+      const { rientri: voci } = movimentiKitDaDelta(delta, prodottiShop, bundleComponenti);
       setAvanzamentoScarico({ fatti: 0, totale: voci.length });
       const erroreRipristino = await muoviStockInBlocco(
-        voci.map(([prodottoId, q]) => ({ prodotto: (prodottiShop || []).find((p) => p.id === prodottoId), delta: q })),
+        voci.map(({ prodotto, delta: q }) => ({ prodotto, delta: q })),
         { origine: "kit_corso", nota: "Rientrati dal corso, dichiarati dalla master", riferimento: corsoData.id });
       if (erroreRipristino) { window.alert("Rientro NON eseguito, nessun prodotto e' stato toccato — " + erroreRipristino); return; }
       setAvanzamentoScarico({ fatti: voci.length, totale: voci.length });
@@ -79879,7 +79931,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       });
       const quantiGuasti = guasti.reduce((n, g) => n + g.quantita, 0);
       if (quantiGuasti > 0) {
-        window.alert(`Rientrati in magazzino ${voci.reduce((n, [, q]) => n + q, 0)} pezzi. ${quantiGuasti} sono tornati guasti e NON sono stati rimessi a scaffale: li trovi in Magazzino guasti.`);
+        window.alert(`Rientrati in magazzino ${voci.reduce((n, v) => n + v.delta, 0)} pezzi. ${quantiGuasti} sono tornati guasti e NON sono stati rimessi a scaffale: li trovi in Magazzino guasti.`);
       }
     } finally {
       fineLavorazione(corsoData.id);
@@ -87868,5 +87920,6 @@ export {
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
   calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse, costoKitDellaClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
+  movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
 };
