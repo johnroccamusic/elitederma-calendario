@@ -1532,7 +1532,16 @@ sulle 10 vendite col QR in archivio coincidono tutte). Provati tutti e
 quindici i rami in una transazione annullata.
 
 Restano dichiarazioni, non prove: **contanti**, **buono Amazon** e **POS
-esterno** (solo chi amministra).
+esterno** — chi amministra e, dal 7/11/2026, chi sta al banco di una
+fiera (vedi «Il POS fisico al banco»).
+
+E una cosa da sapere per chi controlla: **`terminale_fisico` non si
+salva**. `registra_vendita_pos` lo legge per decidere se accettare la
+vendita e poi lo **toglie** dal corpo (`p_vendita - 'terminale_fisico'`);
+in `vendite_shop` quella colonna non esiste. Quindi una vendita incassata
+sul terminale si riconosce per assenza: `metodo_pagamento = 'pos'` e
+`pagamento_codice` nullo — che è l'unico modo in cui una carta può stare
+in archivio senza un pagamento provato.
 
 **Il buono Amazon si verifica in logistica (23/10/2026, deciso dal
 titolare).** L'ordine pagato con buono arriva in Ordini in arrivo con il
