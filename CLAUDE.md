@@ -3161,6 +3161,74 @@ due in proporzione), e il gesto col POS vero montato — i due tasti solo al
 programmatore, le due caselle, il resto che compare, il QR che chiede
 21,73 invece di 32,21, e il contante che copre tutto.
 
+### I carrelli sospesi sparivano, e nessuno poteva saperlo (7/11/2026, sera)
+
+Dalla fiera, col banco aperto: «stanno sparendo i carrelli memorizzati, tra
+cui uno molto importante di Ingrid che superava i 1200 euro». Vero, e la
+causa non era una cancellazione.
+
+**Com'è fatta quella lista, che è l'origine di tutto.** I carrelli sospesi
+non hanno una tabella: stanno tutti dentro **una riga** di
+`impostazioni_layout_tabelle` (chiave `pos_carrelliSospesi`), riscritta per
+intero a ogni salvataggio da qualunque dispositivo. Per questo esiste la
+fusione (`LISTE_DA_FONDERE`): prima di scrivere si rilegge il database e si
+uniscono le due liste per id, così nessuno cancella il carrello di un
+altro. Due difetti la scavalcavano, e si sommavano:
+
+- **una rilettura fallita cancellava i carrelli degli altri.** Era scritta
+  `try { const { data } = await … } catch { … }`, ma **il client di Supabase
+  non lancia niente** quando una richiesta va storta: restituisce
+  `{ data: null, error }`. Quindi il `catch` non è mai scattato, e un errore
+  di lettura — la rete di una fiera, un 401, il server che tossisce —
+  arrivava alla fusione come «di là non c'è niente»: si scriveva la copia di
+  quel dispositivo, e i carrelli salvati dagli altri telefoni sparivano.
+  Ora una lettura che non riesce **ferma la scrittura** e la rimette in coda
+  (`riprovaInvioCondiviso`, cinque tentativi a passo crescente): meglio un
+  carrello che arriva al server in ritardo che quelli degli altri cancellati
+  subito;
+- **«salvato» si diceva prima di saperlo.** Il messaggio compariva
+  all'istante, la scrittura partiva 600 ms dopo e, se non riusciva, finiva in
+  un `console.warn`. Al banco si svuotava il carrello fidandosi di quella
+  riga, e il carrello viveva **solo su quel telefono**: alla prima ricarica
+  della pagina non c'era più — e il 7/11 ce ne sono state tre, una per
+  pubblicazione. Ora `sorvegliaSalvataggioSospeso` aspetta l'esito, dice
+  «è salvato su QUESTO dispositivo ma non è arrivato al server, non
+  ricaricare la pagina», e quando la riprova riesce lo dice anche: un avviso
+  rosso che resta acceso dopo che il problema è passato si impara a ignorare.
+
+E la rilettura automatica non si prende più indietro la copia locale
+**mentre una scrittura di quella copia è in viaggio** (`LAYOUT_INVII`
+accanto a `LAYOUT_TIMER`): la risposta del database è vecchia per
+definizione, e sovrascrivere vorrebbe dire cancellare dal telefono l'unica
+copia che esiste.
+
+**Perché non si è potuto ripescare quello di Ingrid.** Quella riga non ha
+mai avuto storico, e un carrello sospeso **non muove il magazzino** (i pezzi
+sono promessi, non scaricati): nessuna riga cancellata, nessun movimento,
+nessun log. Non restava niente da cui risalire — l'unica copia era nel
+telefono di chi l'aveva salvato, e si distrugge appena l'app torna in
+primo piano e rilegge il database. Da oggi c'è
+**`carrelli_sospesi_storico`** (migrazione `20261107213000`, trigger su
+`impostazioni_layout_tabelle`): ogni versione della lista, con quanti
+carrelli aveva prima e dopo e **gli id spariti** in una colonna sua. Si
+archivia solo quella chiave — le altre sono impaginazioni, e perderne una
+non costa niente. Il trigger nomina `old` **solo dentro un ramo che gira
+per forza su un UPDATE**: su un INSERT quella variabile non è assegnata e
+nominarla farebbe fallire la scrittura, cioè rifiutare una chiave nuova di
+quella tabella per colpa di un archivio.
+
+**Resta da fare, e va deciso:** i carrelli sospesi meritano una tabella
+propria, una riga per carrello. Finché sono un unico JSON riscritto per
+intero, ogni salvataggio è l'occasione di cancellare il lavoro di un altro
+— adesso ci sono tre difese e uno storico, ma la forma è quella sbagliata.
+E nell'app non c'è ancora un posto da cui **ripescare** un carrello dallo
+storico: oggi si fa con una query.
+
+Prove in `prove/carrelli-sospesi-non-si-perdono.test.js` (8): la fusione
+tiene il carrello di un altro telefono, toglie solo quello che questo
+dispositivo ha davvero buttato, e la lettura fallita **non scrive niente** —
+era esattamente così che sparivano.
+
 ### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
 
 Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home

@@ -217,7 +217,12 @@ function caricaLayoutCondiviso(chiave) {
       // il database comanda: se la copia locale e' diversa si allinea.
       // Un salvataggio fatto nel frattempo su questo dispositivo ha gia'
       // aggiornato la cache e sta partendo verso il database, e vince.
-      if (data?.valore != null && !LAYOUT_TIMER[chiave] && JSON.stringify(data.valore) !== JSON.stringify(LAYOUT_CACHE[chiave])) {
+      // `LAYOUT_INVII` oltre a `LAYOUT_TIMER` (7/11/2026): mentre una
+      // scrittura di QUESTA copia è in viaggio, la risposta del database
+      // è vecchia per definizione, e prendersela indietro vuol dire
+      // cancellare dal dispositivo un carrello che non è ancora arrivato
+      // di là — cioè l'unica copia che esiste.
+      if (data?.valore != null && !LAYOUT_TIMER[chiave] && !LAYOUT_INVII[chiave] && JSON.stringify(data.valore) !== JSON.stringify(LAYOUT_CACHE[chiave])) {
         LAYOUT_CACHE[chiave] = data.valore;
         scriviCacheLocaleLayout(chiave, data.valore);
         notificaLayout(chiave);
@@ -277,7 +282,7 @@ const LAYOUT_RIMOSSI = {};
 // Da chiamare PRIMA di salvare, con la lista com'era e come diventa: e'
 // l'unico modo di distinguere "questa voce non ce l'ho" da "questa voce
 // l'ho buttata io".
-function segnaVociRimosse(chiave, prima, dopo) {
+export function segnaVociRimosse(chiave, prima, dopo) {
   if (!LISTE_DA_FONDERE.has(chiave)) return;
   const restano = new Set((dopo || []).map((x) => x?.id).filter(Boolean));
   const andate = (prima || []).map((x) => x?.id).filter((id) => id && !restano.has(id));
@@ -286,7 +291,7 @@ function segnaVociRimosse(chiave, prima, dopo) {
   andate.forEach((id) => LAYOUT_RIMOSSI[chiave].add(id));
 }
 const quandoAggiornata = (v) => String(v?.aggiornato || v?.creato || "");
-function fondiListaCondivisa(remota, locale, rimossi) {
+export function fondiListaCondivisa(remota, locale, rimossi) {
   const perId = new Map();
   (Array.isArray(remota) ? remota : []).forEach((v) => { if (v?.id) perId.set(v.id, v); });
   (Array.isArray(locale) ? locale : []).forEach((v) => {
@@ -323,24 +328,77 @@ function inviaImpostazioneCondivisa(chiave) {
     if (LISTE_DA_FONDERE.has(chiave) && Array.isArray(valore)) {
       const rimossi = LAYOUT_RIMOSSI[chiave] || new Set();
       LAYOUT_RIMOSSI[chiave] = new Set();
+      // QUESTA LETTURA DEVE RIUSCIRE, O NON SI SCRIVE (7/11/2026).
+      //
+      // Il `catch` qui sotto non è mai scattato, e non per fortuna: il
+      // client di Supabase NON lancia niente quando una richiesta va
+      // storta — restituisce `{ data: null, error }`. Quindi una lettura
+      // fallita (la rete del banco di una fiera, un 401, il server che
+      // tossisce) arrivava qui come `data` vuoto, la fusione trovava
+      // "di là non c'è niente" e si scriveva la copia di QUESTO
+      // dispositivo: tutti i carrelli che lui non aveva — perché salvati
+      // da un altro telefono — venivano cancellati in silenzio.
+      //
+      // Dalla fiera di Napoli: un carrello da oltre 1.200 €. Quella
+      // lista non ha mai avuto storico, quindi non si è potuto
+      // ripescare (adesso ce l'ha: `carrelli_sospesi_storico`).
+      //
+      // Ora una lettura che non riesce ferma la scrittura e la rimette in
+      // coda: la copia locale resta (ed è protetta dal rilettura
+      // automatica, che salta le chiavi con un invio in attesa) e si
+      // riprova fra qualche secondo. Meglio un carrello che arriva al
+      // server in ritardo che i carrelli degli altri cancellati subito.
+      let letta = null;
+      let erroreLettura = null;
       try {
-        const { data } = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle();
-        valore = fondiListaCondivisa(data?.valore, valore, rimossi);
-        LAYOUT_CACHE[chiave] = valore;
-        scriviCacheLocaleLayout(chiave, valore);
-        notificaLayout(chiave);
-      } catch {
-        // niente risposta: si manda la copia locale, com'era prima. Meglio
-        // una lista vecchia scritta che un carrello perso in silenzio
+        const { data, error } = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle();
+        if (error) erroreLettura = error; else letta = data;
+      } catch (e) { erroreLettura = e; }
+      if (erroreLettura) {
         rimossi.forEach((id) => LAYOUT_RIMOSSI[chiave].add(id));
+        riprovaInvioCondiviso(chiave);
+        return { ok: false, motivo: erroreLettura?.message || "il server non ha risposto" };
       }
+      valore = fondiListaCondivisa(letta?.valore, valore, rimossi);
+      LAYOUT_CACHE[chiave] = valore;
+      scriviCacheLocaleLayout(chiave, valore);
+      notificaLayout(chiave);
     }
     const { error } = await supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
-    if (error) console.warn("Impostazione non salvata:", error.message);
+    if (error) {
+      console.warn("Impostazione non salvata:", error.message);
+      // Un'impaginazione persa non costa niente e si riscrive al prossimo
+      // trascinamento. Una lista di carrelli persa è merce promessa a una
+      // cliente: si riprova, e chi ha salvato lo viene a sapere.
+      if (LISTE_DA_FONDERE.has(chiave)) riprovaInvioCondiviso(chiave);
+      return { ok: false, motivo: error.message };
+    }
+    LAYOUT_RIPROVE[chiave] = 0;
+    return { ok: true };
   })();
   LAYOUT_INVII[chiave] = invio.finally(() => { if (LAYOUT_INVII[chiave] === invio) LAYOUT_INVII[chiave] = null; });
 }
-function salvaImpostazioneCondivisa(chiave, valore, sezione = null) {
+// Quante volte si riprova, e con che passo: un banco in fiera resta senza
+// rete per qualche secondo, non per mezz'ora. Dopo l'ultimo tentativo la
+// copia locale resta comunque sul dispositivo, e il prossimo salvataggio
+// (o il rientro in vista della pagina) la rimanda.
+const LAYOUT_RIPROVE = {};
+function riprovaInvioCondiviso(chiave) {
+  const fatte = LAYOUT_RIPROVE[chiave] || 0;
+  if (fatte >= 5) { LAYOUT_RIPROVE[chiave] = 0; return; }
+  LAYOUT_RIPROVE[chiave] = fatte + 1;
+  clearTimeout(LAYOUT_TIMER[chiave]);
+  LAYOUT_TIMER[chiave] = setTimeout(() => inviaImpostazioneCondivisa(chiave), 3000 * (fatte + 1));
+}
+// Aspettare di sapere com'e' andata. Serve a chi salva qualcosa che non
+// si puo' perdere — un carrello sospeso — e deve poter dire la verita'
+// invece di scrivere "salvato" e sperare: fa partire subito l'invio che
+// stava in attesa dei 600 ms e restituisce il suo esito.
+export function attendiInvioCondiviso(chiave) {
+  if (LAYOUT_TIMER[chiave]) inviaImpostazioneCondivisa(chiave);
+  return LAYOUT_INVII[chiave] || Promise.resolve({ ok: true });
+}
+export function salvaImpostazioneCondivisa(chiave, valore, sezione = null) {
   LAYOUT_CACHE[chiave] = valore;
   notificaLayout(chiave);
   scriviCacheLocaleLayout(chiave, valore);
@@ -23786,7 +23844,7 @@ const CHIAVE_LOGHI_MASTER_PUBBLICATI = "loghi_masterPubblicati";
 // quindi si vedono da qualunque dispositivo; NON sono vendite (niente
 // contabilita', niente scarico) ma i loro pezzi sono gia' promessi: il POS
 // li toglie dal disponibile finche' il carrello non si paga o si elimina
-const CHIAVE_CARRELLI_SOSPESI = "pos_carrelliSospesi";
+export const CHIAVE_CARRELLI_SOSPESI = "pos_carrelliSospesi";
 // chi sta usando il POS: master, venditore o utente dell'app — la stessa
 // identita' che il POS scrive sulle vendite e sui carrelli sospesi
 // LE EDIZIONI DOVE UNA PERSONA FA L'ASSISTENTE.
@@ -71990,6 +72048,22 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     else if (c.couponCodiceTesto) applicaCodiceCoupon(c.couponCodiceTesto);
     else { setCouponCodiceTesto(""); setCouponAttivo(null); setCouponValore(""); setReferralPersonaleAttivo(false); }
   }
+  // Sta davanti alla scrittura finche' non e' arrivata, e lo dice. Il
+  // primo messaggio e' la verita' del momento ("e' solo qui"); quando la
+  // riprova riesce, lo dice anche quello — un avviso rosso che resta
+  // acceso dopo che il problema e' passato si impara a ignorare.
+  async function sorvegliaSalvataggioSospeso(nome) {
+    let esito = await attendiInvioCondiviso(CHIAVE_CARRELLI_SOSPESI);
+    if (esito?.ok !== false) return;
+    setMsg(`ATTENZIONE: il carrello "${nome}" è salvato su QUESTO dispositivo ma NON è arrivato al server (${esito.motivo || "niente risposta"}). Sto riprovando: non ricaricare la pagina e non chiudere l'app finché non ti dico che è al sicuro.`);
+    for (let giro = 0; giro < 6 && esito?.ok === false; giro += 1) {
+      await new Promise((ok) => setTimeout(ok, 4000));
+      esito = await attendiInvioCondiviso(CHIAVE_CARRELLI_SOSPESI);
+    }
+    setMsg(esito?.ok === false
+      ? `Il carrello "${nome}" NON è ancora arrivato al server. Resta su questo dispositivo: segnalalo in amministrazione e non ricaricare la pagina.`
+      : `Carrello "${nome}" arrivato al server: adesso è al sicuro e lo vedono tutti.`);
+  }
   function salvaCarrelloSospeso() {
     if (carrello.length === 0) { setMsg("Il carrello è vuoto: niente da salvare."); return; }
     // il nome e' la prima riga delle note; senza note lo si chiede, e
@@ -72015,6 +72089,22 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     nuovaVendita();
     setCarrelloEspanso(false);
     setMsg(`Carrello "${nome}" salvato fra i sospesi: lo ritrovi nella linguetta a destra.`);
+    // E SI DICE SE E' ARRIVATO DAVVERO (7/11/2026, dalla fiera di
+    // Napoli: «stanno sparendo i carrelli memorizzati»).
+    //
+    // Fino a oggi "salvato" compariva qui, subito, mentre la scrittura
+    // partiva 600 ms dopo e, se non riusciva, finiva in un
+    // `console.warn` che nessuno legge. Al banco si svuotava il carrello
+    // fidandosi di questa riga, e quel carrello viveva SOLO su quel
+    // telefono: alla prima ricarica della pagina — e oggi ce ne sono
+    // state tre, una per pubblicazione — non c'era piu'. Nessun errore,
+    // nessuna traccia, merce promessa a una cliente e nessuno che lo
+    // sapesse.
+    //
+    // Non si trattiene il carrello aspettando la risposta: il banco deve
+    // andare avanti, e la copia locale c'e'. Si dice la verita' e si
+    // riprova da soli (vedi riprovaInvioCondiviso).
+    sorvegliaSalvataggioSospeso(nome);
   }
   function apriCarrelloSospeso(c) {
     if (carrello.length > 0 && carrelloSospesoId !== c.id && !window.confirm("Il carrello che hai adesso verrà sostituito e, se non l'hai salvato, andrà perso. Continuare?")) return;
