@@ -3041,6 +3041,112 @@ carrello e non sfonda il subtotale. In
 `prove/pos-incasso-carta.test.jsx` c'è anche il guardiano della forma
 vecchia: «Tipo di incasso carta» non deve ricomparire.
 
+### Il pagamento splittato: contanti più carta, con due sconti (7/11/2026)
+
+Il titolare, dalla fiera: «sotto al totale ci devono essere due tasti,
+modalità di pagamento in unica soluzione o splittato. Se scrivi splittato
+ti dà due caselle: nella prima ci scrivi quanto paga in contanti, e in
+quella sotto, in base a quanto hai scritto, viene riportato l'importo
+rimanente con lo sconto aggiornato per la parte residua con POS fisico o
+Stripe.» E, subito dopo: «per ora questa funzionalità la aggiorni solo
+sul POS programmatore e sul POS Chiara.»
+
+**Perché non è una sottrazione, ed è tutto il punto.** In contanti e a
+carta lo sconto non è lo stesso: alla fiera di Napoli le due serie dicono
+**4/6/10/13/14/15% la carta** e **6/8/12/14/16/20% il contante**, secondo
+il margine del prodotto. Quindi un carrello pagato metà e metà non ha un
+prezzo solo da spezzare: ha due prezzi, e bisogna decidere quale vale su
+quale parte. Sui tre conti possibili ha scelto il titolare:
+
+> **Il contante compra merce.** I 40 € in contanti comprano 50 € di merce
+> allo sconto dei contanti; i 50 € di merce che restano si pagano a carta
+> con lo sconto della carta. Su 100 € di merce (80 tutto contanti, 85
+> tutto carta) si incassano **82,50**.
+
+Le due prove che è il conto giusto, e sono anche due prove del banco:
+dando **tutto** in contanti si torna esattamente al totale «tutto
+contanti», dando **zero** a quello «tutto carta». Nessun salto, e nessun
+vantaggio inventato in mezzo. Gli altri due conti li ha scartati: scontare
+tutto come contanti vorrebbe dire che un euro in contanti vale come darli
+tutti; scontare tutto come carta vorrebbe dire che pagare in contanti non
+serve a niente.
+
+**Il conto sta in `contoSplittato`, e le righe in
+`scontiPerRigaSplittati`.** Ogni riga prende la sua fetta di sconto
+contanti e la sua fetta di sconto carta, nella stessa proporzione in cui
+il carrello è stato pagato: così la somma delle righe fa lo sconto del
+totale senza che nessuno debba fidarsi, e il **margine per prodotto**
+resta vero nelle statistiche. Il riproporzionamento dei centesimi è
+uscito da `scontiPerRigaCarrello` (`riproporzionaSconti`) ed è lo stesso
+per tutti e due i conti: due copie si staccherebbero il giorno che una
+impara qualcosa, e le righe smetterebbero di sommare quello che si
+incassa. Per la stessa ragione le **tabelle** sono una funzione del metodo
+(`fasceDelPagamento(inContanti)`) e non due costanti: lo stesso conto
+letto due volte.
+
+**In archivio è una vendita sola con due importi** (deciso dal titolare
+fra le due strade). `metodo_pagamento = 'misto'`, più
+`incasso_contanti_eur` e `incasso_carta_eur` (migrazione
+`20261107200000`). Lo scontrino è uno, il numero d'ordine è uno, il
+magazzino si scarica una volta; spezzarla in due vendite avrebbe voluto
+dire spezzare le righe dei prodotti — mezzo pigmento su una e mezzo
+sull'altra — e due scontrini per un acquisto solo.
+
+Due vincoli nel database, perché qui una bugia non si vedrebbe:
+**una vendita mista deve portare i due importi** (una chiave sbagliata nel
+payload e `jsonb_populate_record` la ignora in silenzio: resterebbero zero
+in tutte e due le casse) e **i due importi devono fare il totale**. E la
+**prova del pagamento** vale adesso anche sulla parte a carta: senza,
+lo splittato sarebbe diventato la strada per registrare una carta non
+provata — bastava scrivere un euro di contanti. Il pagamento col QR deve
+corrispondere al **resto**, non al totale, ed è il resto che il QR chiede.
+Provati in transazione annullata tutti e sette i casi: misto senza prova
+rifiutato, misto sul terminale registrato, somma sbagliata rifiutata,
+misto senza i due importi rifiutato, misto con la carta a zero registrato,
+e le vendite normali a carta e in contanti esattamente come prima.
+
+**Chi legge quei due numeri.** `incassoContantiDi(v)` e
+`incassoCartaDi(v)` (più `incassaContanti(metodo)`) stanno in un posto
+solo, e su ogni vendita che non è mista tornano **esattamente** il numero
+che l'app leggeva prima: è il modo di insegnare lo splittato alla
+contabilità senza rimettere mano a 4.398 vendite in archivio. Da lì
+passano la busta della classe (ci entra la parte in contanti, e la vendita
+prende il suo numero di busta), le appendici, la cassa contanti, le
+vendite del corso divise per cassa, l'avviso prima di cestinare, lo
+sgancio dalla busta, e il «come hanno pagato» del conto evento e del
+Dettaglio vendite — dove una vendita mista si **divide fra le due voci**,
+perché «misto» non è un modo di pagare.
+
+**L'IVA sta solo sulla parte a carta.** Il contante senza fattura non
+genera imposta: è la convenzione di tutta l'app, non una regola nuova.
+Quindi su una vendita mista l'imponibile è il contante per intero più il
+netto del resto; scorporarla su tutto dichiarerebbe un'imposta che nessuno
+verserà.
+
+**Dove lo splittato NON si può fare, e non è una dimenticanza:** con la
+**fattura** (una fattura si emette su un incasso solo, e cosa ci va dentro
+di una vendita mista è una decisione, non un calcolo), con l'**omaggio**
+(non incassa niente) e con l'**acquisto personale** (lì una parte la
+pagano le provvigioni maturate e i soldi in gioco sono tre). Al posto del
+tasto spento c'è la ragione scritta. E una vendita mista **non si
+rietichetta** dalla colonna Incasso di Vendite al banco, come una pagata
+con Stripe: i due importi resterebbero a dire un'altra cosa.
+
+**Chi ce l'ha:** `ruoloUtente === "programmatore"`, che vuol dire il
+titolare e **Chiara** — il grado di supervisore la porta a programmatore,
+quindi non è servito nessun permesso nuovo. La cifra in contanti **si
+azzera a ogni vendita nuova** (un contante rimasto scritto finirebbe sulla
+cliente dopo) e **sta nella fotografia del carrello sospeso**: ripreso il
+carrello, al cliente si chiede lo stesso resto che gli era stato detto.
+
+Prove in `prove/pagamento-splittato.test.jsx` (16): il conto e i suoi due
+estremi, il tetto, la cifra a mano che si toglie dal resto, le righe che
+sommano **esattamente** lo sconto del carrello con percentuali in mezzo
+alle due, le due casse in archivio (compreso un reso che esce da tutte e
+due in proporzione), e il gesto col POS vero montato — i due tasti solo al
+programmatore, le due caselle, il resto che compare, il QR che chiede
+21,73 invece di 32,21, e il contante che copre tutto.
+
 ### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
 
 Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home

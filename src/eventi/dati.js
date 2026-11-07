@@ -369,7 +369,7 @@ export async function linkDocumentoEvento(percorso, secondi = 3600) {
 
 export async function leggiVenditeEvento(eventoId) {
   const { data, error } = await supabase.from("vendite_shop")
-    .select("id, numero_ordine, data_ordine, totale, totale_imponibile, metodo_pagamento, tipo_movimento, operatore_nome, cliente_nome, prodotti")
+    .select("id, numero_ordine, data_ordine, totale, totale_imponibile, metodo_pagamento, incasso_contanti_eur, incasso_carta_eur, tipo_movimento, operatore_nome, cliente_nome, prodotti")
     .eq("evento_id", eventoId)
     .order("data_ordine");
   if (error) throw new Error(error.message);
@@ -440,8 +440,15 @@ export function totaliVendite(vendite) {
     quante += 1;
     pezzi += quanti;
     incassato += Number(v.totale) || 0;
-    const m = v.metodo_pagamento || "—";
-    perMetodo.set(m, Math.round(((perMetodo.get(m) || 0) + (Number(v.totale) || 0)) * 100) / 100);
+    // una vendita pagata in due entra nelle DUE voci, ognuna per la sua
+    // parte: «come hanno pagato» e' una domanda sui soldi, non sulle righe
+    const aggiungi = (m, importo) => perMetodo.set(m, Math.round(((perMetodo.get(m) || 0) + importo) * 100) / 100);
+    if (v.metodo_pagamento === "misto") {
+      aggiungi("contanti", Number(v.incasso_contanti_eur) || 0);
+      aggiungi("pos", Number(v.incasso_carta_eur) || 0);
+    } else {
+      aggiungi(v.metodo_pagamento || "—", Number(v.totale) || 0);
+    }
   });
   return {
     quante, omaggi, pezzi, pezziOmaggio,

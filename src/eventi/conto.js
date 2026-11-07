@@ -58,7 +58,7 @@ export function costoDi(prodotto, prodottiPerId, componentiPerBundle) {
 export async function leggiConto(eventoId) {
   const [vendite, spese, attribuzioni, trasferimenti, gruppi, materiali] = await Promise.all([
     supabase.from("vendite_shop")
-      .select("id, numero_ordine, data_ordine, totale, totale_imponibile, totale_iva, metodo_pagamento, tipo_movimento, prodotti")
+      .select("id, numero_ordine, data_ordine, totale, totale_imponibile, totale_iva, metodo_pagamento, incasso_contanti_eur, incasso_carta_eur, tipo_movimento, prodotti")
       .eq("evento_id", eventoId).then(({ data, error }) => { if (error) throw new Error(error.message); return data || []; }),
     supabase.from("spese").select("*").eq("evento_id", eventoId)
       .then(({ data, error }) => { if (error) throw new Error(error.message); return data || []; }),
@@ -122,6 +122,16 @@ export function calcolaConto(dati, eventoId, { prodottiShop = [], bundleComponen
     perMetodo: {},
   };
   reali.forEach((v) => {
+    // UNA VENDITA PAGATA IN DUE SI DIVIDE FRA LE DUE CASSE (7/11/2026).
+    // «Come hanno pagato» risponde a quanto e' entrato in contanti e
+    // quanto sul conto: contarla tutta sotto una voce sola —  o peggio
+    // sotto «misto», che non e' un modo di pagare — direbbe il falso su
+    // tutte e due.
+    if (v.metodo_pagamento === "misto") {
+      entrate.perMetodo.contanti = r2((entrate.perMetodo.contanti || 0) + (Number(v.incasso_contanti_eur) || 0));
+      entrate.perMetodo.pos = r2((entrate.perMetodo.pos || 0) + (Number(v.incasso_carta_eur) || 0));
+      return;
+    }
     const k = v.metodo_pagamento || "non indicato";
     entrate.perMetodo[k] = r2((entrate.perMetodo[k] || 0) + (Number(v.totale) || 0));
   });

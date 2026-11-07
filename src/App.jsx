@@ -5606,26 +5606,41 @@ export function scontiPerRigaCarrello({
     return 0;
   });
   if (!omaggio && scontoApplicato != null) {
-    const somma = round2(sconti.reduce((acc, x) => acc + x, 0));
-    const atteso = round2(Number(scontoApplicato) || 0);
-    if (somma !== atteso) {
-      const fattore = somma > 0 ? atteso / somma : 0;
-      sconti = sconti.map((x, i) => Math.min(lordi[i], round2(x * fattore)));
-      const resto = round2(atteso - sconti.reduce((acc, x) => acc + x, 0));
-      if (resto !== 0 && sconti.length) {
-        // I CENTESIMI DI RESTO NON VANNO SU UNA RIGA CONCORDATA, o quel
-        // prezzo finale non sarebbe finito. Vanno sull'ultima riga che
-        // puo' prenderli; se sono concordate tutte, non c'e' altro posto
-        // e si torna all'ultima — altrimenti le righe non sommerebbero
-        // quello che si incassa, e la cifra scritta a mano «In piu' €»
-        // sparirebbe dal conto delle righe pur restando nel totale.
-        const libere = sconti.map((_, i) => i).filter((i) => !concordata[i]);
-        const dove = libere.length ? libere[libere.length - 1] : sconti.length - 1;
-        sconti[dove] = Math.max(0, Math.min(lordi[dove], round2(sconti[dove] + resto)));
-      }
-    }
+    sconti = riproporzionaSconti({ sconti, lordi, concordata, scontoApplicato });
   }
-  return righe.map((r, i) => {
+  return dettagliDelleRighe(righe, lordi, sconti);
+}
+// IL RIPROPORZIONAMENTO, IN UN POSTO SOLO. Se la somma delle righe non fa
+// lo sconto del totale — per i centesimi, per il tetto al subtotale, o
+// perche' il totale l'ha deciso un conto piu' in su — le righe si tirano
+// in proporzione e la differenza va sull'ultima riga che puo' prendersela.
+// Lo usano il conto normale e quello splittato: due copie si staccherebbero
+// il giorno che una delle due impara qualcosa, e le righe smetterebbero di
+// sommare quello che si incassa.
+export function riproporzionaSconti({ sconti = [], lordi = [], concordata = [], scontoApplicato = 0 }) {
+  const somma = round2(sconti.reduce((acc, x) => acc + x, 0));
+  const atteso = round2(Number(scontoApplicato) || 0);
+  if (somma === atteso) return sconti.slice();
+  const fattore = somma > 0 ? atteso / somma : 0;
+  const fuori = sconti.map((x, i) => Math.min(lordi[i], round2(x * fattore)));
+  const resto = round2(atteso - fuori.reduce((acc, x) => acc + x, 0));
+  if (resto !== 0 && fuori.length) {
+    // I CENTESIMI DI RESTO NON VANNO SU UNA RIGA CONCORDATA, o quel
+    // prezzo finale non sarebbe finito. Vanno sull'ultima riga che
+    // puo' prenderli; se sono concordate tutte, non c'e' altro posto
+    // e si torna all'ultima — altrimenti le righe non sommerebbero
+    // quello che si incassa, e la cifra scritta a mano «In piu' €»
+    // sparirebbe dal conto delle righe pur restando nel totale.
+    const libere = fuori.map((_, i) => i).filter((i) => !concordata[i]);
+    const dove = libere.length ? libere[libere.length - 1] : fuori.length - 1;
+    fuori[dove] = Math.max(0, Math.min(lordi[dove], round2(fuori[dove] + resto)));
+  }
+  return fuori;
+}
+// la forma con cui una riga si legge al banco, sulla vendita e sulla
+// ricevuta: lordo, sconto, totale, percentuale e prezzo del pezzo
+function dettagliDelleRighe(righe, lordi, sconti) {
+  return (righe || []).map((r, i) => {
     const lordo = lordi[i];
     const sconto = sconti[i];
     const totale = round2(lordo - sconto);
@@ -5640,6 +5655,65 @@ export function scontiPerRigaCarrello({
       unitario: pezzi > 0 ? round2(totale / pezzi) : 0,
     };
   });
+}
+
+// IL PAGAMENTO SPLITTATO: una parte in contanti, il resto con la carta.
+// 7/11/2026, chiesto dal titolare per il suo POS e per quello di Chiara.
+//
+// IL CONTANTE COMPRA MERCE, e questa e' la regola che decide i soldi
+// (scelta dal titolare davanti ai tre conti possibili). Chi sta al banco
+// scrive quanti euro riceve in contanti; quegli euro comprano una fetta
+// del carrello allo sconto dei CONTANTI, e la merce che resta si paga a
+// carta con lo sconto della CARTA — che e' piu' basso, perche' lo decide
+// una tabella diversa (in fiera 4/6/10/13/14/15% contro 6/8/12/14/16/20%).
+//
+// Le due prove che questo e' il conto giusto: dando tutto in contanti si
+// torna esattamente al totale «tutto contanti», dando zero a quello
+// «tutto carta». Nessun salto, nessun vantaggio inventato.
+//
+// La cifra scritta a mano «In piu' €» si toglie dal RESTO: e' l'ultima
+// cosa che si fa per arrivare al numero tondo, e il contante e' gia'
+// stato contato. Non sfonda: il resto non scende sotto zero.
+export function contoSplittato({ subtotale = 0, scontoContanti = 0, scontoCarta = 0, contantiDati = 0, scontoExtra = 0 } = {}) {
+  const lordo = round2(Number(subtotale) || 0);
+  const merceContanti = Math.max(0, round2(lordo - (Number(scontoContanti) || 0)));
+  const merceCarta = Math.max(0, round2(lordo - (Number(scontoCarta) || 0)));
+  // piu' del carrello non si puo' dare: oltre, il contante copre tutto e
+  // il resto e' zero (e chi sta al banco lo legge scritto)
+  const chiesti = round2(Number(contantiDati) || 0);
+  const contanti = Math.max(0, Math.min(merceContanti, chiesti));
+  const oltre = chiesti > merceContanti + 0.004;
+  // la fetta di carrello che quei contanti hanno comprato
+  const quota = merceContanti > 0 ? contanti / merceContanti : 0;
+  const cartaPrima = round2(merceCarta * (1 - quota));
+  const extra = Math.max(0, Math.min(cartaPrima, round2(Number(scontoExtra) || 0)));
+  const carta = round2(cartaPrima - extra);
+  return {
+    contanti, carta, quota, oltre, extra,
+    merceContanti, merceCarta,
+    // quanta merce a listino ha comprato il contante: e' il numero che
+    // spiega il conto a chi lo guarda, e va scritto accanto
+    lordoContanti: round2(lordo * quota),
+    lordoCarta: round2(lordo - round2(lordo * quota)),
+    // lo sconto totale del carrello: quello che non si incassa
+    sconto: round2(lordo - contanti - carta),
+  };
+}
+// LE RIGHE DI UN CARRELLO SPLITTATO. Ogni riga prende la sua fetta di
+// sconto contanti e la sua fetta di sconto carta, nella stessa proporzione
+// in cui il carrello e' stato pagato: cosi' la somma delle righe fa lo
+// sconto del totale senza che nessuno debba fidarsi, e il margine per
+// prodotto resta vero. Il riproporzionamento e' quello di sempre.
+export function scontiPerRigaSplittati({ carrello = [], righeContanti = [], righeCarta = [], quota = 0, scontoApplicato = null } = {}) {
+  const righe = carrello || [];
+  const lordi = righe.map((r) => round2((Number(r?.prezzo) || 0) * (Number(r?.quantita) || 0)));
+  const concordata = righe.map((r) => r?.prezzoListino != null);
+  const q = Math.max(0, Math.min(1, Number(quota) || 0));
+  let sconti = righe.map((_, i) => round2(
+    q * (righeContanti?.[i]?.sconto || 0) + (1 - q) * (righeCarta?.[i]?.sconto || 0),
+  ));
+  if (scontoApplicato != null) sconti = riproporzionaSconti({ sconti, lordi, concordata, scontoApplicato });
+  return dettagliDelleRighe(righe, lordi, sconti);
 }
 // LE RIGHE CHE LA CLIENTE VEDE QUANDO PAGA (pagina di Stripe, QR,
 // ricevuta). Devono sommare ESATTAMENTE quello che si incassa — quella
@@ -30416,7 +30490,7 @@ function PannelloRiepilogoAmministrativo({
     // domani finirebbe dentro questa busta invece di aprire l'appendice.
     // E' un conto che non torna, quindi si dice.
     const { error: erroreVendite } = rientrata
-      ? await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).eq("metodo_pagamento", "contanti").is("busta_numero", null)
+      ? await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).in("metodo_pagamento", ["contanti", "misto"]).is("busta_numero", null)
       : await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
     if (erroreVendite) {
       setMsg(`Busta segnata, ma le vendite in contanti non sono state marcate: ${testoErrore(erroreVendite)}. Riprova, o i prossimi incassi finiranno nella busta sbagliata.`);
@@ -37043,8 +37117,11 @@ function contiRiepilogoClasse({
   // Acconto e pre corso arrivano prima e restano come sono.
   const tutteLeQuote = listaIscritti.flatMap((i) => quotePagateDiIscritto(i).filter((q) => q.fase !== "saldo" || i.incassato));
   const daIncassareAncora = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + modelleTotaleDi(i)), 0));
-  const venditeContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
-  const venditePos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  // una vendita mista sta in tutte e due le colonne, ognuna per la sua
+  // parte: sommarla per intero da un lato gonfierebbe quella cassa e
+  // svuoterebbe l'altra
+  const venditeContanti = round2(venditeAlCorso.reduce((s, v) => s + incassoContantiDi(v), 0));
+  const venditePos = round2(venditeAlCorso.reduce((s, v) => s + (v.metodo_pagamento === "misto" ? incassoCartaDi(v) : (v.metodo_pagamento === "contanti" ? 0 : (v.totale || 0))), 0));
   // I prodotti venduti al corso entrano nei conti come tutto il resto:
   // lordo il loro "totale", netto il loro "totale_imponibile". L'IVA resta
   // la differenza, quindi si regola da se' vendita per vendita - una
@@ -48149,21 +48226,36 @@ function provenienzaClasse(cd, corsi, location) {
 // conta come uscita. Se la busta e' ancora aperta, le due righe si
 // compensano dentro la busta e non c'e' niente da rimborsare dalla cassa.
 const FUORI_BUSTA = 0;
-function datiEreditatiDallaVendita(originale) {
+function datiEreditatiDallaVendita(originale, totaleRiga = null) {
   if (!originale) return {};
-  const inBustaChiusa = originale.metodo_pagamento === "contanti" && !!originale.corso_data_id && originale.busta_numero != null;
+  const inBustaChiusa = incassaContanti(originale.metodo_pagamento) && !!originale.corso_data_id && originale.busta_numero != null;
   return {
     corso_data_id: originale.corso_data_id || null,
     evento_id: originale.evento_id || null,
     metodo_pagamento: originale.metodo_pagamento || null,
     richiede_fattura: !!originale.richiede_fattura,
     busta_numero: inBustaChiusa ? FUORI_BUSTA : null,
+    ...incassiProporzionali(originale, totaleRiga),
+  };
+}
+// UNA RIGA NEGATIVA SU UNA VENDITA MISTA esce dalle due casse nella stessa
+// proporzione in cui i soldi erano entrati: senza, un reso non saprebbe
+// dire quanto e' uscito dal cassetto e quanto e' tornato sulla carta, e la
+// busta della classe conterebbe un rimborso che non le appartiene.
+function incassiProporzionali(originale, totaleRiga) {
+  if (originale?.metodo_pagamento !== "misto" || totaleRiga == null) return {};
+  const tot = Number(originale.totale) || 0;
+  if (!tot) return {};
+  const quota = (Number(totaleRiga) || 0) / tot;
+  return {
+    incasso_contanti_eur: round2((Number(originale.incasso_contanti_eur) || 0) * quota),
+    incasso_carta_eur: round2((Number(originale.incasso_carta_eur) || 0) * quota),
   };
 }
 // una vendita in contanti che non sta nella prima busta, quando la prima
 // busta e' gia' chiusa: e' materia di un'appendice
 function venditaInAppendice(v, cd) {
-  return !!cd?.busta_rientrata_il && v.metodo_pagamento === "contanti" && v.busta_numero !== 1;
+  return !!cd?.busta_rientrata_il && incassaContanti(v.metodo_pagamento) && v.busta_numero !== 1;
 }
 // le vendite che il Riepilogo della classe conta nella prima busta: tutte
 // finche' la busta e' aperta, poi solo quelle contate quel giorno
@@ -48197,17 +48289,17 @@ function righeProdottiVendite(vendite) {
 // non con quelli soltanto scritti.
 function contiAppendici({ cd, venditeShop, spese, buste }) {
   if (!cd?.busta_rientrata_il) return { chiuse: [], aperta: null };
-  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && v.metodo_pagamento === "contanti");
+  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && incassaContanti(v.metodo_pagamento));
   const speseCorso = (spese || []).filter((x) => x.classe_id === cd.id && x.busta_numero > 1);
   const chiuse = (buste || []).filter((b) => b.corso_data_id === cd.id).sort((a, b) => a.numero - b.numero).map((b) => {
     const vendite = venditeCorso.filter((v) => v.busta_numero === b.numero);
     const speseBusta = speseCorso.filter((x) => x.busta_numero === b.numero);
-    return { ...b, vendite, righeProdotti: righeProdottiVendite(vendite), contanti: round2(vendite.reduce((s, v) => s + (v.totale || 0), 0)), spese: speseBusta, cashDisposto: round2(speseBusta.reduce((s, x) => s + (x.totale || 0), 0)) };
+    return { ...b, vendite, righeProdotti: righeProdottiVendite(vendite), contanti: round2(vendite.reduce((s, v) => s + incassoContantiDi(v), 0)), spese: speseBusta, cashDisposto: round2(speseBusta.reduce((s, x) => s + (x.totale || 0), 0)) };
   });
   const numero = chiuse.length > 0 ? chiuse[chiuse.length - 1].numero + 1 : 2;
   const vendite = venditeCorso.filter((v) => v.busta_numero == null);
   const speseAperta = speseCorso.filter((x) => x.busta_numero === numero);
-  const contanti = round2(vendite.reduce((s, v) => s + (v.totale || 0), 0));
+  const contanti = round2(vendite.reduce((s, v) => s + incassoContantiDi(v), 0));
   const cashDisposto = round2(speseAperta.filter((x) => x.data_pagamento).reduce((s, x) => s + (x.totale || 0), 0));
   const cashDaDisporre = round2(speseAperta.filter((x) => !x.data_pagamento).reduce((s, x) => s + (x.totale || 0), 0));
   const aperta = {
@@ -48615,7 +48707,7 @@ export function PannelloCassaContanti({
       // (31/10/2026) Entrano anche le righe di reso/annullo di una vendita
       // di corso GIA' in una busta chiusa (busta_numero = FUORI_BUSTA): sono
       // rimborsi che escono dalla cassa nel giorno in cui si fanno.
-      supabase.from("vendite_shop").select("totale, evento_id, data_ordine").eq("metodo_pagamento", "contanti").or(`corso_data_id.is.null,busta_numero.eq.${FUORI_BUSTA}`).gte("data_ordine", aperta).neq("tipo_movimento", "omaggio"),
+      supabase.from("vendite_shop").select("totale, evento_id, data_ordine, metodo_pagamento, incasso_contanti_eur, incasso_carta_eur").in("metodo_pagamento", ["contanti", "misto"]).or(`corso_data_id.is.null,busta_numero.eq.${FUORI_BUSTA}`).gte("data_ordine", aperta).neq("tipo_movimento", "omaggio"),
       supabase.from("spese").select("id, descrizione, totale, metodo_pagamento, stato, data_pagamento, classe_id, evento_id, origine, origine_scadenziario_chiave").eq("stato", "pagata").gte("data_pagamento", aperta),
       supabase.from("cassa_spese_ricorrenti").select("*").eq("attiva", true).order("nome"),
       supabase.from("eventi").select("id, stato"),
@@ -48627,7 +48719,9 @@ export function PannelloCassaContanti({
     setBusteAppendici(app.data || []);
     const conclusi = new Set((eve.data || []).filter((e) => e.stato === "concluso").map((e) => e.id));
     const venditeCassa = (ven.data || []).filter((v) => !incassoDiEventoAperto(v, conclusi));
-    setVenditeSenzaCorso(round2(venditeCassa.reduce((s, v) => s + (v.totale || 0), 0)));
+    // nel cassetto entra solo la parte in contanti: di una vendita mista
+    // il resto e' finito sul conto
+    setVenditeSenzaCorso(round2(venditeCassa.reduce((s, v) => s + incassoContantiDi(v), 0)));
     setElencoVenditeCassa(venditeCassa);
     const dallaCassa = (spe.data || []).filter((x) => METODI_SPESA_DALLA_CASSA.has(x.metodo_pagamento) && !spesaUscitaDallaBusta(x) && !spesaDiEventoAperto(x, conclusi));
     setSpeseDallaCassa(round2(dallaCassa.reduce((s, x) => s + (x.totale || 0), 0)));
@@ -57020,7 +57114,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
       "Finisce nel cestino: sparisce da prima nota, cassa contanti, provvigioni e statistiche, e si può ripristinare entro sei mesi dal tasto «Cestino» in cima alla pagina.",
       collegate.length > 0 ? `Spariscono anche ${collegate.length} movimenti collegati (annullamenti, resi o cambi).` : null,
       rimetteStock ? "I pezzi venduti tornano in magazzino." : (v.prelevato_dai_kit ? "I pezzi erano usciti dai kit del corso: il magazzino non cambia." : giaAnnullata ? "Era già annullata: il magazzino non cambia." : null),
-      v.metodo_pagamento === "contanti" && (Number(v.totale) || 0) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(Number(v.totale))} in contanti non sono mai stati incassati: se la busta del corso era già in cassa, si riapre e torna da approvare.` : null,
+      incassaContanti(v.metodo_pagamento) && incassoContantiDi(v) > 0 && !giaAnnullata ? `I ${fmtEuroErp2(incassoContantiDi(v))} in contanti non sono mai stati incassati: se la busta del corso era già in cassa, si riapre e torna da approvare.` : null,
     ].filter(Boolean);
   }
 
@@ -57031,7 +57125,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // importo scende. Torna la frase da accodare al messaggio.
   async function sganciaDallaBusta(v, giaAnnullata = false) {
     let bustaRiaperta = "";
-    if (v.metodo_pagamento === "contanti" && v.corso_data_id && !giaAnnullata && (Number(v.totale) || 0) > 0) {
+    if (incassaContanti(v.metodo_pagamento) && v.corso_data_id && !giaAnnullata && incassoContantiDi(v) > 0) {
       const cd = (corsiDate || []).find((x) => x.id === v.corso_data_id);
       if (v.busta_numero > 1) {
         const { data: busta } = await supabase.from("corsi_date_buste").select("id").eq("corso_data_id", v.corso_data_id).eq("numero", v.busta_numero).maybeSingle();
@@ -57045,7 +57139,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
         if ((appendici || []).length > 0) {
           // la prima busta non si riapre se dopo di lei ci sono appendici:
           // qui si puo' solo abbassare l'importo congelato
-          const nuovo = Math.max(0, round2((Number(cd.busta_importo) || 0) - round2(Number(v.totale) || 0)));
+          const nuovo = Math.max(0, round2((Number(cd.busta_importo) || 0) - incassoContantiDi(v)));
           const { error: e2 } = await supabase.from("corsi_date").update({ busta_importo: nuovo }).eq("id", cd.id);
           // e la vendita non e' piu' "della prima busta"
           await supabase.from("vendite_shop").update({ busta_numero: null }).eq("id", v.id);
@@ -57764,8 +57858,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
                                 conto, e lo vieta anche il database. */}
                             {!v.metodo_pagamento ? (
                               <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>
-                            ) : (!puoRiscuotere || pagatoStripeIl(v)) ? (
-                              <span data-campo="metodo-fisso" title={pagatoStripeIl(v) ? "Incassato con Stripe: il metodo non si cambia" : "Il metodo di pagamento lo corregge l'amministrazione"}
+                            ) : (!puoRiscuotere || pagatoStripeIl(v) || v.metodo_pagamento === "misto") ? (
+                              // una vendita mista porta DUE importi scritti:
+                              // rietichettarla «contanti» lascerebbe quelle
+                              // due colonne a dire un'altra cosa, e la busta
+                              // leggerebbe un numero che non c'entra
+                              <span data-campo="metodo-fisso" title={v.metodo_pagamento === "misto" ? "Pagata in due, contanti più carta: i due importi stanno scritti sulla vendita e il metodo non si cambia da qui" : pagatoStripeIl(v) ? "Incassato con Stripe: il metodo non si cambia" : "Il metodo di pagamento lo corregge l'amministrazione"}
                                 style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 8, padding: "4px 8px", display: "inline-block",
                                   border: `1px solid ${v.metodo_pagamento === "contanti" ? "#E8D4B0" : "#C9CEEA"}`,
                                   color: v.metodo_pagamento === "contanti" ? "#8A6A1B" : "#3D4A94",
@@ -65441,7 +65539,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       totale: -importoReso, totale_imponibile: -imponibile, totale_iva: -iva,
       prodotti: [{ nome: rigaSelezionata.nome, quantita: -qta, totale_riga: -importoReso }],
       origine: "pos", tipo_movimento: "reso", vendita_collegata_id: rigaSelezionata.venditaId,
-      ...datiEreditatiDallaVendita(rigaSelezionata.vendita),
+      ...datiEreditatiDallaVendita(rigaSelezionata.vendita, -importoReso),
       operatore_tipo: rigaSelezionata.operatoreTipo, operatore_id: rigaSelezionata.operatoreId, operatore_nome: rigaSelezionata.operatoreNome,
       coupon_id: rigaSelezionata.vendita?.coupon_id || null, codice_coupon: rigaSelezionata.vendita?.codice_coupon || null,
     });
@@ -65472,7 +65570,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       totale: -(v.totale || 0), totale_imponibile: -(v.totale_imponibile || 0), totale_iva: -(v.totale_iva || 0),
       prodotti: righe.map((r) => ({ nome: r.nome, quantita: -(r.quantita || 0), totale_riga: -(r.totale_riga || 0) })),
       origine: "pos", tipo_movimento: "annullamento", vendita_collegata_id: v.id,
-      ...datiEreditatiDallaVendita(v),
+      ...datiEreditatiDallaVendita(v, -(v.totale || 0)),
       operatore_tipo: v.operatore_tipo, operatore_id: v.operatore_id, operatore_nome: v.operatore_nome,
       coupon_id: v.coupon_id || null, codice_coupon: v.codice_coupon || null,
     });
@@ -65530,7 +65628,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       totale: differenzaFinale, totale_imponibile: imponibile, totale_iva: iva,
       prodotti: prodottiRiga,
       origine: "pos", tipo_movimento: "cambio", vendita_collegata_id: rigaAttribuzione.venditaId,
-      ...datiEreditatiDallaVendita(rigaAttribuzione.vendita),
+      ...datiEreditatiDallaVendita(rigaAttribuzione.vendita, differenzaFinale),
       operatore_tipo: rigaAttribuzione.operatoreTipo, operatore_id: rigaAttribuzione.operatoreId, operatore_nome: rigaAttribuzione.operatoreNome,
       coupon_id: rigaAttribuzione.vendita?.coupon_id || null, codice_coupon: rigaAttribuzione.vendita?.codice_coupon || null,
     });
@@ -70602,7 +70700,34 @@ function pagamentoContaComeContanti(metodo) {
 function etichettaMetodoVendita(metodo) {
   if (metodo === "contanti") return "Contanti";
   if (metodo === "buono_amazon") return "Buono Amazon";
+  if (metodo === "misto") return "Contanti + carta";
   return "POS";
+}
+// QUANTO CONTANTE HA DENTRO UNA VENDITA, e quanta carta. Dal 7/11/2026 un
+// carrello si puo' pagare in due (`metodo_pagamento = 'misto'`), e i due
+// importi stanno scritti sulla riga.
+//
+// Perche' passano da qui e non da un `=== "contanti"` sparso: la busta
+// della classe, la cassa contanti, il conto del corso e le fatture da
+// emettere leggevano `v.totale` dando per scontato che una vendita avesse
+// UN metodo. Su una vendita mista quel numero e' giusto per il totale e
+// falso per ognuna delle due casse.
+//
+// Su ogni vendita che non e' mista queste funzioni tornano ESATTAMENTE il
+// numero che l'app leggeva prima: e' il modo di insegnare lo splittato
+// alla contabilita' senza rimettere mano a 4.398 vendite in archivio.
+export function incassaContanti(metodo) {
+  return metodo === "contanti" || metodo === "misto";
+}
+export function incassoContantiDi(v) {
+  if (!v) return 0;
+  if (v.metodo_pagamento === "misto") return round2(Number(v.incasso_contanti_eur) || 0);
+  return v.metodo_pagamento === "contanti" ? round2(Number(v.totale) || 0) : 0;
+}
+export function incassoCartaDi(v) {
+  if (!v) return 0;
+  if (v.metodo_pagamento === "misto") return round2(Number(v.incasso_carta_eur) || 0);
+  return v.metodo_pagamento === "pos" ? round2(Number(v.totale) || 0) : 0;
 }
 // Il cassetto che incassa: due monete che cadono dentro con la freccia
 // verde. Sta sul tasto che chiude la vendita, ed e' l'unico posto
@@ -71420,6 +71545,21 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // puo' gia' arrivare allo stesso risultato da li', un pezzo alla
   // volta; allargarla anche a lui e' una parola, ma e' una decisione sua.
   const [scontoExtraValore, setScontoExtraValore] = useState("");
+  // IL PAGAMENTO SPLITTATO: una parte in contanti, il resto con la carta.
+  //
+  // Il titolare, 7/11/2026: «sotto al totale ci devono essere due tasti,
+  // in unica soluzione o splittato. Se scrivi splittato ti da' due
+  // caselle: nella prima ci metti quanto paga in contanti, e in quella
+  // sotto viene riportato l'importo rimanente con lo sconto aggiornato
+  // per la parte residua con POS fisico o Stripe.»
+  //
+  // Non e' un modo di pagare in piu': e' il carrello pagato con DUE
+  // metodi, che hanno due tabelle di sconto diverse. Per questo la cifra
+  // in contanti non si toglie dal totale, lo RIFA' (vedi
+  // `contoSplittato`), e in archivio la vendita porta i due importi
+  // separati (`incasso_contanti_eur`, `incasso_carta_eur`).
+  const [pagamentoSplittato, setPagamentoSplittato] = useState(false);
+  const [contantiSplitValore, setContantiSplitValore] = useState("");
   // sconto vendita (manuale) e coupon (dallo sconto dell'edizione di corso
   // collegata) sono alternativi, mai cumulabili: si escludono a vicenda
   const [couponValore, setCouponValore] = useState("");
@@ -71794,6 +71934,9 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // due tasti, un carrello ripreso che tornasse sul QR farebbe
       // ricominciare da capo un incasso già battuto sul terminale
       modoIncassoPos,
+      // e lo splittato, con la cifra in contanti: un carrello ripreso
+      // deve chiedere al cliente lo stesso resto che gli era stato detto
+      pagamentoSplittato, contantiSplit: contantiSplitValore,
       // la cifra scritta a mano sta nella fotografia come lo sconto
       // fiera: ripreso il carrello, il totale concordato col cliente
       // deve essere ancora quello
@@ -71817,6 +71960,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     // in fiera e ripreso dall'ufficio senza terminale mostrerebbe quattro
     // tasti e nessuno scelto, e manderebbe `terminale_fisico` su una
     // vendita che nessuno ha battuto
+    setPagamentoSplittato(!!c.pagamentoSplittato);
+    setContantiSplitValore(c.contantiSplit || "");
     if (c.modoIncassoPos) setModoIncassoPos(c.modoIncassoPos === "esterno" && terminaleFisicoDisponibile ? "esterno" : "qr");
     setCorsoPosId(c.corsoPosId || "");
     // un carrello ripreso porta la sua fiera: e' una scelta gia' fatta,
@@ -72096,6 +72241,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     // la cifra scritta a mano vale per QUEL carrello: un arrotondamento
     // che resta acceso si ripete sullo scontrino dopo, e nessuno lo vede
     setScontoExtraValore("");
+    // e si riparte in unica soluzione: uno splittato rimasto acceso con
+    // la sua cifra si ripeterebbe sullo scontrino dopo, e il contante
+    // di un'altra cliente finirebbe in questa vendita
+    setPagamentoSplittato(false); setContantiSplitValore("");
     // l'acquisto personale vale per quel carrello, non resta acceso: i
     // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
     setAcquistoPersonale(false); setRitiroAttivo(false);
@@ -72313,20 +72462,32 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   }, [couponAcquistoMaster, cedibilePerProdotto]);
   const cartaDiClasse = couponNeedlingAttivo ? fasceNeedlingCartaPos : fasceCorsiCartaPos;
   const contantiDiClasse = couponNeedlingAttivo ? fasceNeedlingContantiPos : fasceContantiCorsiPos;
-  const fasceCouponAttive = couponAFasce
-    ? (couponPersonaleAttivo
-      ? fasceCorsiPerPagamento(
-          serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto,
-          fasceReferralContantiPos, pagamentoContaComeContanti(metodoPagamento))
-      // Le tabelle d'aula valgono per il codice di una classe E per un
-      // codice di needling senza edizione: in tutti e due i casi lo
-      // sconto e' quello che la scuola fa ai suoi allievi, e l'edizione
-      // dice solo quale classe, non quale regola.
-      : fasceCorsiPerPagamento(
-          (!!couponAttivo.corsi_date_id || couponNeedlingAttivo) && serieScontoScritta(cartaDiClasse) ? cartaDiClasse : couponAttivo.fasce_sconto,
-          contantiDiClasse,
-          (!!couponAttivo.corsi_date_id || couponNeedlingAttivo) && pagamentoContaComeContanti(metodoPagamento)))
-    : null;
+  // LE TABELLE DI SCONTO DI QUESTO CARRELLO, LETTE PER UN METODO.
+  //
+  // E' una funzione e non una costante perche' dal 7/11/2026 il carrello
+  // si puo' pagare METa IN CONTANTI E META A CARTA, e le due parti si
+  // scontano con tabelle diverse: in fiera 6/8/12/14/16/20% il contante,
+  // 4/6/10/13/14/15% la carta. Lo stesso conto letto due volte, non due
+  // conti — o il totale e le righe racconterebbero due storie.
+  function fasceDelPagamento(inContanti) {
+    if (couponAFasce) {
+      return couponPersonaleAttivo
+        ? fasceCorsiPerPagamento(
+            serieScontoScritta(regolaReferralPos?.fasce) ? regolaReferralPos.fasce : couponAttivo.fasce_sconto,
+            fasceReferralContantiPos, inContanti)
+        // Le tabelle d'aula valgono per il codice di una classe E per un
+        // codice di needling senza edizione: in tutti e due i casi lo
+        // sconto e' quello che la scuola fa ai suoi allievi, e l'edizione
+        // dice solo quale classe, non quale regola.
+        : fasceCorsiPerPagamento(
+            (!!couponAttivo.corsi_date_id || couponNeedlingAttivo) && serieScontoScritta(cartaDiClasse) ? cartaDiClasse : couponAttivo.fasce_sconto,
+            contantiDiClasse,
+            (!!couponAttivo.corsi_date_id || couponNeedlingAttivo) && inContanti);
+    }
+    // la fiera: `scontoFieraAttivo` e' dichiarato piu' sotto, e qui si
+    // legge solo quando la funzione viene chiamata
+    return scontoFieraAttivo ? fasceCorsiPerPagamento(tabellaFieraCarta, fasceEventiContantiPos, inContanti) : null;
+  }
   // L'eccezione del reparto vale SOLO col codice di un corso di needling:
   // su tutti gli altri un prodotto needling si sconta come gli altri,
   // sul suo margine. E' la regola che il 7/10 mancava da questa parte e
@@ -72366,14 +72527,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // modo peggiore di sbagliare.
   const scontoFieraDisponibile = !!eventoPosSel && !!tabellaFieraCarta && !couponAttivo && !(couponNum > 0) && !omaggioAttivo;
   const scontoFieraAttivo = scontoFieraDisponibile && scontoFiera;
-  const fasceFieraAttive = scontoFieraAttivo
-    ? fasceCorsiPerPagamento(tabellaFieraCarta, fasceEventiContantiPos, pagamentoContaComeContanti(metodoPagamento))
-    : null;
+
   // Le fasce che stanno valendo su QUESTO carrello, da qualunque parte
   // arrivino: il codice o la fiera. Da qui in giu' si guarda questa, cosi'
   // il totale, lo sconto di riga, le righe senza margine e "manca alla
   // fascia" non possono raccontare tre cose diverse.
-  const fasceInUsoSulCarrello = couponAFasce ? fasceCouponAttive : fasceFieraAttive;
+  const fasceInUsoSulCarrello = fasceDelPagamento(pagamentoContaComeContanti(metodoPagamento));
   // L'eccezione del reparto needling vale solo col codice di quel corso:
   // in fiera non c'entra niente.
   const eccezioneFasceInUso = couponAFasce ? eccezioneNeedlingPos : null;
@@ -72396,16 +72555,49 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // Adesso il totale e' la somma delle righe, e il conto sta in un posto
   // solo. Le tre funzioni restano dove sono: le usa `scontiPerRigaCarrello`
   // per una riga alla volta.
-  const righeAlNaturale = scontiPerRigaCarrello({
-    carrello, prodottiPerId, subtotale, scontoApplicato: null,
-    fasce: fasceInUsoSulCarrello,
-    contanti: pagamentoContaComeContanti(metodoPagamento),
-    eccezione: eccezioneFasceInUso,
-    couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
-    omaggio: omaggioAttivo,
-    acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
-  });
+  function righeNaturaliPerPagamento(inContanti) {
+    return scontiPerRigaCarrello({
+      carrello, prodottiPerId, subtotale, scontoApplicato: null,
+      fasce: fasceDelPagamento(inContanti),
+      contanti: inContanti,
+      eccezione: eccezioneFasceInUso,
+      couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
+      omaggio: omaggioAttivo,
+      acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
+    });
+  }
+  const righeAlNaturale = righeNaturaliPerPagamento(pagamentoContaComeContanti(metodoPagamento));
   const scontoDalleRegole = round2(righeAlNaturale.reduce((somma, x) => somma + x.sconto, 0));
+  // IL CARRELLO PAGATO IN DUE: una parte in contanti, il resto a carta.
+  //
+  // Solo il POS del programmatore e quello di Chiara (che il grado di
+  // supervisore porta a programmatore): l'ha chiesto cosi' il titolare,
+  // «per ora questa funzionalita' la aggiorni solo sul POS programmatore
+  // e sul POS Chiara».
+  const puoSplittare = ruoloUtente === "programmatore";
+  // Dove NON si puo' splittare, e non e' una dimenticanza:
+  // - con la fattura, perche' una fattura si emette su un incasso solo e
+  //   cosa ci va dentro di una vendita mista lo decide una persona;
+  // - con l'omaggio, che non incassa niente;
+  // - con l'acquisto personale, dove una parte la pagano le provvigioni
+  //   maturate e i soldi in gioco sono tre, non due.
+  const splitAmmesso = puoSplittare && !omaggioAttivo && !fattAttiva && !acquistoPersonale;
+  // quello che l'interfaccia mostra: il tasto resta scelto anche col
+  // carrello vuoto, altrimenti premerlo sembrerebbe non fare niente
+  const splitScelto = splitAmmesso && pagamentoSplittato;
+  const splitAcceso = splitScelto && carrello.length > 0 && subtotale > 0;
+  const contantiSplitNum = contantiSplitValore === "" ? 0 : parseNum(contantiSplitValore);
+  // lo stesso carrello contato con le due tabelle: non due conti, lo
+  // stesso conto letto due volte
+  const righeSplitContanti = splitAcceso ? righeNaturaliPerPagamento(true) : null;
+  const righeSplitCarta = splitAcceso ? righeNaturaliPerPagamento(false) : null;
+  const splitConto = splitAcceso ? contoSplittato({
+    subtotale,
+    scontoContanti: round2(righeSplitContanti.reduce((somma, x) => somma + x.sconto, 0)),
+    scontoCarta: round2(righeSplitCarta.reduce((somma, x) => somma + x.sconto, 0)),
+    contantiDati: contantiSplitNum,
+    scontoExtra,
+  }) : null;
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
@@ -72419,8 +72611,23 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // somma — e' stata chiesta per fare proprio quello, arrivare alla cifra
   // tonda che chi decide i prezzi ha in mente. Il tetto al subtotale
   // resta: un carrello non si sconta piu' di quanto vale.
-  const scontoApplicato = subtotale <= 0 ? 0
-    : round2(Math.min(subtotale, scontoDalleRegole + scontoExtra));
+  function commutaSplit(acceso) {
+    setPagamentoSplittato(acceso);
+    setMsgQr("");
+    // In splittato il RESTO si paga con la carta, e il contante lo scrive
+    // la casella: se il metodo era «contanti» o «buono» la riga dei
+    // quattro tasti direbbe una cosa e il conto un'altra.
+    if (acceso) setMetodoPagamento("pos");
+    else setContantiSplitValore("");
+  }
+  const scontoApplicato = splitConto ? splitConto.sconto
+    : subtotale <= 0 ? 0
+      : round2(Math.min(subtotale, scontoDalleRegole + scontoExtra));
+  // la cifra scritta a mano come e' stata DAVVERO applicata: in splittato
+  // si toglie dal resto e li' si ferma a zero, quindi puo' valere meno di
+  // quella battuta. E' questa che si scrive sulla vendita e nel conto, o
+  // l'archivio direbbe uno sconto a mano che non c'e' stato.
+  const scontoAMano = splitConto ? splitConto.extra : scontoExtra;
   // LA PERCENTUALE CHE HANNO FATTO LE TABELLE su questo carrello:
   // quanto hanno davvero eroso il codice, le fasce o lo sconto fiera,
   // diviso il subtotale. Il numero scritto sul coupon non dice la
@@ -72437,7 +72644,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // 12% comparirebbe come 13,8 e un codice al 30% come 34: vero sul
   // carrello, falso sul cartellino. Gli euro scritti a mano hanno la
   // loro riga, nel riquadro dei conti e sulla vendita.
-  const percentualeDaTabelle = subtotale > 0 ? round2(((scontoApplicato - scontoExtra) / subtotale) * 100) : 0;
+  const percentualeDaTabelle = subtotale > 0 ? round2(((scontoApplicato - scontoAMano) / subtotale) * 100) : 0;
   // Quanto manca alla fascia di spesa successiva. Si dice SOLO la cifra
   // che manca, mai quanto sconto si otterrebbe: la percentuale media
   // dipende da COSA si aggiunge, non da quanto si spende — un prodotto a
@@ -72463,15 +72670,20 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // vendita che si registra, la ricevuta. Il conto sta in
   // `scontiPerRigaCarrello` — compreso il riproporzionamento, che prima
   // faceva solo la vendita e il carrello no.
-  const scontiDelleRighe = scontiPerRigaCarrello({
-    carrello, prodottiPerId, subtotale, scontoApplicato,
-    fasce: fasceInUsoSulCarrello,
-    contanti: pagamentoContaComeContanti(metodoPagamento),
-    eccezione: eccezioneFasceInUso,
-    couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
-    omaggio: omaggioAttivo,
-    acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
-  });
+  const scontiDelleRighe = splitConto
+    ? scontiPerRigaSplittati({
+      carrello, righeContanti: righeSplitContanti, righeCarta: righeSplitCarta,
+      quota: splitConto.quota, scontoApplicato,
+    })
+    : scontiPerRigaCarrello({
+      carrello, prodottiPerId, subtotale, scontoApplicato,
+      fasce: fasceInUsoSulCarrello,
+      contanti: pagamentoContaComeContanti(metodoPagamento),
+      eccezione: eccezioneFasceInUso,
+      couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
+      omaggio: omaggioAttivo,
+      acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
+    });
   // Nel carrello non ci sono due righe dello stesso prodotto — il "+"
   // alza la quantita' — quindi la riga si ritrova dal prodotto e non
   // dalla posizione, che cambia a ogni aggiunta.
@@ -72556,6 +72768,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     && round2(totaleNetto + speseSpedizione) >= provvigioniDaUsare - 0.004
     ? provvigioniDaUsare : 0;
   const totaleConSpedizione = round2(totaleNetto + speseSpedizione - provvigioniScalabili);
+  // QUANTO RESTA DA INCASSARE CON LA CARTA, in splittato: il totale meno
+  // il contante ricevuto. Ci stanno dentro la spedizione, perche' e' la
+  // cifra che la cliente paga davvero col QR o sul terminale — ed e'
+  // quella che il QR deve chiedere, non il totale del carrello.
+  const restoCarta = splitConto ? Math.max(0, round2(totaleConSpedizione - splitConto.contanti)) : null;
   // L'IVA si scorpora solo se quella vendita un documento fiscale ce
   // l'ha. Una vendita in contanti senza fattura non genera IVA: non c'e'
   // un'imposta da versare, quindi l'imponibile e' il totale e l'IVA e'
@@ -72567,12 +72784,25 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // corso, riepiloghi, statistiche) l'IVA non si ricalcola mai, si legge
   // la differenza fra totale e imponibile registrati qui.
   // contanti e buono Amazon: senza fattura non si genera IVA
-  const senzaIva = pagamentoContaComeContanti(metodoPagamento) && !fattAttiva;
-  const imponibile = senzaIva ? totaleConSpedizione : round2(totaleConSpedizione / 1.22);
+  const senzaIva = !splitConto && pagamentoContaComeContanti(metodoPagamento) && !fattAttiva;
+  // IN SPLITTATO L'IVA STA SOLO SULLA PARTE A CARTA. Il contante senza
+  // fattura non genera imposta — e' la convenzione di tutta l'app, non
+  // una regola nuova — quindi su una vendita mista l'imponibile e' il
+  // contante per intero piu' il netto del resto. Scorporarla su tutto
+  // dichiarerebbe un'imposta che nessuno versera'.
+  const imponibile = splitConto
+    ? round2(splitConto.contanti + restoCarta / 1.22)
+    : senzaIva ? totaleConSpedizione : round2(totaleConSpedizione / 1.22);
   const iva = round2(totaleConSpedizione - imponibile);
   // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
   // il totale "da incassare" e le sue componenti diventano sempre zero
   const totaleDaIncassare = omaggioAttivo ? 0 : totaleConSpedizione;
+  // L'IMPORTO CHE SI CHIEDE CON LA CARTA: in splittato e' il RESTO, non il
+  // totale. Il QR, la pagina di Stripe e la ricevuta devono chiedere
+  // quello — un QR che chiedesse il totale dopo che il contante e' gia'
+  // in cassa farebbe pagare due volte la stessa merce. E il database
+  // controlla che il pagamento corrisponda proprio a questa cifra.
+  const importoCarta = splitConto ? restoCarta : totaleDaIncassare;
   // IL CONTO DI UNO SCONTO SUL NETTO, SCRITTO.
   //
   // «Subtotale 220,70, sconto 41,10» e' vero ma non dimostra niente: chi
@@ -72611,7 +72841,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // Lo sconto si spalma in proporzione e il resto dei centesimi va
   // sull'ultima riga, come fa gia' la conferma della vendita.
   function righePerPagamento() {
-    return righeDaPagare({ carrello, righeSconto: scontiDelleRighe, speseSpedizione, totaleDaIncassare });
+    // in splittato le righe si tirano sul resto a carta: sono la fetta
+    // di ogni riga che la carta sta pagando, e sommano esattamente
+    // quello che si sta chiedendo
+    return righeDaPagare({ carrello, righeSconto: scontiDelleRighe, speseSpedizione, totaleDaIncassare: importoCarta });
   }
 
   // IL LINK DI PAGAMENTO, COPIATO.
@@ -72663,7 +72896,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     setCreandoQr(true); setMsgQr("");
     const { data, error } = await supabase.functions.invoke("stripe-crea-pagamento", {
       body: {
-        importo: round2(totaleDaIncassare),
+        importo: round2(importoCarta),
         descrizione: corsoPosSel ? `POS · ${corsoById[corsoPosSel.corso_id]?.nome || "corso"}` : "Vendita al banco",
         righe: righePerPagamento(),
         operatore: { tipo: operatore.tipo, id: operatore.id, nome: operatore.nome },
@@ -72919,7 +73152,14 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       totale_iva: ivaDaRegistrare,
       prodotti: prodottiRiga,
       origine: "pos",
-      metodo_pagamento: omaggioAttivo ? null : metodoPagamento,
+      // «misto» e' il carrello pagato con DUE metodi, e i due importi
+      // stanno nelle colonne qui sotto: senza di loro in archivio ci
+      // sarebbe un totale e nessun modo di sapere quanto e' entrato in
+      // cassa e quanto sul conto — cioe' la busta della classe e le
+      // fatture da emettere leggerebbero il numero sbagliato.
+      metodo_pagamento: omaggioAttivo ? null : (splitConto ? "misto" : metodoPagamento),
+      incasso_contanti_eur: splitConto ? splitConto.contanti : null,
+      incasso_carta_eur: splitConto ? importoCarta : null,
       note: note.trim() || null,
       // Il codice dell'incasso col QR, scritto SULLA vendita. E' la
       // difesa contro il doppione: il legame sull'incasso puo' non
@@ -72931,7 +73171,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // e' l'unica carta che si registra senza un pagamento col QR, e il
       // database (registra_vendita_pos) pretende questo segno per
       // accettarla. Non e' una colonna: la funzione lo legge e lo toglie.
-      terminale_fisico: !omaggioAttivo && metodoPagamento === "pos" && modoIncassoPos === "esterno",
+      terminale_fisico: !omaggioAttivo && (metodoPagamento === "pos" || !!splitConto) && modoIncassoPos === "esterno",
       cliente_nome: clientePos.trim() || null,
       tipo_movimento: omaggioAttivo ? "omaggio" : "vendita",
       // Chi "ha fatto" la vendita, cioe' a chi contano punti e
@@ -72959,7 +73199,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // resterebbe solo un totale piu' basso di quello che le tabelle
       // dicono, e nessuno saprebbe che qualcuno l'ha deciso — ne' chi,
       // benche' `operatore_*` qui accanto dica chi ha battuto.
-      sconto_a_mano_eur: scontoExtra > 0 ? scontoExtra : null,
+      sconto_a_mano_eur: scontoAMano > 0 ? scontoAMano : null,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
@@ -73329,7 +73569,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                       <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0 }}>
                         {v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}
-                        <span style={{ fontWeight: 400, color: MUTED }}>{" · "}{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</span>
+                        <span style={{ fontWeight: 400, color: MUTED }}>{" · "}{v.metodo_pagamento === "misto" ? "Contanti + carta" : v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</span>
                         {pastigliaStripe(v)}
                       </span>
                       {badgeTipo && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: badgeTipo.c, background: badgeTipo.s, borderRadius: 7, padding: "2px 7px", flexShrink: 0 }}>{badgeTipo.l}</span>}
@@ -73392,7 +73632,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${nomeVivoDellaRiga(p, indiciNomi)}`).join(", ")}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}{pastigliaStripe(v)}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "misto" ? "Contanti + carta" : v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}{pastigliaStripe(v)}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                       </tr>
                     );
@@ -73521,7 +73761,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                       : !tabellaFieraCarta
                         ? "Le fasce degli eventi non sono ancora scritte: Genera Coupon → Sconti eventi."
                         : scontoFieraAttivo
-                          ? `Fasce degli eventi, serie ${fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeDaTabelle)} su questo carrello.${scontoExtra > 0 ? " Più la cifra scritta a mano." : ""}`
+                          // in splittato valgono TUTTE E DUE le serie, una
+                          // per parte: scrivere «serie carta» accanto a una
+                          // percentuale che contiene anche i contanti
+                          // sarebbe un cartellino falso
+                          ? `Fasce degli eventi, serie ${splitConto ? "contanti + carta" : fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeDaTabelle)} su questo carrello.${scontoAMano > 0 ? " Più la cifra scritta a mano." : ""}`
                           : "Applica a questo carrello le fasce di sconto degli eventi."}
                 </span>
               </span>
@@ -74097,7 +74341,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             sbagliarla. */}
         {scontoExtra > 0 && (
           <div style={{ flexBasis: "100%", ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>
-            In più a mano − {fmtEuroErp2(scontoExtra)}
+            In più a mano − {fmtEuroErp2(scontoAMano)}
             <span style={{ color: NAVY }}>{"  →  si incassano "}{fmtEuroErp2(totaleDaIncassare)}</span>
             {scontoApplicato >= subtotale && subtotale > 0 && (
               <span style={{ color: "#8A6A1B" }}>{"  ·  più di così il carrello non si sconta"}</span>
@@ -74158,7 +74402,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             // sommata dentro «Sconto» farebbe sembrare che l'abbia
             // calcolata una tabella, ed e' il contrario — l'ha decisa
             // una persona, e in archivio resta scritto che e' sua
-            ...(scontoExtra > 0 ? [{ etichetta: "di cui in più, a mano", valore: scontoExtra, negativo: true }] : []),
+            ...(scontoAMano > 0 ? [{ etichetta: "di cui in più, a mano", valore: scontoAMano, negativo: true }] : []),
             ...(provvigioniScalabili > 0 ? [{ etichetta: "Provvigioni usate", valore: provvigioniScalabili, negativo: true }] : []),
             // la spedizione e' una riga del conto come le altre, non una
             // nota piccola sotto il totale (23/10/2026): il subtotale non
@@ -74422,6 +74666,111 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
 
       {!omaggioAttivo && (
         <>
+          {/* MODALITA' DI PAGAMENTO: in unica soluzione o splittato.
+              Chiesta dal titolare il 7/11/2026, e per ora solo sul suo
+              POS e su quello di Chiara. Sta qui, subito dopo il conto e
+              prima di «Come paga?», perche' decide proprio quello: un
+              metodo solo, oppure il contante piu' il resto. */}
+          {puoSplittare && (splitAmmesso ? (
+            <>
+              <div style={etichettaPos}>Modalità di pagamento</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 6 : 8, marginBottom: isMobile ? 10 : 14 }}>
+                <SceltaPos notte={NOTTE.scuro}
+                  scelto={!splitScelto} Icona={IconaCartaPos}
+                  titolo="In unica soluzione" sotto="Un modo di pagare" isMobile={isMobile}
+                  onClick={() => commutaSplit(false)}
+                />
+                <SceltaPos notte={NOTTE.scuro}
+                  scelto={splitScelto} Icona={IconaBanconota}
+                  titolo="Splittato" sotto="Contanti + carta" isMobile={isMobile}
+                  onClick={() => commutaSplit(true)}
+                />
+              </div>
+            </>
+          ) : (
+            // un tasto che non si puo' premere e' un dubbio: al suo posto
+            // la ragione, scritta
+            <div style={{ ...fontBody, fontSize: 11.5, color: NOTTE.soffuso, marginBottom: isMobile ? 8 : 12, lineHeight: 1.45 }}>
+              {fattAttiva
+                ? "Con la fattura si incassa in un modo solo: cosa mettere in una fattura di una vendita pagata metà e metà è una decisione, non un calcolo."
+                : "Con l'acquisto personale non si splitta: lì una parte la pagano le provvigioni maturate, e i soldi in gioco sono tre."}
+            </div>
+          ))}
+
+          {splitScelto ? (
+            <div style={{ display: "grid", gap: isMobile ? 8 : 10, marginBottom: isMobile ? 10 : 14 }}>
+              {/* LA PRIMA CASELLA: quanto paga in contanti. */}
+              <div style={{ padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: "#F4FBF5", border: "1px solid #BFE3C6", boxShadow: OMBRA_POS.tasto }}>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ flex: "0 0 110px" }}>
+                    <div style={{ ...etichettaSconto, color: "#2E7D32" }}>Contanti €</div>
+                    <input
+                      style={{ ...campoSconto, fontSize: 15, fontWeight: 700, padding: "8px 10px", borderColor: "#2E7D32" }}
+                      inputMode="decimal" value={contantiSplitValore}
+                      onChange={(e) => setContantiSplitValore(e.target.value)}
+                      placeholder="0,00"
+                      title="Quanti euro in contanti ti dà la cliente"
+                    />
+                  </div>
+                  <div style={{ flex: "1 1 180px", minWidth: 0, ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, lineHeight: 1.45 }}>
+                    {/* IL CONTANTE COMPRA MERCE, e qui si legge quanta:
+                        senza questa riga il resto sarebbe un numero che
+                        esce da solo, e davanti alla cliente non si
+                        potrebbe spiegare. */}
+                    {splitConto && splitConto.contanti > 0 ? (
+                      <>
+                        {fmtEuroErp2(splitConto.contanti)} in contanti comprano <b style={{ color: NAVY }}>{fmtEuroErp2(splitConto.lordoContanti)}</b> di merce
+                        {splitConto.merceContanti > 0 && subtotale > 0
+                          ? ` (sconto contanti ${fmtPctErp(round2(((subtotale - splitConto.merceContanti) / subtotale) * 100))})`
+                          : ""}.
+                      </>
+                    ) : (
+                      <>Scrivi quanto ti dà in contanti: sotto compare il resto, già con lo sconto della carta.</>
+                    )}
+                  </div>
+                </div>
+                {splitConto?.oltre && (
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
+                    Pagando tutto in contanti il carrello fa {fmtEuroErp2(splitConto.merceContanti)}: di più non serve, e il resto è zero.
+                  </div>
+                )}
+              </div>
+
+              {/* LA SECONDA CASELLA: il resto, con lo sconto della carta,
+                  e con quale carta si incassa. */}
+              <div style={{ padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: NOTTE.incassoSfondo, border: `1px solid ${NOTTE.incassoBordo}`, boxShadow: OMBRA_POS.incassato }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ ...etichettaSconto, marginBottom: 0 }}>Resto da incassare con la carta</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{fmtEuroErp2(importoCarta)}</div>
+                </div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: MUTED, marginTop: 4, lineHeight: 1.45 }}>
+                  {splitConto && splitConto.carta > 0
+                    ? <>
+                        {fmtEuroErp2(splitConto.lordoCarta)} di merce con lo sconto della carta
+                        {subtotale > 0 ? ` (${fmtPctErp(round2(((subtotale - splitConto.merceCarta) / subtotale) * 100))})` : ""}
+                        {splitConto.extra > 0 ? `, meno ${fmtEuroErp2(splitConto.extra)} scritti a mano` : ""}
+                        {speseSpedizione > 0 ? `, più ${fmtEuroErp2(speseSpedizione)} di spedizione` : ""}.
+                      </>
+                    : <>Qui compare il resto appena scrivi i contanti. Lo sconto è quello della carta, più basso di quello dei contanti: è il motivo per cui il resto non è una sottrazione.</>}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 6 : 8, marginTop: 10 }}>
+                  <SceltaPos notte={NOTTE.scuro}
+                    scelto={modoIncassoPos !== "esterno"} Icona={IconaAnelloLink}
+                    titolo="Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
+                    onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}
+                  />
+                  {terminaleFisicoDisponibile && (
+                    <SceltaPos notte={NOTTE.scuro}
+                      scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
+                      titolo="POS fisico" sotto="Batti tu sul terminale" isMobile={isMobile}
+                      onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+          <>
           <div style={etichettaPos}>Come paga?</div>
           {/* QUATTRO TASTI ALLO STESSO LIVELLO, e non "carta" e poi di
               che carta. Il terminale stava dentro il riquadro che si apre
@@ -74456,6 +74805,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               />
             ))}
           </div>
+          </>
+          )}
 
           {metodoPagamento === "pos" && (
             // il riquadro di quello che si è scelto: per il terminale la
@@ -74475,10 +74826,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                   {/* un tasto spento senza una ragione scritta sembra un
                       tasto rotto: chi sta al banco preme, non succede
                       niente, e non ha modo di capire perche' */}
-                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: (carrello.length === 0 || totaleDaIncassare <= 0) ? NOTTE.oro : NOTTE.soffuso, flex: "1 1 180px", lineHeight: 1.45 }}>
+                  <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: (carrello.length === 0 || importoCarta <= 0) ? NOTTE.oro : NOTTE.soffuso, flex: "1 1 180px", lineHeight: 1.45 }}>
                     {carrello.length === 0
                       ? "Il carrello è vuoto: aggiungi i prodotti e il QR si accende."
-                      : totaleDaIncassare <= 0
+                      : splitConto && importoCarta <= 0
+                        ? "Il contante copre tutto: con la carta non resta niente da pagare."
+                        : importoCarta <= 0
                         ? "Il totale da incassare è zero: non c'è niente da far pagare."
                         : "La cliente inquadra il QR col suo telefono, oppure paga sul tuo: la pagina si apre qui. I dati per la fattura glieli chiede solo se rispondi che le serve."}
                   </span>
@@ -74509,8 +74862,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                       </button>
                     </div>
                   ) : (() => {
-                    const spento = creandoQr || carrello.length === 0 || totaleDaIncassare <= 0;
-                    const perche = carrello.length === 0 ? "Carrello vuoto" : totaleDaIncassare <= 0 ? "Totale a zero" : null;
+                    const spento = creandoQr || carrello.length === 0 || importoCarta <= 0;
+                    const perche = carrello.length === 0 ? "Carrello vuoto" : importoCarta <= 0 ? (splitConto ? "Il contante copre tutto" : "Totale a zero") : null;
                     return (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
                         {/* DUE STRADE PER LO STESSO PAGAMENTO. Il QR se la
@@ -74540,7 +74893,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                           disabled={spento}
                           style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "9px 15px", cursor: spento ? "default" : "pointer", opacity: spento ? 0.45 : 1, whiteSpace: "nowrap" }}
                         >
-                          {creandoQr ? "Preparo…" : `Mostra il QR · ${fmtEuroErp2(totaleDaIncassare)}`}
+                          {creandoQr ? "Preparo…" : `Mostra il QR · ${fmtEuroErp2(importoCarta)}`}
                         </button>
                       </div>
                     );
@@ -74575,7 +74928,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#E8F5E9", color: "#2E7D32", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
                 <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
               </div>
-              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)} incassati</div>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(importoCarta)} incassati</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6, marginTop: 8 }}>
                 Sto chiudendo la vendita e scaricando il magazzino: non serve premere altro.
                 <br />I dati per la fattura li ha scritti lei e sono già in <b style={{ color: NAVY }}>Amministrazione → Fatture da emettere</b>.
@@ -74583,7 +74936,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             </div>
           ) : (
             <div style={{ textAlign: "center" }}>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(importoCarta)}</div>
               {qrPagamento && (
                 <div style={{ display: "flex", justifyContent: "center", margin: "14px 0 10px", lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: qrPagamento }} />
               )}
@@ -85285,7 +85638,7 @@ function Gestionale() {
     // corto a meta' lavoro.
     vendite_shop: async () => {
       const query = () => {
-        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero, da_preparare, preparata_in_sede_il").eq("simulazione", false);
+        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero, da_preparare, preparata_in_sede_il, incasso_contanti_eur, incasso_carta_eur").eq("simulazione", false);
         return (venditeStoricoIntero.current ? q : q.gte("data_ordine", DA_QUANDO_VENDITE_IN_MEMORIA)).order("data_ordine", { ascending: false }).order("id");
       };
       setVenditeShop(await leggiTutte(query));
