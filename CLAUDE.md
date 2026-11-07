@@ -3262,6 +3262,114 @@ tiene il carrello di un altro telefono, toglie solo quello che questo
 dispositivo ha davvero buttato, e la lettura fallita **non scrive niente** —
 era esattamente così che sparivano.
 
+### Si iscrive anche chi vive in Svizzera (7/11/2026, sera)
+
+Il titolare: «estendi la possibilità di iscrivere clienti dalla
+Svizzera, quindi il modulo di iscrizione deve recuperare anche città,
+province e cap svizzeri, e anche lo Stato deve essere selezionabile».
+
+**Com'era.** La cascata della residenza — stato → regione → provincia →
+comune → CAP — valeva per l'Italia e basta. Fuori Italia si premeva
+«Altro stato» e si tornava a **tre caselle di scrittura libera**, cioè
+esattamente la cosa da cui quella cascata esisteva per scappare: dai
+moduli a mano libera erano arrivati «Vollw» per Volla, «Rome» e il CAP
+«148» senza lo zero davanti. Chi vive a Sion rientrava lì.
+
+**Gli elenchi stanno per Stato, e la cascata è una sola.** Il pezzo
+nuovo è `src/iscrizione/residenza.js`: `elencoResidenza(stato)`
+restituisce chi fornisce regioni, province, comuni e codici postali di
+quel paese, e i due posti che scendono per gradini — la scheda del
+venditore (`AreeAnagrafiche.jsx`) e il modulo dell'allieva
+(`PaginaModulo.jsx`) — non sanno di che paese stiano disegnando. Un
+`if (svizzera)` avrebbe voluto dire due rami per paese in due file, e
+il giorno della Francia sei rami con la certezza che uno si dimentica.
+
+**I dati svizzeri** sono in `src/comuni-svizzera.js`: **26 cantoni e
+4.141 località con i loro NPA**, 85 KB nel bundle come i 7.904 comuni
+italiani — la residenza si compila senza chiamate di rete, anche col
+telefono senza campo. Si rigenera con
+`node genera-comuni-svizzera.mjs`, che interroga **OpenPLZ API**
+(openplzapi.org), la quale pubblica l'«Amtliches
+Ortschaftenverzeichnis» di swisstopo. Non si legge swisstopo
+direttamente perché il suo file ufficiale è uno zip, e Node non apre
+uno zip senza una dipendenza.
+
+Tre cose decise lì dentro, e ognuna per un motivo:
+
+- **sopra il cantone non c'è niente.** In Italia la regione serve a
+  tagliare 107 province in gruppi scorribili; i cantoni sono ventisei e
+  stanno in una tendina sola. Quindi l'elenco dichiara `conRegione`, e
+  in Svizzera la casella «Regione» dice «—» invece di chiedere una cosa
+  che non esiste;
+- **le etichette dicono il vero**: Cantone, Località e **NPA**, che è il
+  nome del codice postale svizzero ed è quello scritto sulla busta.
+  Valgono anche sulle righe bloccate del modulo, o un cantone
+  comparirebbe sotto l'etichetta «Provincia». Le frasi delle tendine
+  stanno **scritte** e non composte dall'etichetta: «— scegli l'NPA —»
+  non si ricava senza indovinare un articolo, e un articolo indovinato
+  si vede;
+- **i nomi dei cantoni restano quelli della fonte**, bilingui dove lo
+  sono («Valais / Wallis», «Graubünden / Grigioni / Grischun»), con la
+  sigla accanto. «Svitto» e «Sciaffusa» sono italiano corretto e non li
+  riconosce nessuno, e sulla busta c'è scritto l'altro: tradurli
+  vorrebbe dire inventare un dato che la fonte non ha.
+
+**Lo Stato ADESSO SI SCEGLIE, in tutti e due i posti.** Nella scheda
+erano due voci — Italia e «Altro stato» — e il nome del paese si
+batteva a mano: «SVIZERA» e «Svizzera» sono due paesi diversi per
+chiunque debba contare. Ora la tendina porta Italia e Svizzera (quelle
+con l'elenco), poi gli altri 230 Stati della lista ISTAT — la stessa
+dello stato di nascita — e in coda «Altro stato», che apre la scrittura
+libera **solo** per quello che in quella lista non c'è. Il modulo usa
+la stessa lista e **la stessa scrittura in maiuscolo**: prima scriveva
+«Svizzera» e la scheda «SVIZZERA», cioè due forme della stessa cosa in
+archivio. Nel modulo la voce «Altro stato» non c'è, perché di là non
+esiste una casella accanto in cui scrivere il nome, e una voce che apre
+il vuoto è peggio di una voce che manca. Uno Stato che in archivio c'è
+e nella lista non c'è **resta in coda marcato**: una tendina che mostra
+il vuoto si spedisce senza accorgersene.
+
+**E nel modulo l'allieva scegli anche il cantone.** Di qua la provincia
+era una casella libera e la cascata partiva dal comune già scritto dal
+venditore; per una svizzera che compila da zero non ci sarebbe stato
+modo di arrivare alla propria località. Ora **dove sopra la provincia
+non c'è niente** quella casella diventa una tendina — i ventisei
+cantoni — e da lì scendono località e NPA. In Italia resta com'era: 107
+province senza il gradino della regione sarebbero un elenco da scorrere
+a vuoto, e quella casella la riempie quasi sempre il venditore.
+
+**Cambiare paese cancella la sigla e il codice postale, non la città.**
+Una sigla italiana sotto un indirizzo svizzero non vuol dire niente, e
+un NPA sotto un indirizzo italiano nemmeno; un nome di città invece è
+un nome, e se di là non esiste si vede marcato «fuori elenco» invece di
+sparire senza dirlo. E **si guarda l'elenco, non il nome dello Stato**:
+253 schede su 260 hanno la residenza italiana e lo Stato mai scritto,
+quindi la casella vuota vale Italia — se passare dal vuoto a «Italia»
+contasse come un cambio di paese, chi non ha fatto altro che dichiarare
+l'ovvio cancellerebbe la residenza di quella persona.
+
+**Un normalizzatore solo.** `normalizzaNome` era scritto due volte,
+identico, in `AreeAnagrafiche.jsx` e in `comuni-regioni.js`: adesso è
+uno (`normalizzaLuogo`, esportato di là e riesportato di qua). Due idee
+di «stesso nome» un giorno si staccano, e quel giorno un comune che in
+archivio c'è non si riconosce più nell'elenco.
+
+**Quello che NON copre, e va saputo:** la ricerca delle vie
+(`cerca-indirizzo`, Photon) resta ristretta all'Italia, quindi in
+Svizzera l'indirizzo si scrive come prima; e la **fatturazione** a un
+cliente estero non è stata toccata — lì «Provincia» e codice
+destinatario vogliono una decisione sulla fattura, non un elenco.
+
+Prove in `prove/residenza-svizzera.test.jsx` (16): l'elenco (ventisei
+cantoni, Sion 1950, Lugano 6900, Zurigo con molti NPA, il Belgio che
+elenco non ha) e il gesto, col pannello e col modulo montati per
+davvero — si scegli la Svizzera, il cantone si apre **subito**, la
+località scrive l'NPA da sé, a Zurigo l'NPA si scegli, le etichette
+dicono Cantone e NPA, e dichiarare «Italia» su una scheda italiana non
+cancella niente. In `prove/residenza-a-cascata.test.jsx` la prova che
+diceva «una residenza svizzera apre in scrittura libera» adesso dice
+il contrario: era giusta finché quell'elenco non c'era.
+
 ### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
 
 Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home

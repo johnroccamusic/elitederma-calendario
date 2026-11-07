@@ -27,6 +27,12 @@ function normalizza(s) {
   return (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\([^)]*\)/g, " ").replace(/[^A-Z0-9]+/g, " ").trim();
 }
 
+// Lo stesso normalizzatore serve all'elenco svizzero, e a chi confronta
+// un nome in archivio con uno dell'elenco: sta scritto qui e basta.
+// Due idee di «stesso nome» un giorno si staccano, e quel giorno un
+// comune che c'e' non si riconosce piu'.
+export { normalizza as normalizzaLuogo };
+
 // La tabella comune -> regione si ricava da COMUNI la prima volta che
 // serve, invece di spedire gli stessi 7900 nomi due volte nel bundle.
 let CITTA_REG = null;

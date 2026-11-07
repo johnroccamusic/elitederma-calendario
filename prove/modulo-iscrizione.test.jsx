@@ -251,8 +251,17 @@ describe("modulo di iscrizione", () => {
     const stato = p.nodo.querySelector('[data-campo="stato_residenza"]');
     expect(stato.tagName).toBe("SELECT");
     const voci = [...stato.options].map((o) => o.value);
+    // UNA SOLA SCRITTURA IN ARCHIVIO: la lista e' quella della scheda
+    // del venditore, maiuscola come la scrive lei. Due liste
+    // vorrebbero dire «Svizzera» di qua e «SVIZZERA» di la', cioe' due
+    // paesi per chiunque debba contare.
     expect(voci).toContain("ITALIA");
-    expect(voci).toContain("Romania");
+    expect(voci).toContain("SVIZZERA");
+    expect(voci).toContain("ROMANIA");
+    // e «Altro stato» non c'e': di qua non c'e' una casella accanto in
+    // cui scrivere il nome, e una voce che apre il vuoto e' peggio di
+    // una voce che manca
+    expect(voci).not.toContain("ALTRO");
   });
 
   // LA TAGLIA LA SCEGLIE LEI (29/10/2026). Segnalato dai venditori: le

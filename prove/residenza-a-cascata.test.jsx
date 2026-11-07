@@ -114,15 +114,28 @@ describe("chi non vive in Italia", () => {
     expect(p.campi().length).toBeGreaterThan(0);
   });
 
-  it("una residenza estera gia' in archivio apre da se' in scrittura libera", async () => {
-    const p = await apri({ stato_residenza: "SVIZZERA", citta_residenza: "SION", cap_residenza: "1950" });
+  it("una residenza di uno Stato senza elenco apre da se' in scrittura libera", async () => {
+    // Il Belgio non ha elenco: la' le caselle sono quelle di prima.
+    const p = await apri({ stato_residenza: "BELGIO", citta_residenza: "LIEGI", cap_residenza: "4000" });
     expect(p.tendina("citta_residenza")).toBe(null);
     const valori = p.campi().map((i) => i.value);
-    expect(valori).toContain("SION");
-    expect(valori).toContain("1950");
-    expect(valori).toContain("SVIZZERA");
+    expect(valori).toContain("LIEGI");
+    expect(valori).toContain("4000");
+    // lo Stato invece si scegli dalla tendina, non si scrive
+    expect(p.tendina("stato_residenza").value).toBe("BELGIO");
   });
 
+  // LA SVIZZERA NON E' PIU' «ALTRO STATO» (7/11/2026): ha il suo
+  // elenco, e una residenza svizzera gia' in archivio apre con la
+  // cascata invece che in scrittura libera. La prova di prima diceva
+  // il contrario, ed era giusta finche' quell'elenco non c'era.
+  it("una residenza svizzera gia' in archivio apre con la sua cascata", async () => {
+    const p = await apri({ stato_residenza: "SVIZZERA", citta_residenza: "SION", cap_residenza: "1950" });
+    expect(p.tendina("citta_residenza").value).toBe("Sion");
+    // il cantone si ricava dalla localita', come la provincia dal comune
+    expect(p.tendina("prov_residenza").value).toBe("VS");
+    expect(p.tendina("cap_residenza").value).toBe("1950");
+  });
 
 });
 

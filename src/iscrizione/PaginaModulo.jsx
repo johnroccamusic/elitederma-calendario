@@ -42,7 +42,10 @@ import CampoComuneNascita from "./CampoComune.jsx";
 import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI, ritaglia } from "./RitaglioFoto.jsx";
 import LetturaDocumento from "./LetturaDocumento.jsx";
 import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
-import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
+import { nomiStati } from "../comuni-regioni.js";
+// gli elenchi della residenza, uno per Stato: gli stessi della scheda
+// del venditore, perche' la cascata e' una sola (vedi residenza.js)
+import { elencoResidenza, vociStatoResidenza, etichettaResidenza } from "./residenza.js";
 // lo stesso confronto della cascata della scheda: "PATERNO" e
 // "Paternò" sono lo stesso posto, e due copie di questa regola
 // prima o poi direbbero cose diverse
@@ -646,27 +649,61 @@ export default function PaginaModulo({ token }) {
   // incompleto impedirebbe di registrare chi esiste.
   const valoreDi = (k) => String(risposte[k] ?? c(k)?.valore ?? "").trim();
   const statoScritto = valoreDi("stato_residenza");
-  const fuoriItaliaModulo = statoScritto !== "" && normalizzaNome(statoScritto) !== "ITALIA";
+  // L'ELENCO DELLO STATO. Italia e Svizzera ne hanno uno; degli altri
+  // 230 non abbiamo ne' localita' ne' codici postali, e la' le caselle
+  // restano libere com'erano.
+  const elencoModulo = elencoResidenza(statoScritto);
   const comuneScritto = valoreDi("citta_residenza");
-  const provinciaModulo = (valoreDi("prov_residenza") || provinciaDiComune(comuneScritto) || "").toUpperCase();
+  const provinciaModulo = (valoreDi("prov_residenza")
+    || (elencoModulo ? elencoModulo.provinciaDi(comuneScritto, valoreDi("cap_residenza")) : "")
+    || "").toUpperCase();
   // UN ELENCO CHIUSO NON PUO' CANCELLARE QUELLO CHE C'E' GIA'. Se il
   // valore in casella non e' fra le voci, la tendina lo mostrerebbe
   // vuoto e basterebbe spedire per perderlo: li' si resta sul testo.
   const elencoBuono = (voci, valore) => voci.length > 0
     && (!valore || voci.some((x) => normalizzaNome(x) === normalizzaNome(valore)));
-  const comuniModulo = !fuoriItaliaModulo && provinciaModulo ? comuniDiProvincia(provinciaModulo) : [];
-  const capModulo = !fuoriItaliaModulo && comuneScritto ? capDiComune(provinciaModulo, comuneScritto) : [];
+  const comuniModulo = elencoModulo && provinciaModulo ? elencoModulo.comuniDi(provinciaModulo) : [];
+  const capModulo = elencoModulo && comuneScritto ? elencoModulo.capDi(provinciaModulo, comuneScritto) : [];
+  // DOVE SOPRA LA PROVINCIA NON C'E' NIENTE, la provincia si scegli da
+  // qui. In Svizzera i cantoni sono ventisei e stanno in una tendina;
+  // le 107 province italiane senza il gradino della regione sarebbero
+  // un elenco da scorrere a vuoto, e di qua quella casella la riempie
+  // quasi sempre il venditore. Senza questa tendina una allieva
+  // svizzera non arriverebbe mai alla sua localita': la cascata parte
+  // dal cantone.
+  const provinceModulo = elencoModulo && !elencoModulo.conRegione
+    ? elencoModulo.provinceDi().map((x) => ({ valore: x.sigla, etichetta: `${x.nome} (${x.sigla})` }))
+    : [];
+  // LO STATO SI SCEGLIE DALLA STESSA LISTA DELLA SCHEDA, e con la
+  // stessa scrittura: due liste vorrebbero dire «Svizzera» da una parte
+  // e «SVIZZERA» dall'altra, cioe' due paesi per chi conta. Uno Stato
+  // che in archivio c'e' e nella lista non c'e' resta in coda marcato:
+  // una tendina che mostra il vuoto si spedisce senza accorgersene.
+  const vociStato = (() => {
+    const voci = vociStatoResidenza({ conAltro: false })
+      .map((v) => ({ valore: v.valore, etichetta: v.testo }));
+    if (statoScritto && !voci.some((v) => normalizzaNome(v.valore) === normalizzaNome(statoScritto))) {
+      return [...voci, { valore: statoScritto, etichetta: `${statoScritto} — già scritto` }];
+    }
+    return voci;
+  })();
   function campoConElenco(campo) {
+    // in Svizzera «Provincia» si chiama «Cantone» e il CAP «NPA»: chi
+    // compila legge l'etichetta, e quella deve dire il vero
+    const conNome = etichettaResidenza(campo, elencoModulo);
     if (campo.chiave === "stato_residenza") {
-      return { ...campo, opzioni: [{ valore: "ITALIA", etichetta: "Italia" }, ...nomiStati().map((x) => ({ valore: x, etichetta: x }))] };
+      return { ...conNome, opzioni: vociStato };
+    }
+    if (campo.chiave === "prov_residenza" && elencoBuono(provinceModulo.map((x) => x.valore), valoreDi("prov_residenza"))) {
+      return { ...conNome, opzioni: provinceModulo };
     }
     if (campo.chiave === "citta_residenza" && elencoBuono(comuniModulo, comuneScritto)) {
-      return { ...campo, opzioni: comuniModulo };
+      return { ...conNome, opzioni: comuniModulo };
     }
     if (campo.chiave === "cap_residenza" && elencoBuono(capModulo, valoreDi("cap_residenza"))) {
-      return { ...campo, opzioni: capModulo };
+      return { ...conNome, opzioni: capModulo };
     }
-    return campo;
+    return conNome;
   }
   const scrivi = (k, v) => setRisposte((r) => ({ ...r, [k]: v }));
   const testi = {
@@ -842,7 +879,8 @@ export default function PaginaModulo({ token }) {
           return <SceltaIntestazione key={campo.chiave} valore={risposte.tipo_cliente || d.valore} onCambia={scrivi} />;
         }
         if (d.bloccato) {
-          return <Letto key={campo.chiave} etichetta={campo.etichetta || etichettaDi(campo.chiave)}
+          return <Letto key={campo.chiave}
+                        etichetta={campoConElenco(campo).etichetta || etichettaDi(campo.chiave)}
                         valore={mostra(campo.chiave, d.valore)} larghezza={campo.larghezza} />;
         }
         // nato all'estero: il comune italiano non si chiede piu'
