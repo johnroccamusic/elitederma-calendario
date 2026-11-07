@@ -31,7 +31,7 @@
 import { leggiRifiuto } from "./rifiuti.js";
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
-import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
+import { areaSchedaIscritto, IntestazioneArea, titoloAreaScheda } from "../ui/scheda.jsx";
 import FirmaDito from "../ui/FirmaDito.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, campoDataStyle } from "../ui/stile.js";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
@@ -908,9 +908,17 @@ export default function PaginaModulo({ token }) {
   // tre lettere. Chiamandola, i figli restano `Letto`/`DaRiempire`, che
   // stanno fuori di qui e non cambiano mai identita'.
   const rigaSua = (riga, spenti = false) => (
-    // `aCapo: false` vale anche qui: una riga tenuta insieme nella
-    // scheda e spezzata nel modulo e' la stessa riga disegnata in due
-    // modi, cioe' due disposizioni da mantenere invece di una
+    <>
+    {/* UN'INTESTAZIONE SOPRA IL NULLA E' PEGGIO DI UNA CHE MANCA: di
+        qua le caselle sono solo quelle che Impostazioni ha acceso, e
+        se nessuna di quelle che le stanno sotto e' arrivata, il
+        titoletto non si disegna. */}
+    {riga.titolo && (riga.dipendeDa || []).some((k) => c(k)) && (
+      <div style={{ ...titoloAreaScheda, marginTop: 10, marginBottom: 12 }}>{riga.titolo}</div>
+    )}
+    {/* `aCapo: false` vale anche qui: una riga tenuta insieme nella
+        scheda e spezzata nel modulo e' la stessa riga disegnata in due
+        modi, cioe' due disposizioni da mantenere invece di una */}
     <div style={{ display: "flex", gap: 14, flexWrap: riga.aCapo === false ? "nowrap" : "wrap" }}>
       {riga.campi.map((campo) => {
         const d = c(campo.chiave);
@@ -935,6 +943,7 @@ export default function PaginaModulo({ token }) {
                              : null} />;
       })}
     </div>
+    </>
   );
 
   // un riquadro commerciale: di sola lettura per intero, e senza le

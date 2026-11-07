@@ -29,7 +29,7 @@ import {
   ITALIA, ALTRO_STATO, elencoResidenza, vociStatoResidenza, vocePerStato,
   etichettaResidenza, campoFiscale,
 } from "./residenza.js";
-import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
+import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea, titoloAreaScheda } from "../ui/scheda.jsx";
 import { campoDataStyle } from "../ui/stile.js";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
@@ -690,8 +690,14 @@ export function AreaAnagrafica({
     <div style={stileArea || { ...areaSchedaIscritto, flex: 1 }}>
       <IntestazioneArea Icona={icona}>{area.titolo}</IntestazioneArea>
       {area.righe.map((riga, i) => (
+        <React.Fragment key={i}>
+        {/* una riga con un `titolo` e' un'intestazione dentro l'area:
+            stesso carattere del titolo in cima, con l'aria sopra che
+            la stacca da quello che la precede */}
+        {riga.titolo && (
+          <div style={{ ...titoloAreaScheda, marginTop: 16, marginBottom: 10 }}>{riga.titolo}</div>
+        )}
         <div
-          key={i}
           style={{
             display: "flex", gap: 14,
             ...(riga.aCapo === false ? {} : { flexWrap: "wrap" }),
@@ -762,6 +768,7 @@ export function AreaAnagrafica({
             );
           })}
         </div>
+        </React.Fragment>
       ))}
     </div>
   );

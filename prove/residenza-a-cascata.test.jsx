@@ -140,6 +140,22 @@ describe("chi non vive in Italia", () => {
 });
 
 describe("la disposizione dei gradini", () => {
+  // L'AREA SI CHIAMA «Dati anagrafici» E DENTRO HA UN'INTESTAZIONE
+  // (7/11/2026, chiesta dal titolare): raccoglie due cose diverse —
+  // chi e' quella persona e dove vive — e da «Dati residenza:» in giu'
+  // comincia la seconda.
+  it("l'area si chiama Dati anagrafici e dentro stacca i dati di residenza", async () => {
+    const p = await apri({});
+    expect(p.testo()).toMatch(/Dati anagrafici/);
+    expect(p.testo()).not.toMatch(/Dati dell'allievo/);
+    const testo = p.testo();
+    // l'intestazione sta DOPO il campo fiscale e PRIMA dei gradini
+    const titolo = testo.indexOf("Dati residenza:");
+    expect(titolo).toBeGreaterThan(-1);
+    expect(titolo).toBeGreaterThan(testo.indexOf("Identificativo fiscale"));
+    expect(titolo).toBeLessThan(testo.indexOf("Regione"));
+  });
+
   it("regione e provincia stanno su una riga sola e non vanno a capo", async () => {
     // jsdom non impagina, quindi non si misura: si guarda la struttura,
     // che e' quella che decide. Due caselle nello stesso contenitore

@@ -29,7 +29,7 @@ import { codiceCatastale } from "../comuni-regioni.js";
 import { avvisoEmail } from "./email.js";
 
 export const AREA_ALLIEVO = {
-  titolo: "Dati dell'allievo",
+  titolo: "Dati anagrafici",
   icona: "persona",
   righe: [
     // nome e cognome non vanno a capo: sono due meta' della stessa riga
@@ -136,6 +136,25 @@ export const AREA_ALLIEVO = {
         maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, nomeAvviso: "codice fiscale",
         suggerimento: "Inserisci l'identificativo fiscale", salvaUscendo: true },
     ] },
+    // UN'INTESTAZIONE DENTRO L'AREA (7/11/2026, chiesta dal titolare).
+    //
+    // «Dati anagrafici» raccoglie due cose diverse — chi e' quella
+    // persona e dove vive — e da qui in giu' comincia la seconda. Una
+    // riga senza campi e con un `titolo` e' un'intestazione: la
+    // disegnano tutti e due i posti che leggono questa disposizione,
+    // la scheda del venditore e il modulo dell'allieva, perche' la
+    // disposizione e' una sola.
+    //
+    // `campi: []` non e' una svista: tutto quello che legge queste
+    // righe le scorre con `r.campi`, e una riga senza quella lista
+    // farebbe cadere la pagina invece di saltare l'intestazione.
+    //
+    // `dipendeDa` serve al modulo: li' le caselle sono solo quelle che
+    // Impostazioni ha acceso, e un'intestazione sopra il nulla e'
+    // peggio di un'intestazione che manca.
+    { titolo: "Dati residenza:", campi: [],
+      dipendeDa: ["prov_residenza", "citta_residenza", "cap_residenza",
+                  "indirizzo_residenza", "civico_residenza"] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
     //
     // Quattro gradini, e ognuno apre il successivo: stato -> regione ->

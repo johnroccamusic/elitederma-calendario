@@ -13832,7 +13832,7 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
         </div>
 
         <div style={pannello}>
-          <IntestazioneArea Icona={IconaPersonaSemplice}>Dati dell'allievo</IntestazioneArea>
+          <IntestazioneArea Icona={IconaPersonaSemplice}>Dati anagrafici</IntestazioneArea>
           <RigaLettura>
             <CampoLettura label="Nome" valore={d.nome} />
             <CampoLettura label="Cognome" valore={d.cognome} />

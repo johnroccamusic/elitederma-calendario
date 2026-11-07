@@ -134,7 +134,7 @@ describe("il venditore iscrive", () => {
     expect(t.disabled).toBe(false);
     await clicca(t);
     expect(p.testo()).toMatch(/Iscrivi allievo/);
-    expect(p.testo()).toMatch(/Dati dell'allievo/);
+    expect(p.testo()).toMatch(/Dati anagrafici/);
   });
 
   // IL VICOLO CIECO: la classe è al completo e il tasto si spegne. Qui

@@ -76,7 +76,8 @@ describe("contratto già firmato", () => {
     expect(tasto, "il tasto in cima").toBeTruthy();
     // sta prima del riepilogo dei dati, non in fondo
     const testo = p.testo();
-    expect(testo.indexOf("Ricomincia procedura di firma")).toBeLessThan(testo.indexOf("Dati dell'allievo"));
+    // «Dati anagrafici» dal 7/11/2026: era «Dati dell'allievo»
+    expect(testo.indexOf("Ricomincia procedura di firma")).toBeLessThan(testo.indexOf("Dati anagrafici"));
     await clicca(tasto); await attendi(150);
     expect(rpc).toHaveLength(1);
     expect(rpc[0].p_motivo).toBe("Vuole le modelle");

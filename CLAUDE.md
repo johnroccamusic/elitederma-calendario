@@ -3453,6 +3453,18 @@ nome e cognome → STATO di nascita, STATO di residenza
 → via e civico → email → tutor e cellulare
 ```
 
+**L'area si chiama «Dati anagrafici»** e non piu' «Dati dell'allievo», e
+dentro ha un'intestazione sua: **«Dati residenza:»**, subito dopo il
+campo fiscale. Raccoglie due cose diverse — chi e' quella persona e dove
+vive — e da li' in giu' comincia la seconda. Un'intestazione e' una riga
+della disposizione con un `titolo` e **`campi: []`**, che non e' una
+svista: tutto quello che legge quelle righe le scorre con `r.campi`, e
+una riga senza quella lista farebbe cadere la pagina invece di saltare
+l'intestazione. Nel modulo dell'allieva si disegna **solo se almeno uno
+dei campi che le stanno sotto e' davvero arrivato** (`dipendeDa`): li'
+le caselle sono quelle che Impostazioni ha acceso, e un'intestazione
+sopra il nulla e' peggio di un'intestazione che manca.
+
 Il campo fiscale sta **subito sotto la data di nascita**, dove chi
 compila se lo aspetta, e puo' starci perche' sopra di lui ci sono gia'
 tutte e due le cose che devono essere decise prima: i dati da cui si
