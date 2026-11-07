@@ -2752,6 +2752,91 @@ che in archivio ci va **digitato e non convertito**. Prove in
 `prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
 dell'hennè, che devono fare residuo **zero** e non 99,18.
 
+### Il supervisore: i privilegi del programmatore a chi non lo è (7/11/2026)
+
+Il titolare: «attiva anche a Chiara Colonnelli le stesse mie funzioni di
+programmatore e accesso, anche se lei non è programmatore: deve venire a
+supervisionare tutte le aree e avere i miei stessi privilegi».
+
+**Il grado, qui, non sta su una riga: lo decide quale password si batte.**
+C'è una riga di sistema `__programmatore` con la sua password, una
+`__admin`, e tutti gli altri entrano con la propria e valgono «user» più
+i permessi scritti. Quindi dare a qualcuno i privilegi del programmatore
+aveva due strade, e la prima è stata scartata:
+
+- **dargli la password del programmatore**: due persone dietro la stessa
+  identità. Ogni vendita, ogni consenso, ogni modifica risulterebbe del
+  programmatore, e per togliere l'accesso a una si dovrebbe cambiare la
+  password all'altro;
+- **una casella sulla sua riga** (`master.supervisore`, e
+  `utenti_app.supervisore` per il giorno in cui servisse a un'utenza
+  d'ufficio). Entra con la **sua** password, resta **sé stessa** — nome,
+  id, attribuzione — e il grado diventa programmatore. Si revoca
+  spegnendo la casella, e quel gesto riguarda lei sola. Migrazione
+  `20261107170000`, accesa su Chiara **per id**.
+
+**E il grado adesso apre anche le tessere.** `apriViewProtetta` e
+`puoAprireVista` aprivano già al programmatore qualunque vista: era solo
+la Home a restare indietro, perché le tessere si leggevano dai permessi
+scritti sulla riga. Funzionava per un motivo che non è una regola — la
+riga `__programmatore` le ha elencate tutte a mano — e si rompeva a ogni
+tessera nuova: `modellefiera` è esistita per mezza giornata senza che
+quella riga la conoscesse. Ora `tastoAbilitato` risponde sì al
+programmatore. **Non** le sono stati copiati i permessi a mano: copiare
+una lista vuol dire ricordarsi di aggiornarla per sempre, e un permesso
+dimenticato non si vede — si vede una tessera che non c'è.
+
+**Cosa le apre, detto per intero**: tutte le aree e ogni vista protetta,
+i conti e gli incassi, Gestione utenti e i permessi degli altri, il
+prezzo a mano sul POS e la cifra «In più €», le impostazioni dei
+consensi, e gli strumenti di impaginazione — rinominare le tessere,
+spostare le sezioni — che valgono **per tutti**.
+
+Prove in `prove/supervisore.test.jsx` (4): entra col suo codice e il
+grado è programmatore mentre nome e id restano i suoi; vede tessere che
+le sue caselle non le darebbero; una master senza la casella resta una
+master; e la colonna si legge davvero dal database — nel Gate le colonne
+si elencano una per una, e `puo_omaggi` era già stato dimenticato una
+volta.
+
+### «Non vede più i prezzi dei corsi»: i permessi si leggono all'accesso (7/11/2026)
+
+Il titolare, dalla fiera: «Olga non vede più i prezzi dei corsi. I
+venditori tutti le devono vedere». Misurato prima di toccare, e sono
+venute fuori **tre** cose diverse.
+
+**Il permesso ce l'aveva già.** `prezzicorsi` era sulla sua riga. Lo
+avevano 18 venditori su 21: i tre senza — Alice Salvitto, Angelica
+Burelli, Tommaso Giumbini — hanno una casella sola in tutto, quindi non
+gliel'ha tolto nessuno, non l'hanno mai avuta. Adesso ce l'hanno tutti e
+21 (migrazione `20261107180000`).
+
+**Allora perché non la vede: i permessi si leggono UNA VOLTA,
+all'accesso**, e restano scritti nella sessione del browser
+(`sessionStorage.edc_utente`). Una casella data dopo che la persona è
+entrata non compare finché non esce e rientra. È un difetto vero, non un
+dato sbagliato, e da oggi conta il doppio: il titolare ha appena
+costruito un modo di lavorare sul concedere permessi a richiesta
+(«Modelle fiera» si sblocca così). **Si risolve facendo rileggere i
+permessi dalla riga viva all'avvio** — intervento sul giro dell'accesso,
+da fare deliberatamente e non con una fiera aperta. **Ancora da fare.**
+
+**E la cosa più grave, trovata di fianco: Olga non poteva aprire il
+POS.** Le quattro master del banco (Chiara, Elia, Stella, Valentina)
+hanno `pos`; le quattro righe **venditore** del banco — Andrea, Elena,
+Olga, Stefano — no. Non si era visto perché entrando con la password
+venditore si eredita anche i permessi della master collegata, e Andrea la
+ha; Elena e Stefano entrano da un'utenza d'ufficio. **Olga non ha
+nessun'altra identità**: con la sua password la tessera POS non c'era —
+cioè la persona per cui il giorno prima si era scritta la preselezione
+del banco non poteva aprire il banco. Acceso sulle quattro righe
+venditore, ricavate dal team della fiera e non da una lista di nomi.
+
+È la stessa lezione del giorno prima, da un'altra parte: **la tessera
+segue la password che si batte**, e la stessa persona ha due o tre
+identità. Un permesso dato all'identità sbagliata è un permesso che non
+c'è.
+
 ### Il POS fisico al banco, e la cifra scritta a mano (7/11/2026)
 
 Due richieste dello stesso momento, con la fiera di Napoli aperta.

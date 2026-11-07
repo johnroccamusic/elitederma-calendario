@@ -7102,8 +7102,8 @@ function Gate({ onOk }) {
       // le colonne si elencano una per una, quindi ogni permesso nuovo va
       // aggiunto anche qui: "puo_omaggi" era stato dimenticato, e chi
       // l'aveva spuntato entrava lo stesso senza poter fare omaggi
-      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi"),
-      supabase.from("master").select("id, nome, password, permessi, venditore_id, e_venditore"),
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi, supervisore"),
+      supabase.from("master").select("id, nome, password, permessi, venditore_id, e_venditore, supervisore"),
       supabase.from("venditori").select("id, nome, password, permessi"),
       supabase.from("assistente").select("id, nome, password, permessi, master_id"),
     ]);
@@ -7166,7 +7166,17 @@ function Gate({ onOk }) {
       // se questa master ha un venditore collegato, porta con sé pure
       // venditoreId e i suoi permessi: da qui in poi "Dashboard venditori"
       // la riconosce e la blocca sui propri dati invece di aprire il picker
-      ruolo = "user";
+      //
+      // IL SUPERVISORE (7/11/2026, chiesto dal titolare per Chiara
+      // Colonnelli): «le stesse mie funzioni di programmatore e accesso,
+      // anche se lei non e' programmatore». Il grado non e' una
+      // password: e' una casella sulla sua riga. Entra con la SUA
+      // password e resta SE STESSA — nome, id, attribuzione — e vale
+      // programmatore. Dare la password di sistema avrebbe voluto dire
+      // due persone dietro la stessa identita': ogni vendita, consenso e
+      // modifica risultata del programmatore, e per togliere l'accesso a
+      // una si sarebbe dovuta cambiare la password all'altro.
+      ruolo = masterTrovata.supervisore ? "programmatore" : "user";
       utente = {
         id: masterTrovata.id, nome: masterTrovata.nome,
         // niente "dashboardmaster" d'ufficio: adesso e' una casella come
@@ -7236,7 +7246,9 @@ function Gate({ onOk }) {
       // amministratore entra come tale anche se è collegato a un venditore
       // — altrimenti trovava le schede iscritto in sola lettura, come un
       // venditore qualsiasi, pur avendo tutti i permessi
-      ruolo = nominale.amministratore ? "amministratore" : "user";
+      // il supervisore (vedi il ramo delle master) vale anche su
+      // un'utenza d'ufficio, e batte il grado di amministratore
+      ruolo = nominale.supervisore ? "programmatore" : (nominale.amministratore ? "amministratore" : "user");
       utente = {
         id: nominale.id, nome: nominale.nome,
         permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
@@ -86046,6 +86058,22 @@ function Gestionale() {
   // Programmatore, coi valori di sempre finché non personalizzate dalla
   // rotellina) sia un utente nominale creato apposta
   function tastoAbilitato(chiave) {
+    // IL PROGRAMMATORE VEDE TUTTE LE TESSERE (7/11/2026).
+    //
+    // `apriViewProtetta` e `puoAprireVista` gli aprivano gia' qualunque
+    // vista: era solo la Home a restare indietro, perche' le tessere si
+    // leggevano dai permessi scritti sulla riga. Funzionava per un
+    // motivo che non e' una regola — la riga di sistema
+    // `__programmatore` le ha elencate tutte a mano — e si rompeva a
+    // ogni tessera nuova: `modellefiera` e' esistita per mezza giornata
+    // senza che la sua riga la conoscesse.
+    //
+    // Serve al supervisore (vedi `supervisore` nel Gate): «deve
+    // supervisionare TUTTE le aree». Copiargli una lista di permessi
+    // avrebbe voluto dire ricordarsi di aggiornarla per sempre, e un
+    // permesso dimenticato non si vede — si vede una tessera che non
+    // c'e'.
+    if (ruoloUtente === "programmatore") return true;
     return !!(utenteLoggato && (utenteLoggato.permessi || []).includes(chiave));
   }
   // Le viste che sono anche un tasto della home (TASTI_HOME) non
