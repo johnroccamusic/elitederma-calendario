@@ -2934,6 +2934,16 @@ concordate tutte restano sull'ultima, perché l'alternativa è che le righe
 non sommino quello che si incassa — e un totale che non torna con le sue
 righe è peggio.
 
+**La quarta copia, e una che resta.** `contoCarrello` — l'elenco dei
+carrelli sospesi, e il dettaglio che chi amministra legge mentre chiude
+il carrello di un altro — rifà il conto per conto suo: lì la riga col
+prezzo concordato è stata allineata, altrimenti mostrava uno sconto che
+quella riga non prenderà. **Resta però fuori la cifra «In più €»**: un
+carrello sospeso la porta nella sua fotografia, ma quella tabella non la
+conosce, quindi per quel carrello mostra un totale più alto di quello che
+si incasserà. È informativa e non registra niente, ma va saputo — e va
+sistemato.
+
 **Controllate le vendite al banco in archivio** (7/11/2026): le righe
 sommano il totale su tutte, comprese le sette della fiera di oggi.
 L'unico scarto è POS-1793740596726 del 3/11 — righe per 382,01 e totale

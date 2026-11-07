@@ -23790,9 +23790,14 @@ function contoCarrello(c, { prodottoPerId, coupon, fasceCarta, fasceContanti, sc
     const unitario = round2(Number(r.prezzo) || 0);
     const lordo = round2(unitario * (Number(r.quantita) || 0));
     const margine = marginePercentualeDi(prodotto);
-    const scontoPct = aFasce
+    // Una riga col prezzo concordato a mano non si sconta (7/11/2026):
+    // qui dentro va detto come nel carrello, o questa tabella —
+    // l'elenco dei sospesi, e il dettaglio che chi amministra legge
+    // mentre chiude il carrello di un altro — mostrerebbe uno sconto
+    // che quella riga non prendera'.
+    const scontoPct = r?.prezzoListino != null ? 0 : (aFasce
       ? percentualeFasciaDi(prodotto, fasce, subtotale, contanti)
-      : (pctSecca > 0 ? percentualeSeccaDiRiga(prodotto, r, pctSecca, baseSecca) : 0);
+      : (pctSecca > 0 ? percentualeSeccaDiRiga(prodotto, r, pctSecca, baseSecca) : 0));
     const sconto = round2((lordo * scontoPct) / 100);
     // quanto si incassa per UN pezzo: e' il numero che chi guarda
     // confronta col prezzo di listino accanto
