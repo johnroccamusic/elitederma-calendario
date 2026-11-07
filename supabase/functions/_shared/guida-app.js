@@ -159,6 +159,19 @@ CHI E' «GIA' REGISTRATO»: nome + cognome + email + telefono. In caso di omonim
 Ogni riga dell'elenco ha due tastini: la matita porta la scheda dentro lo stesso modulo e salvando aggiorna quella riga (non ne crea una nuova), il cestino la cancella dopo una conferma che nomina la persona. Chi ha registrato la riga resta scritto e non si riscrive; una correzione aggiunge chi l'ha fatta e quando. La cancellazione non ha cestino: una riga tolta non si ripesca.`,
   },
   {
+    chiave: "modellefiera",
+    titolo: "Modelle fiera",
+    testo: `MODELLE FIERA — il consenso informato da far compilare alle modelle al banco di una fiera. La tessera la vede chi ha quel permesso: nasce accesa a chi sta al banco della fiera aperta, e si sblocca agli altri a richiesta da Gestione utenti (o Password master / venditori / assistenti).
+
+Come si usa: si controlla che la fiera indicata sia quella giusta (se ce n'e' una sola e' gia' scelta), si preme il TRATTAMENTO che si fa alla modella, e compare il codice da far inquadrare. Il modulo lo compila lei dal suo telefono — dati, documento, questionario di salute, firma col dito — e si puo' anche stampare il codice e appenderlo al banco.
+
+Si scegli un trattamento per volta, e non e' un fastidio di ordine: ogni modulo ha le sue domande sulla salute, e sei codici accanto su un banco vogliono dire una modella trattata a microneedling che firma il modulo del trucco permanente. Il foglio sbagliato sotto una firma giusta non vale niente.
+
+Il consenso firmato da qui resta legato a QUELLA fiera, e si rilegge in fondo alla pagina stessa, con il riepilogo delle risposte sotto ogni nome: e' quello che va guardato prima di toccare la modella. Il tasto «Aggiorna» serve perche' lei firma dal suo telefono e questa pagina non se ne accorge da sola.
+
+Se in questi giorni non c'e' nessuna fiera aperta la pagina lo dice e non mostra nessun codice: un consenso senza la sua fiera, fra un mese, non si sa piu' di quale evento era. In aula invece non si usa questa pagina: il codice della classe sta nella scheda della classe.`,
+  },
+  {
     chiave: "stampe",
     titolo: "Stampe",
     testo: `STAMPE — l'elenco dei corsi in ordine cronologico con, accanto a ogni classe, due tasti: «Diplomi» e «Nomi». Serve a chi deve solo stampare: da qui non si entra nelle classi, non si modifica e non si cancella niente, e non c'e' la vista a calendario.

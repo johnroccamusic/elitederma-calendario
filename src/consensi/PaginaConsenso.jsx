@@ -264,7 +264,7 @@ function CasellaConsenso({ casella, segnata, onCambia, spenta }) {
   );
 }
 
-export default function PaginaConsenso({ codice, edizione = null }) {
+export default function PaginaConsenso({ codice, edizione = null, evento = null }) {
   const modello = consensoDaCodice(codice);
   const [v, setV] = useState({
     nome: "", cognome: "", dataNascita: "", luogoNascita: "", residenza: "",
@@ -383,10 +383,12 @@ export default function PaginaConsenso({ codice, edizione = null }) {
         consensi: spunte,
       },
       { fronte, retro, firma },
-      // da quale classe arriva: lo dice il QR stampato dalla scheda corso.
-      // Col QR generico appeso in aula resta null, e il consenso si trova
-      // solo nell'archivio generale — li' ci sono tutti.
-      edizione,
+      // DA DOVE ARRIVA, e lo dice il QR che la modella ha inquadrato:
+      // dalla scheda di una classe (`edizione`) o dal banco di una fiera
+      // (`evento`, dal 7/11/2026). Col QR generico appeso in aula restano
+      // tutti e due nulli, e il consenso si trova solo nell'archivio
+      // generale — li' ci sono tutti.
+      { corsoDataId: edizione, eventoId: evento },
     );
     setInviando(false);
     if (esito.errore) { setErrore(esito.errore); return; }

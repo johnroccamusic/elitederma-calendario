@@ -108,8 +108,16 @@ async function aJpeg(file: Blob, latoMax = 2000, qualita = 0.85): Promise<Blob> 
 export async function salvaConsenso(
   dati: DatiConsenso,
   file: FileConsenso,
-  corsoDataId: string | null = null,
+  // A CHI APPARTIENE QUESTO CONSENSO: una classe (il QR della scheda
+  // della classe) oppure una fiera (il QR della pagina «Modelle
+  // fiera»). Mai tutti e due: in aula si firma per quella classe, al
+  // banco per quella fiera. Nessuno dei due vuol dire che e' stato
+  // firmato col codice generico, e allora si trova solo nell'archivio
+  // generale — che per una modella di fiera vuol dire non trovarlo.
+  appartiene: { corsoDataId?: string | null; eventoId?: string | null } = {},
 ): Promise<{ id?: string; errore?: string }> {
+  const corsoDataId = appartiene.corsoDataId || null;
+  const eventoId = appartiene.eventoId || null;
   if (!dati.consensoTrattamento) return { errore: "Senza il consenso al trattamento non si puo' inviare." };
   if (!dati.nome?.trim() || !dati.cognome?.trim()) return { errore: "Servono nome e cognome." };
 
@@ -134,6 +142,7 @@ export async function salvaConsenso(
   const { error } = await supabase.from("consensi_modelle").insert({
     id,
     corso_data_id: corsoDataId,
+    evento_id: eventoId,
     modello_codice: dati.modelloCodice,
     versione_testo: dati.versioneTesto,
     nome: dati.nome.trim(),
@@ -167,6 +176,7 @@ export async function salvaConsenso(
 export interface ConsensoRaccolto {
   id: string;
   corsoDataId: string | null;
+  eventoId: string | null;
   modelloCodice: string | null;
   versioneTesto: string;
   nome: string;
@@ -196,6 +206,7 @@ function daRiga(r: any): ConsensoRaccolto {
   return {
     id: r.id,
     corsoDataId: r.corso_data_id || null,
+    eventoId: r.evento_id || null,
     modelloCodice: r.modello_codice || null,
     versioneTesto: r.versione_testo || "v1",
     nome: r.nome || "",
@@ -301,6 +312,23 @@ export async function leggiConsensiDelCorso(corsoDataId: string): Promise<Consen
   const { data } = await supabase
     .from("consensi_modelle").select("*")
     .eq("corso_data_id", corsoDataId)
+    .order("ts", { ascending: false });
+  return (data || []).map(daRiga);
+}
+
+/**
+ * I consensi di UNA FIERA, dal piu' recente (7/11/2026).
+ *
+ * Il gemello di `leggiConsensiDelCorso`: li' il legame e' la classe, qui
+ * l'evento. Chi guarda e' chi sta al banco, con la modella davanti e la
+ * stessa domanda di una master in aula — ha firmato? cosa ha
+ * dichiarato? — prima di toccarla.
+ */
+export async function leggiConsensiDellEvento(eventoId: string): Promise<ConsensoRaccolto[]> {
+  if (!eventoId) return [];
+  const { data } = await supabase
+    .from("consensi_modelle").select("*")
+    .eq("evento_id", eventoId)
     .order("ts", { ascending: false });
   return (data || []).map(daRiga);
 }

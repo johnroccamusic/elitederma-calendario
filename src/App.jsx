@@ -49,6 +49,7 @@ import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
 const ArchivioConsensi = pezzo(() => import("./consensi/ArchivioConsensi.jsx"));
 const ConsensiDelCorso = pezzo(() => import("./consensi/ConsensiDelCorso.jsx"));
 const QrConsensi = pezzo(() => import("./consensi/QrConsensi.jsx"));
+const ModelleFiera = pezzo(() => import("./consensi/ModelleFiera.jsx"));
 import Ricevuta from "./pos/Ricevuta.jsx";
 const GestioneEventi = pezzo(() => import("./eventi/GestioneEventi.jsx"));
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
@@ -28230,6 +28231,14 @@ export const TASTI_HOME = [
   // filtri, stessa ricerca — senza il calendario, senza entrare nelle
   // classi e senza niente da modificare: per riga, due tasti.
   { chiave: "stampe", etichetta: "Stampe" },
+  // I CONSENSI DELLE MODELLE AL BANCO DI UNA FIERA (7/11/2026, chiesto
+  // dal titolare). Nasce accesa a chi sta al banco — la migrazione
+  // 20261107150000 l'ha scritta sulle righe ricavate da
+  // `eventi_team.vende_al_banco`, per id e su tutte le identita' di
+  // ognuno — e si sblocca agli altri a richiesta, da qui. Per questo NON
+  // sta in `PERMESSI_DI_PARTENZA`: un utente nuovo non la trova dentro
+  // da se'.
+  { chiave: "modellefiera", etichetta: "Modelle fiera" },
 ];
 // Quello che un utente nuovo ha acceso appena nasce. Finora era una
 // lista vuota, e andava bene finche' ogni area era da concedere; la
@@ -84491,7 +84500,11 @@ export default function App() {
     // `edizione` e non `classe`: quel nome e' gia' preso dalla rotta
     // ?modelle=, dove vale "1" e vuol dire un'altra cosa
     const edizione = new URLSearchParams(window.location.search).get("edizione");
-    return <PaginaConsenso codice={paramConsenso} edizione={edizione || null} />;
+    // `evento` (7/11/2026): il QR del banco di una fiera, dove una
+    // classe non c'e'. Senza questo, un consenso firmato in fiera
+    // resterebbe senza padrone nell'archivio generale.
+    const evento = new URLSearchParams(window.location.search).get("evento");
+    return <PaginaConsenso codice={paramConsenso} edizione={edizione || null} evento={evento || null} />;
   }
   // ?ricevuta=<CODICE>: dove Stripe rimanda chi ha appena pagato col QR.
   // Esce di qui come le altre rotte pubbliche: chi arriva da un
@@ -85330,6 +85343,8 @@ function Gestionale() {
     // nessun altro. Dichiarata lo stesso, per non finire fra le viste che
     // ricevono dati senza averli chiesti.
     stampepackaging: [],
+    // legge fiere e consensi per conto suo, con due richieste sue
+    modellefiera: [],
     omaggi: ["vendite_shop", "prodotti_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop", "impostazioni_iva"],
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
@@ -87061,6 +87076,11 @@ function Gestionale() {
               // nelle classi e stampa da li'
               { chiave: "stampe", title: "Stampe", descrizione: "L'elenco dei corsi, con diplomi e nomi da stampare", Icona: IconaStampante, attivo: tastoAbilitato("stampe"), onClick: () => setView("stampe") },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
+              // «MODELLE FIERA»: la vede chi ha quella casella, e basta.
+              // Nessun bypass per chi amministra — e non serve: la
+              // migrazione l'ha accesa anche sul profilo Programmatore,
+              // che e' quello da cui la tessera si verifica.
+              { chiave: "modellefiera", title: "Modelle fiera", descrizione: "I consensi da far compilare alle modelle al banco della fiera", Icona: IconaTileModelle, attivo: tastoAbilitato("modellefiera"), onClick: () => setView("modellefiera") },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "regolamenti", title: "Regolamenti", descrizione: "Prezzi, sconti, procedure: le decisioni prese, da consultare", Icona: IconaClipboardErp, attivo: tastoAbilitato("regolamenti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("regolamenti") },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -87990,6 +88010,18 @@ function Gestionale() {
           ricarica={fetchDati}
           onBack={() => setView("iscrizioneallievi")}
           titoloIndietro={etichettaTasto("home", "iscrizioneallievi", "Iscrizione Allievi")}
+        />
+      )}
+
+      {/* «MODELLE FIERA»: il consenso al banco di una fiera. Legge da
+          se' le fiere aperte e i consensi gia' firmati, quindi non ha
+          bisogno di nessuna tabella dal giro generale. */}
+      {view === "modellefiera" && (
+        <ModelleFiera
+          isMobile={isMobile}
+          onBack={() => setView("home")}
+          TastoIndietro={TastoLivelloPrecedente}
+          titolo={etichettaTasto("home", "modellefiera", "Modelle fiera")}
         />
       )}
 

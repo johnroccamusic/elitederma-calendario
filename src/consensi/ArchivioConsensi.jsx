@@ -38,11 +38,16 @@ const soloData = (g) => {
 // `nudo` toglie la cornice: nella pagina delle impostazioni il codice sta
 // gia' dentro una scheda, e due cornici una dentro l'altra sembrano un
 // errore di disegno.
-export function Codice({ modello, isMobile, edizione = null, sottotitolo = null, nudo = false }) {
+export function Codice({ modello, isMobile, edizione = null, evento = null, sottotitolo = null, nudo = false }) {
   // l'indirizzo buono dell'app, non quello della finestra: questo QR
   // finisce stampato e appeso in aula, e vive piu' a lungo di chi lo ha
   // generato
-  const indirizzo = `${INDIRIZZO_APP}/?consenso=${modello.codice}${edizione ? `&edizione=${edizione}` : ""}`;
+  // `edizione` lega il consenso a una classe, `evento` a una fiera
+  // (7/11/2026). Mai tutti e due: un consenso appartiene a un posto solo,
+  // e un QR che ne portasse due direbbe che la stessa firma vale per
+  // un'aula e per un banco.
+  const dove = edizione ? `&edizione=${edizione}` : evento ? `&evento=${evento}` : "";
+  const indirizzo = `${INDIRIZZO_APP}/?consenso=${modello.codice}${dove}`;
   const svg = useMemo(() => qrSvg(indirizzo, { lato: isMobile ? 190 : 220 }), [indirizzo, isMobile]);
 
   return (

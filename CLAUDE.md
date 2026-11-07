@@ -2743,6 +2743,73 @@ che in archivio ci va **digitato e non convertito**. Prove in
 `prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
 dell'hennè, che devono fare residuo **zero** e non 99,18.
 
+### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
+
+Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home
+page devi mettere un tasto con i consensi informati da poter far
+compilare alle modelle in fiera. Il tasto si chiama Modelle fiera e lo
+posso sbloccare io agli utenti a richiesta. Per adesso lo attivo di
+default a tutti quelli in fiera.»
+
+**Perché non bastava quello che c'era.** Un consenso si firma inquadrando
+un QR, e i QR erano di due specie: quello della scheda di una **classe**,
+che porta con sé l'edizione, e quello **generico**, che non porta niente.
+In fiera una classe non c'è, quindi restava solo il generico — cioè
+esattamente il guasto di ottobre scritto in `QrConsensi.jsx`: sette
+consensi che non sapevano a quale corso appartenessero, mentre giravano
+due PMU BASE con le stesse date, e nessuno dei due poteva più
+rivendicarli. In fiera sarebbe peggio: le modelle sono molte, di nessuna
+classe, e se una domani contesta un trattamento quel foglio va ritrovato.
+
+Quindi il QR del banco porta la fiera (`?consenso=<codice>&evento=<id>`) e
+la scrive in **`consensi_modelle.evento_id`** (migrazione
+`20261107150000`). `salvaConsenso` non prende più «la classe» come terzo
+argomento ma **a chi appartiene** (`{ corsoDataId, eventoId }`): mai tutti
+e due, perché una firma appartiene a un posto solo. Niente dei due vuol
+dire «codice generico», e si ritrova solo nell'archivio generale.
+
+**Un trattamento per volta, e non sei QR in fila.** In aula i codici sono
+quelli del corso, e un corso sta su un consenso solo; al banco i modelli
+sono tutti e sei. Sei codici accanto su un tavolo vogliono dire una
+modella trattata a microneedling che firma il modulo del trucco
+permanente — e le domande sulla salute non sono le stesse. Si preme prima
+il trattamento, poi compare il suo codice, da solo. Si può stampare e
+appendere al banco.
+
+**Senza una fiera aperta la pagina non mostra niente**, e lo dice: un
+consenso senza la sua fiera, fra un mese, non si sa più di quale evento
+era. La fiera è già scelta quando ce n'è una sola, altrimenti si scegli
+da una tendina. In fondo alla pagina ci sono le modelle che hanno già
+firmato **a quella fiera**, col riepilogo dei «sì» sotto ogni nome — è
+quello che si guarda prima di toccarla — e un tasto «Aggiorna», perché
+lei firma dal suo telefono e la pagina non se ne accorge da sola.
+
+**Il permesso è una casella vera** (`modellefiera` in `TASTI_HOME`), e si
+sblocca a richiesta da Gestione utenti / Password master / venditori /
+assistenti. **Non** sta in `PERMESSI_DI_PARTENZA`: un utente nuovo non la
+trova dentro da sé — è l'opposto di `registrazioneclienti`, e lo ha detto
+il titolare («lo posso sbloccare io agli utenti a richiesta»). Nessun
+bypass per chi amministra.
+
+**Acceso adesso a chi sta al banco, per id e su tutte le identità.** La
+migrazione non nomina nessuno: ricava le righe da
+`eventi_team.vende_al_banco` — la stessa spunta che decide da dove parte
+il POS — e risale ai legami (`master.venditore_id`,
+`utenti_app.venditore_id`, `assistente.master_id`). Sono **14 righe per
+otto persone**, più il profilo Programmatore che serve a verificarla:
+ANDREA PAURA nel team è il venditore «ANDREA», entra come master e ha
+anche una riga assistente; ELIA CITO il contrario. Accendere il permesso
+su una sola identità vuol dire una tessera che c'è o non c'è secondo la
+password battuta, e nessuno capirebbe perché.
+
+Prove in `prove/modelle-fiera.test.jsx` (13): dove finisce scritta
+l'appartenenza (fiera, classe, o niente col codice generico), che i
+consensi di una fiera si chiedano per la loro colonna, la pagina montata
+per davvero — una fiera sola già scelta, nessun codice prima del
+trattamento, il codice che porta `&evento=` e non `&edizione=`, due fiere
+fra cui scegliere, nessuna fiera aperta — e la tessera in Home, che c'è
+solo per chi ha la casella.
+
 ### Quanto sconto ha preso QUESTO prodotto (7/11/2026)
 
 Le ragazze al banco della fiera di Napoli: «per ogni prodotto vogliono
