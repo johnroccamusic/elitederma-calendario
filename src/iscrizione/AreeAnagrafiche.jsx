@@ -19,9 +19,9 @@
 // altezza, cosi' i due disegni si possono sovrapporre e combaciano.
 import React, { useState, useEffect } from "react";
 import { Field } from "../ui/base.jsx";
-import {
-  comuniDiProvincia, provinciaDiComune, codiceCatastale, nomiStati, normalizzaLuogo,
-} from "../comuni-regioni.js";
+// l'elenco italiano non si nomina piu' qui dentro: la cascata e la
+// ricerca delle vie passano dall'elenco del paese scelto (residenza.js)
+import { codiceCatastale, nomiStati, normalizzaLuogo } from "../comuni-regioni.js";
 // GLI ELENCHI DELLA RESIDENZA STANNO FUORI DA QUI, uno per Stato: la
 // cascata disegnata qui sotto e' una sola e non sa di che paese sia.
 // Vedi residenza.js — con la Svizzera dentro dal 7/11/2026.
@@ -74,7 +74,29 @@ function conFuoriElenco(opzioni, valore) {
   return [...opzioni, { valore: v, testo: `${v} — fuori elenco` }];
 }
 
+// QUANTE VOCI SI SCORRONO CON UN DITO.
+//
+// Venti: le regioni italiane sono venti e si scorrono benissimo, le
+// province di una regione non arrivano a dodici. Sopra, no: i comuni di
+// Torino sono 312, le localita' del Vallese 303, i CAP di Roma 82 —
+// e sul telefono una tendina cosi' e' un rullo che gira. Da li' in su
+// la stessa casella che si cerca degli Stati (CampoCerca): si scrivono
+// due lettere e l'elenco si accorcia.
+//
+// La soglia sta qui e non in ogni chiamata: e' una regola sola, e vale
+// per qualunque tendina di questa scheda — anche per quelle che
+// nasceranno domani.
+const QUANTE_SI_SCORRONO = 20;
+
 function Tendina({ valore, opzioni, onCambia, spenta, stile, vuoto, campo }) {
+  if ((opzioni || []).length > QUANTE_SI_SCORRONO) {
+    return (
+      <CampoCerca
+        chiave={campo} valore={valore} voci={opzioni} onScegli={onCambia}
+        spenta={spenta} stile={stile} vuoto={vuoto}
+      />
+    );
+  }
   return (
     // `data-campo` e' l'unico aggancio stabile per ritrovare questa
     // tendina: cercarla per la forma del DOM si rompe appena una riga si
@@ -123,8 +145,12 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
     // resto. Col comune gia' scelto la ricerca si restringe a lui, che
     // da' risultati migliori: e' lo stesso campo, due comportamenti.
     //
-    // Fuori Italia non si cerca affatto: li' questa ricerca non copre.
-    if (!digitando || spenta || !cercaVie || cascata?.fuoriItalia || scritto.trim().length < 3) {
+    // DOVE SI CERCA. Dall'8/11/2026 anche in Svizzera: le vie di
+    // OpenStreetMap ci sono come quelle italiane, mancava solo dire a
+    // quale paese chiederle (`paese`, dall'elenco della residenza).
+    // Dove un elenco non c'e' — gli altri 230 Stati — non si cerca: la
+    // proposta porterebbe un comune e un CAP che nessuno sa risolvere.
+    if (!digitando || spenta || !cercaVie || !cascata?.elenco?.paese || scritto.trim().length < 3) {
       setProposte([]); setGuasto(""); return;
     }
     let vivo = true;
@@ -141,7 +167,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
       // di prova) oppure l'elenco col motivo: si accettano tutte e due
       let esito = { vie: [] };
       try {
-        const r = await cercaVie(scritto, comune, cap);
+        const r = await cercaVie(scritto, comune, cap, cascata?.elenco?.paese);
         esito = Array.isArray(r) ? { vie: r } : (r || { vie: [] });
       } catch (e) { esito = { vie: [], errore: `La ricerca degli indirizzi si è rotta: ${e?.message || e}` }; }
       if (vivo) {
@@ -151,7 +177,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
       }
     }, 500);
     return () => { vivo = false; clearTimeout(t); };
-  }, [scritto, comune, cap, spenta, cascata?.fuoriItalia, cercaVie, digitando]);
+  }, [scritto, comune, cap, spenta, cascata?.elenco?.paese, cercaVie, digitando]);
 
   // UNA PROPOSTA CHE NON AGGIUNGE NIENTE NON SI MOSTRA.
   //
@@ -227,7 +253,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
                     della ricerca: li' la provincia di Roma si chiama
                     "Roma Capitale", e una sigla inventata e' peggio di
                     nessuna sigla */}
-                {provinciaDiComune(x.comune, x.cap) ? ` (${provinciaDiComune(x.comune, x.cap)})` : ""}
+                {cascata?.elenco?.provinciaDi(x.comune, x.cap) ? ` (${cascata.elenco.provinciaDi(x.comune, x.cap)})` : ""}
                 {x.cap ? ` ${x.cap}` : ""}
                 {/* un CAP diverso da quello scelto si dice: non si
                     riscrive la scheda, si fa vedere che non torna */}
@@ -661,9 +687,14 @@ export function AreaAnagrafica({
     // "fuori elenco", e la provincia e' quella vera e non "Roma
     // Capitale".
     riempiDaVia(proposta) {
-      const sigla = provinciaDiComune(proposta?.comune, proposta?.cap);
+      // si risolve contro l'elenco DEL PAESE SCELTO: in Italia la
+      // provincia e il nome ufficiale del comune, in Svizzera il
+      // cantone e il nome della localita'. Senza, una proposta
+      // svizzera arriverebbe con una sigla italiana o con nessuna.
+      if (!elenco) return;
+      const sigla = elenco.provinciaDi(proposta?.comune, proposta?.cap);
       const ufficiale = sigla
-        ? comuniDiProvincia(sigla).find((x) => normalizzaNome(x) === normalizzaNome(proposta?.comune))
+        ? elenco.comuniDi(sigla).find((x) => normalizzaNome(x) === normalizzaNome(proposta?.comune))
         : null;
       if (sigla) scrivi("prov_residenza", sigla);
       scrivi("citta_residenza", ufficiale || (proposta?.comune || ""));

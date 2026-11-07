@@ -8,7 +8,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import React from "react";
 import PaginaModulo from "../src/iscrizione/PaginaModulo.jsx";
 import { rispondiCon } from "./preparazione.js";
-import { monta, clicca, scrivi, scegli, scegliCercando, cerca } from "./aiuto.js";
+import { monta, clicca, scrivi, scegli, scegliCercando, cerca, scegliVoce, proposteDi, campoDi } from "./aiuto.js";
 
 const CLAUSOLA = "non ha diritto ad alcun rimborso";
 
@@ -239,13 +239,13 @@ describe("modulo di iscrizione", () => {
     // era una casella di testo libero: comune bloccato su «Roma» e CAP
     // da indovinare a memoria, mentre gli ottantadue di Roma li abbiamo
     // qui nel bundle.
+    // e dal 7/11/2026 gli ottantadue NON si scorrono: sopra le venti
+    // voci la casella si cerca, e due cifre bastano
     const p = await apriIlModulo(VISTA_RESIDENZA);
-    const cap = p.nodo.querySelector('[data-campo="cap_residenza"]');
-    expect(cap.tagName).toBe("SELECT");
-    const voci = [...cap.options].map((o) => o.value);
-    expect(voci).toContain("00166");
-    expect(voci).toContain("00184");
-    expect(voci.length).toBeGreaterThan(50);
+    expect(await proposteDi(p, "cap_residenza", "00166")).toContain("00166");
+    expect(await proposteDi(p, "cap_residenza", "00184")).toContain("00184");
+    await scegliVoce(p, "cap_residenza", "00166");
+    expect(campoDi(p, "cap_residenza").value).toBe("00166");
   });
 
   it("lo Stato di residenza si cerca scrivendo, e scegliendo scrive il nome in maiuscolo", async () => {

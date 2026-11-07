@@ -193,7 +193,10 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
       {/* UN ELENCO LUNGO SI CERCA, NON SI SCORRE: gli Stati sono 232 e
           di qua li scorre una allieva, sul telefono, da sola. Stessa
           casella della scheda del venditore. */}
-      {opzioni && (chiave === "stato_residenza" || tipo === "statoNascita") ? (
+      {/* la stessa regola della scheda: oltre venti voci si cerca invece
+          di scorrere. Di qua tocca a un telefono in mano a una persona
+          sola, quindi vale ancora di piu'. */}
+      {opzioni && (chiave === "stato_residenza" || tipo === "statoNascita" || opzioni.length > 20) ? (
         <CampoCerca
           chiave={chiave}
           valore={valore || ""}

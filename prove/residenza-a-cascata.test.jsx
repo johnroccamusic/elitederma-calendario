@@ -8,7 +8,8 @@ import { describe, it, expect } from "vitest";
 import React, { useState } from "react";
 import { AreaAnagrafica } from "../src/iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO } from "../src/iscrizione/disposizione.js";
-import { monta, scegli, voci, scegliCercando } from "./aiuto.js";
+import { capDiComune } from "../src/comuni-regioni.js";
+import { monta, scegli, voci, scegliCercando, scegliVoce, proposteDi, campoDi } from "./aiuto.js";
 
 // La scheda vera tiene i valori e li riscrive: senza questo la cascata
 // non si muove e si proverebbe una fotografia, non un gesto.
@@ -49,36 +50,36 @@ describe("la residenza si scende per gradini", () => {
     const p = await apri({});
     await scegli(p.tendina("regione_residenza"), "Sicilia");
     await scegli(p.tendina("prov_residenza"), "CT");
-    const com = p.tendina("citta_residenza");
-    expect(com.disabled).toBe(false);
-    expect(voci(com)).toContain("Paternò");
-    await scegli(com, "Paternò");
+    // 58 comuni: sopra le venti voci si cerca invece di scorrere
+    expect(campoDi(p, "citta_residenza").disabled).toBe(false);
+    expect(await proposteDi(p, "citta_residenza", "patern")).toContain("Paternò");
+    await scegliVoce(p, "citta_residenza", "Paternò");
     // un comune con un CAP solo non si fa scegliere: si scrive
-    expect(p.tendina("cap_residenza").value).toBe("95047");
+    expect(campoDi(p, "cap_residenza").value).toBe("95047");
   });
 
   it("a Roma il CAP si scegle fra gli ottantadue, non si indovina", async () => {
     const p = await apri({});
     await scegli(p.tendina("regione_residenza"), "Lazio");
     await scegli(p.tendina("prov_residenza"), "RM");
-    await scegli(p.tendina("citta_residenza"), "Roma");
-    const cap = p.tendina("cap_residenza");
-    expect(cap.disabled).toBe(false);
-    expect(cap.value).toBe("");
-    expect(voci(cap).length).toBe(82);
-    await scegli(cap, "00166");
-    expect(p.tendina("cap_residenza").value).toBe("00166");
+    await scegliVoce(p, "citta_residenza", "Roma");
+    // ottantadue CAP non si scorrono: si scrivono le prime cifre
+    expect(campoDi(p, "cap_residenza").disabled).toBe(false);
+    expect(campoDi(p, "cap_residenza").value).toBe("");
+    expect(capDiComune("RM", "Roma").length).toBe(82);
+    await scegliVoce(p, "cap_residenza", "00166");
+    expect(campoDi(p, "cap_residenza").value).toBe("00166");
   });
 
   it("cambiare regione non lascia in piedi la provincia di prima", async () => {
     const p = await apri({});
     await scegli(p.tendina("regione_residenza"), "Sicilia");
     await scegli(p.tendina("prov_residenza"), "CT");
-    await scegli(p.tendina("citta_residenza"), "Paternò");
+    await scegliVoce(p, "citta_residenza", "Paternò");
     await scegli(p.tendina("regione_residenza"), "Piemonte");
     expect(p.tendina("prov_residenza").value).toBe("");
-    expect(p.tendina("citta_residenza").value).toBe("");
-    expect(p.tendina("cap_residenza").value).toBe("");
+    expect(campoDi(p, "citta_residenza").value).toBe("");
+    expect(campoDi(p, "cap_residenza").value).toBe("");
   });
 });
 
@@ -86,19 +87,18 @@ describe("le schede che esistono gia'", () => {
   it("una residenza senza provincia si vede comunque, e la provincia si ricava", async () => {
     const p = await apri({ citta_residenza: "SORSO" });
     expect(p.tendina("prov_residenza").value).toBe("SS");
-    expect(p.tendina("citta_residenza").value).toBe("Sorso");
+    expect(campoDi(p, "citta_residenza").value).toBe("Sorso");
     expect(p.tendina("regione_residenza").value).toBe("Sardegna");
   });
 
   it("scritta in maiuscolo con l'accento mangiato si riconosce lo stesso", async () => {
     const p = await apri({ citta_residenza: "PATERNO", cap_residenza: "95047", prov_residenza: "CT" });
-    expect(p.tendina("citta_residenza").value).toBe("Paternò");
+    expect(campoDi(p, "citta_residenza").value).toBe("Paternò");
   });
 
   it("un valore che nell'elenco non c'e' non si perde: resta, marcato", async () => {
     const p = await apri({ citta_residenza: "VIA CHIARI 29", prov_residenza: "BS" });
-    expect(p.tendina("citta_residenza").value).toBe("VIA CHIARI 29");
-    expect(p.testo()).toMatch(/fuori elenco/);
+    expect(campoDi(p, "citta_residenza").value).toMatch(/VIA CHIARI 29/);
   });
 });
 
@@ -131,10 +131,10 @@ describe("chi non vive in Italia", () => {
   // il contrario, ed era giusta finche' quell'elenco non c'era.
   it("una residenza svizzera gia' in archivio apre con la sua cascata", async () => {
     const p = await apri({ stato_residenza: "SVIZZERA", citta_residenza: "SION", cap_residenza: "1950" });
-    expect(p.tendina("citta_residenza").value).toBe("Sion");
+    expect(campoDi(p, "citta_residenza").value).toBe("Sion");
     // il cantone si ricava dalla localita', come la provincia dal comune
-    expect(p.tendina("prov_residenza").value).toBe("VS");
-    expect(p.tendina("cap_residenza").value).toBe("1950");
+    expect(campoDi(p, "prov_residenza").value).toMatch(/VS/);
+    expect(campoDi(p, "cap_residenza").value).toBe("1950");
   });
 
 });

@@ -29,8 +29,14 @@ const QUANTE = 12;
 export function filtraVoci(voci, scritto, quante = QUANTE) {
   const parole = normalizzaLuogo(scritto).split(" ").filter(Boolean);
   if (!parole.length) return voci.slice(0, quante);
+  // SI CERCA ANCHE PER SIGLA. `normalizzaLuogo` butta via quello che sta
+  // fra parentesi — serve per i nomi dei comuni — e cosi' «Valais /
+  // Wallis (VS)» perdeva proprio la sigla, che e' quella che uno
+  // scrive. Il valore della voce entra nel testo da cercare: per i
+  // cantoni e le province e' la sigla, per le altre e' quello che e'
+  // gia' scritto nel nome e non cambia niente.
   const trovate = voci.filter((v) => {
-    const parti = normalizzaLuogo(v.testo).split(" ");
+    const parti = `${normalizzaLuogo(v.testo)} ${normalizzaLuogo(v.valore)}`.split(" ").filter(Boolean);
     return parole.every((p) => parti.some((d) => d.startsWith(p)));
   });
   // chi comincia con quello che si e' scritto viene prima: scrivendo

@@ -33,6 +33,9 @@ const ELENCHI = [
   {
     stato: ITALIA,
     nome: "Italia",
+    // il codice del paese, per la ricerca delle vie (vedi
+    // cerca-indirizzo): senza, si cercherebbe la via di Sion in Italia
+    paese: "IT",
     // In Italia la regione e' il primo gradino e serve a tagliare 107
     // province in gruppi scorribili.
     conRegione: true,
@@ -57,6 +60,7 @@ const ELENCHI = [
   {
     stato: SVIZZERA,
     nome: "Svizzera",
+    paese: "CH",
     // In Svizzera NON C'E' NIENTE SOPRA IL CANTONE. I ventisei stanno
     // in una tendina sola senza bisogno di un gradino che li divida, e
     // una casella «Regione» sopra un indirizzo svizzero chiederebbe una

@@ -32273,8 +32273,12 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // in quel caso si chiede la sessione — che se serve si rinnova da
   // sola — e si riprova una volta. Un 401 che si risolve da se' non
   // deve diventare un difetto da raccontare.
-  const cercaVie = useMemo(() => async (cerca, comune, cap) => {
-    const chiedi = async () => supabase.functions.invoke("cerca-indirizzo", { body: { cerca, comune, cap } });
+  const cercaVie = useMemo(() => async (cerca, comune, cap, paese = "IT") => {
+    // IL PAESE arriva dall'elenco della residenza (vedi residenza.js):
+    // dall'8/11/2026 si cerca anche in Svizzera, e cercare «Rue de
+    // Lausanne» in Italia non da' niente — o peggio, da' una via
+    // italiana che somiglia.
+    const chiedi = async () => supabase.functions.invoke("cerca-indirizzo", { body: { cerca, comune, cap, paese } });
     try {
       let { data, error } = await chiedi();
       if (error) {

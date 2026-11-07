@@ -17,7 +17,7 @@ import {
 } from "../src/comuni-svizzera.js";
 import { elencoResidenza, vociStatoResidenza } from "../src/iscrizione/residenza.js";
 import { rispondiCon } from "./preparazione.js";
-import { monta, scegli, voci, scegliCercando, cerca, scrivi } from "./aiuto.js";
+import { monta, scegli, voci, scegliCercando, cerca, scrivi, scegliVoce, proposteDi, campoDi } from "./aiuto.js";
 
 function Scheda({ iniziali = {} }) {
   const [valori, setValori] = useState(iniziali);
@@ -83,39 +83,36 @@ describe("la scheda del venditore", () => {
     // la regione italiana non c'entra: la casella lo dice e non chiede
     expect(p.tendina("regione_residenza")).toBe(null);
     // e il cantone NON aspetta un gradino che non esiste
-    const cant = p.tendina("prov_residenza");
-    expect(cant.disabled).toBe(false);
-    expect(voci(cant)).toContain("VS");
-    expect(voci(cant).length).toBe(26);
+    expect(campoDi(p, "prov_residenza").disabled).toBe(false);
+    // ventisei cantoni: sopra le venti voci si cerca, e si trova
+    expect(await proposteDi(p, "prov_residenza", "val")).toContain("VS");
     expect(p.testo()).not.toMatch(/prima la regione/);
   });
 
   it("il cantone apre le sue localita', e la localita' scrive l'NPA da se'", async () => {
     const p = await apri({});
     await scegliCercando(p, "stato_residenza", "Svizz");
-    await scegli(p.tendina("prov_residenza"), "VS");
-    const loc = p.tendina("citta_residenza");
-    expect(loc.disabled).toBe(false);
-    expect(voci(loc)).toContain("Sion");
-    expect(voci(loc)).toContain("Zermatt");
+    await scegliVoce(p, "prov_residenza", "VS");
+    expect(campoDi(p, "citta_residenza").disabled).toBe(false);
+    expect(await proposteDi(p, "citta_residenza", "sion")).toContain("Sion");
+    expect(await proposteDi(p, "citta_residenza", "zerm")).toContain("Zermatt");
     // e non ci sono comuni italiani in mezzo
-    expect(voci(loc)).not.toContain("Roma");
-    await scegli(loc, "Sion");
+    expect(await proposteDi(p, "citta_residenza", "roma")).not.toContain("Roma");
+    await scegliVoce(p, "citta_residenza", "Sion");
     // un NPA solo non si fa scegliere: si scrive
-    expect(p.tendina("cap_residenza").value).toBe("1950");
+    expect(campoDi(p, "cap_residenza").value).toBe("1950");
   });
 
   it("a Zurigo l'NPA si scegli, come il CAP a Roma", async () => {
     const p = await apri({});
     await scegliCercando(p, "stato_residenza", "Svizz");
-    await scegli(p.tendina("prov_residenza"), "ZH");
-    await scegli(p.tendina("citta_residenza"), "Zürich");
-    const npa = p.tendina("cap_residenza");
-    expect(npa.disabled).toBe(false);
-    expect(npa.value).toBe("");
-    expect(voci(npa)).toContain("8001");
-    await scegli(npa, "8004");
-    expect(p.tendina("cap_residenza").value).toBe("8004");
+    await scegliVoce(p, "prov_residenza", "ZH");
+    await scegliVoce(p, "citta_residenza", "Zürich");
+    expect(campoDi(p, "cap_residenza").disabled).toBe(false);
+    expect(campoDi(p, "cap_residenza").value).toBe("");
+    expect(npaDiLocalita("ZH", "Zürich")).toContain("8001");
+    await scegliVoce(p, "cap_residenza", "8004");
+    expect(campoDi(p, "cap_residenza").value).toBe("8004");
   });
 
   it("le etichette dicono Cantone, Località e NPA", async () => {
@@ -134,11 +131,11 @@ describe("la scheda del venditore", () => {
     const p = await apri({ citta_residenza: "Roma", prov_residenza: "RM", cap_residenza: "00166" });
     expect(p.tendina("prov_residenza").value).toBe("RM");
     await scegliCercando(p, "stato_residenza", "Svizz");
-    expect(p.tendina("prov_residenza").value).toBe("");
-    expect(p.tendina("cap_residenza").value).toBe("");
-    // la citta' invece RESTA, marcata: un nome e' un nome, e sparire
-    // senza dirlo e' peggio che restare sbagliato sotto gli occhi
-    expect(p.testo()).toMatch(/fuori elenco/);
+    expect(campoDi(p, "prov_residenza").value).toBe("");
+    expect(campoDi(p, "cap_residenza").value).toBe("");
+    // la citta' invece RESTA: un nome e' un nome, e sparire senza dirlo
+    // e' peggio che restare sbagliato sotto gli occhi
+    expect(campoDi(p, "citta_residenza").value).toMatch(/Roma/);
   });
 
   // IL CASO CHE NON DEVE SUCCEDERE. Le schede in archivio hanno lo
@@ -149,8 +146,8 @@ describe("la scheda del venditore", () => {
     const p = await apri({ citta_residenza: "Sorso", prov_residenza: "SS", cap_residenza: "07037" });
     await scegliCercando(p, "stato_residenza", "Italia");
     expect(p.tendina("prov_residenza").value).toBe("SS");
-    expect(p.tendina("citta_residenza").value).toBe("Sorso");
-    expect(p.tendina("cap_residenza").value).toBe("07037");
+    expect(campoDi(p, "citta_residenza").value).toBe("Sorso");
+    expect(campoDi(p, "cap_residenza").value).toBe("07037");
   });
 
   // L'ORDINE DELLE RIGHE E' UNA REGOLA, NON UN GUSTO (7/11/2026, detta
@@ -289,9 +286,9 @@ describe("la casella degli Stati si cerca", () => {
     // «SVIZERA» con una zeta sola non e' un paese, e non deve diventarlo
     await cerca(p, "stato_residenza", "svizera");
     expect(p.testo()).toMatch(/Nessuna voce con queste lettere/);
-    // la casella ha perso il fuoco senza che nessuna voce fosse premuta:
-    // in archivio non e' finito niente
-    expect(p.tendina("citta_residenza")).toBeTruthy(); // cascata ancora italiana
+    // nessuna voce premuta: in archivio non e' finito niente, e la
+    // cascata e' ancora quella italiana
+    expect(p.tendina("regione_residenza")).toBeTruthy();
   });
 
   it("anche lo Stato di NASCITA si cerca, ed e' la stessa casella", async () => {
@@ -334,16 +331,14 @@ describe("il modulo che compila l'allieva", () => {
 
   it("una allieva svizzera scegli il cantone, e da li' scende", async () => {
     const p = await apriIlModulo();
-    const cant = tendina(p, "prov_residenza");
-    expect(cant.tagName).toBe("SELECT");
-    expect([...cant.options].map((o) => o.value)).toContain("TI");
-    await scegli(cant, "TI");
-    const loc = tendina(p, "citta_residenza");
-    expect(loc.tagName).toBe("SELECT");
-    expect([...loc.options].map((o) => o.value)).toContain("Lugano");
-    await scegli(loc, "Lugano");
-    const npa = tendina(p, "cap_residenza");
-    expect(npa.tagName).toBe("SELECT");
+    // ventisei cantoni e trecento localita' non si scorrono su un
+    // telefono: si scrivono due lettere
+    expect(await proposteDi(p, "prov_residenza", "tic")).toContain("TI");
+    await scegliVoce(p, "prov_residenza", "TI");
+    expect(await proposteDi(p, "citta_residenza", "luga")).toContain("Lugano");
+    await scegliVoce(p, "citta_residenza", "Lugano");
+    // e l'NPA di Lugano e' fra quelli che lei puo' scegliere
+    const npa = campoDi(p, "cap_residenza");
     expect([...npa.options].map((o) => o.value)).toContain("6900");
   });
 
@@ -362,11 +357,8 @@ describe("il modulo che compila l'allieva", () => {
       campi: VISTA.campi.map((c) => (c.chiave === "prov_residenza"
         ? { ...c, valore: "VS", bloccato: true } : c)),
     });
-    const loc = tendina(p, "citta_residenza");
-    expect(loc.tagName).toBe("SELECT");
-    const v = [...loc.options].map((o) => o.value);
-    expect(v).toContain("Sion");
-    expect(v).not.toContain("Lugano");
+    expect(await proposteDi(p, "citta_residenza", "sion")).toContain("Sion");
+    expect(await proposteDi(p, "citta_residenza", "lugano")).not.toContain("Lugano");
   });
 
   it("per uno Stato senza elenco le caselle restano da scrivere", async () => {

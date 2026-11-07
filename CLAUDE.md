@@ -3453,6 +3453,22 @@ nome e cognome → STATO di nascita, STATO di residenza
 → via e civico → email → tutor e cellulare
 ```
 
+**UN ELENCO LUNGO SI CERCA, OVUNQUE** (8/11/2026). La casella che si
+cerca non vale più solo per gli Stati: `Tendina` la usa da sé **oltre le
+venti voci** (`QUANTE_SI_SCORRONO` in AreeAnagrafiche, e la stessa
+soglia nel modulo). Venti perché le regioni italiane sono venti e si
+scorrono benissimo, e le province di una regione non arrivano a dodici;
+sopra no — i comuni di Torino sono 312, le località del Vallese 303, i
+CAP di Roma 82, e sul telefono una tendina così è un rullo che gira. La
+soglia sta in **un posto solo**, quindi vale anche per le tendine che
+nasceranno domani.
+
+**E si cerca anche per sigla.** `normalizzaLuogo` butta via quello che
+sta fra parentesi — serve per i nomi dei comuni — e così «Valais /
+Wallis (VS)» perdeva proprio la sigla, che è quella che uno scrive: il
+**valore** della voce entra nel testo da cercare. Trovato dal banco di
+prova, non dall'uso.
+
 **E LA COPIA FIRMATA DICE LE STESSE PAROLE** (`_shared/modulo-pdf.ts`).
 Il PDF che l'allieva riceve allegato alla conferma scriveva ancora «Dati
 dell'allievo/a» e «Codice fiscale» mentre la schermata diceva «Dati
@@ -3496,11 +3512,25 @@ le cifre, poi il mese — quindi un AHV svizzero scritto li' dentro
 **non sopravvive alla battitura**. Non e' un difetto del filtro: e' il
 motivo per cui lo Stato va scelto per primo.
 
-**Quello che NON copre, e va saputo:** la ricerca delle vie
-(`cerca-indirizzo`, Photon) resta ristretta all'Italia, quindi in
-Svizzera l'indirizzo si scrive come prima; e la **fatturazione** a un
-cliente estero non è stata toccata — lì «Provincia» e codice
-destinatario vogliono una decisione sulla fattura, non un elenco.
+**LA VIA SI CERCA ANCHE IN SVIZZERA** (8/11/2026). Le vie svizzere
+stanno su OpenStreetMap come le italiane: mancava solo **dire a quale
+paese chiederle**. L'elenco della residenza dichiara il suo codice
+(`paese: "IT"` / `"CH"`), l'app lo passa a `cerca-indirizzo`, e la
+funzione lo usa al posto dell'«IT» che era scritto a mano. Chi non lo
+manda cerca in Italia, come ha sempre fatto. Il paese entra anche nella
+memoria corta della funzione: senza, la stessa via cercata prima in
+Italia e poi in Svizzera avrebbe risposto con la risposta di prima. Col
+comune già scelto il paese si controlla **solo se Photon lo dice** —
+scartare le righe senza `countrycode` toglierebbe risultati buoni che
+oggi arrivano. Dove un elenco non c'è (gli altri 230 Stati) **non si
+cerca**: la proposta porterebbe un comune e un codice postale che
+nessuno sa risolvere. E `riempiDaVia` risolve la proposta contro
+l'elenco del paese scelto, quindi da una via svizzera escono il cantone
+e l'NPA invece di una sigla italiana.
+
+**Quello che NON copre, e va saputo:** la **fatturazione** a un cliente
+estero non è stata toccata — lì «Provincia» e codice destinatario
+vogliono una decisione sulla fattura, non un elenco.
 
 Prove in `prove/residenza-svizzera.test.jsx` (16): l'elenco (ventisei
 cantoni, Sion 1950, Lugano 6900, Zurigo con molti NPA, il Belgio che

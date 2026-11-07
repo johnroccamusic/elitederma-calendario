@@ -54,8 +54,14 @@ describe("scheda dell'iscritto", () => {
   // una tendina, e che un valore vecchio si veda lo prova
   // residenza-a-cascata. Qui basta sapere che la tendina c'e'.
   it("il comune non si scrive a mano", async () => {
+    // dal 7/11/2026 i comuni di una provincia sono troppi per una
+    // tendina (Torino ne ha 312): la casella si cerca. Resta un elenco
+    // CHIUSO — quello che si scrive e' un filtro, non il valore — e il
+    // nome ufficiale lo mette la scelta, non la battitura.
     const p = await conValori({ citta_residenza: "SORSO" });
-    expect(p.tendina("citta_residenza")).not.toBe(null);
+    const casella = p.nodo.querySelector('[data-campo="citta_residenza"]');
+    expect(casella).not.toBe(null);
+    expect(casella.value).toBe("Sorso");
     expect(p.campi().map((i) => i.value)).not.toContain("SORSO");
   });
 });

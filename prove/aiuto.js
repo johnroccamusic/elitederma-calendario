@@ -89,6 +89,40 @@ export async function scegliCercando(p, chiave, testo, quale = 0) {
   await premi(proposte[quale]);
 }
 
+// UNA VOCE SI SCEGLIE, COMUNQUE SIA DISEGNATA.
+//
+// Sotto le venti voci e' una <select>, sopra e' una casella che si
+// cerca (vedi QUANTE_SI_SCORRONO in AreeAnagrafiche). Chi compila fa
+// una cosa sola — "scegli questa" — e le prove devono poter dire
+// quella, senza sapere quale delle due forme e' toccata a quel campo:
+// altrimenti ogni soglia spostata rompe venti prove che parlano
+// d'altro.
+export async function scegliVoce(p, chiave, valore) {
+  const tendina = p.nodo.querySelector(`select[data-campo="${chiave}"]`);
+  if (tendina) return scegli(tendina, valore);
+  const casella = p.nodo.querySelector(`input[data-campo="${chiave}"]`);
+  if (!casella) throw new Error(`nessun campo "${chiave}" da scegliere`);
+  await act(async () => { casella.dispatchEvent(new window.FocusEvent("focusin", { bubbles: true })); });
+  await scrivi(casella, String(valore));
+  const voce = [...p.nodo.querySelectorAll("[data-proposta]")]
+    .find((x) => x.getAttribute("data-valore") === String(valore));
+  if (!voce) throw new Error(`"${valore}" non e' fra le voci proposte per "${chiave}"`);
+  return premi(voce);
+}
+
+// Le voci proposte da una casella che si cerca, scrivendoci dentro.
+// Sono al massimo dodici: chi vuole contare l'elenco intero conti
+// l'elenco, non quello che si vede.
+export async function proposteDi(p, chiave, testo) {
+  await cerca(p, chiave, testo);
+  return [...p.nodo.querySelectorAll("[data-proposta]")].map((x) => x.getAttribute("data-valore"));
+}
+
+// Il campo di una chiave, tendina o casella che sia.
+export function campoDi(p, chiave) {
+  return p.nodo.querySelector(`[data-campo="${chiave}"]`);
+}
+
 // Le voci di una tendina, senza la prima che e' il "— scegli —"
 export function voci(tendina) {
   return [...(tendina?.options || [])].slice(1).map((o) => o.value);
