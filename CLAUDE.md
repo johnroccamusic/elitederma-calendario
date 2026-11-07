@@ -3117,6 +3117,20 @@ sgancio dalla busta, e il «come hanno pagato» del conto evento e del
 Dettaglio vendite — dove una vendita mista si **divide fra le due voci**,
 perché «misto» non è un modo di pagare.
 
+**I punti di una vendita mista si contano come carta**, ed è voluto: la
+vista `v_punti_master_righe` decide `e_cash` con
+`metodo_pagamento in ('contanti','buono_amazon')`, quindi «misto» per lei
+è carta — e il POS mostra lo stesso numero. La master prende qualche punto
+in meno di quanti le darebbe la fetta in contanti; vale la regola di
+sempre, **la vista comanda**, e due conti diversi sugli stessi punti
+sarebbero peggio. Il riquadro dei totali e la dashboard dicono la stessa
+cifra.
+
+**E in splittato le due righe del «netto scontato» non si mostrano**: con
+un codice sul netto quei due pezzi facevano la riga «Imponibile», che in
+una vendita mista si calcola in un altro modo — due numeri veri che
+insieme direbbero una cosa falsa.
+
 **L'IVA sta solo sulla parte a carta.** Il contante senza fattura non
 genera imposta: è la convenzione di tutta l'app, non una regola nuova.
 Quindi su una vendita mista l'imponibile è il contante per intero più il

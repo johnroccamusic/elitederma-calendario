@@ -72817,7 +72817,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // l'imponibile (quelle non sono uno sconto sui prodotti).
   const dettaglioNetto = useMemo(() => {
     if (!couponAttivo || baseCoupon !== "netto" || couponAFasce) return null;
-    if (senzaIva || omaggioAttivo || provvigioniScalabili > 0 || !(couponNum > 0)) return null;
+    // e niente righe in splittato: l'imponibile di una vendita mista e' il
+    // contante per intero piu' il netto del resto, quindi questi due pezzi
+    // non farebbero piu' la riga «Imponibile» qui sotto — due numeri veri
+    // che insieme dicono una cosa falsa
+    if (senzaIva || omaggioAttivo || provvigioniScalabili > 0 || splitConto || !(couponNum > 0)) return null;
     let coperto = 0;
     let libero = 0;
     for (const r of carrello) {
