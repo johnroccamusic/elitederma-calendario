@@ -39,13 +39,14 @@ import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
+import CampoCerca from "./CampoCerca.jsx";
 import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI, ritaglia } from "./RitaglioFoto.jsx";
 import LetturaDocumento from "./LetturaDocumento.jsx";
 import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
 import { nomiStati } from "../comuni-regioni.js";
 // gli elenchi della residenza, uno per Stato: gli stessi della scheda
 // del venditore, perche' la cascata e' una sola (vedi residenza.js)
-import { elencoResidenza, vociStatoResidenza, etichettaResidenza } from "./residenza.js";
+import { elencoResidenza, vociStatoResidenza, etichettaResidenza, campoFiscale, ITALIA } from "./residenza.js";
 // lo stesso confronto della cascata della scheda: "PATERNO" e
 // "Paternò" sono lo stesso posto, e due copie di questa regola
 // prima o poi direbbero cose diverse
@@ -189,7 +190,23 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
         {campo.etichetta || etichettaDi(chiave)}
         {obbligatorio && !spento && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
       </div>
-      {tipo === "comuneNascita" ? (
+      {/* UN ELENCO LUNGO SI CERCA, NON SI SCORRE: gli Stati sono 232 e
+          di qua li scorre una allieva, sul telefono, da sola. Stessa
+          casella della scheda del venditore. */}
+      {opzioni && (chiave === "stato_residenza" || tipo === "statoNascita") ? (
+        <CampoCerca
+          chiave={chiave}
+          valore={valore || ""}
+          voci={[
+            ...(tipo === "statoNascita" ? [{ valore: "", testo: "Italia" }] : []),
+            ...opzioni.map((o) => ({ valore: o.valore, testo: o.etichetta })),
+          ]}
+          onScegli={(v) => onCambia(chiave, v)}
+          spenta={spento}
+          stile={stileComune}
+          vuoto={tipo === "statoNascita" ? "Italia" : "— scegli —"}
+        />
+      ) : tipo === "comuneNascita" ? (
         // stesso elenco della scheda: il comune si sceglie, non si
         // indovina, e il nome ufficiale e' quello che fa uscire il
         // codice fiscale
@@ -231,7 +248,9 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
           if (maiuscolo) v = v.toUpperCase();
           // stessa regola della scheda: il codice fiscale ha una forma,
           // e la casella la fa rispettare anche qui
-          if (chiave === "codice_fiscale") v = filtraCodiceFiscale(v);
+          // fuori Italia l'identificativo e' quello del suo paese: il
+          // filtro del codice italiano gli toglierebbe i punti
+          if (chiave === "codice_fiscale" && campo.formatoItaliano !== false) v = filtraCodiceFiscale(v);
           if (lunghezza) v = v.slice(0, lunghezza);
           onCambia(chiave, v);
         }}
@@ -591,6 +610,11 @@ export default function PaginaModulo({ token }) {
     if (!dati || spedito) return;
     const d = (dati.campi || []).find((x) => x.chiave === "codice_fiscale");
     if (!d || d.bloccato) return;
+    // a chi vive fuori non si propone un codice italiano: il suo
+    // identificativo e' quello del suo paese
+    const statoSuo = risposte.stato_residenza
+      ?? (dati.campi || []).find((x) => x.chiave === "stato_residenza")?.valore;
+    if (elencoResidenza(statoSuo)?.stato !== ITALIA) return;
     // stessa regola della scheda: si rifa' solo il codice che abbiamo
     // proposto noi. Quello che ha scritto lei non si tocca.
     const scritto = String(risposte.codice_fiscale || "").trim();
@@ -608,7 +632,8 @@ export default function PaginaModulo({ token }) {
     setRisposte((r) => ({ ...r, codice_fiscale: calcolato }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dati, spedito, risposte.codice_fiscale, risposte.cognome, risposte.nome,
-      risposte.sesso, risposte.data_nascita, risposte.comune_nascita, risposte.stato_nascita]);
+      risposte.sesso, risposte.data_nascita, risposte.comune_nascita, risposte.stato_nascita,
+      risposte.stato_residenza]);
 
   if (caricando) return <Avviso titolo="Un momento" testo="Sto aprendo il tuo modulo." />;
   if (errore) return <Avviso titolo="Qualcosa non ha funzionato" testo={`Riprova fra poco. Se continua, scrivici. (${errore})`} />;
@@ -690,7 +715,13 @@ export default function PaginaModulo({ token }) {
   function campoConElenco(campo) {
     // in Svizzera «Provincia» si chiama «Cantone» e il CAP «NPA»: chi
     // compila legge l'etichetta, e quella deve dire il vero
-    const conNome = etichettaResidenza(campo, elencoModulo);
+    const conNome = campoFiscale(etichettaResidenza(campo, elencoModulo), elencoModulo);
+    // di qua compila LEI, quindi il suggerimento le da' del tu: nella
+    // scheda del venditore la stessa casella dice «Inserisci
+    // l'identificativo fiscale», perche' li' compila un'altra persona
+    if (campo.chiave === "codice_fiscale") {
+      return { ...conNome, suggerimento: "Inserisci il tuo identificativo fiscale" };
+    }
     if (campo.chiave === "stato_residenza") {
       return { ...conNome, opzioni: vociStato };
     }

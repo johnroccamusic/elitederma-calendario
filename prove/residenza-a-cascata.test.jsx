@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import React, { useState } from "react";
 import { AreaAnagrafica } from "../src/iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO } from "../src/iscrizione/disposizione.js";
-import { monta, scegli, voci } from "./aiuto.js";
+import { monta, scegli, voci, scegliCercando } from "./aiuto.js";
 
 // La scheda vera tiene i valori e li riscrive: senza questo la cascata
 // non si muove e si proverebbe una fotografia, non un gesto.
@@ -105,7 +105,7 @@ describe("le schede che esistono gia'", () => {
 describe("chi non vive in Italia", () => {
   it("«Altro stato» spegne la cascata e apre la scrittura libera", async () => {
     const p = await apri({});
-    await scegli(p.tendina("stato_residenza"), "ALTRO");
+    await scegliCercando(p, "stato_residenza", "Altro");
     // la regione italiana non c'e' piu': non vuol dire niente a Sion
     expect(p.tendina("regione_residenza")).toBe(null);
     expect(p.tendina("citta_residenza")).toBe(null);
@@ -122,7 +122,7 @@ describe("chi non vive in Italia", () => {
     expect(valori).toContain("LIEGI");
     expect(valori).toContain("4000");
     // lo Stato invece si scegli dalla tendina, non si scrive
-    expect(p.tendina("stato_residenza").value).toBe("BELGIO");
+    expect(p.casella("stato_residenza").value).toBe("Belgio");
   });
 
   // LA SVIZZERA NON E' PIU' «ALTRO STATO» (7/11/2026): ha il suo
@@ -147,7 +147,7 @@ describe("la disposizione dei gradini", () => {
     const p = await apri({});
     // si risale dallo stato fino al primo contenitore che tiene dentro
     // anche la provincia: quello e' la riga
-    let riga = p.tendina("stato_residenza");
+    let riga = p.casella("stato_residenza");
     while (riga && !riga.contains(p.tendina("prov_residenza"))) riga = riga.parentElement;
     expect(riga).not.toBe(null);
     expect(riga.contains(p.tendina("regione_residenza"))).toBe(true);
@@ -164,7 +164,7 @@ describe("la disposizione dei gradini", () => {
     // spazio riservato all'etichetta e' lo stesso per tutte.
     const p = await apri({});
     const etichette = ["stato_residenza", "regione_residenza", "prov_residenza"].map((k) => {
-      let n = p.tendina(k);
+      let n = p.tendina(k) || p.casella(k);
       while (n && !n.previousElementSibling) n = n.parentElement;
       return n?.previousElementSibling;
     });

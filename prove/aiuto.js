@@ -22,6 +22,9 @@ export async function monta(elemento) {
     // la tendina di un campo, per la sua chiave: l'etichetta si traduce
     // e la posizione si sposta, la chiave no
     tendina: (chiave) => nodo.querySelector(`select[data-campo="${chiave}"]`),
+    // la casella di un campo, per la sua chiave: serve per quelle che
+    // non sono tendine ma caselle che si cercano (vedi CampoCerca)
+    casella: (chiave) => nodo.querySelector(`input[data-campo="${chiave}"]`),
     smonta: () => act(async () => { radice.unmount(); }),
   };
 }
@@ -61,6 +64,29 @@ export async function scegli(tendina, valore) {
     tendina.dispatchEvent(new window.Event("change", { bubbles: true }));
   });
   await attendi();
+}
+
+// SCEGLIERE DA UNA CASELLA CHE SI CERCA (CampoCerca): si scrive
+// qualche lettera e si preme la proposta. E' il gesto vero di chi
+// compila, e va fatto cosi' — scrivere e basta NON sceglie niente,
+// perche' l'elenco e' chiuso apposta.
+export async function cerca(p, chiave, testo) {
+  const casella = p.nodo.querySelector(`input[data-campo="${chiave}"]`);
+  if (!casella) throw new Error(`nessuna casella da cercare per "${chiave}"`);
+  // «focusin» e non «focus»: React aggancia onFocus al primo, e il
+  // secondo non bubbla fino alla radice dove React ascolta. Con
+  // «focus» la casella non si apriva, e il filtro vuoto non mostrava
+  // niente — la prova sembrava dire che l'elenco e' vuoto.
+  await act(async () => { casella.dispatchEvent(new window.FocusEvent("focusin", { bubbles: true })); });
+  await scrivi(casella, testo);
+  return casella;
+}
+
+export async function scegliCercando(p, chiave, testo, quale = 0) {
+  await cerca(p, chiave, testo);
+  const proposte = [...p.nodo.querySelectorAll(`[data-proposta]`)];
+  if (!proposte[quale]) throw new Error(`"${testo}" non propone niente per "${chiave}"`);
+  await premi(proposte[quale]);
 }
 
 // Le voci di una tendina, senza la prima che e' il "— scegli —"

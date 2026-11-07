@@ -3387,6 +3387,57 @@ caselle nella pagina: senza, il giorno che qualcuno rimette la città
 davanti non se ne accorge nessuno finché non arriva un altro allievo
 straniero.
 
+**UN ELENCO LUNGO SI CERCA, NON SI SCORRE** (7/11/2026, provandola:
+«metti la barra di ricerca dove posso scrivere almeno qualche lettera,
+per non farmi scorrere tutta la lista»). Gli Stati sono 232 e stavano in
+una tendina sola: sul telefono, per arrivare al Portogallo si scorreva
+fino in fondo. `CampoCerca.jsx` e' la stessa casella del comune di
+nascita con una differenza che e' tutta: **li' quello che si scrive e'
+il valore, qui e' solo un filtro**. L'elenco resta CHIUSO — finche' non
+si tocca una voce non si e' scelto niente, e «SVIZERA» battuto a mano
+non diventa un paese. Si cerca come si scrive (ogni parola e' l'inizio
+di una parola del nome: «arab sa» trova Arabia Saudita), si mostrano
+dodici voci e **si dice che ce ne sono altre** — dodici righe su
+duecentotrentadue sembrano l'elenco intero, e chi non trova il suo paese
+crede che non ci sia. Vale per lo Stato di residenza e per quello di
+nascita, nella scheda e nel modulo.
+
+**«Identificativo fiscale personale (TIN)»** (7/11/2026, dicitura
+dettata dal titolare). Da quando si iscrive anche chi vive in Svizzera,
+«Codice fiscale» era il nome di una cosa sola fra le tante che quella
+casella puo' contenere. Ma la dicitura da sola sarebbe stata una
+bugia: sotto c'erano i **sedici caratteri obbligati**, il filtro che
+tiene solo lettere e numeri — e quindi mangia i punti dell'AHV svizzero,
+che si scrive `756.1234.5678.97` — l'avviso «mancano quattro caratteri»
+addosso a chi aveva scritto il numero giusto, e il **calcolo automatico**
+che avrebbe proposto un codice italiano a una svizzera. Ora tutte e
+quattro quelle regole valgono **solo per chi risiede in Italia**
+(`campoFiscale` in residenza.js, un posto solo per scheda e modulo);
+fuori si scrive quello che c'e' sul documento e nessuno lo corregge.
+L'avviso dei sedici caratteri nomina «il codice fiscale» e non
+l'etichetta intera (`nomeAvviso`): esce solo per chi risiede in Italia,
+dove quella cosa si chiama cosi'.
+
+**E LO STATO DI RESIDENZA E' SALITO, SUBITO DOPO QUELLO DI NASCITA**
+(7/11/2026, stesso giro di prove del titolare: «dopo lo stato di nascita
+ci sia lo stato di residenza, perché con lo stato di residenza poi ti
+partono tutti i dati con il codice fiscale e il resto»). E' la stessa
+regola del codice fiscale — *il campo che si riempie da se' va dopo
+quelli che lo riempiono* — applicata a una cosa nuova: lo Stato di
+residenza non riempie quelle caselle, **decide che cosa chiedono**.
+L'ordine dei «Dati dell'allievo» adesso e':
+
+```
+nome e cognome → sesso, data, STATO di nascita, comune di nascita
+→ STATO di residenza, regione, provincia → comune e CAP
+→ identificativo fiscale → via e civico → email → tutor e cellulare
+```
+
+Il codice fiscale e' sceso di due righe e sta bene dov'e': arriva dopo i
+dati da cui si calcola **e** dopo lo Stato che decide con quale metro si
+misura. Una prova blocca l'ordine confrontando la posizione delle
+caselle nella pagina.
+
 **Quello che NON copre, e va saputo:** la ricerca delle vie
 (`cerca-indirizzo`, Photon) resta ristretta all'Italia, quindi in
 Svizzera l'indirizzo si scrive come prima; e la **fatturazione** a un

@@ -28,7 +28,7 @@ export const CAMPI_MODULO = [
   { chiave: "stato_residenza", etichetta: "Stato" },
   { chiave: "email", etichetta: "Email" },
   { chiave: "telefono", etichetta: "Cellulare (+39...)" },
-  { chiave: "codice_fiscale", etichetta: "Codice fiscale" },
+  { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)" },
   { chiave: "tutor", etichetta: "Tutor" },
   { chiave: "tipo_cliente", etichetta: "Intestazione" },
   // Dati di fatturazione

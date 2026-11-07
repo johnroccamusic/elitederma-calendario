@@ -27,7 +27,7 @@ import {
 // Vedi residenza.js — con la Svizzera dentro dal 7/11/2026.
 import {
   ITALIA, ALTRO_STATO, elencoResidenza, vociStatoResidenza, vocePerStato,
-  etichettaResidenza,
+  etichettaResidenza, campoFiscale,
 } from "./residenza.js";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
 import { campoDataStyle } from "../ui/stile.js";
@@ -35,6 +35,8 @@ import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
 import { filtraCodiceFiscale, calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
+// un elenco di 232 voci non e' una tendina: si cerca (vedi CampoCerca)
+import CampoCerca from "./CampoCerca.jsx";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -268,12 +270,17 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     // otto. Il genere qui non serve a niente, e nemmeno i trattini: il
     // campo si chiama «Stato di nascita» e la voce vuota deve dire solo
     // quale Stato.
+    //
+    // E SI CERCA, NON SI SCORRE (7/11/2026): duecentotrentadue voci in
+    // una tendina sola, sul telefono, sono duecento righe da far
+    // scorrere col dito. La casella vuota vale Italia e lo dice.
     return (
-      <Tendina
+      <CampoCerca
+        chiave="stato_nascita"
         valore={spenta ? "" : (valore || "")}
-        opzioni={nomiStati().map((x) => ({ valore: x, testo: x }))}
-        onCambia={(v) => { scrivi("stato_nascita", v); if (v) scrivi("comune_nascita", ""); }}
-        spenta={spenta} stile={stile} vuoto="Italia" campo="stato_nascita"
+        voci={[{ valore: "", testo: "Italia" }, ...nomiStati().map((x) => ({ valore: x, testo: x }))]}
+        onScegli={(v) => { scrivi("stato_nascita", v); if (v) scrivi("comune_nascita", ""); }}
+        spenta={spenta} stile={stile} vuoto="Italia"
       />
     );
   }
@@ -311,11 +318,12 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     // l'ultima voce, per quello che in quella lista non c'e'.
     return (
       <>
-        <Tendina
+        <CampoCerca
+          chiave="stato_residenza"
           valore={spenta ? "" : (cascata?.voceStato || "")}
-          opzioni={vociStatoResidenza()}
-          onCambia={(v) => cascata.scegliStato(v)}
-          spenta={spenta} stile={stile} vuoto="— scegli lo Stato —" campo="stato_residenza"
+          voci={vociStatoResidenza()}
+          onScegli={(v) => cascata.scegliStato(v)}
+          spenta={spenta} stile={stile} vuoto="— scegli lo Stato —"
         />
         {/* Solo «Altro stato»: li' il nome si scrive, ed e' l'unica cosa
             che si scrive. */}
@@ -423,7 +431,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         onChange={(e) => scrivi(chiave, e.target.value)}
         style={stile}
       >
-        <option value="">— scegli venditore —</option>
+        {/* «— scegli —» e basta: l'etichetta sopra dice gia' TUTOR, e
+            ripetere «venditore» dentro la casella la allungava fino a
+            farla tagliare sul telefono — si leggeva «SCEGLI VENDITOI». */}
+        <option value="">— scegli —</option>
         {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
         {/* valore già presente ma non (più) in elenco: resta visibile
             invece di sparire silenziosamente */}
@@ -466,7 +477,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         // IL CODICE FISCALE HA UNA FORMA, E LA CASELLA LA FA RISPETTARE.
         // Vale anche sull'incollatura, che e' come la maggioranza lo
         // scrive: `onChange` scatta anche li'.
-        if (chiave === "codice_fiscale") t = filtraCodiceFiscale(t);
+        // il filtro del codice ITALIANO (solo lettere e numeri, sedici)
+        // toglierebbe i punti dell'AHV svizzero: fuori Italia si scrive
+        // quello che c'e' sul documento
+        if (chiave === "codice_fiscale" && campo.formatoItaliano !== false) t = filtraCodiceFiscale(t);
         if (lunghezza) t = t.slice(0, lunghezza);
         scrivi(chiave, t);
       }}
@@ -524,6 +538,11 @@ export function AreaAnagrafica({
   useEffect(() => {
     if (configurazione) return;
     if (codiceScritto && !nostro) return;
+    // NON SI PROPONE UN CODICE ITALIANO A CHI VIVE FUORI: il suo
+    // identificativo e' quello del suo paese, e scriverglielo noi
+    // sarebbe una cifra inventata dentro una casella che nessuno
+    // rimetterebbe in dubbio.
+    if (elencoResidenza(valori.stato_residenza)?.stato !== ITALIA) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: valori.cognome, nome: valori.nome, sesso: valori.sesso,
       dataNascita: valori.data_nascita,
@@ -537,7 +556,8 @@ export function AreaAnagrafica({
     autosalva();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configurazione, codiceScritto, nostro, valori.cognome, valori.nome, valori.sesso,
-      valori.data_nascita, valori.comune_nascita, valori.stato_nascita]);
+      valori.data_nascita, valori.comune_nascita, valori.stato_nascita,
+      valori.stato_residenza]);
 
   function esceDalCampo(campo) {
     if (configurazione) return;
@@ -699,7 +719,7 @@ export function AreaAnagrafica({
                     minLabelHeight={!configurazione && riga.campi.length > 1 ? 28 : undefined}
                   >
                     <Casella
-                      campo={campo}
+                      campo={campoFiscale(campo, cascata.elenco)}
                       valore={configurazione ? "" : valori[campo.chiave]}
                       scrivi={scrivi}
                       esceDalCampo={esceDalCampo}
@@ -711,9 +731,9 @@ export function AreaAnagrafica({
                   </Field>
                   {/* in configurazione le caselle sono vuote per forza:
                       li' un avviso sulla lunghezza non vorrebbe dire niente */}
-                  {!configurazione && avvisoCampo(campo, valori[campo.chiave], valori) && (
+                  {!configurazione && avvisoCampo(campoFiscale(campo, cascata.elenco), valori[campo.chiave], valori) && (
                     <div style={{ ...fontBody, fontSize: 11, color: "#8A6A1B", marginTop: 3, lineHeight: 1.4 }}>
-                      {avvisoCampo(campo, valori[campo.chiave], valori)}
+                      {avvisoCampo(campoFiscale(campo, cascata.elenco), valori[campo.chiave], valori)}
                     </div>
                   )}
                   {/* il codice calcolato lo dice: chi guarda la scheda

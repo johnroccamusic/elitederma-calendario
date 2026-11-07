@@ -134,6 +134,27 @@ export function vocePerStato(statoScritto, aManoLibera) {
   return trovata ? trovata.valore : ALTRO_STATO;
 }
 
+// L'IDENTIFICATIVO FISCALE NON E' IL CODICE FISCALE ITALIANO.
+//
+// Il campo si chiama «Identificativo fiscale personale (TIN)» perche'
+// chi vive fuori ne ha uno del suo paese: l'AHV svizzero si scrive
+// 756.1234.5678.97 — sedici caratteri non lo sono, i punti dentro il
+// filtro del codice italiano li toglieva, e l'avviso «mancano quattro
+// caratteri» dava torto a chi aveva scritto il numero giusto.
+//
+// Quindi le regole del codice italiano — sedici caratteri esatti, solo
+// lettere e numeri, la lettera di controllo, il calcolo automatico da
+// nome, sesso e nascita — valgono SOLO per chi risiede in Italia.
+// Fuori si scrive quello che c'e' sul documento, e nessuno lo corregge.
+export function campoFiscale(campo, elenco) {
+  if (campo?.chiave !== "codice_fiscale") return campo;
+  if (elenco?.stato === ITALIA) return { ...campo, formatoItaliano: true };
+  const senzaMisura = { ...campo, formatoItaliano: false };
+  delete senzaMisura.lunghezza;
+  delete senzaMisura.lunghezzaEsatta;
+  return senzaMisura;
+}
+
 /** L'etichetta di un campo secondo lo Stato (Provincia -> Cantone...). */
 export function etichettaResidenza(campo, elenco) {
   const nuova = elenco?.etichette?.[campo?.tipo];

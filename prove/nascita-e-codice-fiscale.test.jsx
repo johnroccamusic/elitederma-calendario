@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import React, { useState } from "react";
 import { AreaAnagrafica } from "../src/iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO } from "../src/iscrizione/disposizione.js";
-import { monta, clicca, scrivi, scegli, premi } from "./aiuto.js";
+import { monta, clicca, scrivi, scegli, premi, scegliCercando } from "./aiuto.js";
 
 function Scheda({ iniziali = {} }) {
   const [valori, setValori] = useState(iniziali);
@@ -70,7 +70,7 @@ describe("il codice fiscale si compila da se'", () => {
     const p = await apri({ cognome: "POPA", nome: "MARIA" });
     await clicca(tastoSesso(p, "F"));
     await scrivi(campo(p, "data_nascita"), "1990-03-12");
-    await scegli(p.tendina("stato_nascita"), "Romania");
+    await scegliCercando(p, "stato_nascita", "Romania");
     expect(campo(p, "comune_nascita").disabled).toBe(true);
     expect(campo(p, "codice_fiscale").value).toMatch(/Z129.$/);
   });

@@ -17,7 +17,7 @@ import {
 } from "../src/comuni-svizzera.js";
 import { elencoResidenza, vociStatoResidenza } from "../src/iscrizione/residenza.js";
 import { rispondiCon } from "./preparazione.js";
-import { monta, scegli, voci } from "./aiuto.js";
+import { monta, scegli, voci, scegliCercando, cerca, scrivi } from "./aiuto.js";
 
 function Scheda({ iniziali = {} }) {
   const [valori, setValori] = useState(iniziali);
@@ -79,7 +79,7 @@ describe("l'elenco svizzero", () => {
 describe("la scheda del venditore", () => {
   it("scelta la Svizzera, il cantone si apre subito: sopra non c'e' niente", async () => {
     const p = await apri({});
-    await scegli(p.tendina("stato_residenza"), "SVIZZERA");
+    await scegliCercando(p, "stato_residenza", "Svizz");
     // la regione italiana non c'entra: la casella lo dice e non chiede
     expect(p.tendina("regione_residenza")).toBe(null);
     // e il cantone NON aspetta un gradino che non esiste
@@ -92,7 +92,7 @@ describe("la scheda del venditore", () => {
 
   it("il cantone apre le sue localita', e la localita' scrive l'NPA da se'", async () => {
     const p = await apri({});
-    await scegli(p.tendina("stato_residenza"), "SVIZZERA");
+    await scegliCercando(p, "stato_residenza", "Svizz");
     await scegli(p.tendina("prov_residenza"), "VS");
     const loc = p.tendina("citta_residenza");
     expect(loc.disabled).toBe(false);
@@ -107,7 +107,7 @@ describe("la scheda del venditore", () => {
 
   it("a Zurigo l'NPA si scegli, come il CAP a Roma", async () => {
     const p = await apri({});
-    await scegli(p.tendina("stato_residenza"), "SVIZZERA");
+    await scegliCercando(p, "stato_residenza", "Svizz");
     await scegli(p.tendina("prov_residenza"), "ZH");
     await scegli(p.tendina("citta_residenza"), "Zürich");
     const npa = p.tendina("cap_residenza");
@@ -133,7 +133,7 @@ describe("la scheda del venditore", () => {
   it("passando in Svizzera, la sigla e il CAP italiani vanno via", async () => {
     const p = await apri({ citta_residenza: "Roma", prov_residenza: "RM", cap_residenza: "00166" });
     expect(p.tendina("prov_residenza").value).toBe("RM");
-    await scegli(p.tendina("stato_residenza"), "SVIZZERA");
+    await scegliCercando(p, "stato_residenza", "Svizz");
     expect(p.tendina("prov_residenza").value).toBe("");
     expect(p.tendina("cap_residenza").value).toBe("");
     // la citta' invece RESTA, marcata: un nome e' un nome, e sparire
@@ -147,7 +147,7 @@ describe("la scheda del venditore", () => {
   // perderebbe la residenza di quella persona.
   it("dichiarare «Italia» su una scheda italiana non cancella niente", async () => {
     const p = await apri({ citta_residenza: "Sorso", prov_residenza: "SS", cap_residenza: "07037" });
-    await scegli(p.tendina("stato_residenza"), "ITALIA");
+    await scegliCercando(p, "stato_residenza", "Italia");
     expect(p.tendina("prov_residenza").value).toBe("SS");
     expect(p.tendina("citta_residenza").value).toBe("Sorso");
     expect(p.tendina("cap_residenza").value).toBe("07037");
@@ -176,14 +176,84 @@ describe("la scheda del venditore", () => {
     // e la via sta dopo la cascata: era sopra lo Stato, e il suo
     // suggerimento scriveva «ITALIA» prima che qualcuno scegliesse
     expect(prima("citta_residenza", "indirizzo_residenza")).toBe(true);
+    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI: e' lo
+    // Stato di residenza a decidere se quella casella chieda il codice
+    // fiscale italiano (sedici lettere, calcolato) o l'identificativo
+    // del paese di chi si iscrive. Trovata prima, si riempie con la
+    // regola sbagliata.
+    expect(prima("stato_nascita", "codice_fiscale")).toBe(true);
+    expect(prima("stato_residenza", "codice_fiscale")).toBe(true);
+    expect(prima("cap_residenza", "codice_fiscale")).toBe(true);
+  });
+
+  // L'ETICHETTA DEVE DIRE IL VERO, e con essa le regole sotto.
+  it("fuori Italia l'identificativo fiscale non si misura col metro italiano", async () => {
+    const p = await apri({});
+    const casella = () => p.nodo.querySelector('[data-campo="codice_fiscale"]');
+    // in Italia resta il codice fiscale: sedici caratteri, e lo dice
+    expect(casella().maxLength).toBe(16);
+    await scrivi(casella(), "RSSMRA90A01H501");
+    expect(p.testo()).toMatch(/codice fiscale ne ha 16/);
+    // in Svizzera no: l'AHV si scrive 756.1234.5678.97
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    await scrivi(casella(), "756.1234.5678.97");
+    expect(casella().value).toBe("756.1234.5678.97");
+    expect(p.testo()).not.toMatch(/ne ha 16/);
   });
 
   it("uno Stato senza elenco lascia le caselle libere, com'erano", async () => {
     const p = await apri({});
-    await scegli(p.tendina("stato_residenza"), "BELGIO");
+    await scegliCercando(p, "stato_residenza", "Belgio");
     expect(p.tendina("citta_residenza")).toBe(null);
     expect(p.tendina("cap_residenza")).toBe(null);
-    expect(p.tendina("stato_residenza").value).toBe("BELGIO");
+    // la casella mostra il nome scelto, e in archivio va BELGIO
+    expect(p.casella("stato_residenza").value).toBe("Belgio");
+  });
+});
+
+// 232 STATI NON SI SCORRONO (7/11/2026, detto dal titolare provandola:
+// «metti la barra di ricerca dove posso scrivere almeno qualche
+// lettera, per non farmi scorrere tutta la lista»).
+describe("la casella degli Stati si cerca", () => {
+  const proposte = (p) => [...p.nodo.querySelectorAll("[data-proposta]")].map((x) => x.textContent);
+
+  it("due lettere bastano, e l'elenco si accorcia", async () => {
+    const p = await apri({});
+    await cerca(p, "stato_residenza", "sviz");
+    expect(proposte(p)).toEqual(["Svizzera"]);
+  });
+
+  it("si cerca come si scrive: accenti e parolette non vanno sapute", async () => {
+    const p = await apri({});
+    await cerca(p, "stato_residenza", "arab sa");
+    expect(proposte(p)).toContain("Arabia Saudita");
+  });
+
+  it("appena aperta mostra le prime voci, e dice che ce ne sono altre", async () => {
+    const p = await apri({});
+    await cerca(p, "stato_residenza", "");
+    // Italia e Svizzera davanti: sono quelle con l'elenco
+    expect(proposte(p)[0]).toBe("Italia");
+    expect(proposte(p)[1]).toBe("Svizzera");
+    expect(p.testo()).toMatch(/scrivi un'altra lettera/i);
+  });
+
+  it("quello che si scrive NON e' il valore: l'elenco e' chiuso", async () => {
+    const p = await apri({});
+    // «SVIZERA» con una zeta sola non e' un paese, e non deve diventarlo
+    await cerca(p, "stato_residenza", "svizera");
+    expect(p.testo()).toMatch(/Nessuna voce con queste lettere/);
+    // la casella ha perso il fuoco senza che nessuna voce fosse premuta:
+    // in archivio non e' finito niente
+    expect(p.tendina("citta_residenza")).toBeTruthy(); // cascata ancora italiana
+  });
+
+  it("anche lo Stato di NASCITA si cerca, ed e' la stessa casella", async () => {
+    const p = await apri({});
+    await scegliCercando(p, "stato_nascita", "Romania");
+    expect(p.casella("stato_nascita").value).toBe("Romania");
+    // nata all'estero: il comune italiano non si chiede piu'
+    expect(p.casella("comune_nascita").disabled).toBe(true);
   });
 });
 

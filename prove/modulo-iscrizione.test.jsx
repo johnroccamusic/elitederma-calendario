@@ -8,7 +8,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import React from "react";
 import PaginaModulo from "../src/iscrizione/PaginaModulo.jsx";
 import { rispondiCon } from "./preparazione.js";
-import { monta, clicca, scrivi, scegli } from "./aiuto.js";
+import { monta, clicca, scrivi, scegli, scegliCercando, cerca } from "./aiuto.js";
 
 const CLAUSOLA = "non ha diritto ad alcun rimborso";
 
@@ -219,7 +219,9 @@ describe("modulo di iscrizione", () => {
   it("scelto uno Stato estero, il comune non si chiede piu'", async () => {
     const p = await apriIlModulo(VISTA_CON_NASCITA);
     const casella = (k) => p.nodo.querySelector(`[data-campo="${k}"]`);
-    await scegli(casella("stato_nascita"), "Romania");
+    // 232 Stati non si scorrono: si scrivono le prime lettere e si
+    // preme la voce (vedi CampoCerca)
+    await scegliCercando(p, "stato_nascita", "Romania");
     expect(casella("comune_nascita").disabled).toBe(true);
     await scegli(casella("sesso"), "F");
     await scrivi(casella("data_nascita"), "1990-03-12");
@@ -246,22 +248,23 @@ describe("modulo di iscrizione", () => {
     expect(voci.length).toBeGreaterThan(50);
   });
 
-  it("lo Stato di residenza e' una scelta, non una riga da scrivere", async () => {
+  it("lo Stato di residenza si cerca scrivendo, e scegliendo scrive il nome in maiuscolo", async () => {
     const p = await apriIlModulo(VISTA_RESIDENZA);
-    const stato = p.nodo.querySelector('[data-campo="stato_residenza"]');
-    expect(stato.tagName).toBe("SELECT");
-    const voci = [...stato.options].map((o) => o.value);
+    // SI SCRIVE QUALCHE LETTERA invece di scorrere 232 voci
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    expect(p.casella("stato_residenza").value).toBe("Svizzera");
     // UNA SOLA SCRITTURA IN ARCHIVIO: la lista e' quella della scheda
     // del venditore, maiuscola come la scrive lei. Due liste
     // vorrebbero dire «Svizzera» di qua e «SVIZZERA» di la', cioe' due
     // paesi per chiunque debba contare.
-    expect(voci).toContain("ITALIA");
-    expect(voci).toContain("SVIZZERA");
-    expect(voci).toContain("ROMANIA");
+    const scelto = p.nodo.querySelector('[data-proposta][data-valore]');
+    expect(scelto).toBe(null); // l'elenco si chiude dopo la scelta
     // e «Altro stato» non c'e': di qua non c'e' una casella accanto in
     // cui scrivere il nome, e una voce che apre il vuoto e' peggio di
     // una voce che manca
-    expect(voci).not.toContain("ALTRO");
+    const p2 = await apriIlModulo(VISTA_RESIDENZA);
+    await cerca(p2, "stato_residenza", "Altro");
+    expect(p2.testo()).toMatch(/Nessuna voce con queste lettere/);
   });
 
   // LA TAGLIA LA SCEGLIE LEI (29/10/2026). Segnalato dai venditori: le

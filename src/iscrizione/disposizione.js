@@ -77,19 +77,6 @@ export const AREA_ALLIEVO = {
       { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
       { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
     ] },
-    // IL CODICE FISCALE VIENE DOPO, E NON E' UN DETTAGLIO DI ORDINE.
-    //
-    // Stava sopra, ed era la prima casella vuota che si incontrava: chi
-    // compila la trova lampeggiante e lo scrive a mano, prima che
-    // esista un solo dato da cui calcolarlo. Il campo che si riempie da
-    // se' va dopo quelli che lo riempiono, o il calcolo arriva sempre
-    // secondo.
-    //
-    // Sta comunque coi dati di chi si iscrive e non col documento:
-    // serve per la fattura e per il diploma, non solo a identificarla.
-    { campi: [
-      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
-    ] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
     //
     // Quattro gradini, e ognuno apre il successivo: stato -> regione ->
@@ -120,6 +107,38 @@ export const AREA_ALLIEVO = {
     { campi: [
       { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
       { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 120px", tipo: "cap", salvaUscendo: true },
+    ] },
+    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI, E NON
+    // E' UN DETTAGLIO DI ORDINE.
+    //
+    // Stava sopra, ed era la prima casella vuota che si incontrava: chi
+    // compila la trova lampeggiante e lo scrive a mano, prima che
+    // esista un solo dato da cui calcolarlo. Il campo che si riempie da
+    // se' va dopo quelli che lo riempiono, o il calcolo arriva sempre
+    // secondo.
+    //
+    // Dal 7/11/2026 scende ancora, sotto la residenza, e per lo stesso
+    // motivo di prima applicato a una cosa nuova: e' lo STATO DI
+    // RESIDENZA a decidere che cosa questa casella chieda — il codice
+    // fiscale italiano, con le sue sedici lettere e il suo calcolo,
+    // oppure l'identificativo fiscale del paese di chi si iscrive, che
+    // sedici lettere non le ha. Il titolare, provando a iscrivere un
+    // allievo: «dopo lo stato di nascita ci sia lo stato di residenza,
+    // perché con lo stato di residenza poi ti partono tutti i dati con
+    // il codice fiscale e il resto».
+    //
+    // Sta comunque coi dati di chi si iscrive e non col documento:
+    // serve per la fattura e per il diploma, non solo a identificarla.
+    { campi: [
+      // «Identificativo fiscale personale (TIN)» e non «Codice fiscale»
+      // (7/11/2026, dicitura dettata dal titolare): da quando si
+      // iscrive anche chi vive in Svizzera, quella casella non chiede
+      // piu' per forza un codice italiano. Le sedici lettere, il filtro
+      // e il calcolo automatico restano, ma solo per chi risiede in
+      // Italia — vedi `campoFiscale` in residenza.js.
+      { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)", larghezza: "0 1 240px",
+        maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, nomeAvviso: "codice fiscale",
+        suggerimento: "Inserisci l'identificativo fiscale", salvaUscendo: true },
     ] },
     // LA VIA VIENE PER ULTIMA, DOPO LA CASCATA (7/11/2026).
     //
@@ -317,6 +336,11 @@ export function avvisoCampo(campo, valore, valori = null) {
     return avvisoEmail(valore) || null;
   }
   if (campo?.chiave === "codice_fiscale" || campo?.tipo === "codice_fiscale") {
+    // CHI NON RISIEDE IN ITALIA HA UN IDENTIFICATIVO DEL SUO PAESE, e
+    // non si misura col metro italiano: l'AHV svizzero non ha sedici
+    // caratteri e non ha una lettera di controllo. Dirgli che e'
+    // sbagliato sarebbe dare torto a chi ha scritto il numero giusto.
+    if (campo?.formatoItaliano === false) return null;
     // prima la forma, poi il contenuto: un codice malfatto non ha senso
     // confrontarlo con la data di nascita
     const perForma = avvisoCodiceFiscale(valore);
@@ -337,7 +361,12 @@ export function avvisoLunghezza(campo, valore) {
   if (!attesa) return null;
   const quanti = String(valore ?? "").trim().length;
   if (quanti === 0 || quanti === attesa) return null;
-  const nome = (campo.etichetta || "Questo campo").toLowerCase();
+  // L'ETICHETTA NON SEMPRE STA IN UNA FRASE. «Identificativo fiscale
+  // personale (TIN)» dentro «il ... ne ha 16» diventa lungo e storto
+  // («il identificativo»), e quell'avviso esce solo per chi risiede in
+  // Italia, dove quella cosa si chiama codice fiscale. Quindi un campo
+  // puo' dire con che nome vuole essere nominato.
+  const nome = (campo.nomeAvviso || campo.etichetta || "Questo campo").toLowerCase();
   return quanti < attesa
     ? `Manca${attesa - quanti === 1 ? "" : "no"} ${attesa - quanti} caratter${attesa - quanti === 1 ? "e" : "i"}: il ${nome} ne ha ${attesa}.`
     : `Sono ${quanti} caratteri: il ${nome} ne ha ${attesa}.`;
