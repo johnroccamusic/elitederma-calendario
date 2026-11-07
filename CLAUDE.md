@@ -3161,6 +3161,39 @@ due in proporzione), e il gesto col POS vero montato — i due tasti solo al
 programmatore, le due caselle, il resto che compare, il QR che chiede
 21,73 invece di 32,21, e il contante che copre tutto.
 
+### «Non vedo più i prezzi corso»: era una cartella (7/11/2026, sera)
+
+Terza volta nello stesso giorno che torna la stessa frase, e le prime due
+risposte — giuste entrambe — non erano **la** risposta:
+
+1. al mattino «Olga non vede più i prezzi dei corsi» → il permesso ce
+   l'aveva; `prezzicorsi` è stato acceso su tutti e 21 i venditori
+   (`20261107180000`);
+2. subito dopo → i permessi si leggevano una volta sola, all'accesso: una
+   casella data a chi è già dentro non compariva. Corretto («Permessi e
+   grado si rileggono all'apertura»);
+3. la sera, ancora. **E il motivo era in Home**: `prezzicorsi` non è una
+   tessera di primo livello, sta **dentro la cartella «Storico allievi»**
+   (`impostazioni_layout_tasti`, pagina `home`, creata il 2/10/2026) con
+   `crmallievi` e `storicoallievi`. Chi vende al banco — Olga, Andrea,
+   Stefano, Elena, Elia — ha il permesso **solo** di quella: in Home
+   vedevano una cartella chiamata «Storico allievi» che conteneva una cosa
+   sola, i prezzi dei corsi. Nessuno la apre cercando un prezzo.
+
+**La regola che ne resta: una tessera dentro una cartella il cui nome dice
+un'altra cosa è una tessera che non esiste.** La cartella funzionava come
+scritto — si nasconde solo se dentro non ha niente di visibile, e mostra il
+conto delle tessere visibili — quindi non c'era nessun difetto da trovare
+nel codice, e cercarlo lì è costato due diagnosi. Quando qualcuno dice «non
+vedo più X» e il permesso c'è, **si guarda l'ordine dei tasti di quella
+pagina prima del codice**: `impostazioni_layout_tasti` può averlo infilato
+in una cartella, e la cartella la vede diversa ogni persona, perché dentro
+ci resta solo quello a cui ha diritto.
+
+Deciso dal titolare la sera stessa: `prezzicorsi` **tirata fuori in Home**,
+subito dopo la cartella, che resta con CRM e Storico allievi. È un dato
+(nessuna pubblicazione), e si vede al ricarico della pagina.
+
 ### I carrelli sospesi sparivano, e nessuno poteva saperlo (7/11/2026, sera)
 
 Dalla fiera, col banco aperto: «stanno sparendo i carrelli memorizzati, tra
