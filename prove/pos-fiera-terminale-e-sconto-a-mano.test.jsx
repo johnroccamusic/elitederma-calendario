@@ -101,6 +101,49 @@ describe("il POS fisico al banco della fiera", () => {
   });
 });
 
+describe("il prezzo scritto a mano sulla riga", () => {
+  const casellaPrezzo = (p) => p.nodo.querySelector('input[title^="Prezzo di questa riga"]');
+
+  it("è il prezzo finale: lo sconto fiera non si applica sopra", async () => {
+    const p = await banco({ ruolo: "programmatore" });
+    await clicca(tessera(p));
+    await attendi(80);
+    // senza toccare niente: 36,60 pieni, 12% di fascia, si pagano 32,21
+    expect(pulito(p)).toContain("32,21");
+
+    const campo = casellaPrezzo(p);
+    expect(campo, "la casella del prezzo di riga").toBeTruthy();
+    await scrivi(campo, "30");
+    await attendi(80);
+
+    const t = pulito(p);
+    // 30,00 scritti, 30,00 incassati: prima erano 26,40
+    expect(t, "si incassa quello che c'è scritto").toContain("Totale da incassare30,00 €");
+    expect(t, "e la riga lo dice").toContain("prezzo concordato, non si sconta");
+    expect(t).not.toContain("26,40");
+    expect(t).not.toContain("−12%");
+    await p.smonta();
+  });
+
+  it("tornando al listino lo sconto riparte", async () => {
+    // il tasto ↺ rimette il prezzo di partenza, e con esso la riga torna
+    // a scontarsi: «finale» vale finché quel prezzo è scritto
+    const p = await banco({ ruolo: "programmatore" });
+    await clicca(tessera(p));
+    await scrivi(casellaPrezzo(p), "30");
+    await attendi(60);
+    const ripristina = [...p.nodo.querySelectorAll("button")]
+      .find((b) => (b.title || "").includes("Rimetti il prezzo di listino"));
+    expect(ripristina, "il tasto che rimette il listino").toBeTruthy();
+    await clicca(ripristina);
+    await attendi(80);
+    const t = pulito(p);
+    expect(t).toContain("32,21");
+    expect(t).not.toContain("prezzo concordato");
+    await p.smonta();
+  });
+});
+
 describe("la cifra scritta a mano, in più", () => {
   const casella = (p) => p.nodo.querySelector('input[title^="Una cifra in euro"]');
 

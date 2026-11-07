@@ -5544,7 +5544,11 @@ function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false, ecc
 // L'omaggio non e' uno sconto commerciale e qui vale zero: chi registra
 // la vendita sa che in omaggio la riga vale il suo lordo intero.
 export function scontiPerRigaCarrello({
-  carrello = [], prodottiPerId = {}, subtotale = 0, scontoApplicato = 0,
+  // `scontoApplicato` e' il totale a cui le righe devono sommare. A
+  // `null` non si riproporziona niente e si restituisce il conto
+  // NATURALE, riga per riga: e' da quella somma che il carrello ricava
+  // il suo totale, invece di rifare lo stesso conto per conto proprio.
+  carrello = [], prodottiPerId = {}, subtotale = 0, scontoApplicato = null,
   fasce = null, contanti = false, eccezione = null,
   couponNum = 0, baseCoupon = null, coperturaCoupon = null,
   scontoTipo = "percentuale", scontoNum = 0, omaggio = false,
@@ -5552,9 +5556,30 @@ export function scontiPerRigaCarrello({
 } = {}) {
   const righe = carrello || [];
   const lordi = righe.map((r) => round2((Number(r?.prezzo) || 0) * (Number(r?.quantita) || 0)));
+  // IL PREZZO SCRITTO A MANO E' IL PREZZO FINALE (7/11/2026).
+  //
+  // Deciso dal titolare: «il prezzo che posso correggere e' anche il
+  // prezzo finale, quello dopo un eventuale sconto». Prima quella cifra
+  // era il nuovo PUNTO DI PARTENZA e lo sconto si applicava sopra:
+  // scritto 30,00, con lo sconto fiera al 12% la cliente pagava 26,40 —
+  // e chi aveva concordato trenta euro al banco si ritrovava a
+  // incassarne ventisei senza averlo deciso.
+  //
+  // C'era di peggio, misurato: la fascia si scegli sul margine
+  // dell'ANAGRAFICA (listino meno costo), non sul prezzo scritto, quindi
+  // la percentuale restava la stessa anche abbassando il prezzo. Su quel
+  // pigmento, scritto 13,00, la cliente pagava 11,44 — 9,38 netti su un
+  // prodotto che costa 10. Sotto costo, e niente lo diceva.
+  //
+  // Una riga con un prezzo concordato esce quindi dallo sconto delle
+  // tabelle. Il resto del carrello continua a scontarsi come sempre: non
+  // si sta spegnendo lo sconto, si sta dicendo che QUELLA riga un prezzo
+  // ce l'ha gia'.
+  const concordata = righe.map((r) => r?.prezzoListino != null);
   let sconti = righe.map((r, i) => {
     const lordoRiga = lordi[i];
     if (omaggio || lordoRiga <= 0) return 0;
+    if (concordata[i]) return 0;
     // Il codice di acquisto di una master viene prima di tutto, come nel
     // conto del totale. Sono euro per pezzo (il cedibile), quindi ogni
     // riga ha il suo: prima stavano tutti sull'ULTIMA riga del carrello,
@@ -5580,7 +5605,7 @@ export function scontiPerRigaCarrello({
     }
     return 0;
   });
-  if (!omaggio) {
+  if (!omaggio && scontoApplicato != null) {
     const somma = round2(sconti.reduce((acc, x) => acc + x, 0));
     const atteso = round2(Number(scontoApplicato) || 0);
     if (somma !== atteso) {
@@ -5588,8 +5613,15 @@ export function scontiPerRigaCarrello({
       sconti = sconti.map((x, i) => Math.min(lordi[i], round2(x * fattore)));
       const resto = round2(atteso - sconti.reduce((acc, x) => acc + x, 0));
       if (resto !== 0 && sconti.length) {
-        const ultima = sconti.length - 1;
-        sconti[ultima] = Math.max(0, Math.min(lordi[ultima], round2(sconti[ultima] + resto)));
+        // I CENTESIMI DI RESTO NON VANNO SU UNA RIGA CONCORDATA, o quel
+        // prezzo finale non sarebbe finito. Vanno sull'ultima riga che
+        // puo' prenderli; se sono concordate tutte, non c'e' altro posto
+        // e si torna all'ultima — altrimenti le righe non sommerebbero
+        // quello che si incassa, e la cifra scritta a mano «In piu' €»
+        // sparirebbe dal conto delle righe pur restando nel totale.
+        const libere = sconti.map((_, i) => i).filter((i) => !concordata[i]);
+        const dove = libere.length ? libere[libere.length - 1] : sconti.length - 1;
+        sconti[dove] = Math.max(0, Math.min(lordi[dove], round2(sconti[dove] + resto)));
       }
     }
   }
@@ -72306,14 +72338,31 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const fasceContantiInUso = pagamentoContaComeContanti(metodoPagamento) && (couponAFasce
     ? (couponPersonaleAttivo ? serieScontoScritta(fasceReferralContantiPos) : serieScontoScritta(contantiDiClasse))
     : scontoFieraAttivo && serieScontoScritta(fasceEventiContantiPos));
-  const scontoDellaFiera = scontoFieraAttivo
-    ? scontoAFasceCarrello(carrello, prodottiPerId, fasceFieraAttive, pagamentoContaComeContanti(metodoPagamento), null)
-    : 0;
-  const scontoCoupon = couponAcquistoMaster
-    ? scontoAcquistoMasterCarrello(carrello, prodottiPerId, cedibilePerProdotto, quotaMasterPos)
-    : couponAFasce
-      ? scontoAFasceCarrello(carrello, prodottiPerId, fasceCouponAttive, pagamentoContaComeContanti(metodoPagamento), eccezioneNeedlingPos)
-      : scontoCouponCarrello(carrello, prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
+  // QUANTO SCONTANO LE REGOLE SU QUESTO CARRELLO: la somma delle righe.
+  //
+  // Qui c'erano tre funzioni «di carrello» — `scontoAFasceCarrello`,
+  // `scontoCouponCarrello`, `scontoAcquistoMasterCarrello` — che
+  // applicavano al carrello intero la stessa formula che
+  // `scontiPerRigaCarrello` applica riga per riga. Due conti sullo stesso
+  // sconto, e il 7/11/2026 si sono staccati per davvero: da quando una
+  // riga col prezzo concordato a mano non si sconta piu', il totale
+  // continuava a scontarla e il riproporzionamento le ributtava addosso
+  // la differenza — cioe' il prezzo «finale» tornava a non essere finale,
+  // e il banco di prova l'ha preso al primo giro.
+  //
+  // Adesso il totale e' la somma delle righe, e il conto sta in un posto
+  // solo. Le tre funzioni restano dove sono: le usa `scontiPerRigaCarrello`
+  // per una riga alla volta.
+  const righeAlNaturale = scontiPerRigaCarrello({
+    carrello, prodottiPerId, subtotale, scontoApplicato: null,
+    fasce: fasceInUsoSulCarrello,
+    contanti: pagamentoContaComeContanti(metodoPagamento),
+    eccezione: eccezioneFasceInUso,
+    couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
+    omaggio: omaggioAttivo,
+    acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
+  });
+  const scontoDalleRegole = round2(righeAlNaturale.reduce((somma, x) => somma + x.sconto, 0));
   // le righe che non hanno potuto contribuire: senza costo di acquisto
   // il margine non si sa e non si sconta. Va detto a chi vende, o sembra
   // che il codice non abbia funzionato
@@ -72322,17 +72371,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     : couponNum > 0 && couponSulMargine
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
-  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale,
-    ((couponNum > 0 || couponAFasce || couponAcquistoMaster) ? scontoCoupon
-      // la fiera viene prima dello sconto a mano: quando e' accesa i due
-      // campi qui sotto sono spenti, e sommarli sarebbe scontare due volte
-      : scontoFieraAttivo ? scontoDellaFiera
-        : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum))
-    // ...e QUESTA invece si somma, perche' e' l'unica che e' stata
-    // chiesta per fare proprio quello: arrivare alla cifra tonda che
-    // chi decide i prezzi ha in mente. Il tetto al subtotale resta: un
-    // carrello non si sconta piu' di quanto vale.
-    + scontoExtra));
+  // Lo sconto di questo carrello: quello delle regole (la somma delle
+  // righe, qui sopra) piu' la cifra scritta a mano, che e' l'unica che si
+  // somma — e' stata chiesta per fare proprio quello, arrivare alla cifra
+  // tonda che chi decide i prezzi ha in mente. Il tetto al subtotale
+  // resta: un carrello non si sconta piu' di quanto vale.
+  const scontoApplicato = subtotale <= 0 ? 0
+    : round2(Math.min(subtotale, scontoDalleRegole + scontoExtra));
   // LA PERCENTUALE CHE HANNO FATTO LE TABELLE su questo carrello:
   // quanto hanno davvero eroso il codice, le fasce o lo sconto fiera,
   // diviso il subtotale. Il numero scritto sul coupon non dice la
@@ -72417,15 +72462,19 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     if (!(sc.sconto > 0)) {
       // Con una regola accesa, una riga che non prende niente va detta:
       // la cliente ha visto lo sconto sul pigmento e lo chiede anche su
-      // questo. Succede quando del prodotto non risulta il costo di
-      // acquisto, cioe' il margine: senza margine non c'e' niente da
-      // cedere. Il riquadro dei totali li elenca gia', ma lontano da qui.
+      // questo. E i due motivi per cui non lo prende sono diversi, quindi
+      // si dicono diversi: il prezzo l'ha scritto una persona ed e' quello
+      // (7/11/2026), oppure del prodotto non risulta il costo di acquisto
+      // e senza margine non c'e' niente da cedere.
       if (!regolaAccesa) return soloSconto ? null : pieno;
+      const concordato = r.prezzoListino != null;
       return (
         <>
           {soloSconto ? null : pieno}
-          <span title="Su questo prodotto lo sconto non si applica: non ne risulta il costo di acquisto, quindi il margine non si sa. Si vende a prezzo pieno.">
-            {" · niente sconto"}
+          <span title={concordato
+            ? "Questo prezzo l'hai scritto tu: è quello che si incassa, e lo sconto non si applica sopra."
+            : "Su questo prodotto lo sconto non si applica: non ne risulta il costo di acquisto, quindi il margine non si sa. Si vende a prezzo pieno."}>
+            {concordato ? " · prezzo concordato, non si sconta" : " · niente sconto"}
           </span>
         </>
       );

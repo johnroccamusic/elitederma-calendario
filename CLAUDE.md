@@ -2898,6 +2898,52 @@ acceso si ripete sullo scontrino dopo, e nessuno lo vede) e **sta nella
 fotografia del carrello sospeso**, come lo sconto fiera: ripreso il
 carrello, il totale concordato col cliente deve essere ancora quello.
 
+**E il prezzo scritto a mano su una riga è il prezzo FINALE** (deciso lo
+stesso giorno: «il prezzo che posso correggere è anche il prezzo finale,
+quello dopo un eventuale sconto»). Prima quella cifra era il nuovo *punto
+di partenza* e lo sconto si applicava sopra: scritto 30,00, con il 12%
+della fiera si incassavano 26,40 — e chi aveva concordato trenta euro al
+banco ne incassava ventisei senza averlo deciso. Misurato, c'era di
+peggio: la fascia si scegli sul margine dell'**anagrafica** (listino meno
+costo), non sul prezzo scritto, quindi la percentuale non si abbassava
+mai. Su un pigmento che costa 10, scritto 13,00, la cliente pagava 11,44
+— **9,38 netti, sotto costo**, e niente lo diceva.
+
+Ora una riga con un prezzo concordato esce dallo sconto delle tabelle e
+lo dice («prezzo concordato, non si sconta»); il resto del carrello
+continua a scontarsi, e il tasto ↺ rimette il listino e con esso lo
+sconto. Si riconosce da `prezzoListino`, che la correzione scrive sulla
+riga, e sulla vendita resta `prezzo_corretto_a_mano`.
+
+**La terza copia dello stesso conto, e come si è fatta sentire.** Il
+totale del carrello lo calcolavano tre funzioni «di carrello»
+(`scontoAFasceCarrello`, `scontoCouponCarrello`,
+`scontoAcquistoMasterCarrello`) con la stessa formula che
+`scontiPerRigaCarrello` applica riga per riga. Finché le due dicevano lo
+stesso numero non si vedeva; appena una riga ha smesso di scontarsi, il
+totale ha continuato a scontarla e **il riproporzionamento le ha
+ributtato addosso la differenza** — cioè il prezzo «finale» tornava a non
+essere finale. L'ha preso il banco di prova al primo giro, non l'uso.
+Adesso **il totale è la somma delle righe**: `scontiPerRigaCarrello` con
+`scontoApplicato: null` restituisce il conto naturale, e da lì esce il
+totale. Le tre funzioni restano, usate una riga alla volta.
+
+E i centesimi di resto dell'arrotondamento **non vanno su una riga
+concordata**: vanno sull'ultima riga che può prenderseli. Se sono
+concordate tutte restano sull'ultima, perché l'alternativa è che le righe
+non sommino quello che si incassa — e un totale che non torna con le sue
+righe è peggio.
+
+**Controllate le vendite al banco in archivio** (7/11/2026): le righe
+sommano il totale su tutte, comprese le sette della fiera di oggi.
+L'unico scarto è POS-1793740596726 del 3/11 — righe per 382,01 e totale
+348,12 — ed è giusto: era un **acquisto personale** di una master che ha
+speso 33,89 di provvigioni maturate. La merce vale 382,01, in cassa sono
+entrati 348,12, il resto l'hanno pagato le provvigioni. Il riquadro dei
+conti ha la sua riga «Provvigioni usate» apposta; sulla vendita però quel
+numero **non è scritto**, e si ricava solo dalla differenza: è una cosa
+da sapere quando si controlla un totale.
+
 Prove in `prove/pos-fiera-terminale-e-sconto-a-mano.test.jsx` (8): il
 terminale c'è per chi sta al banco e non per gli altri, si spegne passata
 l'ora, il banco si apre sul QR; la cifra a mano la vede solo il

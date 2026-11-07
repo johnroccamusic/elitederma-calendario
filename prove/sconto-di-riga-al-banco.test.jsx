@@ -196,6 +196,77 @@ async function banco() {
   );
 }
 
+// IL PREZZO SCRITTO A MANO E' IL PREZZO FINALE (7/11/2026, deciso dal
+// titolare: «il prezzo che posso correggere è anche il prezzo finale,
+// quello dopo un eventuale sconto»).
+//
+// Prima quella cifra era il nuovo punto di partenza e lo sconto si
+// applicava sopra: scritto 30,00, con il 12% della fiera si incassavano
+// 26,40. E la fascia si scegli sul margine dell'anagrafica, non sul
+// prezzo scritto, quindi la percentuale non si abbassava mai: scritto
+// 13,00 su un prodotto che costa 10, la cliente pagava 11,44 — 9,38
+// netti, sotto costo, senza che niente lo dicesse.
+describe("una riga con il prezzo concordato a mano", () => {
+  it("non si sconta: si incassa quello che c'è scritto", () => {
+    const carrello = [{ prodottoId: "p1", prezzo: 30, quantita: 1, prezzoListino: 36.6 }];
+    const [riga] = scontiPerRigaCarrello({
+      carrello, prodottiPerId: PER_ID, subtotale: 30, scontoApplicato: 0, fasce: FASCE,
+    });
+    expect(riga.sconto).toBe(0);
+    expect(riga.totale).toBe(30);
+    expect(riga.pct).toBe(0);
+  });
+
+  it("il resto del carrello continua a scontarsi", () => {
+    // non si sta spegnendo lo sconto: si sta dicendo che QUELLA riga un
+    // prezzo ce l'ha già
+    const carrello = [
+      { prodottoId: "p1", prezzo: 30, quantita: 1, prezzoListino: 36.6 },
+      { prodottoId: "p2", prezzo: 12.2, quantita: 1 },
+    ];
+    const righe = scontiPerRigaCarrello({
+      carrello, prodottiPerId: PER_ID, subtotale: 42.2, scontoApplicato: 0.49, fasce: FASCE,
+    });
+    expect(righe[0].sconto).toBe(0);
+    expect(righe[1].pct).toBe(4);
+    const somma = Math.round(righe.reduce((a, x) => a + x.sconto, 0) * 100) / 100;
+    expect(somma).toBe(0.49);
+  });
+
+  it("i centesimi di resto non finiscono sulla riga concordata", () => {
+    // è il modo in cui «finale» tornerebbe a non essere finale: lo
+    // sconto a mano in più si riproporziona, e il resto va sull'ultima
+    // riga — che non deve essere quella col prezzo concordato
+    const carrello = [
+      { prodottoId: "p2", prezzo: 12.2, quantita: 1 },
+      { prodottoId: "p1", prezzo: 30, quantita: 1, prezzoListino: 36.6 },
+    ];
+    const righe = scontiPerRigaCarrello({
+      carrello, prodottiPerId: PER_ID, subtotale: 42.2, scontoApplicato: 1.15, fasce: FASCE,
+    });
+    expect(righe[1].sconto, "la riga concordata").toBe(0);
+    expect(righe[1].totale).toBe(30);
+    const somma = Math.round(righe.reduce((a, x) => a + x.sconto, 0) * 100) / 100;
+    expect(somma, "i conti tornano comunque").toBe(1.15);
+  });
+
+  it("se sono concordate tutte, i conti tornano lo stesso", () => {
+    // caso limite, e la scelta è dichiarata: se non c'è nessuna riga che
+    // possa prendersi la cifra scritta a mano, se la prende l'ultima —
+    // perché l'alternativa è che le righe non sommino quello che si
+    // incassa, e un totale che non torna con le sue righe è peggio
+    const carrello = [
+      { prodottoId: "p1", prezzo: 30, quantita: 1, prezzoListino: 36.6 },
+      { prodottoId: "p2", prezzo: 10, quantita: 1, prezzoListino: 12.2 },
+    ];
+    const righe = scontiPerRigaCarrello({
+      carrello, prodottiPerId: PER_ID, subtotale: 40, scontoApplicato: 2, fasce: FASCE,
+    });
+    const somma = Math.round(righe.reduce((a, x) => a + x.sconto, 0) * 100) / 100;
+    expect(somma).toBe(2);
+  });
+});
+
 // Le righe che la cliente vede quando paga col QR: devono dire lo
 // stesso prezzo che le è stato detto al banco, e sommare esattamente
 // quello che paga. Prima lo sconto si spalmava con un fattore unico su
