@@ -5515,6 +5515,99 @@ function scontoAFasceCarrello(righe, prodottoPerId, fasce, contanti = false, ecc
     return s + (pct > 0 ? (r.prezzo * r.quantita * pct) / 100 : 0);
   }, 0));
 }
+// ---------- Lo sconto di OGNI riga, in un posto solo ----------
+// Chiesto dal banco della fiera di Napoli (7/11/2026): «per ogni prodotto
+// vogliono vedere quale percentuale il programma ha calcolato, perche' la
+// cliente glielo chiede». Il conto per riga c'era gia' — lo sconto a
+// fasce nasce riga per riga, sul margine di quel prodotto — ma era
+// scritto DUE VOLTE: una per quello che si vede nel carrello, una per
+// quello che finisce registrato nella vendita, a trecento righe di
+// distanza. Finche' quel numero lo leggeva solo chi vende era una
+// duplicazione; da quando lo legge la cliente davanti al banco, due
+// copie vogliono dire un prezzo detto e un prezzo incassato che possono
+// non coincidere.
+//
+// Qui dentro c'e' anche il riproporzionamento: se la somma delle righe
+// non fa lo sconto applicato al totale (i centesimi, o il tetto al
+// subtotale), si riproporziona e la differenza va sull'ultima riga. E'
+// quello che la vendita faceva gia' da sola, e che il carrello invece
+// NON faceva: era l'unico punto in cui i due numeri si staccavano.
+//
+// Risponde con una riga per ogni riga del carrello:
+//   lordo     quanto costa a listino (prezzo x pezzi)
+//   sconto    gli euro tolti a questa riga
+//   pct       la percentuale di questa riga, un decimale
+//   totale    quanto si paga per questa riga
+//   unitario  quanto viene il pezzo, scontato
+//
+// L'omaggio non e' uno sconto commerciale e qui vale zero: chi registra
+// la vendita sa che in omaggio la riga vale il suo lordo intero.
+export function scontiPerRigaCarrello({
+  carrello = [], prodottiPerId = {}, subtotale = 0, scontoApplicato = 0,
+  fasce = null, contanti = false, eccezione = null,
+  couponNum = 0, baseCoupon = null, coperturaCoupon = null,
+  scontoTipo = "percentuale", scontoNum = 0, omaggio = false,
+  acquistoMaster = false, cedibilePerProdotto = null, quotaMaster = null,
+} = {}) {
+  const righe = carrello || [];
+  const lordi = righe.map((r) => round2((Number(r?.prezzo) || 0) * (Number(r?.quantita) || 0)));
+  let sconti = righe.map((r, i) => {
+    const lordoRiga = lordi[i];
+    if (omaggio || lordoRiga <= 0) return 0;
+    // Il codice di acquisto di una master viene prima di tutto, come nel
+    // conto del totale. Sono euro per pezzo (il cedibile), quindi ogni
+    // riga ha il suo: prima stavano tutti sull'ULTIMA riga del carrello,
+    // perche' nessuno sapeva calcolarli per riga e il riproporzionamento
+    // qui sotto ci buttava dentro l'intera differenza. Il totale era
+    // giusto, l'attribuzione no — e con essa i margini per prodotto.
+    if (acquistoMaster) {
+      return scontoAcquistoMasterCarrello([r], prodottiPerId, cedibilePerProdotto, quotaMaster);
+    }
+    // Su un prodotto preso da un'eccezione del codice la percentuale e'
+    // quella dell'eccezione, che e' sul netto: `percentualeFasciaDi` la
+    // riporta sul lordo, perche' qui si moltiplica sempre per il lordo.
+    if (fasce) {
+      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasce, subtotale, contanti, eccezione)) / 100);
+    }
+    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
+    if (scontoNum > 0) {
+      // lo sconto a mano in euro si spalma in proporzione: e' una cifra
+      // sul carrello, non su un prodotto
+      return scontoTipo === "percentuale"
+        ? round2((lordoRiga * scontoNum) / 100)
+        : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
+    }
+    return 0;
+  });
+  if (!omaggio) {
+    const somma = round2(sconti.reduce((acc, x) => acc + x, 0));
+    const atteso = round2(Number(scontoApplicato) || 0);
+    if (somma !== atteso) {
+      const fattore = somma > 0 ? atteso / somma : 0;
+      sconti = sconti.map((x, i) => Math.min(lordi[i], round2(x * fattore)));
+      const resto = round2(atteso - sconti.reduce((acc, x) => acc + x, 0));
+      if (resto !== 0 && sconti.length) {
+        const ultima = sconti.length - 1;
+        sconti[ultima] = Math.max(0, Math.min(lordi[ultima], round2(sconti[ultima] + resto)));
+      }
+    }
+  }
+  return righe.map((r, i) => {
+    const lordo = lordi[i];
+    const sconto = sconti[i];
+    const totale = round2(lordo - sconto);
+    const pezzi = Number(r?.quantita) || 0;
+    return {
+      lordo, sconto, totale,
+      // la stessa formula che finisce in `sconto_pct` sulla vendita
+      pct: lordo > 0 ? Math.round((sconto / lordo) * 1000) / 10 : 0,
+      // il prezzo del pezzo scontato si ricava dal TOTALE della riga e
+      // non si sconta per conto suo: chi moltiplica il pezzo per la
+      // quantita' deve ritrovare la riga, non un centesimo di scarto
+      unitario: pezzi > 0 ? round2(totale / pezzi) : 0,
+    };
+  });
+}
 // Lo sconto di un carrello col codice di acquisto di una master.
 //
 // Non e' una percentuale: sono EURO, la quota di quello che su ogni pezzo
@@ -72135,24 +72228,83 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   })();
   const totaleNetto = round2(subtotale - scontoApplicato);
 
-  // Lo sconto di UNA riga, con la stessa regola che usa l'incasso: chi
-  // guarda il carrello deve leggere lo stesso numero che finira' scritto
-  // sulla vendita, non una stima fatta col totale spalmato. Su un
-  // carrello a fasce ogni prodotto ha la sua percentuale — quella del suo
-  // margine — e dal totale in fondo non si capiva da dove venisse.
-  function scontoDiRiga(r) {
-    const lordoRiga = round2(r.prezzo * r.quantita);
-    if (omaggioAttivo || lordoRiga <= 0) return 0;
-    if (fasceInUsoSulCarrello) {
-      return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceInUsoSulCarrello, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneFasceInUso)) / 100);
+  // LO SCONTO DI OGNI RIGA, calcolato una volta sola per tutti quelli
+  // che lo devono dire: il carrello che si mostra alla cliente, la
+  // vendita che si registra, la ricevuta. Il conto sta in
+  // `scontiPerRigaCarrello` — compreso il riproporzionamento, che prima
+  // faceva solo la vendita e il carrello no.
+  const scontiDelleRighe = scontiPerRigaCarrello({
+    carrello, prodottiPerId, subtotale, scontoApplicato,
+    fasce: fasceInUsoSulCarrello,
+    contanti: pagamentoContaComeContanti(metodoPagamento),
+    eccezione: eccezioneFasceInUso,
+    couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
+    omaggio: omaggioAttivo,
+    acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
+  });
+  // Nel carrello non ci sono due righe dello stesso prodotto — il "+"
+  // alza la quantita' — quindi la riga si ritrova dal prodotto e non
+  // dalla posizione, che cambia a ogni aggiunta.
+  const scontoRigaPerProdotto = new Map(carrello.map((r, i) => [r.prodottoId, scontiDelleRighe[i]]));
+  function dettaglioScontoRiga(r) { return scontoRigaPerProdotto.get(r?.prodottoId) || null; }
+  // IL PREZZO DI UNA RIGA, COME SI LEGGE AL BANCO.
+  //
+  // «24,00 € → 21,12 € −12%»: il prezzo pieno barrato, quello scontato
+  // e la percentuale, sulla riga del prodotto. Prima c'era la sola
+  // percentuale, e in fondo al NOME — dove un riquadro che taglia quello
+  // che non ci sta (`nowrap` + `ellipsis`) se la mangiava per prima: su
+  // un telefono, con i nomi che hanno i prodotti qui, al banco non si
+  // vedeva niente. Il prezzo scontato non c'era affatto, e chi vendeva
+  // doveva fare il conto a mente davanti alla cliente.
+  //
+  // Il prezzo scontato e' quello DEL PEZZO, perche' e' quello che la
+  // cliente chiede, e si ricava DALLA RIGA: totale diviso i pezzi, non
+  // il pezzo scontato per conto suo e poi moltiplicato — cosi' si
+  // incasserebbe un centesimo in piu' di quello che la vendita
+  // registra. Per la stessa ragione il pezzo e' un numero arrotondato:
+  // 96,62 su tre pezzi non e' divisibile, e il conto che fa fede e'
+  // quello della riga. Percio' con piu' di un pezzo si scrive "al
+  // pezzo" e accanto quanto fa la riga intera: i due numeri si leggono
+  // per quello che sono, invece di sembrare l'uno il triplo dell'altro.
+  function dettaglioPrezzoRiga(r, { soloSconto = false } = {}) {
+    const pieno = fmtEuroErp2(r.prezzo);
+    const sc = dettaglioScontoRiga(r);
+    // una regola di sconto sta valendo su questo carrello
+    const regolaAccesa = !!fasceInUsoSulCarrello || couponNum > 0 || couponAcquistoMaster || scontoNum > 0;
+    if (omaggioAttivo || !sc || sc.lordo <= 0) return soloSconto ? null : pieno;
+    if (!(sc.sconto > 0)) {
+      // Con una regola accesa, una riga che non prende niente va detta:
+      // la cliente ha visto lo sconto sul pigmento e lo chiede anche su
+      // questo. Succede quando del prodotto non risulta il costo di
+      // acquisto, cioe' il margine: senza margine non c'e' niente da
+      // cedere. Il riquadro dei totali li elenca gia', ma lontano da qui.
+      if (!regolaAccesa) return soloSconto ? null : pieno;
+      return (
+        <>
+          {soloSconto ? null : pieno}
+          <span title="Su questo prodotto lo sconto non si applica: non ne risulta il costo di acquisto, quindi il margine non si sa. Si vende a prezzo pieno.">
+            {" · niente sconto"}
+          </span>
+        </>
+      );
     }
-    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
-    if (scontoNum > 0) {
-      return scontoTipo === "percentuale"
-        ? round2((lordoRiga * scontoNum) / 100)
-        : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
-    }
-    return 0;
+    // "12%" e non "12,00%": i decimali si scrivono solo quando ci sono
+    const pct = sc.pct;
+    const scritta = Number.isInteger(pct) ? String(pct) : String(Math.round(pct * 10) / 10).replace(".", ",");
+    const pezzi = Number(r.quantita) || 0;
+    const spiega = pezzi > 1
+      ? `Prezzo pieno ${pieno} al pezzo. Sconto ${scritta}%: ${fmtEuroErp2(sc.sconto)} su ${pezzi} pezzi, si pagano ${fmtEuroErp2(sc.totale)}. Il prezzo del pezzo e' arrotondato: il conto che fa fede e' quello della riga.`
+      : `Prezzo pieno ${pieno}, sconto ${scritta}% (${fmtEuroErp2(sc.sconto)}): si paga ${fmtEuroErp2(sc.totale)}.`;
+    return (
+      <span title={spiega}>
+        {soloSconto ? null : <span style={{ textDecoration: "line-through" }}>{pieno}</span>}
+        {" → "}
+        <span style={{ ...fontBody, fontSize: isMobile ? 12 : 12.5, fontWeight: 800, color: "#2E7D32" }}>{fmtEuroErp2(sc.unitario)}</span>
+        {pezzi > 1 ? <span>{" al pezzo"}</span> : null}
+        <span style={{ color: "#2E7D32", fontWeight: 800 }}>{" −"}{scritta}%</span>
+        {pezzi > 1 ? <span>{" · "}{pezzi} pz {fmtEuroErp2(sc.totale)}</span> : null}
+      </span>
+    );
   }
   // La spedizione si paga: 6,90 sul totale quando la vendita va spedita.
   // Entra nel conto come una riga a se', cosi' il totale e' sempre la
@@ -72500,27 +72652,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     // Negli omaggi ogni riga vale zero, non solo il totale, altrimenti
     // risulterebbe un ricavo fantasma per prodotto nei report che sommano
     // "prodotti.totale_riga".
-    const lordiRiga = carrello.map((r) => round2(r.prezzo * r.quantita));
-    let scontiRiga = carrello.map((r, i) => {
-      const lordoRiga = lordiRiga[i];
-      if (omaggioAttivo || lordoRiga <= 0) return 0;
-      if (fasceInUsoSulCarrello) return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasceInUsoSulCarrello, subtotale, pagamentoContaComeContanti(metodoPagamento), eccezioneFasceInUso)) / 100);
-      if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
-      if (scontoNum > 0) return scontoTipo === "percentuale" ? round2((lordoRiga * scontoNum) / 100) : round2(subtotale > 0 ? (scontoNum * lordoRiga) / subtotale : 0);
-      return 0;
-    });
-    if (!omaggioAttivo) {
-      const somma = round2(scontiRiga.reduce((acc, x) => acc + x, 0));
-      if (somma !== scontoApplicato) {
-        const fattore = somma > 0 ? scontoApplicato / somma : 0;
-        scontiRiga = scontiRiga.map((x, i) => Math.min(lordiRiga[i], round2(x * fattore)));
-        const resto = round2(scontoApplicato - scontiRiga.reduce((acc, x) => acc + x, 0));
-        if (resto !== 0 && scontiRiga.length) {
-          const ultima = scontiRiga.length - 1;
-          scontiRiga[ultima] = Math.max(0, Math.min(lordiRiga[ultima], round2(scontiRiga[ultima] + resto)));
-        }
-      }
-    }
+    // Qui NON si ricalcola niente: le righe le ha gia' fatte
+    // `scontiDelleRighe`, e sono le stesse che chi sta al banco ha
+    // letto accanto a ogni prodotto e che la cliente si e' sentita
+    // dire. Prima questa formula era scritta una seconda volta, qui.
+    const lordiRiga = scontiDelleRighe.map((x) => x.lordo);
+    const scontiRiga = scontiDelleRighe.map((x) => x.sconto);
     // il prodotto_id serve alla chiusura del corso per sapere QUALE pezzo è
     // uscito: il solo nome costringeva a indovinare per stringa.
     // prezzo_listino e' il prezzo al pubblico di quel giorno: il listino
@@ -73421,29 +73558,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Solo il nome. La percentuale di questa riga stava
+                    qui dentro, in fondo al nome — e questo riquadro
+                    taglia quello che non ci sta (`nowrap` + `ellipsis`):
+                    su un telefono, con un nome come «Excellentia Siero
+                    ricrescita Ciglia», la prima cosa che l'ellissi si
+                    mangiava era proprio lo sconto. Al banco della fiera
+                    di Napoli nessuna l'ha mai visto. Adesso sta sulla
+                    riga del prezzo, che manda a capo invece di
+                    tagliare. */}
                 <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {r.nome}
-                  {(() => {
-                    // Quanto sconta QUESTA riga, e solo quello: la
-                    // percentuale, accanto al nome. Gli euro e il prezzo
-                    // finale li dice gia' il riquadro dei totali, e sotto
-                    // ogni prodotto diventavano tre numeri da leggere per
-                    // sapere una cosa sola.
-                    //
-                    // Su un prodotto preso da un'eccezione del codice si
-                    // scrive la percentuale dell'eccezione, che e' sul
-                    // netto: raccontata sul lordo un 30% diventerebbe
-                    // 24,59 e non sarebbe il numero che si e' scritto in
-                    // "Regole di un codice".
-                    const suoSconto = scontoDiRiga(r);
-                    if (!(suoSconto > 0)) return null;
-                    const lordoRiga = round2(r.prezzo * r.quantita);
-                    const pct = lordoRiga > 0 ? Math.round((suoSconto / lordoRiga) * 1000) / 10 : 0;
-                    // "30%" e non "30,00%": i decimali si scrivono solo
-                    // quando ci sono davvero
-                    const scritta = Number.isInteger(pct) ? String(pct) : String(Math.round(pct * 10) / 10).replace(".", ",");
-                    return <span style={{ color: "#2E7D32", fontWeight: 800 }}>{"  "}−{scritta}%</span>;
-                  })()}
                 </div>
                 {correzionePrezzo ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
@@ -73465,12 +73590,24 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                           style={{ background: "none", border: "none", color: "#8A6D1D", cursor: "pointer", fontSize: isMobile ? 11 : 12, padding: 0, lineHeight: 1 }}>↺</button>
                       </>
                     )}
+                    {/* anche col prezzo scritto a mano lo sconto si
+                        vede: la percentuale si applica a quel prezzo */}
+                    {dettaglioPrezzoRiga(r, { soloSconto: true })}
                     <PuntiDellaRiga punti={puntiDiRiga(r)} isMobile={isMobile} />
                     {r.sku ? <span style={{ ...fontBody, fontSize: isMobile ? 9.5 : 10, color: grigioCarrello, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Cod. {r.sku}</span> : null}
                   </div>
                 ) : (
                   <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: grigioCarrello }}>
-                    {fmtEuroErp2(r.prezzo)}
+                    {/* QUANTO PAGA LA CLIENTE PER QUESTO PRODOTTO.
+                        Chiesto dal banco della fiera (7/11/2026):
+                        «vogliono vedere quale percentuale e' stata fatta
+                        sugli aghi, e poi sul pigmento, perche' la cliente
+                        glielo chiede». Il prezzo pieno e quello scontato
+                        stanno accanto: non si legge una percentuale per
+                        poi fare il conto a mente davanti a chi aspetta.
+                        Sta sulla riga del prezzo e non sotto, cosi' il
+                        prezzo pieno si scrive una volta sola. */}
+                    {dettaglioPrezzoRiga(r)}
                     <PuntiDellaRiga punti={puntiDiRiga(r)} isMobile={isMobile} />
                     {r.sku ? ` · Cod. ${r.sku}` : ""}
                   </div>

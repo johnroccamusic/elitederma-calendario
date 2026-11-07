@@ -2743,6 +2743,79 @@ che in archivio ci va **digitato e non convertito**. Prove in
 `prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
 dell'hennè, che devono fare residuo **zero** e non 99,18.
 
+### Quanto sconto ha preso QUESTO prodotto (7/11/2026)
+
+Le ragazze al banco della fiera di Napoli: «per ogni prodotto vogliono
+vedere quale percentuale il programma ha calcolato con lo sconto fiera,
+perché la cliente glielo chiede. Quando battono gli aghi vogliono vedere
+sugli aghi che percentuale è stata fatta, poi sul pigmento quella del
+colore». E il motivo: «calcola il prezzo intero e poi applica la
+percentuale tutta insieme nel carrello, così non si capisce qual è il
+prezzo intero e qual è il prezzo scontato di ciascuna riga».
+
+**La percentuale di riga c'era già, e nessuna l'ha mai vista.** Era
+scritta in fondo al NOME del prodotto, dentro un riquadro con
+`white-space: nowrap` + `overflow: hidden` + `text-overflow: ellipsis`:
+cioè un riquadro che taglia quello che non ci sta, e quello che non ci
+sta è sempre l'ultima cosa — proprio lo sconto. Su un telefono, con i
+nomi che hanno i prodotti qui («Excellentia Siero ricrescita Ciglia —
+Espositore 10pz»), l'ellissi se lo mangiava per primo. **Una cosa
+aggiunta in fondo a un riquadro che taglia non esiste**, e non lo dice
+nessun errore: il numero era calcolato giusto e disegnato fuori dallo
+schermo. Adesso sta sulla riga del prezzo, che manda a capo invece di
+tagliare, e una prova controlla che il riquadro del nome non contenga
+percentuali.
+
+**Cosa si legge adesso**, sulla riga di ogni prodotto del carrello:
+`36,60 € → 32,21 € −12% · 2 pz 64,42 €` — il prezzo pieno barrato,
+quello scontato, la percentuale di quella riga, e con più di un pezzo
+quanto fa la riga intera.
+
+**Il prezzo del pezzo si ricava DALLA RIGA**, non il contrario: totale
+della riga diviso i pezzi. Scontare il pezzo e moltiplicarlo
+incasserebbe un centesimo in più di quello che la vendita registra — tre
+pigmenti fanno 96,62 €, che su tre pezzi non è divisibile (32,2066…), e
+32,21 × 3 fa 96,63. Per questo con più di un pezzo si scrive «al pezzo»
+e accanto il totale della riga: il pezzo è arrotondato, il conto che fa
+fede è quello della riga, e i due numeri si leggono per quello che sono
+invece di sembrare l'uno il triplo dell'altro.
+
+**Una riga che non prende niente lo dice** («Su questo nessuno sconto:
+prezzo pieno»), ma solo quando una regola di sconto sta valendo sul
+carrello. È il caso che al banco si chiede per primo: la cliente ha
+visto lo sconto sul pigmento e lo chiede anche sull'altro. Succede quando
+del prodotto non risulta il costo di acquisto — senza margine non c'è
+niente da cedere. Il riquadro dei totali li elencava già, ma lontano da
+lì.
+
+**E il conto di riga adesso è uno solo** (`scontiPerRigaCarrello`).
+Erano **due copie della stessa formula** a quattrocento righe di
+distanza: una per il carrello che si guarda, una per la vendita che si
+registra. Finché quel numero lo leggeva solo chi vende era una
+duplicazione; **da quando lo legge la cliente davanti al banco, due
+copie vogliono dire un prezzo detto e un prezzo incassato che possono
+non coincidere.** Dentro c'è anche il riproporzionamento — se la somma
+delle righe non fa lo sconto del totale, per i centesimi o per il tetto
+al subtotale, si riproporziona e la differenza va sull'ultima riga — che
+prima faceva solo la vendita: era l'unico punto in cui i due numeri si
+staccavano davvero.
+
+**Un difetto trovato strada facendo, e sono margini.** Col codice di
+acquisto di una master lo sconto è in euro per pezzo (il cedibile), e per
+riga non lo calcolava nessuno: le righe venivano tutte zero e il
+riproporzionamento buttava **l'intera differenza sull'ultima riga del
+carrello**. Il totale era giusto — quello che la master pagava non
+cambia — ma `sconto_riga`, `sconto_pct` e `totale_riga` attribuivano
+tutto a un prodotto solo, e con essi il margine per prodotto nelle
+statistiche. Ora ogni riga porta il suo.
+
+Prove in `prove/sconto-di-riga-al-banco.test.jsx` (12): la regola —
+margini diversi danno percentuali diverse sulla stessa vendita, la somma
+delle righe fa **esattamente** lo sconto del carrello, lo sconto più
+grande del carrello non sfonda le righe, l'omaggio, il codice della
+master — e il gesto, col POS vero montato: si batte il prodotto e si
+legge la riga, compresa quella con due pezzi.
+
 ### Il POS di chi sta al banco parte dalla fiera (7/11/2026)
 
 Il titolare, sabato mattina con la fiera di Napoli aperta: «Da oggi fino a
