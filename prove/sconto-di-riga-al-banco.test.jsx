@@ -111,7 +111,7 @@ describe("scontiPerRigaCarrello: lo sconto di ogni riga", () => {
     ];
     const righe = scontiPerRigaCarrello({
       carrello, prodottiPerId: PER_ID, subtotale: 48.8, scontoApplicato: 10,
-      scontoTipo: "euro", scontoNum: 10,
+      scontoTipo: "importo", scontoNum: 10,
     });
     const somma = Math.round(righe.reduce((s, x) => s + x.sconto, 0) * 100) / 100;
     expect(somma).toBe(10);
@@ -124,7 +124,7 @@ describe("scontiPerRigaCarrello: lo sconto di ogni riga", () => {
     const carrello = [{ prodottoId: "p1", prezzo: 36.6, quantita: 1 }];
     const [riga] = scontiPerRigaCarrello({
       carrello, prodottiPerId: PER_ID, subtotale: 36.6, scontoApplicato: 36.6,
-      scontoTipo: "euro", scontoNum: 100,
+      scontoTipo: "importo", scontoNum: 100,
     });
     expect(riga.sconto).toBe(36.6);
     expect(riga.totale).toBe(0);

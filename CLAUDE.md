@@ -2743,6 +2743,73 @@ che in archivio ci va **digitato e non convertito**. Prove in
 `prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
 dell'hennè, che devono fare residuo **zero** e non 99,18.
 
+### Il POS fisico al banco, e la cifra scritta a mano (7/11/2026)
+
+Due richieste dello stesso momento, con la fiera di Napoli aperta.
+
+**«Anche il POS fisico, che non è necessariamente carta Stripe».** La
+scelta fra «POS esterno» e «Carta / Stripe» esisteva solo per chi
+amministra, perché il terminale sta in amministrazione. Ma a una fiera il
+terminale lo si porta al banco, e senza quella scelta chi vende aveva una
+strada sola — il QR — che davanti a una cliente che porge la carta non è
+una strada. Ora la vede anche **chi ha la preselezione del banco**: non
+una lista di nomi, ma chi il database dice che vende al banco di quella
+fiera (`eventi_team.vende_al_banco`) e finché l'ora del banco non è
+passata. Si accende e si spegne con la fiera, da sé.
+
+**Resta una dichiarazione, non una prova**, e per questo non diventa la
+scelta di partenza: col terminale la vendita si registra senza che
+nessuno abbia visto i soldi arrivare — il database la accetta solo perché
+quel segno c'è (`terminale_fisico`), e resta scritto sulla vendita. Il
+banco si apre sul QR, che è l'unica carta che si prova, e si passa al
+terminale quando lo si usa.
+
+**«È meglio che scrivo una cifra io da scontare: se vedo che il prezzo fa
+7,56 e voglio fare 6,90, scrivo a mano meno 60 euro».** Serve ad
+arrotondare il totale, e per questo è una casella **a parte** — «In più
+€», nel riquadro degli sconti, solo per il programmatore — e non lo
+«Sconto vendita» che c'era già: quello è *alternativo* allo sconto fiera
+e ai codici (uno o l'altro, mai sommati, e con la fiera accesa è spento).
+Questa invece **si somma** a quello che sta valendo, che è esattamente
+la cosa che le altre caselle hanno il divieto di fare. Appena si scrive
+la cifra, accanto compare quanto si incassa: cercare una cifra tonda
+contando a mente davanti al cliente è il modo di sbagliarla.
+
+Tre cose decise lì dentro:
+
+- **Il tetto al subtotale resta.** Un carrello non si sconta più di
+  quanto vale: oltre, il totale si ferma a zero e la riga lo dice.
+- **Resta scritta sulla vendita** (`vendite_shop.sconto_a_mano_eur`,
+  migrazione `20261107160000`). Senza, in archivio resterebbe solo un
+  totale più basso di quello che le tabelle dicono, e nessuno saprebbe
+  che un pezzo di quello sconto non viene da nessuna tabella ma da una
+  decisione presa al banco. Chi ha battuto è già scritto; questo dice
+  quanto ha tolto di suo. Nota tecnica: `registra_vendita_pos` costruisce
+  la riga con `jsonb_populate_record`, che **ignora** le chiavi che non
+  sono colonne — senza la migrazione il numero non avrebbe fatto fallire
+  niente, si sarebbe perso in silenzio.
+- **Le percentuali attribuite non la contano.** Le frasi «Codice valido:
+  −x%», «Fasce degli eventi: x% su questo carrello», «Sconto del corso
+  applicato: −x%» dicono quanto ha fatto *quella* cosa, e ora leggono
+  `percentualeDaTabelle` (sconto **meno** la cifra a mano). Sommandoci gli
+  euro tolti da una persona, una fascia del 12% comparirebbe come 13,8 e
+  un codice al 30% come 34: vero sul carrello, falso sul cartellino — lo
+  stesso guasto del «−4,81%» su un carrello che ne riceveva 8,55. Le
+  righe del carrello invece la contano, perché lì il numero è quello che
+  la cliente paga: con 0,66 a mano la riga passa da 32,21 a 31,55 e il
+  totale torna.
+
+La cifra **si azzera a ogni vendita nuova** (un arrotondamento che resta
+acceso si ripete sullo scontrino dopo, e nessuno lo vede) e **sta nella
+fotografia del carrello sospeso**, come lo sconto fiera: ripreso il
+carrello, il totale concordato col cliente deve essere ancora quello.
+
+Prove in `prove/pos-fiera-terminale-e-sconto-a-mano.test.jsx` (8): il
+terminale c'è per chi sta al banco e non per gli altri, si spegne passata
+l'ora, il banco si apre sul QR; la cifra a mano la vede solo il
+programmatore, si somma allo sconto fiera, trascina le righe del
+carrello e non sfonda il subtotale.
+
 ### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
 
 Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home

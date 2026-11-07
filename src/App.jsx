@@ -71015,6 +71015,31 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     setSpedizioneAttiva(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operatore, eventiOggi, teamBanco, master, assistente]);
+  // IL POS FISICO ANCHE A CHI STA IN FIERA (7/11/2026).
+  //
+  // Il titolare: «per le persone che sono in fiera gli devi attivare
+  // anche il POS fisico, che non e' necessariamente carta Stripe, quindi
+  // c'e' l'eccezione per chi e' in fiera anche il POS fisico».
+  //
+  // La scelta fra «POS esterno» e «Carta / Stripe» esisteva solo per chi
+  // amministra, perche' il terminale sta in amministrazione. Ma a una
+  // fiera il terminale lo si porta al banco, e senza questa scelta chi
+  // vende aveva una strada sola: il QR. Davanti a una cliente che
+  // porge la carta non e' una strada.
+  //
+  // CHI E' «IN FIERA» NON LO DECIDE UNA LISTA DI NOMI: e' chi ha la
+  // preselezione del banco, cioe' chi il database dice che vende al
+  // banco di quella fiera (`eventi_team.vende_al_banco`) e finche' l'ora
+  // del banco non e' passata. Quindi si accende e si spegne con la
+  // fiera, da se', come tutto il resto di quella regola.
+  //
+  // E RESTA UNA DICHIARAZIONE, NON UNA PROVA. Col terminale esterno la
+  // vendita si registra senza che nessuno abbia visto i soldi arrivare:
+  // il database la accetta solo perche' quel segno c'e'
+  // (`terminale_fisico`), ed e' scritto sulla vendita. Per questo NON
+  // diventa la scelta di partenza: chi sta al banco apre sul QR, che e'
+  // l'unica carta che si prova, e passa al terminale quando lo usa.
+  const terminaleFisicoDisponibile = chiAmministra || !!preselezioneFiera;
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
   // Capita che un amministratore dia una mano a una master vendendo dal
   // proprio telefono. La vendita e' sua, non di chi tiene il telefono:
@@ -71299,6 +71324,24 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const correzionePrezzo = puoCorreggerePrezzoPos(ruoloUtente, utenteLoggato, venditoreLoggato);
   const [scontoTipo, setScontoTipo] = useState("percentuale"); // percentuale | importo
   const [scontoValore, setScontoValore] = useState("");
+  // LA CIFRA IN PIU', SCRITTA A MANO (7/11/2026).
+  //
+  // Il titolare: «e' meglio che scrivo una cifra io da scontare. Ad
+  // esempio, se vedo che il prezzo fa 7,56 e voglio fare 6,90, scrivo a
+  // mano meno 60 euro, che ne so».
+  //
+  // Serve ad arrotondare il totale, e per questo e' una casella A PARTE
+  // e non lo «Sconto vendita» qui sopra: quello e' alternativo allo
+  // sconto fiera e ai codici (uno o l'altro, mai sommati, e con la
+  // fiera accesa e' spento). Questa invece SI SOMMA a quello che sta
+  // valendo — e' esattamente la cosa che le altre caselle hanno il
+  // divieto di fare, e deve essere riconoscibile come tale.
+  //
+  // Solo il programmatore, che e' quello che ha chiesto («a me, con il
+  // mio account da programmatore»). Chi corregge i prezzi riga per riga
+  // puo' gia' arrivare allo stesso risultato da li', un pezzo alla
+  // volta; allargarla anche a lui e' una parola, ma e' una decisione sua.
+  const [scontoExtraValore, setScontoExtraValore] = useState("");
   // sconto vendita (manuale) e coupon (dallo sconto dell'edizione di corso
   // collegata) sono alternativi, mai cumulabili: si escludono a vicenda
   const [couponValore, setCouponValore] = useState("");
@@ -71669,6 +71712,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   function fotografaCarrello() {
     return {
       carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo, scontoFiera,
+      // la cifra scritta a mano sta nella fotografia come lo sconto
+      // fiera: ripreso il carrello, il totale concordato col cliente
+      // deve essere ancora quello
+      scontoExtra: scontoExtraValore,
       // L'EVENTO VA NELLA FOTOGRAFIA, e prima non c'era: si salvava
       // `scontoFiera` e non la fiera a cui apparteneva. Ripreso il
       // carrello dopo un ricaricamento della pagina, `eventoPosId` era
@@ -71691,6 +71738,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     if (c.eventoPosId !== undefined) setEventoPosId(c.eventoPosId || "");
     setScontoTipo(c.scontoTipo || "percentuale"); setScontoValore(c.scontoValore || "");
     setScontoFiera(!!c.scontoFiera);
+    setScontoExtraValore(c.scontoExtra || "");
     setScontoCorsoAttivo(c.scontoCorsoAttivo !== false);
     setOmaggioAttivo(!!c.omaggioAttivo);
     setSpedizioneAttiva(!!c.spedizioneAttiva);
@@ -71958,6 +72006,9 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   }, [metodoPagamento, couponAttivo?.id, pctContantiCorsiPos]);
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg(""); setScontoFiera(false);
+    // la cifra scritta a mano vale per QUEL carrello: un arrotondamento
+    // che resta acceso si ripete sullo scontrino dopo, e nessuno lo vede
+    setScontoExtraValore("");
     // l'acquisto personale vale per quel carrello, non resta acceso: i
     // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
     setAcquistoPersonale(false); setRitiroAttivo(false);
@@ -72012,6 +72063,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
   const scontoNum = scontoValore === "" ? 0 : parseNum(scontoValore);
+  // la cifra in piu' la scrive solo il programmatore, e solo positiva:
+  // un numero negativo qui vorrebbe dire ALZARE il totale, che e' un'altra
+  // cosa e non si fa da una casella di sconto
+  const puoScontoExtra = ruoloUtente === "programmatore";
+  const scontoExtraNum = scontoExtraValore === "" ? 0 : parseNum(scontoExtraValore);
+  const scontoExtra = puoScontoExtra && scontoExtraNum > 0 ? round2(scontoExtraNum) : 0;
   const couponNum = couponValore === "" ? 0 : parseNum(couponValore);
   // Su cosa si legge la percentuale del coupon lo dice il coupon stesso:
   // sul prezzo (come e' sempre stato) o sul margine. Lo sconto scritto a
@@ -72105,7 +72162,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     </div>
                     ) : (
                     <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
-                      Codice valido: −{fmtPctErp2(percentualeErogata)}
+                      Codice valido: −{fmtPctErp2(percentualeDaTabelle)}
                       {/* quanto durera': un codice a uso singolo sparisce dopo
                           questo carrello, e saperlo prima evita di cercarlo
                           alla vendita dopo credendo che sia sparito per errore */}
@@ -72254,18 +72311,33 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       ? carrello.filter((r) => scontoSulMargineDiRiga(prodottiPerId[r.prodottoId], r.quantita, couponNum) === 0)
       : [];
   const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale,
-    (couponNum > 0 || couponAFasce || couponAcquistoMaster) ? scontoCoupon
+    ((couponNum > 0 || couponAFasce || couponAcquistoMaster) ? scontoCoupon
       // la fiera viene prima dello sconto a mano: quando e' accesa i due
       // campi qui sotto sono spenti, e sommarli sarebbe scontare due volte
       : scontoFieraAttivo ? scontoDellaFiera
-        : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
-  // La percentuale che si mostra e' quella DAVVERO erogata su questo
-  // carrello: sconto diviso subtotale. Il numero scritto sul coupon non
-  // dice la verita' quando lo sconto va a fasce — ogni prodotto ha la sua
+        : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum))
+    // ...e QUESTA invece si somma, perche' e' l'unica che e' stata
+    // chiesta per fare proprio quello: arrivare alla cifra tonda che
+    // chi decide i prezzi ha in mente. Il tetto al subtotale resta: un
+    // carrello non si sconta piu' di quanto vale.
+    + scontoExtra));
+  // LA PERCENTUALE CHE HANNO FATTO LE TABELLE su questo carrello:
+  // quanto hanno davvero eroso il codice, le fasce o lo sconto fiera,
+  // diviso il subtotale. Il numero scritto sul coupon non dice la
+  // verita' quando lo sconto va a fasce — ogni prodotto ha la sua
   // percentuale, e due carrelli con lo stesso codice possono ricevere
-  // sconti molto diversi. Si leggeva "−4,81%" su un carrello che ne stava
-  // ricevendo l'8,55: il conto era giusto, il cartellino no.
-  const percentualeErogata = subtotale > 0 ? round2((scontoApplicato / subtotale) * 100) : 0;
+  // sconti molto diversi. Si leggeva "−4,81%" su un carrello che ne
+  // stava ricevendo l'8,55: il conto era giusto, il cartellino no.
+  //
+  // E DA QUI NON PASSA LA CIFRA SCRITTA A MANO (7/11/2026). Le frasi che
+  // usano questo numero attribuiscono lo sconto a QUALCOSA — «Codice
+  // valido: −x%», «Fasce degli eventi: x% su questo carrello», «Sconto
+  // del corso applicato: −x%» — e devono dire quanto ha fatto QUELLA
+  // cosa. Sommandoci gli euro che ha tolto una persona, una fascia del
+  // 12% comparirebbe come 13,8 e un codice al 30% come 34: vero sul
+  // carrello, falso sul cartellino. Gli euro scritti a mano hanno la
+  // loro riga, nel riquadro dei conti e sulla vendita.
+  const percentualeDaTabelle = subtotale > 0 ? round2(((scontoApplicato - scontoExtra) / subtotale) * 100) : 0;
   // Quanto manca alla fascia di spesa successiva. Si dice SOLO la cifra
   // che manca, mai quanto sconto si otterrebbe: la percentuale media
   // dipende da COSA si aggiunge, non da quanto si spende — un prodotto a
@@ -72506,7 +72578,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // il ripiego si nomina solo a chi ce l'ha: una master senza
       // terminale, mandata al "POS esterno", resta ferma col cliente
       // davanti a cercare una cosa che non esiste
-      setMsgQr(`QR non creato: ${dettaglio}. ${chiAmministra
+      setMsgQr(`QR non creato: ${dettaglio}. ${terminaleFisicoDisponibile
         ? "Puoi incassare col POS esterno e confermare la vendita a mano."
         : "Riprova fra un momento; se continua, chiama l'amministrazione."}`);
       // la finestra vuota non resta li' a far credere che stia caricando
@@ -72514,7 +72586,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       return;
     }
     if (!data?.codice) {
-      setMsgQr(`QR non creato: il server ha risposto senza codice. Riprova${chiAmministra ? ", oppure incassa col POS esterno." : "; se continua, chiama l'amministrazione."}`);
+      setMsgQr(`QR non creato: il server ha risposto senza codice. Riprova${terminaleFisicoDisponibile ? ", oppure incassa col POS esterno." : "; se continua, chiama l'amministrazione."}`);
       finestra?.close();
       return;
     }
@@ -72779,6 +72851,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // si accende uno per uno. Senza, "quanto ci e' costata la fiera in
       // sconti" si potrebbe solo stimare riga per riga.
       sconto_fiera: scontoFieraAttivo,
+      // LA CIFRA IN PIU' SCRITTA A MANO, registrata. Senza, in archivio
+      // resterebbe solo un totale piu' basso di quello che le tabelle
+      // dicono, e nessuno saprebbe che qualcuno l'ha deciso — ne' chi,
+      // benche' `operatore_*` qui accanto dica chi ha battuto.
+      sconto_a_mano_eur: scontoExtra > 0 ? scontoExtra : null,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
       prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
@@ -73340,7 +73417,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                       : !tabellaFieraCarta
                         ? "Le fasce degli eventi non sono ancora scritte: Genera Coupon → Sconti eventi."
                         : scontoFieraAttivo
-                          ? `Fasce degli eventi, serie ${fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeErogata)} su questo carrello.`
+                          ? `Fasce degli eventi, serie ${fasceContantiInUso ? "contanti" : "carta"}: ${fmtPctErp(percentualeDaTabelle)} su questo carrello.${scontoExtra > 0 ? " Più la cifra scritta a mano." : ""}`
                           : "Applica a questo carrello le fasce di sconto degli eventi."}
                 </span>
               </span>
@@ -73545,7 +73622,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               saprebbe se e' quello giusto */}
           {corsoPosSel && couponAttivo && couponAttivo.corsi_date_id === corsoPosSel.id && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 10, padding: "7px 11px", marginTop: (puoAttribuireAllaMaster && masterDelCorso) ? 8 : -6, marginBottom: 12 }}>
-              Sconto del corso applicato: −{fmtPctErp2(percentualeErogata)}
+              Sconto del corso applicato: −{fmtPctErp2(percentualeDaTabelle)}
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: grigioCarrello, textTransform: "uppercase", letterSpacing: 0.4 }}>{couponAttivo.codice}</span>
               {fasceContantiInUso && (
                 <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "2px 7px" }}>{couponPersonaleAttivo && metodoPagamento === "buono_amazon" ? "fasce buono Amazon" : "fasce contanti"}</span>
@@ -73784,6 +73861,29 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               <div style={etichettaSconto}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
               <input style={{ ...campoSconto, opacity: (couponNum > 0 || scontoFieraAttivo) ? (isMobile ? 0.8 : 0.5) : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0 || scontoFieraAttivo} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
             </div>
+            {/* LA CIFRA IN PIU', PER ARROTONDARE (7/11/2026).
+                Non e' spenta da niente — ne' dal codice, ne' dalla
+                fiera — perche' il suo mestiere e' proprio sommarsi a
+                quello che sta valendo: «fa 7,56 e voglio fare 6,90».
+                Per questo e' staccata dalle altre due da un filo e
+                l'etichetta dice «in piu'»: due caselle di sconto
+                accanto, una alternativa e una additiva, si distinguono
+                solo se la differenza e' scritta. */}
+            {puoScontoExtra && (
+              <>
+                <span style={{ width: 1, alignSelf: "stretch", minHeight: 28, background: NOTTE.bordoSconto, flexShrink: 0, margin: "0 2px" }} />
+                <div style={{ flex: "0 0 66px", minWidth: 0 }}>
+                  <div style={etichettaSconto} title="Si somma allo sconto che sta valendo, anche a quello della fiera. Serve per arrivare a una cifra tonda.">In più €</div>
+                  <input
+                    style={{ ...campoSconto, borderColor: scontoExtra > 0 ? "#C0392B" : undefined }}
+                    inputMode="decimal" value={scontoExtraValore}
+                    onChange={(e) => setScontoExtraValore(e.target.value)}
+                    placeholder="0"
+                    title="Una cifra in euro da togliere IN PIU' a questo carrello. Resta scritta sulla vendita."
+                  />
+                </div>
+              </>
+            )}
           </>
         )}
         {/* QUI C'ERA «COUPON (%)», UNA TERZA PERCENTUALE DA SCRIVERE.
@@ -73842,7 +73942,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: scontoCorsoAttivo ? "#2E7D32" : NAVY }}>
                 <input type="checkbox" checked={scontoCorsoAttivo} onChange={(e) => commutaScontoCorso(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
                 <span style={{ whiteSpace: "nowrap" }}>Applica sconto del corso</span>
-                {scontoCorsoAttivo && <span title="Lo sconto davvero erogato su questo carrello" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{fmtPctErp2(percentualeErogata)}</span>}
+                {scontoCorsoAttivo && <span title="Quanto ha fatto lo sconto del corso su questo carrello. La cifra scritta a mano, se c'è, è contata a parte." style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E9F6EC", borderRadius: 8, padding: "2px 7px" }}>−{fmtPctErp2(percentualeDaTabelle)}</span>}
               </label>
             )}
             {/* il separatore solo se a sinistra c'e' davvero qualcosa */}
@@ -73881,6 +73981,23 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             {scontoFieraAttivo
               ? "Sta valendo lo sconto fiera: spegnilo qui sopra per scontare a mano o usare un codice."
               : couponNum > 0 ? "Togli il codice qui sotto per inserire uno sconto a mano." : "Svuota lo sconto vendita per usare un codice."}
+            {/* ...tranne la casella «In più», che si somma: dirlo qui
+                evita di leggere la riga sopra come «non si può scontare
+                niente» */}
+            {puoScontoExtra ? " La casella «In più €» invece si somma a quello che sta valendo." : ""}
+          </div>
+        )}
+        {/* QUELLO CHE RESTA DA PAGARE, appena si scrive la cifra: e' la
+            ragione per cui la casella esiste — si cerca una cifra tonda,
+            e cercarla contando a mente davanti al cliente e' il modo di
+            sbagliarla. */}
+        {scontoExtra > 0 && (
+          <div style={{ flexBasis: "100%", ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>
+            In più a mano − {fmtEuroErp2(scontoExtra)}
+            <span style={{ color: NAVY }}>{"  →  si incassano "}{fmtEuroErp2(totaleDaIncassare)}</span>
+            {scontoApplicato >= subtotale && subtotale > 0 && (
+              <span style={{ color: "#8A6A1B" }}>{"  ·  più di così il carrello non si sconta"}</span>
+            )}
           </div>
         )}
       </div>
@@ -73933,6 +74050,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             // calcolo: i 137,47 di provvigioni spese sparivano fra la
             // seconda riga e il totale. Il riquadro giallo sopra il
             // carrello lo diceva, ma a parole e tre dita piu' in alto.
+            // la cifra scritta a mano si scrive A PARTE dallo sconto:
+            // sommata dentro «Sconto» farebbe sembrare che l'abbia
+            // calcolata una tabella, ed e' il contrario — l'ha decisa
+            // una persona, e in archivio resta scritto che e' sua
+            ...(scontoExtra > 0 ? [{ etichetta: "di cui in più, a mano", valore: scontoExtra, negativo: true }] : []),
             ...(provvigioniScalabili > 0 ? [{ etichetta: "Provvigioni usate", valore: provvigioniScalabili, negativo: true }] : []),
             // la spedizione e' una riga del conto come le altre, non una
             // nota piccola sotto il totale (23/10/2026): il subtotale non
@@ -74221,12 +74343,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             // incassato nella pagina e non appoggiato sopra: e' un
             // dettaglio DENTRO "Carta", non una scelta allo stesso livello
             <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: NOTTE.incassoSfondo, border: `1px solid ${NOTTE.incassoBordo}`, boxShadow: OMBRA_POS.incassato }}>
-              {/* La scelta fra terminale e QR esiste solo dove esiste il
-                  terminale, cioe' in amministrazione. Per tutti gli altri
-                  la carta e' il QR e non c'e' niente da scegliere: due
-                  tasti di cui uno solo premibile sono un tasto e un
-                  dubbio. */}
-              {chiAmministra && (
+              {/* La scelta fra terminale e QR esiste dove esiste il
+                  terminale: in amministrazione, e dal 7/11/2026 anche al
+                  banco di una fiera, dove il terminale lo si porta.
+                  Per tutti gli altri la carta e' il QR e non c'e' niente
+                  da scegliere: due tasti di cui uno solo premibile sono
+                  un tasto e un dubbio. */}
+              {terminaleFisicoDisponibile && (
                 <>
                   <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
                   <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
