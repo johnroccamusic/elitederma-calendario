@@ -244,7 +244,119 @@ function Vuoto({ children }) {
 
 // --------------------------------------------------------------- 1. il team
 
-function SchedaTeam({ eventoId, persone }) {
+// IL BANCO DELLA FIERA: fino a quando il POS di chi vende qui parte da
+// questo evento.
+//
+// Al banco si parte sempre da «vendita non legata a un evento» e lo
+// sconto fiera nasce spento, perche' fuori da una fiera agganciare una
+// vendita da sola e' il modo di portarsi addosso uno sconto che nessuno
+// ha chiesto. Per i giorni di una fiera vale il contrario: tutte le
+// vendite di chi sta a quel banco sono di quella fiera, e rifare il giro
+// a ogni scontrino vuol dire dimenticarselo — con la vendita fuori dal
+// conto della fiera e il cliente che paga pieno.
+//
+// Si spegne da se'. La data e' un ISTANTE e non un giorno perche' il
+// banco chiude a un'ora: scaduta, il POS torna da solo a partire da
+// «nessun evento» senza che nessuno debba ricordarsene.
+function BancoDellaFiera({ evento, righe, onCambiato }) {
+  const [msg, setMsg] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  if (!evento?.id) return null;
+  const alBanco = (righe || []).filter((r) => r.vende_al_banco && r.persona_id);
+  const acceso = !!evento.pos_banco_fino_al;
+  const scaduto = acceso && new Date(evento.pos_banco_fino_al).getTime() <= Date.now();
+
+  // `datetime-local` parla l'ora del telefono di chi guarda, il database
+  // un istante: si converte nei due versi, invece di tagliare la stringa
+  const perIlCampo = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleString("it-IT", {
+      timeZone: "Europe/Rome", weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  async function scrivi(campi, detto) {
+    setSalvando(true); setMsg("");
+    try { await salvaEvento(evento.id, campi); setMsg(detto); onCambiato?.(); }
+    catch (e) { setMsg("Non sono riuscito a salvare: " + e.message); }
+    finally { setSalvando(false); }
+  }
+
+  return (
+    <div style={{
+      border: `1px solid ${acceso && !scaduto ? "#C7E3C7" : CREAM_BORDER}`,
+      background: acceso && !scaduto ? "#F4FAF4" : "#fff",
+      borderRadius: 14, padding: "12px 14px", marginBottom: 16,
+    }}>
+      <div style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>
+        Il banco della fiera
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, marginBottom: 10 }}>
+        Chi ha la spunta verde qui sotto trova il POS già impostato su questa fiera, fino all’ora
+        che scrivi. Passata quell’ora torna da solo a «vendita non legata a un evento». Resta una
+        partenza, non un obbligo: al banco la tendina si cambia carrello per carrello.
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <Field label="Il POS parte da questa fiera fino a">
+            <input
+              type="datetime-local" style={inputStyle} value={perIlCampo(evento.pos_banco_fino_al)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) { scrivi({ pos_banco_fino_al: null }, "Spento: il POS riparte da «nessun evento»."); return; }
+                const d = new Date(v);
+                if (isNaN(d.getTime())) { setMsg("Quella data non la capisco."); return; }
+                scrivi({ pos_banco_fino_al: d.toISOString() }, "Salvato: fino a " + fmt(d.toISOString()) + ".");
+              }}
+            />
+          </Field>
+        </div>
+        {acceso && (
+          <div style={{ marginBottom: 14 }}>
+            <Button variant="ghost" disabled={salvando}
+              onClick={() => scrivi({ pos_banco_fino_al: null }, "Spento: il POS riparte da «nessun evento».")}>
+              Spegni
+            </Button>
+          </div>
+        )}
+      </div>
+      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer", marginTop: 2 }}>
+        <input
+          type="checkbox" checked={!!evento.pos_banco_sconto_fiera} disabled={salvando}
+          onChange={(e) => scrivi({ pos_banco_sconto_fiera: e.target.checked },
+            e.target.checked ? "Lo sconto fiera parte acceso." : "Lo sconto fiera parte spento.")}
+          style={{ width: 20, height: 20, flex: "0 0 auto", marginTop: 1, accentColor: "#2E7D32" }}
+        />
+        <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
+          <b>…e con lo sconto fiera già acceso</b>
+          <span style={{ display: "block", fontSize: 11.5, color: MUTED }}>
+            Le fasce di Genera Coupon → Sconti eventi. Spento, le vendite si agganciano alla fiera
+            ma si pagano a listino.
+          </span>
+        </span>
+      </label>
+      {acceso && (
+        <div style={{ ...fontBody, fontSize: 12, color: scaduto ? "#B3261E" : "#2E7D32", lineHeight: 1.5, marginTop: 10 }}>
+          {scaduto
+            ? `È passata: dal ${fmt(evento.pos_banco_fino_al)} il POS riparte da «nessun evento».`
+            : alBanco.length === 0
+              ? "L’ora c’è, ma nessuno ha la spunta «vende al banco»: così non cambia niente per nessuno."
+              : `Vale per ${alBanco.length === 1 ? "una persona" : alBanco.length + " persone"} — ${alBanco.map((r) => r.nome).join(", ")} — fino a ${fmt(evento.pos_banco_fino_al)}.`}
+        </div>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function SchedaTeam({ eventoId, evento, persone, onCambiato }) {
   const [righe, setRighe] = useState(null);
   const [scelta, setScelta] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
@@ -270,6 +382,7 @@ function SchedaTeam({ eventoId, persone }) {
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
   return (
     <>
+      <BancoDellaFiera evento={evento} righe={righe} onCambiato={() => { ricarica(); onCambiato?.(); }} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <Field label="Chi viene (dalle anagrafiche)">
@@ -294,6 +407,24 @@ function SchedaTeam({ eventoId, persone }) {
       {righe.length === 0 && <Vuoto>Non c'è ancora nessuno nel team.</Vuoto>}
       {righe.map((r) => (
         <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+          {/* la spunta sta a sinistra del nome, come quella del rientro
+              dei materiali: si cerca un quadrato da toccare, non una riga
+              da leggere. Sulle righe libere non c'è: senza anagrafica non
+              c'è nessun POS da far partire dalla fiera, e una casella
+              spenta che non si può accendere fa solo credere di avere
+              dimenticato qualcosa */}
+          {r.persona_id ? (
+            <label title="Batte gli scontrini al banco: il suo POS parte da questa fiera" style={{
+              width: 40, height: 40, flex: "0 0 auto", display: "flex", alignItems: "center",
+              justifyContent: "center", cursor: "pointer",
+            }}>
+              <input
+                type="checkbox" checked={!!r.vende_al_banco}
+                onChange={(e) => salvaRiga("eventi_team", r.id, { vende_al_banco: e.target.checked }).then(ricarica)}
+                style={{ width: 24, height: 24, accentColor: "#2E7D32", cursor: "pointer" }}
+              />
+            </label>
+          ) : <span style={{ width: 40, flex: "0 0 auto" }} />}
           <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{r.nome}</span>
           <input
             style={{ ...campoRiga, flex: "1 1 140px", minWidth: 0 }} defaultValue={r.ruolo || ""} placeholder="ruolo all'evento"
@@ -1654,7 +1785,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
       </div>
 
       <div style={{ background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16 }}>
-        {sezione === "team" && <SchedaTeam eventoId={evento.id} persone={persone} />}
+        {sezione === "team" && <SchedaTeam eventoId={evento.id} evento={evento} persone={persone} onCambiato={onCambiato} />}
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} evento={evento} prodotti={prodotti} onStockCambiato={onStockCambiato} fabbisognoCorsi={fabbisognoCorsi} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}

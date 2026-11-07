@@ -6406,6 +6406,90 @@ function eventiAttiviAlBanco(eventi, oggi, margine = GIORNI_ATTORNO_EVENTO) {
     return !!dal && !!al && dal <= ultimo && al >= primo;
   });
 }
+// LE IDENTITA' CON CUI LA STESSA PERSONA PUO' ENTRARE NELL'APP.
+//
+// `operatoreCorrente` ne restituisce una sola — quella con cui si e'
+// entrati — ma in anagrafica la stessa persona ne ha spesso due o tre:
+// ELIA CITO e' master e venditore, ANDREA PAURA e' master, venditore
+// «ANDREA» e assistente. Quale delle tre esce dipende da quale password
+// ha battuto quella mattina, e una regola scritta su una sola la
+// mancherebbe nelle altre senza dirlo a nessuno.
+//
+// I legami si leggono dagli ID — `master.venditore_id`,
+// `assistente.master_id` — e MAI dai nomi: «ANDREA» e «ANDREA PAURA»
+// sono la stessa persona e due stringhe diverse, e questo progetto
+// quella lezione l'ha gia' pagata (la notifica del modulo al venditore,
+// legata al nome scritto in `iscritti.tutor`).
+function identitaDellaPersona(operatore, { master = [], assistente = [] } = {}) {
+  const chiavi = new Set();
+  if (!operatore?.tipo || !operatore?.id) return chiavi;
+  const aggiungi = (tipo, id) => { if (id) chiavi.add(`${tipo}:${id}`); };
+  aggiungi(operatore.tipo, operatore.id);
+  // un'assistente collegata a una master E' quella master
+  const masterDellAssistente = operatore.tipo === "assistente"
+    ? (assistente || []).find((a) => String(a.id) === String(operatore.id))?.master_id || null
+    : null;
+  if (masterDellAssistente) aggiungi("master", masterDellAssistente);
+  const masterId = operatore.tipo === "master" ? operatore.id : masterDellAssistente;
+  // master -> il suo venditore collegato, e il venditore -> la sua master
+  (master || []).forEach((m) => {
+    const suaRiga = masterId && String(m.id) === String(masterId);
+    const suoVenditore = operatore.tipo === "venditore" && m.venditore_id
+      && String(m.venditore_id) === String(operatore.id);
+    if (suaRiga || suoVenditore) { aggiungi("master", m.id); aggiungi("venditore", m.venditore_id); }
+  });
+  // e da una master si arriva alle sue assistenti
+  (assistente || []).forEach((a) => {
+    if (a?.master_id && chiavi.has(`master:${a.master_id}`)) aggiungi("assistente", a.id);
+  });
+  return chiavi;
+}
+// IL BANCO DELLA FIERA: il POS di chi vende li' parte da quell'evento.
+//
+// Al banco si parte sempre da «vendita non legata a un evento» e lo
+// sconto fiera nasce spento — la stessa regola del corso, scritta
+// perche' una vendita agganciata da sola a una classe si porta addosso
+// lo sconto degli allievi senza che nessuno l'abbia chiesto. Per i tre
+// giorni di una fiera pero' la situazione e' rovesciata: TUTTE le
+// vendite di chi sta a quel banco sono di quella fiera, e il giro
+// giusto va ripetuto a mano a ogni scontrino. Chi se lo dimentica fa
+// due danni in una volta — la vendita non entra nel conto della fiera
+// (e il materiale partito non torna in pari al rientro) e il cliente
+// paga pieno davanti a un banco che lo sconto lo fa.
+//
+// Chi e' «a quel banco» e fino a quando NON lo decide questa funzione:
+// lo dicono le spunte «vende al banco» del team dell'evento e
+// `eventi.pos_banco_fino_al`, scritti dalla scheda della fiera. Senza
+// quella data non si preseleziona niente, che e' il comportamento di
+// sempre per ogni altro evento.
+//
+// Resta una preselezione e non un obbligo: la tendina si cambia e la
+// spunta dello sconto si spegne, carrello per carrello.
+export function preselezioneBancoEvento({ operatore, eventi = [], team = [], adesso = new Date(), identita = {} }) {
+  const mie = identitaDellaPersona(operatore, identita);
+  if (mie.size === 0) return null;
+  const ora = adesso instanceof Date ? adesso.getTime() : new Date(adesso).getTime();
+  if (!Number.isFinite(ora)) return null;
+  const candidati = (eventi || []).filter((ev) => {
+    if (!ev?.id || !ev.pos_banco_fino_al) return false;
+    // su una fiera chiusa la cassa e' stata tirata: vedi eventiAttiviAlBanco
+    if (ev.stato === "concluso" || ev.stato === "annullato") return false;
+    const fino = new Date(ev.pos_banco_fino_al).getTime();
+    if (!Number.isFinite(fino) || fino <= ora) return false;
+    // le righe libere del team (chi alla fiera viene ma in anagrafica non
+    // c'e') non hanno persona_id e non entrano nell'app: non possono
+    // valere per nessuno
+    return (team || []).some((r) => r?.vende_al_banco && r.persona_id
+      && String(r.evento_id) === String(ev.id)
+      && mie.has(`${r.persona_tipo}:${r.persona_id}`));
+  });
+  if (candidati.length === 0) return null;
+  // due fiere aperte sulla stessa persona non capitano, ma la scelta deve
+  // essere la stessa a ogni giro: vince quella che chiude prima
+  const scelto = [...candidati].sort((a, b) =>
+    new Date(a.pos_banco_fino_al) - new Date(b.pos_banco_fino_al))[0];
+  return { eventoId: scelto.id, scontoFiera: !!scelto.pos_banco_sconto_fiera, nome: scelto.nome || "" };
+}
 function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -70560,7 +70644,7 @@ function PuntiDellaRiga({ punti, isMobile }) {
 // `export` solo per poterla montare in una prova: dentro App.jsx non la
 // importa nessuno. Il banco e' il posto dove si sbagliano i soldi, ed era
 // l'unico grande componente che nessuna prova aveva mai aperto.
-export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
+export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, master = [], assistente = [], ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, operatoreImpersonato = null, carrelloDaAprire = null, titolo = "POS Vendita diretta" }) {
   // i punti del listino si rileggono ogni volta che si apre il banco:
   // se nel frattempo qualcuno li ha corretti in Prezzi e listini, qui si
   // vede subito invece che al prossimo ricaricamento della pagina
@@ -70719,14 +70803,29 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // Lo sconto della fiera, carrello per carrello: lo accende chi vende.
   // Il perche' sta nel blocco "LO SCONTO DELLA FIERA", piu' sotto.
   const [scontoFiera, setScontoFiera] = useState(false);
+  // Chi sta al banco di quelle fiere: le righe del team con la spunta
+  // «vende al banco». `null` vuol dire «non ancora letto», e si distingue
+  // da «nessuno»: la preselezione deve aspettare la risposta, o il primo
+  // scontrino della mattina partirebbe senza la fiera.
+  const [teamBanco, setTeamBanco] = useState(null);
   useEffect(() => {
     let vivo = true;
     const da = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const a = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-    supabase.from("eventi").select("id, nome, data_inizio, data_fine, citta, stato")
+    supabase.from("eventi").select("id, nome, data_inizio, data_fine, citta, stato, pos_banco_fino_al, pos_banco_sconto_fiera")
       .lte("data_inizio", a).gte("data_fine", da).neq("stato", "annullato")
       .order("data_inizio")
-      .then(({ data }) => { if (vivo) setEventiAperti(data || []); });
+      .then(async ({ data }) => {
+        if (!vivo) return;
+        const lista = data || [];
+        setEventiAperti(lista);
+        const conBanco = lista.filter((ev) => ev.pos_banco_fino_al).map((ev) => ev.id);
+        if (conBanco.length === 0) { setTeamBanco([]); return; }
+        const { data: righe } = await supabase.from("eventi_team")
+          .select("evento_id, persona_tipo, persona_id, nome, vende_al_banco")
+          .in("evento_id", conBanco).eq("vende_al_banco", true);
+        if (vivo) setTeamBanco(righe || []);
+      });
     return () => { vivo = false; };
   }, []);
   // La barra "Sei a un evento?" si fa vedere nei giorni dell'evento piu'
@@ -70742,6 +70841,29 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     return scelto ? [...eventiOggi, scelto] : eventiOggi;
   }, [eventiOggi, eventiAperti, eventoPosId]);
   const eventoPosSel = eventiAperti.find((e) => e.id === eventoPosId) || null;
+  // L'evento di questo POS si decide UNA VOLTA SOLA, e poi comanda chi
+  // vende. Si considera deciso quando: lo ha preselezionato la fiera, lo
+  // ha scelto (o azzerato) chi sta al banco, o e' arrivato dentro un
+  // carrello ripreso dai sospesi. Senza questo segno la preselezione
+  // tornerebbe addosso a una scelta appena fatta — e rimetterebbe la
+  // fiera a chi l'aveva tolta di proposito.
+  const bancoDeciso = useRef(false);
+  const [preselezioneFiera, setPreselezioneFiera] = useState(null);
+  useEffect(() => {
+    if (bancoDeciso.current || teamBanco === null || !operatore) return;
+    const pre = preselezioneBancoEvento({
+      operatore, eventi: eventiOggi, team: teamBanco, adesso: new Date(),
+      identita: { master, assistente },
+    });
+    if (!pre) return;
+    bancoDeciso.current = true;
+    setPreselezioneFiera(pre);
+    setEventoPosId(pre.eventoId);
+    // lo sconto fiera e' l'altra meta' della richiesta: senza, il banco
+    // aggancia la vendita alla fiera e la fa pagare piena
+    if (pre.scontoFiera) setScontoFiera(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operatore, eventiOggi, teamBanco, master, assistente]);
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
   // Capita che un amministratore dia una mano a una master vendendo dal
   // proprio telefono. La vendita e' sua, non di chi tiene il telefono:
@@ -71396,6 +71518,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   function fotografaCarrello() {
     return {
       carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo, scontoFiera,
+      // L'EVENTO VA NELLA FOTOGRAFIA, e prima non c'era: si salvava
+      // `scontoFiera` e non la fiera a cui apparteneva. Ripreso il
+      // carrello dopo un ricaricamento della pagina, `eventoPosId` era
+      // vuoto, lo sconto fiera senza evento non e' «disponibile» — e
+      // spariva in silenzio insieme alla sua spunta, che si vede solo con
+      // un evento scelto. Il cliente pagava pieno.
+      eventoPosId,
       spedizioneAttiva, sped: { spedIscrittoId, spedNome, spedCognome, spedIndirizzo, spedCivico, spedCitta, spedCap, spedProvincia, spedCitofono, spedInterno, spedCellulare },
       fattAttiva, ritiroAttivo, fattComeSpedizione, fatt: { fattClienteId, fattDitta, fattNome, fattCognome, fattPiva, fattCf, fattCodDest, fattPec, fattIndirizzo, fattCivico, fattCap, fattCitta, fattProv },
     };
@@ -71405,6 +71534,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     setNote(c.note || "");
     setMetodoPagamento(c.metodoPagamento || "pos");
     setCorsoPosId(c.corsoPosId || "");
+    // un carrello ripreso porta la sua fiera: e' una scelta gia' fatta,
+    // e la preselezione non ci passa piu' sopra
+    bancoDeciso.current = true;
+    if (c.eventoPosId !== undefined) setEventoPosId(c.eventoPosId || "");
     setScontoTipo(c.scontoTipo || "percentuale"); setScontoValore(c.scontoValore || "");
     setScontoFiera(!!c.scontoFiera);
     setScontoCorsoAttivo(c.scontoCorsoAttivo !== false);
@@ -72974,13 +73107,28 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       {eventiPerLaTendina.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
           <Field label="Sei a un evento?">
-            <select style={inputStyle} value={eventoPosId} onChange={(e) => { setEventoPosId(e.target.value); if (!e.target.value) setScontoFiera(false); }}>
+            <select style={inputStyle} value={eventoPosId} onChange={(e) => { bancoDeciso.current = true; setEventoPosId(e.target.value); if (!e.target.value) setScontoFiera(false); }}>
               <option value="">— vendita non legata a un evento —</option>
               {eventiPerLaTendina.map((ev) => (
                 <option key={ev.id} value={ev.id}>{ev.nome}{ev.citta ? ` · ${ev.citta}` : ""}</option>
               ))}
             </select>
           </Field>
+          {/* UNA PRESELEZIONE SI DICE. Qui sotto si decide dove va la
+              vendita e quanto paga il cliente: trovare la fiera già
+              scelta senza sapere perché è il modo di non guardarla
+              più — e di non accorgersi il giorno in cui è sbagliata. */}
+          {preselezioneFiera && eventoPosId === preselezioneFiera.eventoId && (
+            <div style={{
+              ...fontBody, fontSize: 11.5, color: "#1F3A5F", lineHeight: 1.5, marginTop: 6,
+              background: "#F2F6FC", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10,
+              padding: "7px 10px",
+            }}>
+              Sei fra chi vende al banco di <b>{preselezioneFiera.nome}</b>, quindi il banco parte
+              già da qui{preselezioneFiera.scontoFiera ? " con lo sconto fiera acceso" : ""}. Se questa
+              vendita non è della fiera, cambia qui sopra.
+            </div>
+          )}
           {/* La spunta compare solo con un evento scelto, e sta QUI e non
               nel riquadro dello sconto a mano: quello e' chiuso a chi non
               amministra, e in fiera a vendere ci sono i venditori. */}
@@ -87232,7 +87380,7 @@ function Gestionale() {
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
           ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti} coupon={coupon}
-          bundleComponenti={bundleComponenti} master={master}
+          bundleComponenti={bundleComponenti} master={master} assistente={assistente}
           operatoreImpersonato={posComeOperatore}
           carrelloDaAprire={posCarrelloDaAprire}
           onBack={() => { setPosCarrelloDaAprire(null); setPosComeOperatore(null); setView(posComeOperatore ? "magazzinoshop" : "home"); }}

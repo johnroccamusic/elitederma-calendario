@@ -2743,6 +2743,87 @@ che in archivio ci va **digitato e non convertito**. Prove in
 `prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
 dell'hennè, che devono fare residuo **zero** e non 99,18.
 
+### Il POS di chi sta al banco parte dalla fiera (7/11/2026)
+
+Il titolare, sabato mattina con la fiera di Napoli aperta: «Da oggi fino a
+lunedì i POS della vendita al banco di Elia Cito, Andrea Paura, Stefano
+Di Napoli, Elena Rocca, Maria Stella Quaresima e Olga devono essere
+impostati di default su vendita legata a un evento, fiera di Napoli.
+Sconto fiera. Fino a lunedì ore 20.»
+
+**Perché la regola normale qui è rovesciata.** Al banco si parte sempre
+da «vendita non legata a un evento» e lo sconto fiera nasce spento: è la
+stessa regola del corso («NESSUNA PRESELEZIONE DEL CORSO»), scritta
+perché una vendita agganciata da sola a una classe si porta addosso lo
+sconto degli allievi senza che nessuno l'abbia chiesto. Per i tre giorni
+di una fiera però **tutte** le vendite di chi sta a quel banco sono di
+quella fiera, e il giro giusto va ripetuto a mano a ogni scontrino. Chi
+se lo dimentica fa due danni insieme: la vendita resta fuori dal conto
+della fiera — e il materiale partito non torna in pari al rientro — e il
+cliente paga pieno davanti a un banco che lo sconto lo fa.
+
+**Dove vive, e perché non in App.jsx.** Sei nomi e una scadenza scritti
+nel codice sarebbero una regola che vive nel browser: per spegnerla, o
+per tenerla accesa un'ora in più lunedì sera, servirebbe una
+pubblicazione. Sta accanto alla fiera a cui appartiene
+(`20261107100000_pos_parte_dalla_fiera.sql`): `eventi_team.vende_al_banco`
+dice **chi**, `eventi.pos_banco_fino_al` **fino a quando** e
+`eventi.pos_banco_sconto_fiera` se parte anche lo sconto. Si cambia da
+Gestione eventi → scheda della fiera → Team, dal riquadro **«Il banco
+della fiera»**: la spunta verde a sinistra di ogni nome, l'ora, e
+«Spegni». Senza l'ora scritta non si preseleziona niente — che è il
+comportamento di sempre per ogni altro evento, passato e futuro.
+
+**«Chi viene alla fiera» e «chi batte gli scontrini» non sono la stessa
+lista.** Per questo la spunta è per persona e non per evento: una
+preselezione addosso a chi in quei giorni tiene un corso suo altrove
+aggancerebbe alla fiera le vendite della sua aula, con lo sconto della
+fiera sopra. Nel team di Napoli c'erano dieci righe; il titolare ne ha
+nominate sei, e messo davanti ai nomi delle altre due con un'anagrafica
+(CHIARA COLONNELLI, VALENTINA CALASCIBETTA) ha aggiunto anche quelle:
+**otto**. Le due righe **libere** (Miranda Raffaele, Gianluca Rocca)
+restano fuori per forza — senza anagrafica non hanno un'identità
+nell'app, quindi non hanno un POS.
+
+**La parte che si sbaglia senza accorgersene: le identità.**
+`operatoreCorrente` restituisce **una** identità, quella della password
+battuta; in anagrafica la stessa persona ne ha due o tre, e nel team sta
+con quella dell'elenco da cui è stata presa. ANDREA PAURA nel team è il
+**venditore** «ANDREA» e nell'app entra come **master**; ELIA CITO il
+contrario. Una regola scritta su una sola identità li mancherebbe in
+silenzio, cioè al banco, davanti al cliente.
+`identitaDellaPersona` le unisce **per id** — `master.venditore_id`,
+`assistente.master_id` — e **mai per nome**: «ANDREA» e «ANDREA PAURA»
+sono la stessa persona e due stringhe diverse, e questa lezione il
+progetto l'ha già pagata con la notifica del modulo al venditore.
+
+**Resta una partenza, non un obbligo**, e si dice: sopra la tendina
+compare «Sei fra chi vende al banco di *Fiera di Napoli*… se questa
+vendita non è della fiera, cambia qui sopra». Una preselezione muta su
+dove va la vendita e su quanto paga il cliente è il modo di non
+guardarla più, e di non accorgersi il giorno in cui è sbagliata. La
+scelta di chi vende vince sempre e non torna indietro (`bancoDeciso`),
+anche quando è «nessun evento». E **si spegne da sé**: passata l'ora il
+POS riparte da «nessun evento» senza che nessuno debba togliere le
+spunte. Quell'ora decide da dove il banco **parte**, non taglia un
+carrello aperto a metà.
+
+**Un buco trovato strada facendo, e sono soldi.** La fotografia di un
+carrello sospeso salvava `scontoFiera` ma **non la fiera**: ripreso dopo
+un ricaricamento della pagina, `eventoPosId` era vuoto, e lo sconto
+fiera senza evento non è «disponibile» — spariva in silenzio insieme
+alla sua spunta, che si vede solo con un evento scelto. Il cliente
+pagava pieno. Ora `eventoPosId` sta nella fotografia; un carrello
+salvato prima non ce l'ha e si riprende con la fiera che la
+preselezione ha già messo.
+
+Prove in `prove/pos-parte-dalla-fiera.test.js` (16, la regola: le
+identità doppie, le righe libere, lunedì alle 19:59 sì e alle 20:00 no,
+la fiera conclusa, due fiere aperte) e
+`prove/pos-parte-dalla-fiera-al-banco.test.jsx` (3, il gesto: il POS
+vero montato, la tendina già sulla fiera, la spunta accesa, e chi non è
+al banco che si apre come sempre).
+
 ### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
 
 Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
