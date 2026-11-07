@@ -70955,6 +70955,22 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     // lo sconto fiera e' l'altra meta' della richiesta: senza, il banco
     // aggancia la vendita alla fiera e la fa pagare piena
     if (pre.scontoFiera) setScontoFiera(true);
+    // E LA SPEDIZIONE PARTE SPENTA (7/11/2026, chiesto dal titolare:
+    // «togli la spedizione di default dai POS settati in fiera»).
+    //
+    // Al banco la merce esce dallo scatolone ed entra nella borsa della
+    // cliente: non c'e' niente da spedire, e 6,90 € di spese su uno
+    // scontrino di fiera sono soldi chiesti per un servizio che non
+    // c'e'. La spedizione nasce accesa per decisione del titolare del
+    // 23/10 — «meglio che le toglie la master piuttosto che le
+    // dimentica», che al corso e' giusto — e quella decisione NON si
+    // ribalta qui per tutti: si spegne sul solo POS che parte da una
+    // fiera, dove la consegna a mano non e' l'eccezione ma la regola.
+    //
+    // Resta una partenza, non un divieto: se qualcuno compra e vuole il
+    // pacco a casa, la spunta «Spese di spedizione» si riaccende. E si
+    // spegne da se' quando scade l'ora del banco, come il resto.
+    setSpedizioneAttiva(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operatore, eventiOggi, teamBanco, master, assistente]);
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;

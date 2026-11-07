@@ -2881,6 +2881,26 @@ POS riparte da «nessun evento» senza che nessuno debba togliere le
 spunte. Quell'ora decide da dove il banco **parte**, non taglia un
 carrello aperto a metà.
 
+**E la spedizione parte spenta** (7/11/2026, chiesto il giorno stesso:
+«togli la spedizione di default dai POS settati in fiera a Napoli»). Al
+banco la merce esce dallo scatolone ed entra nella borsa della cliente:
+con il carrello ancora vuoto si leggeva «Totale da incassare 6,90 €», e
+su uno scontrino di fiera sono soldi chiesti per un servizio che non
+c'è. La spedizione nasce accesa per decisione del titolare del 23/10
+(«meglio che le toglie la master piuttosto che le dimentica»), che a un
+corso è giusta: quella decisione **non è stata ribaltata per tutti** —
+si spegne sul solo POS che parte da una fiera, dove la consegna a mano
+non è l'eccezione ma la regola. Resta una partenza e non un divieto: chi
+vuole il pacco a casa riaccende la spunta. Una prova controlla le due
+facce — spenta al banco, accesa per chi al banco non c'è.
+
+**Da sapere, e da decidere**: oggi la spedizione è accesa **solo sul
+primo carrello** dopo l'apertura del POS. Dal secondo in poi
+`nuovaVendita` la spegne, e si riaccende scegliendo un corso o
+un'allieva. Quindi il «accesa di default» del 23/10 vale in pratica per
+una vendita sola a sessione. Non è stato toccato: è una decisione del
+titolare, e va ridetta, non indovinata.
+
 **Un buco trovato strada facendo, e sono soldi.** La fotografia di un
 carrello sospeso salvava `scontoFiera` ma **non la fiera**: ripreso dopo
 un ricaricamento della pagina, `eventoPosId` era vuoto, e lo sconto

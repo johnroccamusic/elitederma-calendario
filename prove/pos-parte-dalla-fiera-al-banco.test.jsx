@@ -76,6 +76,13 @@ describe("il POS di chi vende al banco della fiera", () => {
       && /Sconto fiera/.test(c.closest("label")?.textContent || ""));
     expect(spunta, "la spunta dello sconto fiera").toBeTruthy();
     expect(spunta.checked).toBe(true);
+
+    // E LA SPEDIZIONE PARTE SPENTA (7/11/2026): al banco la merce va
+    // nella borsa della cliente. La spedizione nasce accesa — decisione
+    // del 23/10 — e con il carrello ancora vuoto si leggeva «Totale da
+    // incassare 6,90 €»: a una fiera sono soldi chiesti per un servizio
+    // che non c'è.
+    expect(p.testo(), "le spese di spedizione al banco della fiera").not.toMatch(/Spedizione\s*6,90/);
     await p.smonta();
   });
 
@@ -90,6 +97,9 @@ describe("il POS di chi vende al banco della fiera", () => {
     expect(p.testo()).not.toMatch(/Sei fra chi vende al banco di/);
     // senza evento la spunta dello sconto fiera non esiste nemmeno
     expect(p.testo()).not.toMatch(/Sconto fiera/);
+    // e la spedizione resta accesa come l'ha voluta il titolare il
+    // 23/10: fuori dal banco della fiera non cambia niente
+    expect(p.testo(), "la spedizione fuori dal banco").toMatch(/Spedizione\s*6,90/);
     await p.smonta();
   });
 
