@@ -2886,7 +2886,7 @@ c'è.
 Due richieste dello stesso momento, con la fiera di Napoli aperta.
 
 **«Anche il POS fisico, che non è necessariamente carta Stripe».** La
-scelta fra «POS esterno» e «Carta / Stripe» esisteva solo per chi
+scelta fra «POS fisico» e «Stripe» esisteva solo per chi
 amministra, perché il terminale sta in amministrazione. Ma a una fiera il
 terminale lo si porta al banco, e senza quella scelta chi vende aveva una
 strada sola — il QR — che davanti a una cliente che porge la carta non è
@@ -2901,6 +2901,40 @@ nessuno abbia visto i soldi arrivare — il database la accetta solo perché
 quel segno c'è (`terminale_fisico`), e resta scritto sulla vendita. Il
 banco si apre sul QR, che è l'unica carta che si prova, e si passa al
 terminale quando lo si usa.
+
+**E dal 7/11/2026 sera sono QUATTRO TASTI, non due e poi altri due.** Il
+titolare, dalla fiera: «non è necessario selezionare prima pagamento con
+carta e poi il tasto Stripe o POS esterno. Ci vogliono 4 tasti separati, 2
+sopra e 2 sotto: sopra «Stripe» e «POS fisico», sotto «Contanti» e
+«Buono Amazon».» Era la seconda segnalazione sullo stesso tasto in
+mezza giornata — «non vedo il tasto POS fisico» — e la prima volta la
+risposta era stata sbagliata: il tasto c'era, ma **stava dentro il
+riquadro che si apre scegliendo la carta**, cioè dietro a un gesto che
+non fa chi non sa che dietro c'è qualcosa. Una scelta annidata la trova
+solo chi già sa che esiste.
+
+Ora i quattro stanno in una griglia 2×2 (`gridTemplateColumns: "1fr 1fr"`)
+e ognuno si preme una volta sola. **Dove il terminale non c'è il tasto non
+c'è**, e gli altri tre scorrono a riempire la griglia: un tasto che non
+si può premere è un dubbio, non una scelta. Due cose da sapere:
+
+- **Stripe e POS fisico restano tutti e due «POS»** per la vendita, per
+  l'IVA e per i punti: `metodoPagamento` resta `pos` e `modoIncassoPos`
+  dice quale dei due. Sono due tasti perché al banco sono due gesti
+  diversi, non due metodi di pagamento — e cambia una cosa sola, che il
+  QR il pagamento lo **prova** e il terminale lo **dichiara**.
+- **Il carrello sospeso adesso porta anche QUALE carta** (`modoIncassoPos`
+  nella fotografia). Prima non serviva, perché era un dettaglio dentro
+  «carta»; da quando è un tasto, un carrello ripreso che tornasse sul QR
+  farebbe ricominciare da capo un incasso già battuto sul terminale. Si
+  ripristina **solo a chi il terminale ce l'ha**: ripreso dall'ufficio,
+  un carrello della fiera mostrerebbe quattro tasti e nessuno scelto, e
+  manderebbe `terminale_fisico` su una vendita che nessuno ha battuto.
+
+Il nome a video è **«POS fisico»** — quello che dice il titolare — e con
+esso i due messaggi del QR fallito. Dentro, `terminale_fisico` e
+`modoIncassoPos === "esterno"` non sono stati rinominati: li guarda il
+database, e un rinominare cosmetico su una serratura non si fa.
 
 **«È meglio che scrivo una cifra io da scontare: se vedo che il prezzo fa
 7,56 e voglio fare 6,90, scrivo a mano meno 60 euro».** Serve ad
@@ -2998,11 +3032,14 @@ conti ha la sua riga «Provvigioni usate» apposta; sulla vendita però quel
 numero **non è scritto**, e si ricava solo dalla differenza: è una cosa
 da sapere quando si controlla un totale.
 
-Prove in `prove/pos-fiera-terminale-e-sconto-a-mano.test.jsx` (8): il
+Prove in `prove/pos-fiera-terminale-e-sconto-a-mano.test.jsx` (11): il
 terminale c'è per chi sta al banco e non per gli altri, si spegne passata
-l'ora, il banco si apre sul QR; la cifra a mano la vede solo il
+l'ora, il banco si apre sul QR, **si scegli con un tocco e non con due**
+(e quel tocco toglie di mezzo il QR); la cifra a mano la vede solo il
 programmatore, si somma allo sconto fiera, trascina le righe del
-carrello e non sfonda il subtotale.
+carrello e non sfonda il subtotale. In
+`prove/pos-incasso-carta.test.jsx` c'è anche il guardiano della forma
+vecchia: «Tipo di incasso carta» non deve ricomparire.
 
 ### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
 

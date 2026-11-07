@@ -1,7 +1,7 @@
 // CHI PUO' INCASSARE COME.
 //
 // Il terminale fisico sta in amministrazione: una master non ce l'ha, e
-// la scelta «POS esterno» le offriva una strada che non puo' percorrere
+// la scelta «POS fisico» le offriva una strada che non puo' percorrere
 // — e che per di piu' non chiede conferma a nessuno, perche' la vendita
 // la si dichiara incassata a mano.
 //
@@ -45,19 +45,24 @@ async function apriBanco(ruoloUtente) {
   );
 }
 
-describe("il POS esterno e' solo dell'amministrazione", () => {
+describe("il POS fisico e' solo dell'amministrazione", () => {
   it("al banco di una master non compare", async () => {
     const p = await apriBanco("user");
-    expect(p.testo()).not.toContain("POS esterno");
+    expect(p.testo()).not.toContain("POS fisico");
     expect(p.testo()).not.toContain("Batti tu sul terminale");
-    // e nemmeno il titolo della scelta: un tasto solo non e' una scelta
-    expect(p.testo()).not.toContain("Tipo di incasso carta");
+    // e le restano i suoi tre modi di incassare, tutti e tre premibili
+    expect(p.testo()).toContain("Stripe");
+    expect(p.testo()).toContain("Contanti");
+    expect(p.testo()).toContain("Buono Amazon");
   });
 
-  it("al banco dell'amministrazione resta", async () => {
+  it("al banco dell'amministrazione resta, come tasto suo", async () => {
     const p = await apriBanco("amministratore");
-    expect(p.testo()).toContain("POS esterno");
-    expect(p.testo()).toContain("Tipo di incasso carta");
+    expect(p.testo()).toContain("POS fisico");
+    // e NON dentro la carta: la vecchia forma era "scegli carta, poi
+    // scegli quale carta", e il terminale stava dietro al primo gesto.
+    // Al banco di Napoli nessuno l'ha trovato.
+    expect(p.testo()).not.toContain("Tipo di incasso carta");
   });
 
   it("alla master la carta e' il QR, e si vede subito", async () => {

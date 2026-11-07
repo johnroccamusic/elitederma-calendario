@@ -56,10 +56,10 @@ describe("il tasto Incassa vendita con la carta", () => {
     expect(p.nodo.querySelector('[data-campo="carta-senza-pagamento"]')).toBe(null);
   });
 
-  it("per chi amministra col POS esterno si preme: ha visto lo scontrino", async () => {
+  it("per chi amministra col POS fisico si preme: ha visto lo scontrino", async () => {
     const p = await banco({ utente: ADMIN, ruolo: "amministratore" });
     expect(p.incassa).toBeTruthy();
     expect(p.incassa.disabled).toBe(false);
-    expect(p.testo()).toMatch(/POS esterno/);
+    expect(p.testo()).toMatch(/POS fisico/);
   });
 });

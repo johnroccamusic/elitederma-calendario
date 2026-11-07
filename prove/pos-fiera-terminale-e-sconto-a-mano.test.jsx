@@ -67,9 +67,14 @@ describe("il POS fisico al banco della fiera", () => {
   it("chi vende al banco può scegliere il terminale, non solo il QR", async () => {
     const p = await banco();
     const t = pulito(p);
-    expect(t, "la scelta del tipo di incasso").toContain("Tipo di incasso carta");
-    expect(t).toContain("POS esterno");
+    expect(t).toContain("POS fisico");
     expect(t).toContain("Batti tu sul terminale");
+    // QUATTRO TASTI, non due e poi altri due: il terminale sta accanto a
+    // Stripe, ai contanti e al buono, non dentro la carta
+    expect(t).toContain("Stripe");
+    expect(t).toContain("Contanti");
+    expect(t).toContain("Buono Amazon");
+    expect(t, "la vecchia scelta annidata").not.toContain("Tipo di incasso carta");
     await p.smonta();
   });
 
@@ -89,14 +94,30 @@ describe("il POS fisico al banco della fiera", () => {
   it("chi NON è al banco di quella fiera il terminale non lo vede", async () => {
     const p = await banco({ venditore: { id: "v-katia", nome: "KATIA" } });
     const t = pulito(p);
-    expect(t).not.toContain("Tipo di incasso carta");
-    expect(t).not.toContain("POS esterno");
+    expect(t).not.toContain("POS fisico");
+    expect(t).not.toContain("Batti tu sul terminale");
+    await p.smonta();
+  });
+
+  it("il terminale si scegli con un tocco, non con due", async () => {
+    // era il difetto segnalato dal titolare: il tasto c'era ma stava
+    // dentro il riquadro della carta, quindi per arrivarci bisognava
+    // prima premere «carta» e poi sapere di dover premere ancora
+    const p = await banco();
+    const tasto = p.tasto("POS fisico");
+    expect(tasto).toBeTruthy();
+    await clicca(tasto);
+    const t = pulito(p);
+    expect(t).toContain("Incassa sul terminale");
+    // e scegliendo il terminale il QR si toglie di mezzo: non sono due
+    // strade aperte insieme
+    expect(t).not.toContain("Mostra il QR");
     await p.smonta();
   });
 
   it("passata l'ora del banco, il terminale si spegne da sé", async () => {
     const p = await banco({ eventi: [{ ...FIERA, pos_banco_fino_al: new Date(Date.now() - 60000).toISOString() }] });
-    expect(pulito(p)).not.toContain("POS esterno");
+    expect(pulito(p)).not.toContain("POS fisico");
     await p.smonta();
   });
 });

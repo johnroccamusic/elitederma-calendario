@@ -71099,7 +71099,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // anche il POS fisico, che non e' necessariamente carta Stripe, quindi
   // c'e' l'eccezione per chi e' in fiera anche il POS fisico».
   //
-  // La scelta fra «POS esterno» e «Carta / Stripe» esisteva solo per chi
+  // La scelta fra «POS fisico» e «Stripe» esisteva solo per chi
   // amministra, perche' il terminale sta in amministrazione. Ma a una
   // fiera il terminale lo si porta al banco, e senza questa scelta chi
   // vende aveva una strada sola: il QR. Davanti a una cliente che
@@ -71790,6 +71790,10 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   function fotografaCarrello() {
     return {
       carrello, note, metodoPagamento, corsoPosId, scontoTipo, scontoValore, couponCodiceTesto, referralPersonaleAttivo, scontoCorsoAttivo, omaggioAttivo, scontoFiera,
+      // QUALE carta, non solo "carta": da quando Stripe e POS fisico sono
+      // due tasti, un carrello ripreso che tornasse sul QR farebbe
+      // ricominciare da capo un incasso già battuto sul terminale
+      modoIncassoPos,
       // la cifra scritta a mano sta nella fotografia come lo sconto
       // fiera: ripreso il carrello, il totale concordato col cliente
       // deve essere ancora quello
@@ -71809,6 +71813,11 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     setCarrello(Array.isArray(c.carrello) ? c.carrello : []);
     setNote(c.note || "");
     setMetodoPagamento(c.metodoPagamento || "pos");
+    // il terminale si ripristina solo a chi ce l'ha: un carrello sospeso
+    // in fiera e ripreso dall'ufficio senza terminale mostrerebbe quattro
+    // tasti e nessuno scelto, e manderebbe `terminale_fisico` su una
+    // vendita che nessuno ha battuto
+    if (c.modoIncassoPos) setModoIncassoPos(c.modoIncassoPos === "esterno" && terminaleFisicoDisponibile ? "esterno" : "qr");
     setCorsoPosId(c.corsoPosId || "");
     // un carrello ripreso porta la sua fiera: e' una scelta gia' fatta,
     // e la preselezione non ci passa piu' sopra
@@ -72671,17 +72680,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // se riprovare o passare al terminale
       const dettaglio = data?.errore || error?.message || "nessuna risposta dal server";
       // il ripiego si nomina solo a chi ce l'ha: una master senza
-      // terminale, mandata al "POS esterno", resta ferma col cliente
+      // terminale, mandata al "POS fisico", resta ferma col cliente
       // davanti a cercare una cosa che non esiste
       setMsgQr(`QR non creato: ${dettaglio}. ${terminaleFisicoDisponibile
-        ? "Puoi incassare col POS esterno e confermare la vendita a mano."
+        ? "Puoi incassare col POS fisico e confermare la vendita a mano."
         : "Riprova fra un momento; se continua, chiama l'amministrazione."}`);
       // la finestra vuota non resta li' a far credere che stia caricando
       finestra?.close();
       return;
     }
     if (!data?.codice) {
-      setMsgQr(`QR non creato: il server ha risposto senza codice. Riprova${terminaleFisicoDisponibile ? ", oppure incassa col POS esterno." : "; se continua, chiama l'amministrazione."}`);
+      setMsgQr(`QR non creato: il server ha risposto senza codice. Riprova${terminaleFisicoDisponibile ? ", oppure incassa col POS fisico." : "; se continua, chiama l'amministrazione."}`);
       finestra?.close();
       return;
     }
@@ -74414,63 +74423,55 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       {!omaggioAttivo && (
         <>
           <div style={etichettaPos}>Come paga?</div>
-          <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap", marginBottom: isMobile ? 10 : 14 }}>
+          {/* QUATTRO TASTI ALLO STESSO LIVELLO, e non "carta" e poi di
+              che carta. Il terminale stava dentro il riquadro che si apre
+              scegliendo la carta, cioè dietro a un gesto che non fa chi
+              non sa che dietro c'è qualcosa: al banco di Napoli le
+              ragazze il tasto non l'hanno trovato. Chiesto dal titolare
+              il 7/11/2026: Stripe e POS fisico sopra, contanti e buono
+              Amazon sotto.
+
+              Stripe e POS fisico restano tutti e due «POS» per la
+              vendita, per l'IVA e per i punti: cambia solo che il QR il
+              pagamento lo PROVA e il terminale lo DICHIARA. Sono due
+              tasti perché al banco sono due gesti diversi, non due
+              metodi di pagamento. */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 6 : 8, marginBottom: isMobile ? 10 : 14 }}>
             {[
-              { v: "pos", l: "Carta/Stripe", sotto: "QR code o link", Icona: IconaCartaPos },
-              { v: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota },
-              { v: "buono_amazon", l: "Buono Amazon", sotto: "Codice regalo", Icona: IconaTileOmaggio },
-            ].map((m) => (
+              { k: "stripe", l: "Stripe", sotto: "Paga lei col telefono", Icona: IconaAnelloLink, scelto: metodoPagamento === "pos" && modoIncassoPos !== "esterno", premi: () => { setMetodoPagamento("pos"); setModoIncassoPos("qr"); setMsgQr(""); } },
+              // il terminale esiste dove esiste: in amministrazione e al
+              // banco di una fiera. Dove non c'è, il tasto non c'è — un
+              // tasto che non si può premere è un dubbio, non una scelta
+              // — e gli altri tre scorrono a riempire la griglia
+              terminaleFisicoDisponibile
+                ? { k: "fisico", l: "POS fisico", sotto: "Batti tu sul terminale", Icona: IconaTerminalePos, scelto: metodoPagamento === "pos" && modoIncassoPos === "esterno", premi: () => { setMetodoPagamento("pos"); setModoIncassoPos("esterno"); setMsgQr(""); } }
+                : null,
+              { k: "contanti", l: "Contanti", sotto: "Incasso immediato", Icona: IconaBanconota, scelto: metodoPagamento === "contanti", premi: () => setMetodoPagamento("contanti") },
+              { k: "buono_amazon", l: "Buono Amazon", sotto: "Codice regalo", Icona: IconaTileOmaggio, scelto: metodoPagamento === "buono_amazon", premi: () => setMetodoPagamento("buono_amazon") },
+            ].filter(Boolean).map((m) => (
               <SceltaPos notte={NOTTE.scuro}
-                key={m.v} scelto={metodoPagamento === m.v} Icona={m.Icona}
+                key={m.k} scelto={m.scelto} Icona={m.Icona}
                 titolo={m.l} sotto={m.sotto} isMobile={isMobile}
-                onClick={() => setMetodoPagamento(m.v)}
+                onClick={m.premi}
               />
             ))}
           </div>
 
-          {/* Col POS si incassa in due modi, e il conto non cambia: il
-              terminale fisico al banco — che pero' ce l'ha solo
-              l'amministrazione — oppure il QR che la cliente inquadra
-              col telefono. Non sono due metodi di pagamento: per la
-              vendita, per l'IVA e per i punti restano tutti e due
-              "POS". */}
           {metodoPagamento === "pos" && (
-            // incassato nella pagina e non appoggiato sopra: e' un
-            // dettaglio DENTRO "Carta", non una scelta allo stesso livello
+            // il riquadro di quello che si è scelto: per il terminale la
+            // riga che dice cosa fare, per Stripe i tasti del QR e del
+            // link. Prima qui dentro stava anche la scelta fra i due,
+            // che adesso è sopra fra i quattro tasti.
             <div style={{ marginBottom: isMobile ? 10 : 14, padding: isMobile ? "11px 12px" : "13px 14px", borderRadius: 16, background: NOTTE.incassoSfondo, border: `1px solid ${NOTTE.incassoBordo}`, boxShadow: OMBRA_POS.incassato }}>
-              {/* La scelta fra terminale e QR esiste dove esiste il
-                  terminale: in amministrazione, e dal 7/11/2026 anche al
-                  banco di una fiera, dove il terminale lo si porta.
-                  Per tutti gli altri la carta e' il QR e non c'e' niente
-                  da scegliere: due tasti di cui uno solo premibile sono
-                  un tasto e un dubbio. */}
-              {terminaleFisicoDisponibile && (
-                <>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NOTTE.etichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 9 }}>Tipo di incasso carta</div>
-                  <div style={{ display: "flex", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
-                    <SceltaPos notte={NOTTE.scuro}
-                      scelto={modoIncassoPos === "esterno"} Icona={IconaTerminalePos}
-                      titolo="POS esterno" sotto="Batti tu sul terminale" isMobile={isMobile}
-                      onClick={() => { setModoIncassoPos("esterno"); setMsgQr(""); }}
-                    />
-                    <SceltaPos notte={NOTTE.scuro}
-                      scelto={modoIncassoPos === "qr"} Icona={IconaAnelloLink}
-                      titolo="Carta / Stripe" sotto="Paga lei col telefono" isMobile={isMobile}
-                      onClick={() => { setModoIncassoPos("qr"); setMsgQr(""); }}
-                    />
-                  </div>
-                </>
-              )}
-
               {modoIncassoPos === "esterno" ? (
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 9, marginTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
                   <span style={{ display: "inline-flex", flexShrink: 0, marginTop: 1 }}><IconaInfoTondo size={18} color={NOTTE.soffuso} /></span>
                   <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, color: NOTTE.soffuso, lineHeight: 1.5 }}>
                     Incassa sul terminale, poi conferma la vendita qui sotto come hai sempre fatto. L'app non aspetta nessuna conferma da fuori.
                   </span>
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   {/* un tasto spento senza una ragione scritta sembra un
                       tasto rotto: chi sta al banco preme, non succede
                       niente, e non ha modo di capire perche' */}
@@ -74676,7 +74677,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         // pacco partito il giorno dopo. Per chi non ha il terminale la
         // carta E' il QR, e il QR chiude la vendita da solo quando i
         // soldi arrivano: questo tasto, con la carta, serve solo a chi
-        // ha battuto sul POS esterno. Il database rifiuta comunque
+        // ha battuto sul POS fisico. Il database rifiuta comunque
         // (registra_vendita_pos): qui si evita di arrivarci col carrello
         // gia' svuotato.
         const cartaSenzaPagamento = !omaggioAttivo && metodoPagamento === "pos"
