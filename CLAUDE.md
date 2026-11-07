@@ -3453,6 +3453,17 @@ nome e cognome → STATO di nascita, STATO di residenza
 → via e civico → email → tutor e cellulare
 ```
 
+**E LA COPIA FIRMATA DICE LE STESSE PAROLE** (`_shared/modulo-pdf.ts`).
+Il PDF che l'allieva riceve allegato alla conferma scriveva ancora «Dati
+dell'allievo/a» e «Codice fiscale» mentre la schermata diceva «Dati
+anagrafici» e «Identificativo fiscale personale (TIN)». Non e' una
+differenza di stile: chiamare «codice fiscale» un AHV svizzero e' dire
+una cosa falsa dentro un documento che una persona sottoscrive. Allineato
+— e **va pubblicata `modulo-ricevuto`**, che e' la funzione che compone
+quel PDF: finche' non lo e', ogni copia nuova esce con le parole vecchie.
+I PDF gia' archiviati non si toccano e non si devono toccare: sono la
+fotografia di quello che quella persona ha firmato quel giorno.
+
 **L'area si chiama «Dati anagrafici»** e non piu' «Dati dell'allievo», e
 dentro ha un'intestazione sua: **«Dati residenza:»**, subito dopo il
 campo fiscale. Raccoglie due cose diverse — chi e' quella persona e dove
