@@ -140,17 +140,19 @@ describe("chi non vive in Italia", () => {
 });
 
 describe("la disposizione dei gradini", () => {
-  it("stato, regione e provincia stanno su una riga sola e non vanno a capo", async () => {
+  it("regione e provincia stanno su una riga sola e non vanno a capo", async () => {
     // jsdom non impagina, quindi non si misura: si guarda la struttura,
-    // che e' quella che decide. Tre caselle nello stesso contenitore
-    // `nowrap` sono una riga; in tre contenitori sono tre righe.
+    // che e' quella che decide. Due caselle nello stesso contenitore
+    // `nowrap` sono una riga; in due contenitori sono due righe.
+    //
+    // Lo Stato non sta piu' qui: dal 7/11/2026 e' salito in testa
+    // all'area, accanto allo Stato di nascita, perche' decide tutto
+    // quello che sta sotto — vedi la prova dell'ordine in
+    // residenza-svizzera.test.jsx.
     const p = await apri({});
-    // si risale dallo stato fino al primo contenitore che tiene dentro
-    // anche la provincia: quello e' la riga
-    let riga = p.casella("stato_residenza");
+    let riga = p.tendina("regione_residenza");
     while (riga && !riga.contains(p.tendina("prov_residenza"))) riga = riga.parentElement;
     expect(riga).not.toBe(null);
-    expect(riga.contains(p.tendina("regione_residenza"))).toBe(true);
     expect(riga.contains(p.tendina("citta_residenza"))).toBe(false);
     // `aCapo: false` non scrive "nowrap": smette di scrivere "wrap",
     // che in flexbox e' la stessa cosa
@@ -163,7 +165,7 @@ describe("la disposizione dei gradini", () => {
     // sfalsate. Adesso «opzionale» sta su una riga sua sempre, e lo
     // spazio riservato all'etichetta e' lo stesso per tutte.
     const p = await apri({});
-    const etichette = ["stato_residenza", "regione_residenza", "prov_residenza"].map((k) => {
+    const etichette = ["stato_nascita", "stato_residenza", "regione_residenza", "prov_residenza"].map((k) => {
       let n = p.tendina(k) || p.casella(k);
       while (n && !n.previousElementSibling) n = n.parentElement;
       return n?.previousElementSibling;

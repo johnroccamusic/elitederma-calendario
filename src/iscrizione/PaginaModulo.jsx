@@ -610,14 +610,23 @@ export default function PaginaModulo({ token }) {
     if (!dati || spedito) return;
     const d = (dati.campi || []).find((x) => x.chiave === "codice_fiscale");
     if (!d || d.bloccato) return;
-    // a chi vive fuori non si propone un codice italiano: il suo
-    // identificativo e' quello del suo paese
-    const statoSuo = risposte.stato_residenza
-      ?? (dati.campi || []).find((x) => x.chiave === "stato_residenza")?.valore;
-    if (elencoResidenza(statoSuo)?.stato !== ITALIA) return;
     // stessa regola della scheda: si rifa' solo il codice che abbiamo
     // proposto noi. Quello che ha scritto lei non si tocca.
     const scritto = String(risposte.codice_fiscale || "").trim();
+    // A CHI VIVE FUORI NON SI PROPONE UN CODICE ITALIANO, e quello che
+    // avevamo gia' proposto se ne va col paese: la casella vuota dello
+    // Stato vale Italia, quindi scrivendo i dati di nascita il codice
+    // italiano e' gia' stato scritto prima che lei arrivasse allo
+    // Stato.
+    const statoSuo = risposte.stato_residenza
+      ?? (dati.campi || []).find((x) => x.chiave === "stato_residenza")?.valore;
+    if (elencoResidenza(statoSuo)?.stato !== ITALIA) {
+      if (scritto && scritto === cfProposto) {
+        setCfProposto("");
+        setRisposte((r) => ({ ...r, codice_fiscale: "" }));
+      }
+      return;
+    }
     if (scritto && scritto !== cfProposto) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: risposte.cognome || perChiaveValore(dati, "cognome"),

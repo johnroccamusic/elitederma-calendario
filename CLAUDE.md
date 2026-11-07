@@ -3418,25 +3418,54 @@ L'avviso dei sedici caratteri nomina «il codice fiscale» e non
 l'etichetta intera (`nomeAvviso`): esce solo per chi risiede in Italia,
 dove quella cosa si chiama cosi'.
 
-**E LO STATO DI RESIDENZA E' SALITO, SUBITO DOPO QUELLO DI NASCITA**
-(7/11/2026, stesso giro di prove del titolare: «dopo lo stato di nascita
-ci sia lo stato di residenza, perché con lo stato di residenza poi ti
-partono tutti i dati con il codice fiscale e il resto»). E' la stessa
-regola del codice fiscale — *il campo che si riempie da se' va dopo
-quelli che lo riempiono* — applicata a una cosa nuova: lo Stato di
-residenza non riempie quelle caselle, **decide che cosa chiedono**.
+**I DUE STATI SUBITO DOPO IL NOME** (7/11/2026, dettato dal titolare
+dopo averlo provato davvero: «l'ordine deve essere nome, cognome, stato
+di nascita, stato di residenza, poi i dati della nascita e tutto il
+resto»). Il primo giro li aveva messi in mezzo, e **non bastava**: il
+titolare ha visto il guasto compilando — «il codice fiscale sotto
+continuava a essere calcolato come quello dell'Italia».
+
+**Perche' succedeva, ed e' il punto.** La casella vuota dello Stato vale
+Italia, ed e' giusto che valga Italia: 253 schede su 260 sono italiane e
+quello Stato non l'ha mai scritto nessuno. Ma vuol dire che mentre si
+scrivono nome, sesso, data e comune di nascita il codice fiscale
+italiano **e' gia' stato calcolato e scritto**; si sceglieva la Svizzera
+dopo, e quel codice restava li'. Scritto dall'app, davanti a chi
+incassa, e nessuno lo mette in dubbio — e' la stessa famiglia di guasti
+del «conto giusto sul periodo sbagliato».
+
+Due correzioni, perche' una sola non bastava:
+
+- **l'ordine toglie l'occasione**: i due Stati si incontrano subito dopo
+  il nome, prima di qualunque dato che da loro dipenda;
+- **e il codice che abbiamo scritto NOI se ne va col paese**: scelto uno
+  Stato senza elenco, la casella fiscale si svuota se dentro c'e'
+  esattamente quello che avevamo proposto noi. Quello che ha scritto una
+  persona **non si tocca**, come sempre.
+
 L'ordine dei «Dati dell'allievo» adesso e':
 
 ```
-nome e cognome → sesso, data, STATO di nascita, comune di nascita
-→ STATO di residenza, regione, provincia → comune e CAP
-→ identificativo fiscale → via e civico → email → tutor e cellulare
+nome e cognome → STATO di nascita, STATO di residenza
+→ sesso, data di nascita, comune di nascita
+→ regione, provincia → comune e CAP → identificativo fiscale
+→ via e civico → email → tutor e cellulare
 ```
 
-Il codice fiscale e' sceso di due righe e sta bene dov'e': arriva dopo i
-dati da cui si calcola **e** dopo lo Stato che decide con quale metro si
-misura. Una prova blocca l'ordine confrontando la posizione delle
-caselle nella pagina.
+I due si chiamano per esteso — «Stato di nascita» e «Stato di residenza»
+— perche' affiancati, uno dei due chiamato solo «Stato» non si sa di che
+cosa sia lo stato. Il campo fiscale resta in fondo alla residenza: arriva
+dopo i dati da cui si calcola **e** dopo lo Stato che decide con quale
+metro si misura. Due prove bloccano tutto questo: l'ordine, confrontando
+la posizione vera delle caselle nella pagina, e il codice italiano che
+se ne va quando il paese cambia.
+
+**E una cosa che il banco di prova ha misurato, e che spiega l'ordine
+meglio di qualunque ragionamento:** finche' la scheda e' italiana quella
+casella fa rispettare la *forma* del codice italiano — sei lettere, poi
+le cifre, poi il mese — quindi un AHV svizzero scritto li' dentro
+**non sopravvive alla battitura**. Non e' un difetto del filtro: e' il
+motivo per cui lo Stato va scelto per primo.
 
 **Quello che NON copre, e va saputo:** la ricerca delle vie
 (`cerca-indirizzo`, Photon) resta ristretta all'Italia, quindi in

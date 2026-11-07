@@ -186,6 +186,49 @@ describe("la scheda del venditore", () => {
     expect(prima("cap_residenza", "codice_fiscale")).toBe(true);
   });
 
+  // IL GUASTO VERO, visto dal titolare compilando: «il codice fiscale
+  // sotto continuava a essere calcolato come quello dell'Italia».
+  //
+  // La casella vuota dello Stato vale Italia — ed e' giusto — quindi
+  // scrivendo nome, sesso, data e comune il codice italiano e' GIA'
+  // stato scritto; scegliendo la Svizzera dopo, restava li'. Scritto
+  // dall'app, davanti a chi incassa, e nessuno lo mette in dubbio.
+  it("scelto un altro paese, il codice italiano che avevamo scritto NOI se ne va", async () => {
+    const p = await apri({ cognome: "ROSSI", nome: "MARIO", sesso: "M" });
+    await scrivi(p.casella("data_nascita"), "1990-03-12");
+    await scegliCercando(p, "comune_nascita", "Roma", 0);
+    // fin qui e' una scheda italiana, e il codice si calcola da se'
+    const italiano = p.casella("codice_fiscale").value;
+    expect(italiano).toMatch(/^RSSMRA90C12H501/);
+    // adesso vive in Svizzera: quel codice non e' il suo identificativo
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    expect(p.casella("codice_fiscale").value).toBe("");
+  });
+
+  it("ma un codice scritto a mano NON si tocca", async () => {
+    const p = await apri({ cognome: "ROSSI", nome: "MARIO" });
+    // scritto da una persona, non proposto da noi: resta suo
+    await scrivi(p.casella("codice_fiscale"), "RSSMRA90C12H501X");
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    expect(p.casella("codice_fiscale").value).toBe("RSSMRA90C12H501X");
+  });
+
+  // E PERCHE' LO STATO VA SCELTO PRIMA, detto dai numeri: finche' la
+  // scheda e' italiana quella casella fa rispettare la FORMA del codice
+  // italiano — sei lettere, poi le cifre, poi il mese — e un AHV
+  // svizzero scritto li' dentro non sopravvive. Non e' un difetto del
+  // filtro: e' il motivo per cui lo Stato e' la seconda cosa che si
+  // incontra nella scheda.
+  it("l'AHV svizzero si puo' scrivere solo dopo aver scelto la Svizzera", async () => {
+    const p = await apri({});
+    await scrivi(p.casella("codice_fiscale"), "756.1234.5678.97");
+    expect(p.casella("codice_fiscale").value).not.toBe("756.1234.5678.97");
+    const q = await apri({});
+    await scegliCercando(q, "stato_residenza", "Svizz");
+    await scrivi(q.casella("codice_fiscale"), "756.1234.5678.97");
+    expect(q.casella("codice_fiscale").value).toBe("756.1234.5678.97");
+  });
+
   // L'ETICHETTA DEVE DIRE IL VERO, e con essa le regole sotto.
   it("fuori Italia l'identificativo fiscale non si misura col metro italiano", async () => {
     const p = await apri({});

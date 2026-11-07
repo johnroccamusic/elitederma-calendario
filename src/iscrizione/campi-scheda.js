@@ -25,7 +25,7 @@ export const CAMPI_MODULO = [
   { chiave: "cap_residenza", etichetta: "CAP" },
   { chiave: "citta_residenza", etichetta: "Città" },
   { chiave: "prov_residenza", etichetta: "Provincia" },
-  { chiave: "stato_residenza", etichetta: "Stato" },
+  { chiave: "stato_residenza", etichetta: "Stato di residenza" },
   { chiave: "email", etichetta: "Email" },
   { chiave: "telefono", etichetta: "Cellulare (+39...)" },
   { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)" },

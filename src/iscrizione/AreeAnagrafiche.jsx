@@ -537,12 +537,25 @@ export function AreaAnagrafica({
   const nostro = !!codiceProposto && codiceScritto === codiceProposto;
   useEffect(() => {
     if (configurazione) return;
+    // IL CODICE CHE ABBIAMO SCRITTO NOI SE NE VA COL PAESE.
+    //
+    // Non basta smettere di calcolarlo: la casella vuota dello Stato
+    // vale Italia — ed e' giusto, 253 schede su 260 sono italiane —
+    // quindi mentre si scrivono nome, sesso, data e comune il codice
+    // italiano e' GIA' stato scritto. Scegliendo la Svizzera dopo,
+    // quel codice restava li': scritto dall'app, davanti a chi
+    // incassa, e nessuno lo mette in dubbio. Vale la regola di sempre:
+    // quello che abbiamo proposto noi lo riprendiamo, quello che ha
+    // scritto una persona non si tocca.
+    if (elencoResidenza(valori.stato_residenza)?.stato !== ITALIA) {
+      if (nostro) {
+        setCodiceProposto("");
+        scrivi("codice_fiscale", "");
+        autosalva();
+      }
+      return;
+    }
     if (codiceScritto && !nostro) return;
-    // NON SI PROPONE UN CODICE ITALIANO A CHI VIVE FUORI: il suo
-    // identificativo e' quello del suo paese, e scriverglielo noi
-    // sarebbe una cifra inventata dentro una casella che nessuno
-    // rimetterebbe in dubbio.
-    if (elencoResidenza(valori.stato_residenza)?.stato !== ITALIA) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: valori.cognome, nome: valori.nome, sesso: valori.sesso,
       dataNascita: valori.data_nascita,

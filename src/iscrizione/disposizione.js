@@ -47,6 +47,39 @@ export const AREA_ALLIEVO = {
     // dichiara: resta correggibile, perche' esiste l'omocodia (quando
     // due persone otterrebbero lo stesso codice l'Agenzia ne cambia
     // delle cifre, e il calcolo non puo' saperlo).
+    // I DUE STATI SUBITO DOPO IL NOME, E PRIMA DI TUTTO IL RESTO
+    // (7/11/2026, dettato dal titolare dopo averlo provato: «l'ordine
+    // deve essere nome, cognome, stato di nascita, stato di residenza,
+    // poi i dati della nascita e tutto il resto»).
+    //
+    // NON E' UN GUSTO, ED E' COSTATO UN GUASTO VERO. Lo Stato di
+    // residenza stava sotto i dati di nascita: chi compilava scriveva
+    // nome, sesso, data e comune, e a quel punto il codice fiscale
+    // ITALIANO era gia' stato calcolato e scritto nella casella — la
+    // casella vuota dello Stato vale Italia, ed e' giusto che valga
+    // Italia, perche' 253 schede su 260 sono italiane. Poi si sceglieva
+    // la Svizzera, e quel codice restava li': scritto dall'app, davanti
+    // a chi incassa, e nessuno lo mette in dubbio.
+    //
+    // Questi due campi decidono TUTTO quello che sta sotto — che cosa
+    // chiede la casella fiscale, con quale elenco si sceglie la citta',
+    // se il comune di nascita si chiede — quindi si incontrano per
+    // primi. E il codice che avevamo proposto NOI se ne va quando il
+    // paese cambia (vedi AreeAnagrafiche.jsx): l'ordine toglie
+    // l'occasione di sbagliare, la correzione toglie il danno.
+    //
+    // LO STATO DI NASCITA VIENE PRIMA DEL COMUNE per la stessa ragione:
+    // chi incontrava prima «Comune di nascita» lo cercava nell'elenco
+    // italiano — dove il paese di chi e' nato a Sion non c'e' — e
+    // sceglierlo dopo CANCELLA il comune appena scritto.
+    //
+    // I due si chiamano «Stato di nascita» e «Stato di residenza» per
+    // esteso: affiancati, uno dei due chiamato solo «Stato» non si sa
+    // di che cosa sia lo stato.
+    { campi: [
+      { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "1 1 180px", tipo: "statoNascita", salvaUscendo: true },
+      { chiave: "stato_residenza", etichetta: "Stato di residenza", larghezza: "1 1 180px", tipo: "stato", salvaUscendo: true },
+    ] },
     { campi: [
       // Il sesso sta qui e non altrove perche' serve solo a questo: nel
       // codice fiscale di una donna il giorno di nascita e' il giorno
@@ -61,20 +94,6 @@ export const AREA_ALLIEVO = {
           { valore: "M", etichetta: "M", esteso: "Maschile" },
         ] },
       { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 140px", tipo: "data", salvaUscendo: true },
-      // LO STATO VIENE PRIMA DEL COMUNE (7/11/2026, detto dal titolare
-      // provando a iscrivere un allievo: «la selezione dello stato deve
-      // essere la prima cosa che trovi in lista, altrimenti, trovando
-      // per prima la riga della città, il risultato sarà sempre
-      // sbagliato»).
-      //
-      // Era il contrario, e non era un ordine neutro: chi compila
-      // incontrava «Comune di nascita», lo cercava nell'elenco italiano
-      // — dove il paese di chi è nato a Sion non c'è — e solo dopo
-      // trovava lo Stato. E scegliere uno Stato estero CANCELLA il
-      // comune, perché un comune italiano sotto una nascita svizzera
-      // non vuol dire niente: il lavoro appena fatto se ne andava.
-      // Prima lo Stato, e la casella del comune si spegne da sé.
-      { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
       { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
     ] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
@@ -94,15 +113,13 @@ export const AREA_ALLIEVO = {
     // «Altro stato» spegne la cascata italiana e apre la scrittura
     // libera, che e' l'unico modo di registrare chi vive a Sion.
     //
-    // Tutti e tre su UNA riga (20/10/2026), e le misure vengono dal
-    // contenuto: la provincia e' un nome e una sigla, la regione al
-    // massimo «Emilia-Romagna», e lo spazio che resta va allo stato, che
-    // e' l'unico a crescere. `aCapo: false` perche' andassero a capo
-    // sarebbero tre righe per una scelta sola.
+    // Lo Stato e' salito in testa all'area (vedi sopra): qui restano i
+    // due gradini che da lui dipendono, su una riga sola — `aCapo:
+    // false` perche' andassero a capo sarebbero due righe per una
+    // scelta sola.
     { aCapo: false, campi: [
-      { chiave: "stato_residenza", etichetta: "Stato", larghezza: "3 1 100px", tipo: "stato", salvaUscendo: true },
-      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "0 1 150px", tipo: "regione" },
-      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "0 1 130px", tipo: "provincia", salvaUscendo: true },
+      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "1 1 150px", tipo: "regione" },
+      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "1 1 130px", tipo: "provincia", salvaUscendo: true },
     ] },
     { campi: [
       { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
