@@ -3448,17 +3448,23 @@ L'ordine dei «Dati dell'allievo» adesso e':
 ```
 nome e cognome → STATO di nascita, STATO di residenza
 → sesso, data di nascita, comune di nascita
-→ regione, provincia → comune e CAP → identificativo fiscale
+→ identificativo fiscale (TIN)
+→ regione, provincia → comune e CAP
 → via e civico → email → tutor e cellulare
 ```
 
+Il campo fiscale sta **subito sotto la data di nascita**, dove chi
+compila se lo aspetta, e puo' starci perche' sopra di lui ci sono gia'
+tutte e due le cose che devono essere decise prima: i dati da cui si
+calcola, nella riga appena sopra, e lo Stato di residenza che decide con
+quale metro si misura, due righe piu' su. L'ordine qui non e' un gusto,
+e' la lista di quello che deve essere gia' stato deciso.
+
 I due si chiamano per esteso — «Stato di nascita» e «Stato di residenza»
 — perche' affiancati, uno dei due chiamato solo «Stato» non si sa di che
-cosa sia lo stato. Il campo fiscale resta in fondo alla residenza: arriva
-dopo i dati da cui si calcola **e** dopo lo Stato che decide con quale
-metro si misura. Due prove bloccano tutto questo: l'ordine, confrontando
-la posizione vera delle caselle nella pagina, e il codice italiano che
-se ne va quando il paese cambia.
+cosa sia lo stato. Due prove bloccano tutto questo: l'ordine,
+confrontando la posizione vera delle caselle nella pagina, e il codice
+italiano che se ne va quando il paese cambia.
 
 **E una cosa che il banco di prova ha misurato, e che spiega l'ordine
 meglio di qualunque ragionamento:** finche' la scheda e' italiana quella

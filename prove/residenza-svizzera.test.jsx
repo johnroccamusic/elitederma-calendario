@@ -176,14 +176,17 @@ describe("la scheda del venditore", () => {
     // e la via sta dopo la cascata: era sopra lo Stato, e il suo
     // suggerimento scriveva «ITALIA» prima che qualcuno scegliesse
     expect(prima("citta_residenza", "indirizzo_residenza")).toBe(true);
-    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI: e' lo
-    // Stato di residenza a decidere se quella casella chieda il codice
-    // fiscale italiano (sedici lettere, calcolato) o l'identificativo
-    // del paese di chi si iscrive. Trovata prima, si riempie con la
-    // regola sbagliata.
+    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI e dopo
+    // i dati da cui si calcola. Gli Stati perche' decidono se quella
+    // casella chieda il codice fiscale italiano (sedici lettere,
+    // calcolato) o l'identificativo del paese di chi si iscrive;
+    // sesso, data e comune perche' e' da loro che esce il codice.
+    // Trovata prima di uno qualunque di questi, si riempie con la
+    // regola sbagliata o troppo presto.
     expect(prima("stato_nascita", "codice_fiscale")).toBe(true);
     expect(prima("stato_residenza", "codice_fiscale")).toBe(true);
-    expect(prima("cap_residenza", "codice_fiscale")).toBe(true);
+    expect(prima("data_nascita", "codice_fiscale")).toBe(true);
+    expect(prima("comune_nascita", "codice_fiscale")).toBe(true);
   });
 
   // IL GUASTO VERO, visto dal titolare compilando: «il codice fiscale

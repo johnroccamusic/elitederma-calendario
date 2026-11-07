@@ -96,6 +96,46 @@ export const AREA_ALLIEVO = {
       { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 140px", tipo: "data", salvaUscendo: true },
       { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
     ] },
+    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI, E NON
+    // E' UN DETTAGLIO DI ORDINE.
+    //
+    // Stava sopra, ed era la prima casella vuota che si incontrava: chi
+    // compila la trova lampeggiante e lo scrive a mano, prima che
+    // esista un solo dato da cui calcolarlo. Il campo che si riempie da
+    // se' va dopo quelli che lo riempiono, o il calcolo arriva sempre
+    // secondo.
+    //
+    // E DAL 7/11/2026 STA SUBITO SOTTO LA DATA DI NASCITA, chiesto dal
+    // titolare compilando. Sopra di lei restano tutte e due le
+    // condizioni che contano, ed e' per questo che si puo':
+    //
+    //   - i dati da cui si calcola — sesso, data, comune e Stato di
+    //     nascita — stanno nella riga appena sopra. Il campo che si
+    //     riempie da se' va dopo quelli che lo riempiono, o il calcolo
+    //     arriva sempre secondo;
+    //   - e lo STATO DI RESIDENZA, che decide che cosa questa casella
+    //     chieda — il codice fiscale italiano, con le sue sedici
+    //     lettere e il suo calcolo, oppure l'identificativo fiscale del
+    //     paese di chi si iscrive, che sedici lettere non le ha — sta
+    //     due righe piu' su, subito dopo il nome.
+    //
+    // Quindi e' vicina a quello che la genera e lontana da niente:
+    // l'ordine qui non e' un gusto, e' la lista delle cose che devono
+    // essere gia' state decise.
+    //
+    // Sta comunque coi dati di chi si iscrive e non col documento:
+    // serve per la fattura e per il diploma, non solo a identificarla.
+    { campi: [
+      // «Identificativo fiscale personale (TIN)» e non «Codice fiscale»
+      // (7/11/2026, dicitura dettata dal titolare): da quando si
+      // iscrive anche chi vive in Svizzera, quella casella non chiede
+      // piu' per forza un codice italiano. Le sedici lettere, il filtro
+      // e il calcolo automatico restano, ma solo per chi risiede in
+      // Italia — vedi `campoFiscale` in residenza.js.
+      { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)", larghezza: "0 1 240px",
+        maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, nomeAvviso: "codice fiscale",
+        suggerimento: "Inserisci l'identificativo fiscale", salvaUscendo: true },
+    ] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
     //
     // Quattro gradini, e ognuno apre il successivo: stato -> regione ->
@@ -124,38 +164,6 @@ export const AREA_ALLIEVO = {
     { campi: [
       { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
       { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 120px", tipo: "cap", salvaUscendo: true },
-    ] },
-    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI, E NON
-    // E' UN DETTAGLIO DI ORDINE.
-    //
-    // Stava sopra, ed era la prima casella vuota che si incontrava: chi
-    // compila la trova lampeggiante e lo scrive a mano, prima che
-    // esista un solo dato da cui calcolarlo. Il campo che si riempie da
-    // se' va dopo quelli che lo riempiono, o il calcolo arriva sempre
-    // secondo.
-    //
-    // Dal 7/11/2026 scende ancora, sotto la residenza, e per lo stesso
-    // motivo di prima applicato a una cosa nuova: e' lo STATO DI
-    // RESIDENZA a decidere che cosa questa casella chieda — il codice
-    // fiscale italiano, con le sue sedici lettere e il suo calcolo,
-    // oppure l'identificativo fiscale del paese di chi si iscrive, che
-    // sedici lettere non le ha. Il titolare, provando a iscrivere un
-    // allievo: «dopo lo stato di nascita ci sia lo stato di residenza,
-    // perché con lo stato di residenza poi ti partono tutti i dati con
-    // il codice fiscale e il resto».
-    //
-    // Sta comunque coi dati di chi si iscrive e non col documento:
-    // serve per la fattura e per il diploma, non solo a identificarla.
-    { campi: [
-      // «Identificativo fiscale personale (TIN)» e non «Codice fiscale»
-      // (7/11/2026, dicitura dettata dal titolare): da quando si
-      // iscrive anche chi vive in Svizzera, quella casella non chiede
-      // piu' per forza un codice italiano. Le sedici lettere, il filtro
-      // e il calcolo automatico restano, ma solo per chi risiede in
-      // Italia — vedi `campoFiscale` in residenza.js.
-      { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)", larghezza: "0 1 240px",
-        maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, nomeAvviso: "codice fiscale",
-        suggerimento: "Inserisci l'identificativo fiscale", salvaUscendo: true },
     ] },
     // LA VIA VIENE PER ULTIMA, DOPO LA CASCATA (7/11/2026).
     //
