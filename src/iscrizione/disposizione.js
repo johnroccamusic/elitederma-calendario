@@ -61,8 +61,21 @@ export const AREA_ALLIEVO = {
           { valore: "M", etichetta: "M", esteso: "Maschile" },
         ] },
       { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 140px", tipo: "data", salvaUscendo: true },
-      { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
+      // LO STATO VIENE PRIMA DEL COMUNE (7/11/2026, detto dal titolare
+      // provando a iscrivere un allievo: «la selezione dello stato deve
+      // essere la prima cosa che trovi in lista, altrimenti, trovando
+      // per prima la riga della città, il risultato sarà sempre
+      // sbagliato»).
+      //
+      // Era il contrario, e non era un ordine neutro: chi compila
+      // incontrava «Comune di nascita», lo cercava nell'elenco italiano
+      // — dove il paese di chi è nato a Sion non c'è — e solo dopo
+      // trovava lo Stato. E scegliere uno Stato estero CANCELLA il
+      // comune, perché un comune italiano sotto una nascita svizzera
+      // non vuol dire niente: il lavoro appena fatto se ne andava.
+      // Prima lo Stato, e la casella del comune si spegne da sé.
       { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
+      { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
     ] },
     // IL CODICE FISCALE VIENE DOPO, E NON E' UN DETTAGLIO DI ORDINE.
     //
@@ -76,24 +89,6 @@ export const AREA_ALLIEVO = {
     // serve per la fattura e per il diploma, non solo a identificarla.
     { campi: [
       { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
-    ] },
-    { campi: [
-      // La via si scrive, ma mentre si scrive arrivano i suggerimenti
-      // (edge function `cerca-indirizzo`, su Photon/OpenStreetMap). Non
-      // e' un elenco chiuso come il comune: le vie di OSM coprono bene
-      // le citta' e male i paesi, e un elenco incompleto impedirebbe di
-      // registrare chi esiste.
-      { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", tipo: "via", maiuscolo: true, salvaUscendo: true },
-      { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
-      // L'INTERNO NON SI CHIEDE PIU' QUI (20/10/2026). Quasi nessuno lo
-      // riempiva e nessuno lo aspettava: era una casella in piu' da
-      // saltare su una scheda che si compila col cliente davanti.
-      //
-      // La colonna `iscritti.interno_residenza` resta, e resta quello
-      // che c'e' scritto: la scheda lo rilegge e lo riscrive com'era,
-      // non lo cancella. Dove serve davvero — preparare un pacco — il
-      // POS ha il suo campo interno fra i dati di spedizione, ed e'
-      // quello il momento in cui qualcuno lo sa.
     ] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
     //
@@ -125,6 +120,40 @@ export const AREA_ALLIEVO = {
     { campi: [
       { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
       { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 120px", tipo: "cap", salvaUscendo: true },
+    ] },
+    // LA VIA VIENE PER ULTIMA, DOPO LA CASCATA (7/11/2026).
+    //
+    // Stava SOPRA lo Stato, ed era la prima casella dell'indirizzo che
+    // si incontrava: si scriveva la via, il suggerimento portava con se'
+    // comune, provincia e CAP presi dall'elenco ITALIANO — e scriveva
+    // «ITALIA» nello Stato — e solo dopo si arrivava alla tendina dello
+    // Stato. Per un allievo svizzero il risultato era sbagliato prima di
+    // cominciare, ed e' il difetto che il titolare ha visto provando a
+    // iscriverne uno.
+    //
+    // Non si perde niente del «un tocco invece di cinque»: la proposta
+    // riempie ancora quello che e' vuoto (vedi `riempiDaVia`), e con il
+    // comune gia' scelto la ricerca si restringe a lui, che da'
+    // risultati migliori. Si guadagna che l'indirizzo si legge dall'alto
+    // in basso come si scrive su una busta: paese, cantone o provincia,
+    // citta', e per ultima la porta.
+    { campi: [
+      // La via si scrive, ma mentre si scrive arrivano i suggerimenti
+      // (edge function `cerca-indirizzo`, su Photon/OpenStreetMap). Non
+      // e' un elenco chiuso come il comune: le vie di OSM coprono bene
+      // le citta' e male i paesi, e un elenco incompleto impedirebbe di
+      // registrare chi esiste. Fuori Italia non si cerca affatto.
+      { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", tipo: "via", maiuscolo: true, salvaUscendo: true },
+      { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
+      // L'INTERNO NON SI CHIEDE PIU' QUI (20/10/2026). Quasi nessuno lo
+      // riempiva e nessuno lo aspettava: era una casella in piu' da
+      // saltare su una scheda che si compila col cliente davanti.
+      //
+      // La colonna `iscritti.interno_residenza` resta, e resta quello
+      // che c'e' scritto: la scheda lo rilegge e lo riscrive com'era,
+      // non lo cancella. Dove serve davvero — preparare un pacco — il
+      // POS ha il suo campo interno fra i dati di spedizione, ed e'
+      // quello il momento in cui qualcuno lo sa.
     ] },
     // L'email da sola: e' il campo piu' lungo di tutta la scheda
     // (nome.cognome@qualcosa.it) e in mezza riga si legge a meta'.

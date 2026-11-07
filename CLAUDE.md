@@ -3354,6 +3354,39 @@ uno (`normalizzaLuogo`, esportato di là e riesportato di qua). Due idee
 di «stesso nome» un giorno si staccano, e quel giorno un comune che in
 archivio c'è non si riconosce più nell'elenco.
 
+**E LO STATO E' LA PRIMA CASELLA DI LUOGO CHE SI INCONTRA** (7/11/2026,
+provando a iscrivere un allievo: «la selezione dello stato deve essere
+la prima cosa che trovi in lista, altrimenti, trovando per prima la riga
+della città, il risultato sarà sempre sbagliato»). Era una regola
+mancante in due punti, e in entrambi il danno era lo stesso: chi compila
+riempie dall'alto in basso, e una casella di luogo incontrata prima
+dello Stato si riempie col paese sbagliato.
+
+- nella **nascita** il «Comune» stava prima dello «Stato»: lo si cercava
+  nell'elenco italiano — dove il paese di chi è nato a Sion non c'è — e
+  solo dopo si trovava lo Stato. Che, scelto estero, **cancella il
+  comune appena scritto**, perché un comune italiano sotto una nascita
+  svizzera non vuol dire niente. Ora lo Stato viene prima e la casella
+  del comune si spegne da sé — e il codice fiscale, che da quel comune
+  si calcola, non nasce più da un dato da rifare;
+- nella **residenza** la «Via» stava sopra lo Stato: si scriveva la via,
+  il suggerimento portava con sé comune, provincia e CAP presi
+  dall'elenco italiano **e scriveva «ITALIA» nello Stato**, e solo dopo
+  si arrivava alla tendina. Per un allievo svizzero il risultato era
+  sbagliato prima di cominciare. Ora la cascata è intera e in ordine —
+  Stato → Regione/Cantone → Provincia → Comune/Località → CAP/NPA — e
+  **la via viene per ultima**: l'indirizzo si legge dall'alto in basso
+  come si scrive su una busta, e non si perde il «un tocco invece di
+  cinque», perché la proposta riempie ancora quello che è vuoto e con il
+  comune già scelto la ricerca si restringe a lui.
+
+L'ordine è una riga di `disposizione.js`, quindi vale **insieme** nella
+scheda del venditore, nel modulo dell'allieva e in Impostazioni → Modulo
+di iscrizione. Una prova lo blocca confrontando la posizione delle
+caselle nella pagina: senza, il giorno che qualcuno rimette la città
+davanti non se ne accorge nessuno finché non arriva un altro allievo
+straniero.
+
 **Quello che NON copre, e va saputo:** la ricerca delle vie
 (`cerca-indirizzo`, Photon) resta ristretta all'Italia, quindi in
 Svizzera l'indirizzo si scrive come prima; e la **fatturazione** a un

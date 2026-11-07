@@ -153,6 +153,31 @@ describe("la scheda del venditore", () => {
     expect(p.tendina("cap_residenza").value).toBe("07037");
   });
 
+  // L'ORDINE DELLE RIGHE E' UNA REGOLA, NON UN GUSTO (7/11/2026, detta
+  // dal titolare provando a iscrivere un allievo): «la selezione dello
+  // stato deve essere la prima cosa che trovi in lista, altrimenti,
+  // trovando per prima la riga della città, il risultato sarà sempre
+  // sbagliato». Chi compila riempie dall'alto in basso: qualunque
+  // casella di luogo incontrata prima dello Stato si riempie col paese
+  // sbagliato — l'elenco italiano, o la ricerca delle vie che l'Italia
+  // e basta — e va rifatta.
+  it("lo Stato viene PRIMA della città, nella nascita e nella residenza", async () => {
+    const p = await apri({});
+    const prima = (a, b) => {
+      const x = p.nodo.querySelector(`[data-campo="${a}"]`);
+      const y = p.nodo.querySelector(`[data-campo="${b}"]`);
+      expect(x).toBeTruthy(); expect(y).toBeTruthy();
+      // DOCUMENT_POSITION_FOLLOWING: y viene dopo x nella pagina
+      return !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+    };
+    expect(prima("stato_nascita", "comune_nascita")).toBe(true);
+    expect(prima("stato_residenza", "citta_residenza")).toBe(true);
+    expect(prima("stato_residenza", "cap_residenza")).toBe(true);
+    // e la via sta dopo la cascata: era sopra lo Stato, e il suo
+    // suggerimento scriveva «ITALIA» prima che qualcuno scegliesse
+    expect(prima("citta_residenza", "indirizzo_residenza")).toBe(true);
+  });
+
   it("uno Stato senza elenco lascia le caselle libere, com'erano", async () => {
     const p = await apri({});
     await scegli(p.tendina("stato_residenza"), "BELGIO");
