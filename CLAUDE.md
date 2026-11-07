@@ -2752,6 +2752,51 @@ che in archivio ci va **digitato e non convertito**. Prove in
 `prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
 dell'hennè, che devono fare residuo **zero** e non 99,18.
 
+### Permessi e grado si rileggono all'apertura (7/11/2026)
+
+Due segnalazioni nella stessa ora, dalla fiera, con la stessa causa:
+«Olga non vede più i prezzi dei corsi» (il permesso ce l'aveva, dato
+dopo che era entrata) e «Chiara non può ancora fare gli omaggi» (il
+grado di supervisore acceso mentre lei era dentro — e l'omaggio **è** un
+privilegio del grado, `puoScontare`, non una casella personale).
+
+Permessi e grado erano fotografati all'accesso e messi da parte per
+tutta la sessione. Esisteva già una rilettura all'apertura, ma **solo
+per le utenze d'ufficio**, e il commento diceva che per master e
+venditori «non c'è niente da rileggere»: non era vero — i permessi
+stanno sulla loro riga esattamente come sulle altre. Ora si rilegge da
+**tutte e quattro le porte** (master, venditore, assistente, utenza),
+così basta ricaricare la pagina.
+
+**E il conto dei permessi è uscito dal Gate** (`permessiDiAccesso`).
+Stava scritto là dentro quattro volte, una per ramo, e fuori non si
+poteva rifare — ed è proprio il motivo per cui la rilettura copriva solo
+un caso su quattro. Ricostruirlo a mano nella rilettura avrebbe voluto
+dire due liste che un giorno si staccano, e quel giorno qualcuno perde
+una tessera che ha: i permessi si ereditano in tutte e due le direzioni
+(una master col venditore collegato ha i suoi e i suoi; un venditore
+collegato a una master eredita i suoi, `dashboardmaster` compreso se lei
+ce l'ha).
+
+Tre cose decise lì dentro:
+
+- **`data` deve essere UNA riga con il suo id.** Una finta del banco di
+  prova che non filtra restituisce un elenco, e fidarsi di quello
+  vorrebbe dire azzerare i permessi di chi sta usando l'app. C'è una
+  prova che lo impedisce.
+- **Il grado non si abbassa da qui.** `supervisore` vale programmatore e
+  `amministratore` vale amministratore, ma chi è entrato con la password
+  di sistema resta quello che è: una rilettura non può declassare chi sta
+  lavorando.
+- **Il grado si scrive anche nella sessione**, o a ogni ricarica si
+  ripartirebbe da quello vecchio e la Home lampeggerebbe.
+
+Prove in `prove/supervisore.test.jsx` (7): il grado dato mentre la
+persona è dentro vale al ricarico; una casella nuova su un venditore
+compare al ricarico (il caso di Olga) e il suo grado **non** si alza da
+sé; e se il database non risponde con una riga sola, i permessi non si
+toccano.
+
 ### Il supervisore: i privilegi del programmatore a chi non lo è (7/11/2026)
 
 Il titolare: «attiva anche a Chiara Colonnelli le stesse mie funzioni di
@@ -2811,15 +2856,14 @@ Burelli, Tommaso Giumbini — hanno una casella sola in tutto, quindi non
 gliel'ha tolto nessuno, non l'hanno mai avuta. Adesso ce l'hanno tutti e
 21 (migrazione `20261107180000`).
 
-**Allora perché non la vede: i permessi si leggono UNA VOLTA,
-all'accesso**, e restano scritti nella sessione del browser
+**Allora perché non la vedeva: i permessi si leggevano UNA VOLTA,
+all'accesso**, e restavano scritti nella sessione del browser
 (`sessionStorage.edc_utente`). Una casella data dopo che la persona è
-entrata non compare finché non esce e rientra. È un difetto vero, non un
-dato sbagliato, e da oggi conta il doppio: il titolare ha appena
-costruito un modo di lavorare sul concedere permessi a richiesta
-(«Modelle fiera» si sblocca così). **Si risolve facendo rileggere i
-permessi dalla riga viva all'avvio** — intervento sul giro dell'accesso,
-da fare deliberatamente e non con una fiera aperta. **Ancora da fare.**
+entrata non compariva finché non usciva e rientrava — e nessuno pensa di
+doverlo fare. **Risolto lo stesso giorno**, dopo che lo stesso difetto è
+costato una seconda segnalazione nella stessa ora («Chiara non può
+ancora fare gli omaggi»: il grado di supervisore acceso mentre lei era
+dentro): vedi «Permessi e grado si rileggono all'apertura» qui sotto.
 
 **E la cosa più grave, trovata di fianco: Olga non poteva aprire il
 POS.** Le quattro master del banco (Chiara, Elia, Stella, Valentina)

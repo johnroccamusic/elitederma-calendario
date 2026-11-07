@@ -53,6 +53,76 @@ async function entra(password, master) {
 
 const pulito = (p) => (p.testo() || "").replace(/\s+/g, " ");
 
+// E QUELLO CHE SI DA' MENTRE LA PERSONA E' DENTRO.
+//
+// I permessi e il grado erano fotografati all'accesso: una casella data
+// dopo non compariva finché la persona non usciva e rientrava — e
+// nessuno pensa di doverlo fare. In un giorno solo è costato due
+// segnalazioni dalla fiera: «Olga non vede più i prezzi dei corsi» (il
+// permesso ce l'aveva) e «Chiara non può ancora fare gli omaggi» (il
+// grado acceso mentre era dentro).
+describe("un permesso o un grado dato mentre si è già dentro", () => {
+  function seduta(utente, ruolo = "user") {
+    window.sessionStorage.clear();
+    window.sessionStorage.setItem("edc_ok", "1");
+    window.sessionStorage.setItem("edc_ruolo", ruolo);
+    window.sessionStorage.setItem("edc_utente", JSON.stringify(utente));
+  }
+
+  it("il grado di supervisore vale al ricarico, senza uscire e rientrare", async () => {
+    // la sessione è quella di prima: master, grado «user», due caselle
+    seduta({ id: "m-chiara", nome: "CHIARA COLONNELLI", permessi: ["pos", "gestionedate"], masterId: "m-chiara", chiave_sistema: null });
+    rispondiCon({
+      "/rest/v1/": (_corpo, url) => {
+        // una riga sola e con il suo id: è quello che l'app pretende
+        if (url.includes("/master?") && url.includes("id=eq.m-chiara")) {
+          return { id: "m-chiara", permessi: ["pos", "gestionedate"], venditore_id: null, e_venditore: false, supervisore: true };
+        }
+        return [];
+      },
+    });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(400);
+    expect(window.sessionStorage.getItem("edc_ruolo")).toBe("programmatore");
+    expect(pulito(p)).toContain("Area compensi");
+    await p.smonta();
+  });
+
+  it("una casella nuova su un venditore compare al ricarico", async () => {
+    // il caso di Olga: «prezzicorsi» sulla sua riga, la sessione no
+    seduta({ id: "v-olga", nome: "OLGA", permessi: ["dashboardvenditori"], venditoreId: "v-olga" });
+    rispondiCon({
+      "/rest/v1/": (_corpo, url) => {
+        if (url.includes("/venditori?") && url.includes("id=eq.v-olga")) {
+          return { id: "v-olga", permessi: ["dashboardvenditori", "prezzicorsi"] };
+        }
+        if (url.includes("/master?")) return null;
+        return [];
+      },
+    });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(400);
+    expect(pulito(p), "la tessera dei prezzi").toContain("Prezzi corsi");
+    // e il grado non si alza da sé: lei resta un venditore
+    expect(window.sessionStorage.getItem("edc_ruolo")).toBe("user");
+    await p.smonta();
+  });
+
+  it("se il database non risponde con UNA riga, i permessi non si toccano", async () => {
+    // la finta del banco non filtra: se tornasse un elenco e ci si
+    // fidasse, si azzererebbero i permessi di chi sta usando l'app
+    seduta({ id: "v-olga", nome: "OLGA", permessi: ["dashboardvenditori", "prezzicorsi"], venditoreId: "v-olga" });
+    rispondiCon({ "/rest/v1/": () => [{ id: "v-olga", permessi: [] }, { id: "altro", permessi: [] }] });
+    window.history.replaceState({}, "", "/");
+    const p = await monta(<App />);
+    await attendi(400);
+    expect(pulito(p)).toContain("Prezzi corsi");
+    await p.smonta();
+  });
+});
+
 describe("il supervisore", () => {
   it("entra col grado del programmatore, con la sua password", async () => {
     const p = await entra("chiarapw", [CHIARA, MASTER_NORMALE]);

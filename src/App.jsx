@@ -7097,6 +7097,39 @@ function TopBar({ title, onBack, titoloIndietro = "Home" }) {
 }
 
 // ---------- Gate di accesso ----------
+// ---------- I PERMESSI DI CHI ENTRA, in un posto solo ----------
+// La stessa persona entra da porte diverse — master, venditore,
+// assistente, utenza d'ufficio — e da ognuna si porta dietro anche i
+// permessi della riga collegata: una master col venditore collegato ha i
+// suoi e i suoi, un venditore collegato a una master eredita quelli di
+// lei (se a lei «dashboardmaster» e' stato tolto, non puo' rientrare
+// dalla finestra).
+//
+// Questo conto stava SOLO dentro il Gate, scritto quattro volte, una per
+// ramo. Fuori da li' non si poteva rifare, ed e' il motivo per cui i
+// permessi si leggevano una volta e basta: dare una casella a qualcuno e
+// vederla comparire voleva dire uscire e rientrare — e nessuno pensa di
+// doverlo fare. Da qui lo rilegge anche l'app all'apertura.
+export function permessiDiAccesso(tipo, { master = null, venditore = null, assistente = null, utente = null } = {}) {
+  const uniti = (...liste) => [...new Set(liste.flat().filter(Boolean))];
+  if (tipo === "master") {
+    return uniti(
+      master?.permessi,
+      venditore ? [...(venditore.permessi || []), "dashboardvenditori"] : [],
+      // col flag e senza riga collegata, il venditore E' la master
+      master?.e_venditore ? ["dashboardvenditori"] : [],
+    );
+  }
+  if (tipo === "venditore") {
+    return uniti(venditore?.permessi, ["dashboardvenditori"], master?.permessi);
+  }
+  if (tipo === "assistente") return uniti(assistente?.permessi);
+  return uniti(
+    utente?.permessi,
+    venditore ? [...(venditore.permessi || []), "dashboardvenditori"] : [],
+  );
+}
+
 function Gate({ onOk }) {
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
@@ -7219,11 +7252,7 @@ function Gate({ onOk }) {
         // password, coi SUOI permessi, e il flag di suo apre la
         // Dashboard venditori. Il «venditore collegato» resta per le
         // dieci che gia' stanno in tutte e due le liste.
-        permessi: [...new Set([
-          ...(masterTrovata.permessi || []),
-          ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : []),
-          ...(masterTrovata.e_venditore ? ["dashboardvenditori"] : []),
-        ])],
+        permessi: permessiDiAccesso("master", { master: masterTrovata, venditore: venditoreDellaMaster }),
         chiave_sistema: null, masterId: masterTrovata.id,
         // la stessa persona che in certe classi fa l'assistente: le sue
         // edizioni da assistente entrano nella dashboard che ha gia'
@@ -7250,7 +7279,7 @@ function Gate({ onOk }) {
         // il venditore collegato a una master eredita i permessi di lei,
         // "dashboardmaster" compreso se lei ce l'ha: se a lei e' stata
         // tolta, non puo' rientrare dalla finestra
-        permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori", ...(masterDelVenditore ? (masterDelVenditore.permessi || []) : [])])],
+        permessi: permessiDiAccesso("venditore", { venditore: venditoreTrovato, master: masterDelVenditore }),
         chiave_sistema: null, venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome,
         ...(masterDelVenditore ? { masterId: masterDelVenditore.id } : {}),
       };
@@ -7259,7 +7288,7 @@ function Gate({ onOk }) {
       ruolo = "user";
       utente = {
         id: assistenteTrovata.id, nome: assistenteTrovata.nome,
-        permessi: assistenteTrovata.permessi || [],
+        permessi: permessiDiAccesso("assistente", { assistente: assistenteTrovata }),
         chiave_sistema: null, assistenteId: assistenteTrovata.id,
       };
     }
@@ -7283,7 +7312,7 @@ function Gate({ onOk }) {
       ruolo = nominale.supervisore ? "programmatore" : (nominale.amministratore ? "amministratore" : "user");
       utente = {
         id: nominale.id, nome: nominale.nome,
-        permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
+        permessi: permessiDiAccesso("utente", { utente: nominale, venditore: venditoreDelNominale }),
         chiave_sistema: null,
         ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome } : {}),
         // profilo "kiosk": entra dritto su Gestione corsi (mai Home), sola
@@ -85886,35 +85915,98 @@ function Gestionale() {
     return () => { annullato = true; };
   }, [ok, view]);
 
-  // I permessi vengono fotografati al login e messi da parte per tutta la
-  // sessione: dando a qualcuno un permesso nuovo, lui non lo vedeva finche'
-  // non usciva e rientrava — e nessuno pensa di doverlo fare. Qui si
-  // rileggono all'apertura dell'app, cosi' basta ricaricare la pagina.
+  // PERMESSI E GRADO SI RILEGGONO ALL'APERTURA, DA QUALUNQUE PORTA SI SIA
+  // ENTRATI (7/11/2026).
   //
-  // Solo per gli account nominali: chi entra con la password di una master
-  // o di un venditore ha i permessi della sua scheda, che sta in un'altra
-  // tabella, e li' non c'e' niente da rileggere.
+  // Erano fotografati al login e messi da parte per tutta la sessione:
+  // dando a qualcuno un permesso nuovo, lui non lo vedeva finche' non
+  // usciva e rientrava — e nessuno pensa di doverlo fare. In un giorno
+  // solo e' costato due segnalazioni: «Olga non vede piu' i prezzi dei
+  // corsi» (il permesso ce l'aveva, dato dopo che era entrata) e «Chiara
+  // non puo' ancora fare gli omaggi» (il grado di supervisore acceso
+  // mentre era dentro).
+  //
+  // Prima lo rileggeva solo per le utenze d'ufficio, e il commento
+  // diceva che per master e venditori «non c'e' niente da rileggere»:
+  // non era vero, i permessi stanno sulla loro riga esattamente come
+  // sulle altre. Adesso si rilegge per tutte e quattro le porte, e il
+  // conto lo fa `permessiDiAccesso`, lo stesso del Gate — ricostruirlo
+  // qui a mano avrebbe voluto dire che un giorno le due liste si
+  // staccano, e quel giorno qualcuno perde una tessera che ha.
   useEffect(() => {
     if (!ok || !utenteLoggato?.id) return;
     let annullato = false;
-    supabase.from("utenti_app")
-      .select("permessi, amministratore, solo_calendario, puo_omaggi")
-      .eq("id", utenteLoggato.id).maybeSingle()
-      .then(({ data }) => {
-        if (annullato || !data) return;
-        const aggiornato = {
-          ...utenteLoggato,
-          permessi: [...new Set([...(data.permessi || []), ...(utenteLoggato.venditoreId ? ["dashboardvenditori"] : [])])],
-          ...(data.puo_omaggi ? { puoOmaggi: true } : { puoOmaggi: undefined }),
-          ...(data.solo_calendario ? { soloCalendarioLettura: true } : { soloCalendarioLettura: undefined }),
-        };
-        // si riscrive solo se e' davvero cambiato qualcosa, o l'effetto
-        // ripartirebbe a ogni giro rincorrendo se stesso
-        if (JSON.stringify(aggiornato) === JSON.stringify(utenteLoggato)) return;
+    // da quale porta e' entrata questa persona
+    const tipo = utenteLoggato.masterId ? "master"
+      : utenteLoggato.assistenteId ? "assistente"
+        : (utenteLoggato.venditoreId && utenteLoggato.venditoreId === utenteLoggato.id) ? "venditore"
+          : "utente";
+    const tabella = { master: "master", assistente: "assistente", venditore: "venditori", utente: "utenti_app" }[tipo];
+    const colonne = {
+      master: "id, permessi, venditore_id, e_venditore, supervisore",
+      assistente: "id, permessi, master_id",
+      venditore: "id, permessi",
+      utente: "id, permessi, amministratore, solo_calendario, puo_omaggi, supervisore",
+    }[tipo];
+    const idDaLeggere = tipo === "master" ? utenteLoggato.masterId
+      : tipo === "assistente" ? utenteLoggato.assistenteId
+        : tipo === "venditore" ? utenteLoggato.venditoreId
+          : utenteLoggato.id;
+
+    (async () => {
+      const { data } = await supabase.from(tabella).select(colonne).eq("id", idDaLeggere).maybeSingle();
+      // `data` deve essere UNA riga con il suo id: una finta del banco di
+      // prova che non filtra restituisce un elenco, e fidarsi di quello
+      // vorrebbe dire azzerare i permessi di chi sta usando l'app
+      const riga = Array.isArray(data) ? null : data;
+      if (annullato || !riga?.id) return;
+
+      // la riga collegata, se c'e': i permessi si ereditano in tutte e due
+      // le direzioni, e il Gate fa lo stesso
+      let collegata = null;
+      if (tipo === "master" && riga.venditore_id) {
+        const { data: v } = await supabase.from("venditori").select("id, permessi").eq("id", riga.venditore_id).maybeSingle();
+        collegata = Array.isArray(v) ? null : v;
+      } else if (tipo === "venditore") {
+        const { data: m } = await supabase.from("master").select("id, permessi").eq("venditore_id", idDaLeggere).maybeSingle();
+        collegata = Array.isArray(m) ? null : m;
+      } else if (tipo === "utente" && utenteLoggato.venditoreId) {
+        const { data: v } = await supabase.from("venditori").select("id, permessi").eq("id", utenteLoggato.venditoreId).maybeSingle();
+        collegata = Array.isArray(v) ? null : v;
+      }
+      if (annullato) return;
+
+      const permessi = permessiDiAccesso(tipo, {
+        master: tipo === "master" ? riga : (tipo === "venditore" ? collegata : null),
+        venditore: tipo === "venditore" ? riga : collegata,
+        assistente: tipo === "assistente" ? riga : null,
+        utente: tipo === "utente" ? riga : null,
+      });
+      const aggiornato = {
+        ...utenteLoggato,
+        permessi,
+        ...(riga.puo_omaggi ? { puoOmaggi: true } : { puoOmaggi: undefined }),
+        ...(riga.solo_calendario ? { soloCalendarioLettura: true } : { soloCalendarioLettura: undefined }),
+      };
+      // si riscrive solo se e' davvero cambiato qualcosa, o l'effetto
+      // ripartirebbe a ogni giro rincorrendo se stesso
+      if (JSON.stringify(aggiornato) !== JSON.stringify(utenteLoggato)) {
         setUtenteLoggato(aggiornato);
         try { sessionStorage.setItem("edc_utente", JSON.stringify(aggiornato)); } catch (e) { /* navigazione privata */ }
-        if (data.amministratore) setRuoloUtente((r) => (r === "programmatore" ? r : "amministratore"));
-      });
+      }
+      // IL GRADO. `supervisore` vale programmatore (vedi il Gate), e si
+      // scrive anche nella sessione: senza, a ogni ricarica si
+      // ripartirebbe dal grado vecchio e la Home lampeggerebbe.
+      // Il grado NON si abbassa da qui: chi e' entrato con la password di
+      // sistema resta quello che e'.
+      const grado = riga.supervisore ? "programmatore" : (riga.amministratore ? "amministratore" : null);
+      if (grado) {
+        setRuoloUtente((r) => (r === "programmatore" ? r : grado));
+        try {
+          if (sessionStorage.getItem("edc_ruolo") !== "programmatore") sessionStorage.setItem("edc_ruolo", grado);
+        } catch { /* navigazione privata */ }
+      }
+    })();
     return () => { annullato = true; };
   }, [ok, utenteLoggato]);
 
