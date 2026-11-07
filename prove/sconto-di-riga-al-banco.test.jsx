@@ -15,7 +15,7 @@
 // davanti al banco.
 import { describe, it, expect } from "vitest";
 import React from "react";
-import { scontiPerRigaCarrello, PaginaPOS } from "../src/App.jsx";
+import { scontiPerRigaCarrello, righeDaPagare, PaginaPOS } from "../src/App.jsx";
 import { monta, attendi, clicca } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
@@ -195,6 +195,57 @@ async function banco() {
     />
   );
 }
+
+// Le righe che la cliente vede quando paga col QR: devono dire lo
+// stesso prezzo che le è stato detto al banco, e sommare esattamente
+// quello che paga. Prima lo sconto si spalmava con un fattore unico su
+// tutte le righe — il totale tornava, le righe no.
+describe("righeDaPagare: la pagina del pagamento e la ricevuta", () => {
+  const CARRELLO = [
+    { prodottoId: "p1", nome: "Pigmento", prezzo: 36.6, quantita: 1 },
+    { prodottoId: "p3", nome: "Senza costo", prezzo: 24.4, quantita: 1 },
+  ];
+  const sconti = () => scontiPerRigaCarrello({
+    carrello: CARRELLO, prodottiPerId: PER_ID, subtotale: 61, scontoApplicato: 4.39, fasce: FASCE,
+  });
+
+  it("ogni riga porta il suo prezzo scontato, non la media del carrello", () => {
+    const righe = righeDaPagare({ carrello: CARRELLO, righeSconto: sconti(), totaleDaIncassare: 56.61 });
+    // il pigmento prende il 12% (32,21), il prodotto senza costo di
+    // acquisto non prende niente e resta a 24,40. Con la media sarebbero
+    // state 33,97 e 22,64: due numeri che al banco nessuno ha detto.
+    expect(righe[0].prezzo).toBe(32.21);
+    expect(righe[1].prezzo).toBe(24.4);
+    expect(Math.round((righe[0].prezzo + righe[1].prezzo) * 100) / 100).toBe(56.61);
+  });
+
+  it("la spedizione è una riga sua e non si sconta", () => {
+    const righe = righeDaPagare({ carrello: CARRELLO, righeSconto: sconti(), speseSpedizione: 6.9, totaleDaIncassare: 63.51 });
+    expect(righe[2]).toMatchObject({ nome: "Spedizione", prezzo: 6.9 });
+    expect(Math.round(righe.reduce((a, r) => a + r.prezzo, 0) * 100) / 100).toBe(63.51);
+  });
+
+  it("con le provvigioni scalate la somma resta quello che si incassa", () => {
+    // qui il totale NON è la somma delle righe: si riproporziona, e il
+    // centesimo di resto va sull'ultima riga
+    const totale = 40;
+    const righe = righeDaPagare({ carrello: CARRELLO, righeSconto: sconti(), totaleDaIncassare: totale });
+    expect(Math.round(righe.reduce((a, r) => a + r.prezzo, 0) * 100) / 100).toBe(totale);
+  });
+
+  it("in omaggio ogni riga vale zero, non solo il totale", () => {
+    const righe = righeDaPagare({ carrello: CARRELLO, righeSconto: sconti(), totaleDaIncassare: 0 });
+    righe.forEach((r) => expect(r.prezzo).toBe(0));
+  });
+
+  it("due pezzi si dicono nel nome, come prima", () => {
+    const carrello = [{ prodottoId: "p1", nome: "Pigmento", prezzo: 36.6, quantita: 2 }];
+    const righeSconto = scontiPerRigaCarrello({ carrello, prodottiPerId: PER_ID, subtotale: 73.2, scontoApplicato: 8.78, fasce: FASCE });
+    const righe = righeDaPagare({ carrello, righeSconto, totaleDaIncassare: 64.42 });
+    expect(righe[0].nome).toBe("2 × Pigmento");
+    expect(righe[0].prezzo).toBe(64.42);
+  });
+});
 
 // La tessera del prodotto nell'elenco: si batte premendola, come fa
 // chi vende. Si riconosce dal dito del mouse e dal prezzo «IVA incl.»,

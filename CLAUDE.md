@@ -2809,7 +2809,19 @@ cambia — ma `sconto_riga`, `sconto_pct` e `totale_riga` attribuivano
 tutto a un prodotto solo, e con essi il margine per prodotto nelle
 statistiche. Ora ogni riga porta il suo.
 
-Prove in `prove/sconto-di-riga-al-banco.test.jsx` (12): la regola —
+**E la ricevuta dice lo stesso numero.** Le righe che la cliente vede
+quando paga — pagina di Stripe, QR, ricevuta — spalmavano lo sconto in
+proporzione al lordo, con **un solo fattore per tutte**: il totale
+tornava, ma un pigmento scontato del 12% e un pezzo senza margine
+scontato dello 0% comparivano ridotti della stessa media. Finché al
+banco non si diceva niente di riga era invisibile; da quando la riga
+dice «36,60 → 32,21 −12%», la ricevuta direbbe un terzo numero. Ora
+quelle righe nascono da `scontiPerRigaCarrello` come tutto il resto
+(`righeDaPagare`), e il fattore resta solo per i due casi in cui il
+totale non è la somma delle righe: le provvigioni scalate e l'omaggio.
+In una vendita normale vale esattamente 1.
+
+Prove in `prove/sconto-di-riga-al-banco.test.jsx` (17): la regola —
 margini diversi danno percentuali diverse sulla stessa vendita, la somma
 delle righe fa **esattamente** lo sconto del carrello, lo sconto più
 grande del carrello non sfonda le righe, l'omaggio, il codice della

@@ -5608,6 +5608,39 @@ export function scontiPerRigaCarrello({
     };
   });
 }
+// LE RIGHE CHE LA CLIENTE VEDE QUANDO PAGA (pagina di Stripe, QR,
+// ricevuta). Devono sommare ESATTAMENTE quello che si incassa — quella
+// pagina non e' un preventivo — e dire su ogni riga lo stesso prezzo che
+// chi sta al banco le ha appena detto.
+//
+// Prima qui lo sconto si spalmava in proporzione al lordo, con un solo
+// fattore per tutte le righe: il totale tornava, ma un pigmento scontato
+// del 12% e un pezzo senza margine scontato dello 0% comparivano
+// ridotti della stessa media. Finche' al banco non si diceva niente di
+// riga, era invisibile; da quando la riga del carrello dice «36,60 →
+// 32,21 −12%», la ricevuta direbbe un terzo numero.
+//
+// Il fattore resta, e in una vendita normale vale esattamente 1 (le
+// righe scontate piu' la spedizione fanno il totale): serve per i due
+// casi in cui il totale non e' la somma delle righe — le provvigioni
+// scalate e l'omaggio, che portano a zero. I centesimi
+// dell'arrotondamento vanno sull'ultima riga, come prima.
+export function righeDaPagare({ carrello = [], righeSconto = [], speseSpedizione = 0, totaleDaIncassare = 0 }) {
+  const righe = (carrello || []).map((r, i) => ({
+    nome: `${r.quantita > 1 ? `${r.quantita} × ` : ""}${r.nome}`,
+    quantita: 1,
+    // il totale della riga GIA' scontato: lo stesso di `scontiPerRigaCarrello`
+    prezzo: righeSconto?.[i]?.totale ?? round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0)),
+  }));
+  if (speseSpedizione > 0) righe.push({ nome: "Spedizione", quantita: 1, prezzo: speseSpedizione });
+  const somma = round2(righe.reduce((a, r) => a + r.prezzo, 0));
+  if (righe.length === 0 || somma <= 0) return righe;
+  const fattore = (Number(totaleDaIncassare) || 0) / somma;
+  const scalate = righe.map((r) => ({ ...r, prezzo: round2(r.prezzo * fattore) }));
+  const resto = round2((Number(totaleDaIncassare) || 0) - scalate.reduce((a, r) => a + r.prezzo, 0));
+  if (resto !== 0) scalate[scalate.length - 1].prezzo = round2(scalate[scalate.length - 1].prezzo + resto);
+  return scalate;
+}
 // Lo sconto di un carrello col codice di acquisto di una master.
 //
 // Non e' una percentuale: sono EURO, la quota di quello che su ogni pezzo
@@ -72393,20 +72426,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // Lo sconto si spalma in proporzione e il resto dei centesimi va
   // sull'ultima riga, come fa gia' la conferma della vendita.
   function righePerPagamento() {
-    const lordi = carrello.map((r) => round2(r.prezzo * r.quantita));
-    const lordoTotale = round2(lordi.reduce((a, b) => a + b, 0) + speseSpedizione);
-    const righe = carrello.map((r, i) => ({
-      nome: `${r.quantita > 1 ? `${r.quantita} × ` : ""}${r.nome}`,
-      quantita: 1,
-      prezzo: lordi[i],
-    }));
-    if (speseSpedizione > 0) righe.push({ nome: "Spedizione", quantita: 1, prezzo: speseSpedizione });
-    if (righe.length === 0 || lordoTotale <= 0) return righe;
-    const fattore = totaleDaIncassare / lordoTotale;
-    const scalate = righe.map((r) => ({ ...r, prezzo: round2(r.prezzo * fattore) }));
-    const resto = round2(totaleDaIncassare - scalate.reduce((a, r) => a + r.prezzo, 0));
-    if (resto !== 0) scalate[scalate.length - 1].prezzo = round2(scalate[scalate.length - 1].prezzo + resto);
-    return scalate;
+    return righeDaPagare({ carrello, righeSconto: scontiDelleRighe, speseSpedizione, totaleDaIncassare });
   }
 
   // IL LINK DI PAGAMENTO, COPIATO.
