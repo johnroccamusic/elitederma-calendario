@@ -15,8 +15,11 @@ import {
   impegniMagazzino, segnaPartito, rientroAtteso, segnaRientroVerificato, tieneGiacenza,
   leggiCategoriePrincipali, leggiImmaginiProdotti,
   leggiDocumentiEvento, creaDocumentoEvento, caricaFileDocumento, eliminaDocumentoEvento, linkDocumentoEvento,
-  leggiVenditeEvento, prodottiPiuVenduti, totaliVendite,
+  leggiVenditeEvento, prodottiPiuVenduti, totaliVendite, segnaVenditaFiera,
 } from "./dati.js";
+import {
+  iscrizioniDellaFiera, candidateDellaFiera, corsiChiusiInFiera, contoIscrizioniFiera, periodoFiera,
+} from "./fiera-iscrizioni.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
 import BollaEvento from "./BollaEvento.jsx";
@@ -1682,6 +1685,158 @@ export function SchedaDettaglioVendite({ eventoId, prodotti }) {
   );
 }
 
+// LE ISCRIZIONI CHIUSE AL BANCO DI QUESTA FIERA (8/11/2026).
+//
+// Chiesto dal titolare con la fiera di Napoli aperta: «quelle vendite le
+// mostri in una nuova sezione in fiera di napoli in gestione eventi in
+// cui elenchi i corsi che stiamo chiudendo in fiera».
+//
+// Due elenchi, e sono due cose diverse:
+//
+//   I CORSI CHE STIAMO CHIUDENDO sono le iscrizioni flaggate. Si
+//   raggruppano per classe e non per nome del corso: due edizioni dello
+//   stesso corso in due citta' sono due classi, e sommarle direbbe che a
+//   Napoli si e' venduto un corso che parte a Milano.
+//
+//   LE ISCRIZIONI DI QUESTI GIORNI sono una PROPOSTA, non un conto:
+//   tutte quelle salvate nei giorni della fiera e non ancora attribuite
+//   a nessuna. In quei giorni si iscrive gente da tutta Italia e chi sta
+//   in sede continua a lavorare — l'8/11/2026 nella finestra della
+//   Fiera di Napoli cadevano otto iscrizioni, quasi tutte di classi di
+//   Roma e Milano. Quindi `ts` propone e una persona decide: nessun
+//   flag si accende da solo.
+//
+// E' da qui che si segna un'iscrizione gia' chiusa (la richiesta del
+// titolare: «fai in modo che Elena possa aprire quelle iscrizioni che
+// sono avvenute in questi due giorni per flaggarle»). Si segna senza
+// aprire la scheda, che a iscrizione confermata e' chiusa a chiave:
+// entrarci per dichiarare una provenienza vorrebbe dire sbloccare
+// prezzi e quote per cambiare un'altra cosa.
+export function SchedaIscrizioniFiera({ evento, iscritti = [], corsi = [], corsiDate = [], location = [], onCambiato }) {
+  const [occupato, setOccupato] = useState("");
+  const [guasto, setGuasto] = useState("");
+
+  const mie = useMemo(() => iscrizioniDellaFiera(iscritti, evento?.id), [iscritti, evento?.id]);
+  const gruppi = useMemo(() => corsiChiusiInFiera(mie, { corsi, corsiDate, location }), [mie, corsi, corsiDate, location]);
+  const t = useMemo(() => contoIscrizioniFiera(mie), [mie]);
+  const candidate = useMemo(() => candidateDellaFiera(iscritti, evento), [iscritti, evento]);
+  const p = periodoFiera(evento);
+
+  async function segna(iscritto, eventoId) {
+    setOccupato(iscritto.id); setGuasto("");
+    try {
+      await segnaVenditaFiera(iscritto.id, eventoId);
+      await onCambiato?.();
+    } catch (e) {
+      setGuasto(`${nomeDi(iscritto)}: ${e.message}`);
+    }
+    setOccupato("");
+  }
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <Numerino etichetta="Iscrizioni" valore={String(t.quante)} grande />
+        <Numerino etichetta="Pattuito" valore={euro(t.pattuito)} grande nota="quello che pagheranno in tutto" />
+        <Numerino etichetta="Già incassato" valore={euro(t.incassato)} nota="quote segnate pagate" />
+      </div>
+
+      {guasto && (
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", marginBottom: 12 }}>
+          Non riesco a salvare — {guasto}
+        </div>
+      )}
+
+      <Riquadro titolo="I corsi che stiamo chiudendo in fiera">
+        {gruppi.length === 0 && (
+          <Vuoto>
+            Nessuna iscrizione segnata su questa fiera.
+            <div style={{ marginTop: 6 }}>
+              Si segna spuntando <b style={{ color: NAVY }}>Vendita fiera</b> in cima alla scheda di
+              iscrizione, oppure qui sotto, dall'elenco delle iscrizioni di questi giorni.
+            </div>
+          </Vuoto>
+        )}
+        {gruppi.map((g) => (
+          <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0 2px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 180px", minWidth: 0, ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                {g.nome}
+              </span>
+              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>
+                {[g.citta, g.dataInizio ? fmtGiorno(g.dataInizio) : ""].filter(Boolean).join(" · ") || "data da decidere"}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                {g.quante} iscritt{g.quante === 1 ? "a" : "e"} · {euro(g.pattuito)}
+              </span>
+            </div>
+            {g.iscrizioni.map((i) => (
+              <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "5px 0 5px 2px" }}>
+                <span style={{ flex: "1 1 150px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY }}>
+                  {nomeDi(i)}
+                  {i.tutor && <span style={{ color: MUTED }}> · {toTitolo(i.tutor)}</span>}
+                </span>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtQuando(i.ts)}</span>
+                {/* «Non è della fiera» e non un cestino: non si cancella
+                    niente, si toglie un'attribuzione */}
+                <button
+                  type="button" data-togli={i.id} disabled={occupato === i.id}
+                  onClick={() => segna(i, "")}
+                  style={{
+                    ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#fff",
+                    border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "4px 11px",
+                    cursor: occupato === i.id ? "wait" : "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  {occupato === i.id ? "…" : "Non è della fiera"}
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </Riquadro>
+
+      <Riquadro titolo={`Le iscrizioni di questi giorni${p ? ` (${fmtGiorno(p.dal)} – ${fmtGiorno(p.al)})` : ""}`}>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
+          Tutte le iscrizioni salvate nei giorni della fiera e non ancora attribuite a nessuna.
+          <b style={{ color: NAVY }}> Non sono per forza della fiera</b>: in questi giorni si iscrive
+          gente da tutta Italia e in sede si continua a lavorare. Qui si guarda e si segna una per una.
+        </div>
+        {candidate.length === 0 && <Vuoto>Nessun'altra iscrizione in questi giorni.</Vuoto>}
+        {candidate.map((i) => {
+          const cd = (corsiDate || []).find((x) => x.id === i.corso_data_id) || null;
+          const corso = cd ? (corsi || []).find((c) => c.id === cd.corso_id) : null;
+          const luogo = cd ? (location || []).find((l) => l.id === cd.location_id) : null;
+          return (
+            <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY, fontWeight: 700 }}>
+                {nomeDi(i)}
+                {i.tutor && <span style={{ fontWeight: 400, color: MUTED }}> · {toTitolo(i.tutor)}</span>}
+              </span>
+              <span style={{ flex: "1 1 140px", minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED }}>
+                {corso?.nome || "classe non scelta"}
+                {luogo?.citta ? ` · ${luogo.citta}` : ""}
+              </span>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtQuando(i.ts)}</span>
+              <button
+                type="button" data-segna={i.id} disabled={occupato === i.id}
+                onClick={() => segna(i, evento.id)}
+                style={{
+                  ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY,
+                  border: `1px solid ${NAVY}`, borderRadius: 999, padding: "5px 13px",
+                  cursor: occupato === i.id ? "wait" : "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {occupato === i.id ? "Segno…" : "È della fiera"}
+              </button>
+            </div>
+          );
+        })}
+      </Riquadro>
+    </>
+  );
+}
+
 function Numerino({ etichetta, valore, nota = "", grande = false }) {
   return (
     <div style={{
@@ -1700,6 +1855,8 @@ const etichettaMetodo = (m) => METODI[m] || (m ? String(m) : "—");
 // "ANDREA PAURA" -> "Andrea Paura": in elenco un nome tutto maiuscolo
 // urla, e qui di nomi ce n'e' uno per riga
 const toTitolo = (t) => String(t || "").toLowerCase().replace(/(^|[\s'-])([a-zà-ù])/g, (_, p, c) => p + c.toUpperCase());
+// il nome di un'iscritta, come si legge in un elenco
+const nomeDi = (i) => toTitolo([i?.nome, i?.cognome].filter(Boolean).join(" ")) || "senza nome";
 
 // "184320" -> "180 KB". Senza, in elenco si legge un numero lungo che
 // non dice niente a nessuno.
@@ -1718,10 +1875,11 @@ const SEZIONI = [
   { v: "hotel", l: "Hotel" },
   { v: "documenti", l: "Documenti" },
   { v: "vendite", l: "Dettaglio vendite" },
+  { v: "iscrizioni", l: "Iscrizioni in fiera" },
   { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato, fabbisognoCorsi = {} }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, iscritti = [], corsi = [], corsiDate = [], onIscrizioniCambiate, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato, fabbisognoCorsi = {} }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -1791,6 +1949,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
         {sezione === "documenti" && <SchedaDocumenti eventoId={evento.id} />}
         {sezione === "vendite" && <SchedaDettaglioVendite eventoId={evento.id} prodotti={prodotti} />}
+        {sezione === "iscrizioni" && <SchedaIscrizioniFiera evento={evento} iscritti={iscritti} corsi={corsi} corsiDate={corsiDate} location={location} onCambiato={onIscrizioniCambiate} />}
         {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} onCambiato={onCambiato} />}
       </div>
     </>
@@ -1799,7 +1958,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato, fabbisognoCorsi = {} }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], iscritti = [], corsi = [], corsiDate = [], onIscrizioniCambiate, onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato, fabbisognoCorsi = {} }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -1854,6 +2013,7 @@ export default function GestioneEventi({ location = [], master = [], assistente 
         {!creando && aperto && (
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
+            iscritti={iscritti} corsi={corsi} corsiDate={corsiDate} onIscrizioniCambiate={onIscrizioniCambiate}
             bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} fabbisognoCorsi={fabbisognoCorsi}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}

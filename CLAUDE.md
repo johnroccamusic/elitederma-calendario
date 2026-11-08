@@ -37,7 +37,7 @@ src/<modulo>/            fette già uscite dal monolite — consensi, content,
                          email, eventi, file, iscrizione, iscrizioni, magazzino,
                          notifiche, pos, prezzi, punti, recesso, rientri,
                          salvataggi, spese, stampe
-prove/                   67 file, 448 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   101 file, 839 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      45 edge function + _shared
@@ -3653,6 +3653,136 @@ cancella niente. In `prove/residenza-a-cascata.test.jsx` la prova che
 diceva «una residenza svizzera apre in scrittura libera» adesso dice
 il contrario: era giusta finché quell'elenco non c'era.
 
+### «Vendita fiera»: l'iscrizione chiusa al banco (8/11/2026)
+
+Il titolare, con la fiera di Napoli aperta: «nel modulo iscrizione in
+cima metti un flag che si chiama vendita fiera e quelle vendite le
+mostri in una nuova sezione in fiera di napoli in gestione eventi in cui
+elenchi i corsi che stiamo chiudendo in fiera. Facciamo anche in modo
+che Elena possa aprire quelle iscrizioni che sono avvenute in questi due
+giorni per flaggarle.»
+
+**Il gesto è un flag, quello che si scrive è la fiera.** La colonna è
+`iscritti.vendita_evento_id` (migrazione `20261108120000`, rollback
+scritto dentro), non un `vendita_fiera` vero/falso. Il motivo è che la
+sezione sta dentro la scheda di **un** evento: con un booleano la scheda
+della prossima fiera mostrerebbe le iscrizioni di Napoli, e fra sei mesi
+nessuno potrebbe più dire quale banco ha chiuso quei corsi — è lo stesso
+guasto dei sette consensi col QR generico, che non sapevano a quale
+corso appartenessero. Una colonna sola e non due dichiarazioni (un
+booleano *più* l'id): due dichiarazioni della stessa cosa un giorno si
+contraddicono, e si è già pagato con «Copri clip».
+
+**Il flag sta in cima** (`src/eventi/FlagVenditaFiera.jsx`), sopra tutto
+il resto della scheda: al banco si compila di corsa col cliente davanti,
+e una spunta in fondo a una scheda lunga due schermi non la tocca
+nessuno. Si legge anche a scheda chiusa — «questa iscrizione è della
+fiera» è una cosa da poter leggere, non solo da scrivere — ma se non c'è
+nessuna fiera scritta, a scheda chiusa non compare: una riga che dice di
+no in cima a una scheda che si apre per guardare altro è rumore.
+
+Tre cose decise lì dentro:
+
+- **niente casella senza una fiera, e si dice perché.** Una spunta che
+  non può scrivere niente è un dubbio, non una scelta — e «vendita
+  fiera» senza la fiera è esattamente il dato che quella colonna esiste
+  per non avere. Al suo posto una riga che manda a Gestione eventi;
+- **con una fiera sola non c'è niente da scegliere** e il nome si legge
+  accanto alla spunta; con più di una c'è la tendina, che parte dalla
+  più recente. È una preselezione che **si vede**, non una che decide in
+  silenzio (la lezione del POS che parte dalla fiera);
+- **la fiera già scritta sta sempre in elenco**, anche vecchia di un
+  anno: una tendina che non contiene il valore che sta mostrando lo
+  cancella al primo tocco. Si offrono le fiere in corso più quelle
+  finite da meno di `GIORNI_DI_CODA` (7) — al banco si incassa e si
+  corre, le schede si sistemano il lunedì — e mai una annullata, perché
+  un banco non c'è stato.
+
+**Il flag si scrive da sé, e subito.** Non passa da `autosalva`, per due
+motivi. Il primo è tecnico: `autosalva` ricompone l'intero payload
+leggendo lo stato, e lo stato di React non è ancora cambiato
+nell'istante in cui si tocca la casella — si salverebbe il valore di
+prima. Il secondo conta di più: una spunta che non dice se è arrivata al
+server è la stessa forma del guasto dei carrelli sospesi, dove
+«salvato» si diceva prima di saperlo. Quindi `segnaVenditaFiera` scrive
+quella **sola** colonna con un update mirato, conta le righe cambiate
+(un update senza `select` dice «va bene» anche quando non ha toccato
+niente) e dice com'è andata; se fallisce, la spunta torna com'era. Su
+una scheda ancora da creare non c'è niente da aggiornare e il valore
+viaggia nel payload della creazione. **E non resta accesa da una scheda
+all'altra**: al banco si iscrive una dopo l'altra, ma una scheda aperta
+in sede il giorno dopo nascerebbe «di fiera» senza che nessuno l'abbia
+detto.
+
+**La sezione nella scheda della fiera** è `SchedaIscrizioniFiera`
+(Gestione eventi → scheda dell'evento → **Iscrizioni in fiera**), e
+porta due elenchi che sono due cose diverse:
+
+- **I corsi che stiamo chiudendo in fiera** sono le iscrizioni
+  flaggate, raggruppate **per classe e mai per nome del corso**: due
+  edizioni dello stesso corso in due città sono due classi, e sommarle
+  direbbe che a Napoli si è venduto un corso che parte a Milano. In cima
+  il corso su cui la fiera ha portato più gente, che è la domanda a cui
+  la pagina serve a rispondere. Chi non ha ancora una classe non si
+  perde: al banco si prende l'acconto e la data si decide dopo.
+- **Le iscrizioni di questi giorni** sono una **proposta, non un
+  conto**: quelle salvate nei giorni della fiera e non ancora attribuite
+  a nessuna. In quei giorni si iscrive gente da tutta Italia e chi sta
+  in sede continua a lavorare — l'8/11/2026, nella finestra della Fiera
+  di Napoli, cadevano **otto** iscrizioni e la maggior parte erano di
+  classi di Roma e Milano. Quindi `ts` propone e **una persona decide**:
+  nessun flag si accende da solo, e la pagina lo scrive. Quelle già
+  attribuite a un'altra fiera restano fuori: proporle vorrebbe dire
+  invitare a rubarsele.
+
+**I numeri in cima sono due e non uno**: `pattuito` è quello che quelle
+persone pagheranno in tutto, `incassato` quello che è **già** entrato
+(le quote segnate pagate, al totale, righe «+» comprese). Al banco si
+prende un acconto, e una fiera che pattuisce ventimila euro e ne incassa
+mille non è la stessa cosa di una che ne incassa diecimila. Nessuno
+scorporo di IVA: ogni cifra registrata resta com'è scritta.
+
+**Elena flagga da lì, e non le è servito nessun permesso nuovo.** Ha già
+`gestionieventi` sulla sua utenza d'ufficio, e ci arriva da Gestione
+corsi → «Gestione eventi». Si segna **senza aprire la scheda**: a
+iscrizione confermata quella scheda è chiusa a chiave, ed entrarci per
+dichiarare una provenienza vorrebbe dire sbloccare prezzi e quote per
+cambiare un'altra cosa. Il tasto per togliere si chiama «Non è della
+fiera» e non è un cestino: non si cancella niente, si toglie
+un'attribuzione.
+
+**Il giorno di un'iscrizione è quello di chi compilava.** `iscritti.ts`
+è un istante in UTC e le date della fiera sono giorni: tagliare la
+stringa (`ts.slice(0, 10)`, che è quello che fa il resto dell'app nelle
+statistiche) darebbe il giorno **UTC**, e una scheda chiusa alle 00:30
+del 9 a Roma è ancora l'8 in UTC. `giornoRoma` chiede il giorno al fuso
+in cui quella persona stava scrivendo.
+
+**Il conto sta in un posto solo** (`src/eventi/fiera-iscrizioni.js`,
+senza niente che si disegni): lo leggono il flag nella scheda del
+venditore e la sezione nella scheda della fiera. Due copie di «quali
+iscrizioni sono di questa fiera» vorrebbero dire due numeri diversi
+sulla stessa fiera, e quello sbagliato sarebbe sempre quello che si
+guarda.
+
+**Quello che NON è stato toccato, e va deciso:** il **Conto** della
+fiera. Oggi dice se l'evento è andato in pari sulle sue spese e sulle
+vendite del banco, in imponibile; le iscrizioni ai corsi non ci entrano.
+Farle entrare cambierebbe un numero di soldi che ha una convenzione sua
+— e «quanto ha reso la fiera» con dentro un corso che partirà a gennaio
+è una domanda diversa da «la fiera si è pagata». Da chiedere, non da
+indovinare. E il flag **non va sul modulo dell'allieva**: è roba nostra,
+quindi non sta in `CAMPI_MODULO` e non ha una spunta in Impostazioni.
+
+Prove in `prove/vendita-fiera.test.jsx` (32): le regole — il giorno a
+Roma contro il giorno UTC, quali fiere il flag può nominare, le
+iscrizioni di **una** fiera e non di tutte, le due edizioni che restano
+due righe, l'incassato che conta solo le quote pagate — e i due gesti,
+coi componenti montati per davvero: spuntare scrive *quella* fiera,
+togliere scrive il vuoto, senza fiere aperte la casella non c'è, e da
+«È della fiera» parte un update su *quella* iscrizione con *questa*
+fiera, che se non tocca nessuna riga lo dice invece di far finta.
+
 ### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
 
 Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home
@@ -4041,7 +4171,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 43 file e 368 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 101 file e 839 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al

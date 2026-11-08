@@ -459,3 +459,25 @@ export function totaliVendite(vendite) {
     perMetodo: [...perMetodo.entries()].sort((a, b) => b[1] - a[1]),
   };
 }
+
+// --- le iscrizioni chiuse al banco della fiera -----------------------------
+
+/**
+ * Segna (o toglie) un'iscrizione come vendita di questa fiera.
+ *
+ * UNA COLONNA SOLA, con un update mirato: la scheda di un'iscrizione
+ * confermata e' chiusa, e riscriverla per intero da qui vorrebbe dire
+ * toccare prezzi e quote per segnare una provenienza.
+ *
+ * `select("id")` e il conto delle righe perche' PostgREST risponde «va
+ * bene» anche quando non ha aggiornato niente (vedi
+ * update-senza-select-mente): senza, un'iscrizione che non si e'
+ * flaggata sembrerebbe flaggata finche' qualcuno non ricarica.
+ */
+export async function segnaVenditaFiera(iscrittoId, eventoId) {
+  const { data, error } = await supabase.from("iscritti")
+    .update({ vendita_evento_id: eventoId || null })
+    .eq("id", iscrittoId).select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("nessuna riga aggiornata");
+}

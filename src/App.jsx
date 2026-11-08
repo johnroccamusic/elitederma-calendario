@@ -85,6 +85,7 @@ import ChiediAiDati from "./statistiche/ChiediAiDati.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
+import FlagVenditaFiera from "./eventi/FlagVenditaFiera.jsx";
 import { statoDi, aggiornaStatoDopoAcconto, iscrittiAttiviDi } from "./iscrizioni/stato.js";
 import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
 import { INDIRIZZO_APP } from "./indirizzo.js";
@@ -32073,6 +32074,11 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
   // momento in cui viene salvata nel database, non la data del corso)
   const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
+  // VENDITA FIERA (8/11/2026): l'iscrizione chiusa al banco di un
+  // evento. Non e' un si'/no ma l'id della fiera — la scheda dell'evento
+  // mostra LE SUE iscrizioni, e un booleano le mescolerebbe a quelle di
+  // ogni fiera successiva. Vedi src/eventi/fiera-iscrizioni.js.
+  const [venditaEventoId, setVenditaEventoId] = useState("");
   const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false };
   // il prodotto di magazzino che corrisponde a un modello di dermografo:
   // il listino è quello (netto in anagrafica, qui portato a lordo)
@@ -32758,6 +32764,10 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
 
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
+    // la fiera NON resta accesa da una scheda all'altra: al banco si
+    // iscrive una dopo l'altra, ma una scheda aperta in sede il giorno
+    // dopo nascerebbe «di fiera» senza che nessuno l'abbia detto
+    setVenditaEventoId("");
     // scheda nuova: acconto DA PAGARE e nessuna data d'incasso — la data
     // si scrive quando i soldi arrivano davvero, non all'apertura
     setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(false); setPagAccontoIncassatoIl(""); setAccontoExtra([]);
@@ -32806,6 +32816,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
     setModoPattuito(i.totale_pattuito_modo || "netto");
     setDaCompletare([]); setAvvisoQuote("");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
+    setVenditaEventoId(i.vendita_evento_id || "");
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
       totale: i.acconto_totale != null ? String(i.acconto_totale) : "",
@@ -33182,6 +33193,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
         tutor: tutor.trim() || null,
         telefono: telefono.trim() || null,
         vecchia_iscrizione: vecchiaIscrizione,
+        vendita_evento_id: venditaEventoId || null,
         acconto_imponibile: pagAcconto.imponibile === "" ? null : parseNum(pagAcconto.imponibile),
         acconto_totale: pagAcconto.totale === "" ? null : parseNum(pagAcconto.totale),
         acconto_metodo: pagAcconto.metodo || null,
@@ -33424,6 +33436,36 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // torna al primo microtask e non alla fine della scrittura): un blur che
   // arriva dopo porta dati nuovi e deve salvare.
   const autosalvaGiaChiesto = React.useRef(false);
+  // IL FLAG DELLA FIERA SI SCRIVE DA SE', E SUBITO.
+  //
+  // Non passa da `autosalva`, e per due motivi. Il primo e' tecnico:
+  // `autosalva` ricompone l'intero payload leggendo lo stato, e lo
+  // stato di React non e' ancora cambiato nell'istante in cui si tocca
+  // la casella — si salverebbe il valore di prima. Il secondo conta di
+  // piu': una spunta che non dice se e' arrivata al server e' la stessa
+  // forma del guasto dei carrelli sospesi, dove «salvato» si diceva
+  // prima di saperlo. Qui si scrive quella sola colonna, si guarda
+  // quante righe sono cambiate (un update senza `select` dice «va
+  // bene» anche quando non ha toccato niente) e si dice com'e' andata.
+  //
+  // Su una scheda ancora da creare non c'e' niente da aggiornare: il
+  // valore viaggia nel payload della creazione.
+  async function segnaVenditaFiera(eventoId) {
+    const prima = venditaEventoId;
+    setVenditaEventoId(eventoId);
+    if (!modificandoId) return;
+    const { data, error } = await supabase.from("iscritti")
+      .update({ vendita_evento_id: eventoId || null })
+      .eq("id", modificandoId).select("id");
+    if (error || !data?.length) {
+      setVenditaEventoId(prima);
+      setMsg("Non sono riuscito a segnare la vendita fiera: " + (error ? testoErrore(error) : "nessuna riga aggiornata"));
+      return;
+    }
+    setMsg(eventoId ? "Segnata come vendita fiera." : "Non è più una vendita fiera.");
+    ricarica?.(["iscritti"]);
+  }
+
   async function autosalva() {
     if (!modificandoId) return; // un iscritto nuovo va prima creato col pulsante
     if (!nome.trim() || !cognome.trim()) return; // non salvare stati incompleti
@@ -34670,6 +34712,18 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
               </label>
             )}
           </div>
+          {/* VENDITA FIERA, IN CIMA (8/11/2026, chiesto dal titolare).
+              Al banco si compila di corsa col cliente davanti: un flag in
+              fondo a una scheda lunga due schermi non lo tocca nessuno.
+              Si vede anche a scheda chiusa, spento: «questa iscrizione e'
+              della fiera» e' una cosa da poter leggere, non solo da
+              scrivere. Chi deve segnarne una vecchia lo fa dalla scheda
+              della fiera, in Gestione eventi. */}
+          <FlagVenditaFiera
+            valore={venditaEventoId}
+            soloLettura={soloLettura}
+            onCambia={segnaVenditaFiera}
+          />
           {/* IN ALTO, prima di tutto: si resetta, poi si scrive ovunque, poi
               si rispedisce. Dopo il reset lo stato torna a «modulo inviato»
               e la scheda si sblocca da sola. */}
@@ -88730,6 +88784,13 @@ function Gestionale() {
           location={location} master={master} assistente={assistente} venditori={venditori}
           prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} hotel={hotel}
           costiCategorie={costiCategorie} fabbisognoCorsi={fabbisognoCorsiPerProdotto}
+          // le iscrizioni chiuse al banco: la sezione «Iscrizioni in
+          // fiera» le raggruppa per classe, quindi le servono anche i
+          // corsi e le date. Sono gli stessi elenchi che l'app ha gia'
+          // in mano — una lettura in piu' qui direbbe numeri diversi da
+          // quelli del resto dell'app per il tempo che ci passa in mezzo
+          iscritti={iscritti} corsi={corsi} corsiDate={corsiDate}
+          onIscrizioniCambiate={() => fetchDati(["iscritti"])}
           eventoIniziale={eventoDaAprire}
           onNuovaSpesa={apriNuovaSpesaEvento}
           // il materiale di un evento esce e rientra dal magazzino: le
