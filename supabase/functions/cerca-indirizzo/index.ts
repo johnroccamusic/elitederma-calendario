@@ -100,10 +100,16 @@ async function chiamanteAutorizzato(req: Request): Promise<boolean> {
 // in archivio c'e' "PATERNO", Photon risponde "Paternò", ed e' lo stesso
 // posto. Senza questo il filtro butterebbe via i risultati giusti.
 function chiave(s: string): string {
-  // `\p{Diacritic}` invece dell'intervallo \u0300-\u036f: dice la stessa
-  // cosa e si legge, e soprattutto non si trasforma nei segni veri ogni
-  // volta che questo file passa per uno strumento che interpreta gli
-  // escape — e' appena successo due volte.
+  // `\p{Diacritic}` invece dell'intervallo dei segni combinanti (da
+  // U+0300 a U+036F): dice la stessa cosa e si legge.
+  //
+  // E QUEL NUMERO SI SCRIVE COSI', "U+0300", e non con la barra
+  // rovescia davanti: scritto come escape si trasforma nei segni veri
+  // ogni volta che questo file passa per uno strumento che li
+  // interpreta. E' successo tre volte — l'ultima l'8/11/2026,
+  // pubblicando questa funzione, dentro il commento che avvisava di
+  // non farlo. Un avviso che si fa ignorare tre volte non e' un
+  // avviso: e' la cosa da togliere.
   return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "")
     .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
 }
