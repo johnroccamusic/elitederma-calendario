@@ -3884,6 +3884,26 @@ Quindi: **dopo un push che deve arrivare a qualcuno, si controlla che lo
 sha pubblicato sia il proprio.** La ripartenza si fa dal pannello Vercel
 (Redeploy) o con un commit nuovo, che fa ripartire il collegamento.
 
+**Due trappole nel controllare che sia arrivata** (8/11/2026, pagate
+tutte e due nello stesso giro):
+
+- **il nome del file servito NON e' quello della build locale.** Vercel
+  ricompila, e l'impronta nel nome cambia: in locale
+  `index-30S72oR2.js`, online `index-cIYdUSso.js`, stesso commit.
+  Aspettare che compaia il proprio nome e' aspettare per sempre. Si
+  confronta lo **sha** (`git ls-remote origin main` contro quello della
+  pubblicazione) e, per essere certi del contenuto, si cerca **dentro il
+  file servito** una stringa che prima non c'era — i nomi delle
+  proprieta' sopravvivono alla minificazione, quelli delle variabili no;
+- **interrogare il sito con una `curl` nuda, ripetuta, lo fa rispondere
+  403 «Vercel Security Checkpoint»**, e sembra un guasto della
+  pubblicazione. E' la protezione automatica che prende per robot un
+  client senza intestazioni da browser — a maggior ragione se chiede
+  ogni dieci secondi dallo stesso indirizzo. Con lo `User-Agent` di un
+  telefono la stessa richiesta torna **200**: chi usa l'app non vede
+  niente. Se serve davvero un'attesa, si guarda lo stato della
+  pubblicazione dalle API di Vercel, non si martella il sito.
+
 **Pubblicare pianta le schede rimaste aperte (22/10/2026).** L'app è divisa in
 pezzi caricati a richiesta, e ognuno ha il nome col codice del contenuto
 (`index-BxhQZihE.js`): a ogni pubblicazione quel codice cambia e il file di
