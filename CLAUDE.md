@@ -3450,6 +3450,85 @@ tasto cancella toglierebbe il punto, la formattazione lo rimetterebbe, e
 la casella sembrerebbe inchiodata. Prove in
 `prove/residenza-svizzera.test.jsx`, dove si batte una cifra alla volta.
 
+### Il prefisso telefonico si sceglie, e parte dalla residenza (8/11/2026)
+
+Il titolare, subito dopo la residenza svizzera: «il prefisso telefonico
+internazionale adesso e' scritto sulla casella nel testo +39, e in
+futuro va selezionato da una tendina che ti propone come priorita'
+quelli dello stato di residenza che hai appena inserito, e che in ogni
+modo ti da' l'opportunita' di cambiarlo».
+
+Era una scritta fissa in due posti — l'etichetta «Cellulare (+39...)» e
+il suggerimento dentro la casella — e a chi vive fuori chiedeva un
+numero che non ha. Ora accanto alla casella c'e' una tendina che si
+cerca (per nome o per cifre), **gia' puntata sul paese di residenza**,
+con l'Italia subito sotto e gli altri 231 in ordine.
+
+**In archivio non cambia niente, ed e' il punto.** `iscritti.telefono`
+resta UNA colonna di testo con prefisso e numero attaccati
+(`+41791234567`), che e' la forma in cui l'app scrive i numeri italiani
+da sempre. La tendina non e' un campo nuovo: e' un modo di leggere e
+riscrivere quella stringa (`separaPrefisso` / `componiTelefono` in
+`src/prefissi-telefonici.js`). Nessuna migrazione, e i numeri gia'
+scritti si riaprono spezzati senza essere toccati.
+
+**I dati si generano, non si scrivono a mano** (`genera-prefissi.mjs` →
+`src/prefissi-telefonici-dati.js`, chiave = il codice catastale dello
+Stato, non il nome). Fonte: il dataset `mledoze/countries` su GitHub,
+letto direttamente perche' l'API restcountries l'8/11/2026 risponde
+«versione dismessa» su ogni versione, v5 compresa. **L'Italia non e' in
+quell'elenco** e non e' una dimenticanza: l'elenco ISTAT e' quello degli
+Stati *esteri*, e la riga dell'Italia e' l'unica scritta a mano.
+
+Tre cose che il generatore stampa a ogni giro, e che vanno rilette:
+
+- **gli Stati senza prefisso** (oggi zero su 232). Una tendina che non
+  propone il paese di chi si ha davanti e' peggio di una casella da
+  scrivere;
+- **i nomi riscritti a mano** (16: «Sudafrica» → «Sud Africa»,
+  «Maurizio» → «Mauritius»…) **con il paese che hanno agganciato**. Un
+  paese preso per assonanza e' un prefisso sbagliato addosso a una
+  persona vera;
+- **i paesi con piu' di un suffisso** (7). E' da li' che sono usciti due
+  numeri falsi: il dataset tiene `root` = la **prima cifra** e il resto
+  nei suffissi, quindi la radice da sola dava «Sant'Elena +2» e
+  «Vaticano +3». La regola segue il piano di numerazione: un suffisso
+  solo → radice+suffisso (Anguilla e' +1264); piu' suffissi su **+1 o
+  +7** → la radice, che sono gli unici due prefissi di una cifra che
+  esistono e li' i suffissi sono i distretti interni; piu' suffissi
+  altrove → radice + il primo. I due casi in cui sbaglia comunque stanno
+  in `PREFISSO_A_MANO` col perche': **Vaticano +379** (il dataset mette
+  per primo 06698, la linea romana da cui passa davvero) e **Sahara
+  occidentale +212** (si chiama attraverso il Marocco).
+
+Due cose decise nella casella (`CampoTelefono.jsx`, una sola per la
+scheda del venditore e per il modulo dell'allieva):
+
+- **il prefisso scelto si ricorda anche a numero vuoto.** Lo ha trovato
+  il banco di prova: in archivio va una stringa sola, e senza cifre
+  quella stringa e' vuota — quindi scegliere «Francia +33» *prima* di
+  battere il numero non lasciava traccia, la casella tornava al paese di
+  residenza e il numero nasceva col prefisso sbagliato. Ed e' il gesto
+  normale: prima il paese, poi il numero;
+- **un numero incollato per intero sposta anche il prefisso.** Chi copia
+  un contatto incolla «+41 79…» nella casella del numero: senza, quel
+  «+41» finirebbe nel filtro delle cifre e il numero resterebbe
+  attaccato al +39.
+
+Chiusa, la casella del prefisso mostra **il valore** e non il nome
+(`mostraValore` su `CampoCerca`): lo stesso «+1» appartiene a venti
+paesi, e dopo aver scelto «Canada» riaprendo la scheda si leggerebbe il
+primo di quei venti — una bugia. Aperta, l'elenco mostra i nomi.
+
+**Quello che NON e' stato toccato:** la pagina *Registrazione clienti*,
+dove il `+39` e' un riquadro fisso accanto alla casella. Li' non esiste
+uno Stato di residenza (le citta' sono l'elenco ISTAT italiano) e il
+telefono normalizzato entra nell'**indice unico dell'identita**: allargarlo
+vuol dire una migrazione e una decisione su cosa distingue due omonimi.
+Da chiedere, non da indovinare.
+
+Prove in `prove/prefisso-telefonico.test.jsx` (16).
+
 **I DUE STATI SUBITO DOPO IL NOME** (7/11/2026, dettato dal titolare
 dopo averlo provato davvero: «l'ordine deve essere nome, cognome, stato
 di nascita, stato di residenza, poi i dati della nascita e tutto il

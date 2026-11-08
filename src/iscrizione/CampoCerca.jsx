@@ -53,13 +53,20 @@ export function filtraVoci(voci, scritto, quante = QUANTE) {
 export default function CampoCerca({
   chiave, valore, voci = [], onScegli, stile, spenta = false,
   vuoto = "— scegli —",
+  // CHIUSA, LA CASELLA PUO' MOSTRARE IL VALORE INVECE DEL TESTO.
+  // Serve ai prefissi telefonici, dove lo stesso «+1» appartiene a
+  // venti paesi: scegliendo «Canada +1» e riaprendo la scheda si
+  // leggerebbe il primo paese con quel prefisso, cioe' una bugia.
+  // Chiusa dice «+1», che e' l'unica cosa che sappiamo davvero;
+  // aperta, l'elenco mostra i nomi e si cerca per nome o per cifre.
+  mostraValore = false,
 }) {
   const [aperto, setAperto] = useState(false);
   const [scritto, setScritto] = useState("");
   const scelta = voci.find((v) => String(v.valore) === String(valore || ""));
   // chiusa, la casella mostra quello che si e' scelto; aperta, quello
   // che si sta scrivendo per cercarlo
-  const mostrato = aperto ? scritto : (scelta ? scelta.testo : "");
+  const mostrato = aperto ? scritto : (scelta ? (mostraValore ? scelta.valore : scelta.testo) : "");
   const proposte = aperto && !spenta ? filtraVoci(voci, scritto) : [];
 
   function chiudi() { setAperto(false); setScritto(""); }

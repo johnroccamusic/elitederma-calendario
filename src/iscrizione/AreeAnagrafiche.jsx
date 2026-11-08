@@ -37,6 +37,7 @@ import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
 // un elenco di 232 voci non e' una tendina: si cerca (vedi CampoCerca)
 import CampoCerca from "./CampoCerca.jsx";
+import CampoTelefono from "./CampoTelefono.jsx";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -274,6 +275,21 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     ...(maiuscolo ? { textTransform: "uppercase" } : {}),
     ...(spenta ? { background: "#F1EEE7" } : {}),
   };
+
+  // IL PREFISSO INTERNAZIONALE SI SCEGLIE, E PARTE DALLA RESIDENZA.
+  // Era una scritta fissa «+39»: a una svizzera chiedeva un numero che
+  // non ha. Il paese arriva dalla cascata — e' la stessa scheda, due
+  // righe piu' su — e resta sempre cambiabile.
+  if (tipo === "telefono") {
+    return (
+      <CampoTelefono
+        chiave={chiave} valore={valore} statoResidenza={cascata?.statoResidenza}
+        spenta={spenta} stile={stile} suggerimento={suggerimento}
+        onCambia={(v) => scrivi(chiave, v)}
+        onEsce={() => esceDalCampo(campo)}
+      />
+    );
+  }
 
   // --- data e luogo di nascita --------------------------------------
   if (tipo === "data") {
@@ -643,6 +659,9 @@ export function AreaAnagrafica({
   const cascata = {
     regione, provincia, comuneScelto, capDisponibili, elenco,
     voceStato: vocePerStato(statoScritto, altroStato),
+    // il nome dello Stato, non il suo elenco: il prefisso telefonico
+    // ce l'hanno tutti e 232, gli elenchi di citta' e CAP solo due
+    statoResidenza: statoScritto,
     // La ricerca delle vie copre l'Italia e basta (vedi
     // cerca-indirizzo): fuori si scrive, come prima.
     fuoriItalia: elenco?.stato !== ITALIA,

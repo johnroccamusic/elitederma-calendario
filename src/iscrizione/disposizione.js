@@ -226,7 +226,9 @@ export const AREA_ALLIEVO = {
     // Tutor e cellulare insieme (20/10/2026): due campi corti, una riga.
     { campi: [
       { chiave: "tutor", etichetta: "Tutor", larghezza: "2 1 140px", tipo: "venditori", maiuscolo: true },
-      { chiave: "telefono", etichetta: "Cellulare (+39...)", larghezza: "2 1 150px", tipo: "telefono", suggerimento: "+39 333 1234567", salvaUscendo: true },
+      // il prefisso e' la tendina accanto: nell'etichetta e nel
+      // suggerimento non ci va piu', e la casella e' larga per due
+      { chiave: "telefono", etichetta: "Cellulare", larghezza: "2 1 220px", tipo: "telefono", suggerimento: "333 1234567", salvaUscendo: true },
     ] },
     // L'intestazione resta per se': non e' un dato, e' la scelta che
     // apre o chiude tutto il riquadro della fatturazione qui sotto.

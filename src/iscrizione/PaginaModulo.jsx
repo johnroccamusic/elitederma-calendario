@@ -39,6 +39,7 @@ import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
 import CampoCerca from "./CampoCerca.jsx";
+import CampoTelefono from "./CampoTelefono.jsx";
 import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI, ritaglia } from "./RitaglioFoto.jsx";
 import LetturaDocumento from "./LetturaDocumento.jsx";
 import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
@@ -216,6 +217,16 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
           chiave={chiave} valore={valore} spenta={spento}
           scrivi={onCambia} suggerimento={spento ? "" : "Inserisci la tua città"}
           stile={stileComune}
+        />
+      ) : tipo === "telefono" ? (
+        // IL PREFISSO SI SCEGLIE ANCHE QUI, e parte dal paese di
+        // residenza che lei ha appena scelto: stessa casella della
+        // scheda del venditore, perche' due copie vorrebbero dire due
+        // modi di archiviare lo stesso numero.
+        <CampoTelefono
+          chiave={chiave} valore={valore} statoResidenza={campo.statoResidenza}
+          spenta={spento} stile={stileComune} suggerimento={spento ? "" : (suggerimento || "333 1234567")}
+          onCambia={(v) => onCambia(chiave, v)}
         />
       ) : tipo === "data" ? (
         <input
@@ -730,6 +741,9 @@ export default function PaginaModulo({ token }) {
     // in Svizzera «Provincia» si chiama «Cantone» e il CAP «NPA»: chi
     // compila legge l'etichetta, e quella deve dire il vero
     const conNome = campoFiscale(etichettaResidenza(campo, elencoModulo), elencoModulo);
+    // il prefisso del telefono parte dal paese che l'allieva ha appena
+    // scelto qui sopra: di la' il venditore, di qua lei, stessa regola
+    if (conNome.tipo === "telefono") return { ...conNome, statoResidenza: statoScritto };
     // di qua compila LEI, quindi il suggerimento le da' del tu: nella
     // scheda del venditore la stessa casella dice «Inserisci
     // l'identificativo fiscale», perche' li' compila un'altra persona

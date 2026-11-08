@@ -27,7 +27,10 @@ export const CAMPI_MODULO = [
   { chiave: "prov_residenza", etichetta: "Provincia" },
   { chiave: "stato_residenza", etichetta: "Stato di residenza" },
   { chiave: "email", etichetta: "Email" },
-  { chiave: "telefono", etichetta: "Cellulare (+39...)" },
+  // «(+39...)» non c'e' piu': il prefisso e' una tendina accanto alla
+  // casella, e scriverlo nell'etichetta sarebbe dire a una svizzera che
+  // il suo numero comincia per 39
+  { chiave: "telefono", etichetta: "Cellulare" },
   { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)" },
   { chiave: "tutor", etichetta: "Tutor" },
   { chiave: "tipo_cliente", etichetta: "Intestazione" },

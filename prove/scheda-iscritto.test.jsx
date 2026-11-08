@@ -13,11 +13,18 @@ describe("scheda dell'iscritto", () => {
   // Il suggerimento "ITALIA" non c'e' piu' e non doveva restare: dal
   // 19/10/2026 lo stato si scegle da una tendina, e un suggerimento
   // dentro una tendina non vuol dire niente. Vedi residenza-a-cascata.
+  //
+  // E DALL'8/11/2026 NEMMENO IL «+39» STA PIU' LI'. Il prefisso si
+  // scegli da una tendina accanto alla casella, che parte dal paese di
+  // residenza: scriverlo nel suggerimento direbbe a una svizzera che il
+  // suo numero comincia per 39. Il suggerimento resta, ed e' il numero
+  // senza prefisso.
   it("il suggerimento del telefono c'e' ed e' smorzato", async () => {
     const p = await conValori({});
     const conSuggerimento = p.campi().filter((i) => (i.getAttribute("placeholder") || "").trim() !== "");
     const scritte = conSuggerimento.map((i) => i.getAttribute("placeholder"));
-    expect(scritte.some((s) => s.startsWith("+39"))).toBe(true);
+    expect(scritte).toContain("333 1234567");
+    expect(scritte.some((s) => s.startsWith("+39"))).toBe(false);
     for (const c of conSuggerimento) expect(c.className).toContain("suggerimento-chiaro");
   });
 
