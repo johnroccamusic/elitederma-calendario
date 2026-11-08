@@ -86,6 +86,7 @@ import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import FlagVenditaFiera from "./eventi/FlagVenditaFiera.jsx";
+import { testoErroreFunzione } from "./errore-funzione.js";
 import { statoDi, aggiornaStatoDopoAcconto, iscrittiAttiviDi } from "./iscrizioni/stato.js";
 import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
 import { INDIRIZZO_APP } from "./indirizzo.js";
@@ -17924,14 +17925,6 @@ async function invocaConUnSecondoTentativo(nomeFunzione, opzioni) {
   if (stato && stato < 500) return primo;
   await new Promise((r) => setTimeout(r, 1000));
   return supabase.functions.invoke(nomeFunzione, opzioni);
-}
-
-async function testoErroreFunzione(error) {
-  try {
-    const corpo = await error?.context?.json?.();
-    if (corpo?.errore) return corpo.errore;
-  } catch { /* la risposta poteva non essere JSON */ }
-  return error?.message || "Non riuscito.";
 }
 
 // una riga della tabella "Gestione utenti": nome + password (si salvano

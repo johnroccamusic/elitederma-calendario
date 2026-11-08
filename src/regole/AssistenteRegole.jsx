@@ -15,6 +15,7 @@ import { supabase } from "../supabase.js";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay } from "../ui/stile.js";
 import { voceDisponibile, leggi, leggiNaturale, zittisci, ascoltaUnaFrase } from "./voce.js";
 import { DESTINATARI } from "./PaginaRegolamenti.jsx";
+import { testoErroreFunzione } from "../errore-funzione.js";
 
 // I NUMERI E IL CONTO, sotto una risposta presa dai dati. Chiusi, perche'
 // chi chiede «che corso c'e' a Bari» vuole la risposta; apribili, perche'
@@ -131,7 +132,9 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi =
     try {
       const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, permessi, cronologia } });
       if (error || !data?.ok) {
-        const errore = data?.errore || error?.message || "Nessuna risposta.";
+        // il motivo vero sta nel corpo della risposta, non in
+        // error.message: vedi errore-funzione.js
+        const errore = data?.errore || (error ? await testoErroreFunzione(error) : "Nessuna risposta.");
         setScambi((s) => [...s, { domanda: d, errore }]); return errore;
       }
       setScambi((s) => [...s, {

@@ -10,6 +10,7 @@ import React, { useState } from "react";
 import { supabase } from "../supabase.js";
 import { fontBody, fontDisplay, NAVY, MUTED, GOLD, CREAM_BORDER } from "../ui/stile.js";
 import { Button } from "../ui/base.jsx";
+import { testoErroreFunzione } from "../errore-funzione.js";
 
 export const DOMANDE_PRONTE = [
   "I 10 prodotti più venduti a maggio",
@@ -54,7 +55,11 @@ export default function ChiediAiDati({ chi = "" }) {
     const cronologia = esiti.filter((e) => e.risposta).slice(-3).map((e) => ({ domanda: e.domanda, risposta: e.risposta }));
     try {
       const { data, error } = await supabase.functions.invoke("analisi-domanda", { body: { domanda: d, cronologia, chi } });
-      if (error || !data?.ok) setEsiti((e) => [...e, { domanda: d, errore: data?.errore || error?.message || "Nessuna risposta." }]);
+      if (error || !data?.ok) {
+        // il motivo sta nel corpo della risposta: vedi errore-funzione.js
+        const errore = data?.errore || (error ? await testoErroreFunzione(error) : "Nessuna risposta.");
+        setEsiti((e) => [...e, { domanda: d, errore }]);
+      }
       else setEsiti((e) => [...e, { domanda: d, risposta: data.risposta, sql: data.sql, righe: data.righe || [], totale: data.totale_righe, nota: data.nota }]);
       setDomanda("");
     } catch (e) {

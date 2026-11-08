@@ -12,6 +12,7 @@ import { supabase } from "../supabase.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
 import TastoDettatura from "./Dettatura.jsx";
+import { testoErroreFunzione } from "../errore-funzione.js";
 
 export const DESTINATARI = [
   { chiave: "tutti", etichetta: "Tutti" },
@@ -68,7 +69,7 @@ function FormScheda({ iniziale, onSalva, onAnnulla, salvando }) {
     setSistemando(true); setProposta(null);
     try {
       const { data, error } = await supabase.functions.invoke("sistema-testo", { body: { testo: s.testo, titolo: s.titolo } });
-      if (error || !data?.ok) setProposta({ errore: data?.errore || error?.message || "Nessuna proposta." });
+      if (error || !data?.ok) setProposta({ errore: data?.errore || (error ? await testoErroreFunzione(error) : "Nessuna proposta.") });
       else setProposta({ testo: data.testo, note: data.note || "" });
     } catch (e) { setProposta({ errore: String(e?.message || e) }); }
     finally { setSistemando(false); }
