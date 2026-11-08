@@ -27,13 +27,13 @@ import { codiceCatastale, nomiStati, normalizzaLuogo } from "../comuni-regioni.j
 // Vedi residenza.js — con la Svizzera dentro dal 7/11/2026.
 import {
   ITALIA, ALTRO_STATO, elencoResidenza, vociStatoResidenza, vocePerStato,
-  etichettaResidenza, campoFiscale,
+  etichettaResidenza, campoFiscale, formattaFiscale,
 } from "./residenza.js";
 import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea, titoloAreaScheda } from "../ui/scheda.jsx";
 import { campoDataStyle } from "../ui/stile.js";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
-import { filtraCodiceFiscale, calcolaCodiceFiscale } from "./codice-fiscale.js";
+import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
 // un elenco di 232 voci non e' una tendina: si cerca (vedi CampoCerca)
 import CampoCerca from "./CampoCerca.jsx";
@@ -478,7 +478,9 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
       placeholder={suggerimento}
       // il suggerimento in grigio chiaro: vedi la regola in index.html
       className="suggerimento-chiaro"
-      inputMode={tipo === "telefono" ? "tel" : undefined}
+      // tredici cifre sul telefono si battono col tastierino: i punti
+      // li mette la casella, quindi di lettere non ce n'e' bisogno
+      inputMode={tipo === "telefono" ? "tel" : campo.paeseFiscale === "CH" ? "numeric" : undefined}
       // IL RIEMPIMENTO AUTOMATICO DEL BROWSER STA FUORI DA QUI.
       //
       // Questi campi non sono i dati di chi usa l'app: sono quelli
@@ -503,10 +505,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         // IL CODICE FISCALE HA UNA FORMA, E LA CASELLA LA FA RISPETTARE.
         // Vale anche sull'incollatura, che e' come la maggioranza lo
         // scrive: `onChange` scatta anche li'.
-        // il filtro del codice ITALIANO (solo lettere e numeri, sedici)
-        // toglierebbe i punti dell'AHV svizzero: fuori Italia si scrive
-        // quello che c'e' sul documento
-        if (chiave === "codice_fiscale" && campo.formatoItaliano !== false) t = filtraCodiceFiscale(t);
+        // ...e la forma dipende dal paese: in Italia il codice fiscale,
+        // in Svizzera i punti dell'AVS che compaiono da se', altrove
+        // quello che c'e' sul documento e nessuno lo corregge
+        if (chiave === "codice_fiscale") t = formattaFiscale(t, campo);
         if (lunghezza) t = t.slice(0, lunghezza);
         scrivi(chiave, t);
       }}

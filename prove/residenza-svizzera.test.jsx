@@ -15,7 +15,7 @@ import { AREA_ALLIEVO } from "../src/iscrizione/disposizione.js";
 import {
   cantoniSvizzeri, localitaDiCantone, npaDiLocalita, cantoneDiLocalita,
 } from "../src/comuni-svizzera.js";
-import { elencoResidenza, vociStatoResidenza } from "../src/iscrizione/residenza.js";
+import { elencoResidenza, vociStatoResidenza, formattaAhv } from "../src/iscrizione/residenza.js";
 import { rispondiCon } from "./preparazione.js";
 import { monta, scegli, voci, scegliCercando, cerca, scrivi, scegliVoce, proposteDi, campoDi } from "./aiuto.js";
 
@@ -369,5 +369,93 @@ describe("il modulo che compila l'allieva", () => {
     });
     expect(tendina(p, "citta_residenza").tagName).toBe("INPUT");
     expect(tendina(p, "cap_residenza").tagName).toBe("INPUT");
+  });
+
+  // GLI STESSI PUNTI ANCHE DI QUA. La scheda e il modulo chiamano la
+  // stessa funzione: due copie vorrebbero dire un numero accettato dal
+  // venditore e rifiutato all'allieva, sullo stesso documento.
+  it("anche nel modulo l'AVS prende i punti da se'", async () => {
+    const p = await apriIlModulo({
+      ...VISTA,
+      campi: [...VISTA.campi, { chiave: "codice_fiscale", valore: null, bloccato: false, obbligatorio: false }],
+    });
+    const casella = tendina(p, "codice_fiscale");
+    await scrivi(casella, "7561234567897");
+    expect(tendina(p, "codice_fiscale").value).toBe("756.1234.5678.97");
+  });
+});
+
+// I PUNTI DELL'AVS (8/11/2026). Tredici cifre di fila non si rileggono
+// per controllare di aver battuto giusto; a gruppi si'. Qui si prova
+// che compaiano MENTRE si scrive — una cifra alla volta, come fa un
+// dito — e soprattutto che non rovinino quello che non e' un AVS.
+describe("l'AVS si scrive a gruppi", () => {
+  it("i punti compaiono da se', cifra dopo cifra", async () => {
+    const p = await apri({});
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    const casella = () => p.casella("codice_fiscale");
+    const visto = [];
+    for (const cifra of "7561234567897") {
+      await scrivi(casella(), casella().value + cifra);
+      visto.push(casella().value);
+    }
+    expect(casella().value).toBe("756.1234.5678.97");
+    // il punto entra fra un gruppo e il successivo, MAI in coda: con
+    // «756.» gia' scritto il tasto cancella toglierebbe il punto, la
+    // formattazione lo rimetterebbe, e la casella sembrerebbe inchiodata
+    expect(visto[2]).toBe("756");
+    expect(visto[3]).toBe("756.1");
+    expect(visto[6]).toBe("756.1234");
+    expect(visto[7]).toBe("756.1234.5");
+  });
+
+  it("si cancella all'indietro senza restare incastrati", async () => {
+    const p = await apri({});
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    const casella = () => p.casella("codice_fiscale");
+    await scrivi(casella(), "7561");
+    expect(casella().value).toBe("756.1");
+    // il dito toglie l'ultimo carattere: la cifra se ne va e il punto
+    // non torna da solo
+    await scrivi(casella(), "756.");
+    expect(casella().value).toBe("756");
+    await scrivi(casella(), "75");
+    expect(casella().value).toBe("75");
+  });
+
+  it("incollato dalla tessera com'e' scritto, resta com'e'", async () => {
+    const p = await apri({});
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    await scrivi(p.casella("codice_fiscale"), "756.1234.5678.97");
+    expect(p.casella("codice_fiscale").value).toBe("756.1234.5678.97");
+  });
+
+  // LE DUE PROTEZIONI, che sono il motivo per cui questa non e' una
+  // maschera qualunque.
+  it("un codice fiscale italiano scritto da chi vive in Svizzera non si tocca", async () => {
+    // e' il caso vero: un italiano residente a Lugano ha il codice
+    // fiscale italiano. Levargli le lettere per fare spazio ai punti
+    // sarebbe, al contrario, il guasto da cui veniamo.
+    const p = await apri({});
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    await scrivi(p.casella("codice_fiscale"), "RSSMRA90C12H501X");
+    expect(p.casella("codice_fiscale").value).toBe("RSSMRA90C12H501X");
+  });
+
+  it("un numero che non comincia per 756 non si spezza in gruppi che non sono i suoi", () => {
+    expect(formattaAhv("1234567890123")).toBe("1234567890123");
+    expect(formattaAhv("7561234567897")).toBe("756.1234.5678.97");
+    // oltre le tredici cifre non si va: l'AVS ne ha tredici
+    expect(formattaAhv("75612345678979999")).toBe("756.1234.5678.97");
+    // svuotare la casella deve restare possibile
+    expect(formattaAhv("")).toBe("");
+  });
+
+  it("in Italia quella casella resta il codice fiscale, punti compresi", async () => {
+    // la prova che la regola nuova non ha invaso l'Italia: li' i punti
+    // sono rumore di chi incolla e si tolgono, come hanno sempre fatto
+    const p = await apri({});
+    await scrivi(p.casella("codice_fiscale"), "756.1234.5678.97");
+    expect(p.casella("codice_fiscale").value).not.toContain(".");
   });
 });

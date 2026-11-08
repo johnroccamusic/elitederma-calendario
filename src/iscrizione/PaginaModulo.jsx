@@ -35,7 +35,6 @@ import { areaSchedaIscritto, IntestazioneArea, titoloAreaScheda } from "../ui/sc
 import FirmaDito from "../ui/FirmaDito.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, campoDataStyle } from "../ui/stile.js";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
-import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
@@ -46,7 +45,7 @@ import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
 import { nomiStati } from "../comuni-regioni.js";
 // gli elenchi della residenza, uno per Stato: gli stessi della scheda
 // del venditore, perche' la cascata e' una sola (vedi residenza.js)
-import { elencoResidenza, vociStatoResidenza, etichettaResidenza, campoFiscale, ITALIA } from "./residenza.js";
+import { elencoResidenza, vociStatoResidenza, etichettaResidenza, campoFiscale, formattaFiscale, ITALIA } from "./residenza.js";
 // lo stesso confronto della cascata della scheda: "PATERNO" e
 // "Paternò" sono lo stesso posto, e due copie di questa regola
 // prima o poi direbbero cose diverse
@@ -245,15 +244,18 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
         placeholder={spento ? "" : (suggerimento || "")}
         // il suggerimento in grigio chiaro: vedi la regola in index.html
         className="suggerimento-chiaro"
-        inputMode={tipo === "telefono" ? "tel" : chiave === "email" ? "email" : undefined}
+        inputMode={tipo === "telefono" ? "tel" : chiave === "email" ? "email"
+          // il tastierino per le tredici cifre dell'AVS: i punti li
+          // mette la casella
+          : campo.paeseFiscale === "CH" ? "numeric" : undefined}
         onChange={(e) => {
           let v = e.target.value;
           if (maiuscolo) v = v.toUpperCase();
           // stessa regola della scheda: il codice fiscale ha una forma,
           // e la casella la fa rispettare anche qui
-          // fuori Italia l'identificativo e' quello del suo paese: il
-          // filtro del codice italiano gli toglierebbe i punti
-          if (chiave === "codice_fiscale" && campo.formatoItaliano !== false) v = filtraCodiceFiscale(v);
+          // ...e la forma dipende dal paese, con la stessa funzione
+          // della scheda: in Svizzera i punti dell'AVS compaiono da se'
+          if (chiave === "codice_fiscale") v = formattaFiscale(v, campo);
           if (lunghezza) v = v.slice(0, lunghezza);
           onCambia(chiave, v);
         }}

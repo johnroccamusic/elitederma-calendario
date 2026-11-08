@@ -20,6 +20,7 @@ import {
   REGIONI, provinceDiRegione, regioneDiProvincia, comuniDiProvincia,
   capDiComune, provinciaDiComune, normalizzaLuogo, nomiStati,
 } from "../comuni-regioni.js";
+import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import {
   cantoniSvizzeri, localitaDiCantone, npaDiLocalita, cantoneDiLocalita,
 } from "../comuni-svizzera.js";
@@ -152,11 +153,64 @@ export function vocePerStato(statoScritto, aManoLibera) {
 // Fuori si scrive quello che c'e' sul documento, e nessuno lo corregge.
 export function campoFiscale(campo, elenco) {
   if (campo?.chiave !== "codice_fiscale") return campo;
-  if (elenco?.stato === ITALIA) return { ...campo, formatoItaliano: true };
-  const senzaMisura = { ...campo, formatoItaliano: false };
+  // il paese viaggia col campo: e' quello che decide come si scrive
+  // quel numero mentre lo si batte (vedi formattaFiscale)
+  if (elenco?.stato === ITALIA) return { ...campo, formatoItaliano: true, paeseFiscale: "IT" };
+  const senzaMisura = { ...campo, formatoItaliano: false, paeseFiscale: elenco?.paese || "" };
   delete senzaMisura.lunghezza;
   delete senzaMisura.lunghezzaEsatta;
   return senzaMisura;
+}
+
+// I PUNTI DELL'AVS LI METTE LA CASELLA (8/11/2026, chiesto dal titolare
+// provando a iscrivere un'allieva svizzera: «mentre scrivi non appaiono
+// i punti automaticamente, che sarebbe perfetto»).
+//
+// L'AVS si scrive 756.1234.5678.97, e quei punti non sono un vezzo: e'
+// un numero di tredici cifre che si copia guardando una tessera, e
+// tredici cifre di fila non si rileggono per controllare se si e'
+// battuto giusto. A gruppi si'. Quindi si battono le sole cifre.
+//
+// DUE REGOLE, E TUTTE E DUE SONO PROTEZIONI:
+//
+// 1. SE C'E' UNA LETTERA NON SI TOCCA NIENTE. Un italiano che vive in
+//    Svizzera in quella casella ci scrive il suo codice fiscale:
+//    levargli le lettere per fare spazio ai punti sarebbe, al
+//    contrario, lo stesso guasto da cui veniamo — il filtro italiano
+//    che mangiava l'AVS.
+// 2. SI RAGGRUPPA SOLO QUELLO CHE STA DIVENTANDO UN AVS, cioe' le
+//    cifre che cominciano per 756 (il codice della Svizzera, uguale
+//    per tutti). Un identificativo numerico di un altro genere non si
+//    spezza in gruppi che non sono i suoi.
+//
+// E un punto non si appiccica MAI in coda a un gruppo finito: con
+// «756.» gia' scritto, il tasto cancella toglierebbe il punto, la
+// formattazione lo rimetterebbe, e la casella sembrerebbe inchiodata.
+export function formattaAhv(testo) {
+  const scritto = String(testo ?? "");
+  if (/[^\d.\s-]/.test(scritto)) return scritto;
+  const cifre = scritto.replace(/\D/g, "").slice(0, 13);
+  if (!"756".startsWith(cifre.slice(0, 3))) return scritto;
+  return [cifre.slice(0, 3), cifre.slice(3, 7), cifre.slice(7, 11), cifre.slice(11, 13)]
+    .filter(Boolean).join(".");
+}
+
+/** Cosa fa la casella fiscale mentre si scrive, secondo il paese.
+ *
+ *  Sta qui e non nelle due caselle che la chiamano — la scheda del
+ *  venditore e il modulo dell'allieva — perche' due copie vorrebbero
+ *  dire un numero accettato di qua e rifiutato di la', sullo stesso
+ *  documento. */
+export function formattaFiscale(testo, campo) {
+  // L'ITALIA E' L'UNICO PAESE DI CUI SAPPIAMO ABBASTANZA PER CORREGGERE
+  // CHI SCRIVE: il codice fiscale ha una forma obbligata e la casella
+  // la fa rispettare. Senza campo (la pagina delle impostazioni, che
+  // disegna i campi senza una residenza) vale la regola di sempre.
+  if (campo?.formatoItaliano !== false) return filtraCodiceFiscale(testo);
+  if (campo?.paeseFiscale === "CH") return formattaAhv(testo);
+  // degli altri 230 Stati non sappiamo niente: si scrive quello che c'e'
+  // sul documento, e nessuno lo corregge
+  return testo;
 }
 
 /** L'etichetta di un campo secondo lo Stato (Provincia -> Cantone...). */

@@ -3418,6 +3418,38 @@ L'avviso dei sedici caratteri nomina «il codice fiscale» e non
 l'etichetta intera (`nomeAvviso`): esce solo per chi risiede in Italia,
 dove quella cosa si chiama cosi'.
 
+**E I PUNTI DELL'AVS LI METTE LA CASELLA** (8/11/2026, chiesto dal
+titolare provando l'inserimento: «mentre scrivi non appaiono i punti
+automaticamente, che sarebbe perfetto»). Si battono le sole cifre e
+`756.1234.5678.97` si compone da se', cifra dopo cifra; sul telefono
+esce il tastierino numerico.
+
+**Quel numero non si puo' CALCOLARE, e non e' una mancanza**: dal 1°
+luglio 2008 l'AVS e' *non significativo* — `756` (la Svizzera) + nove
+cifre **estratte a caso** + una cifra di controllo EAN-13 — e dentro non
+c'e' niente della persona, apposta, perche' il vecchio numero conteneva
+data di nascita e sesso. Il codice fiscale italiano si calcola perche'
+*contiene* nome, sesso, data e comune; l'AVS lo assegna la Centrale di
+compensazione e si copia dalla tessera. L'unica automazione possibile su
+di lui e' il **controllo** della cifra finale, che prenderebbe una cifra
+invertita o saltata: offerta al titolare, **non ancora chiesta**.
+
+La formattazione sta in `formattaFiscale(testo, campo)` (residenza.js),
+che e' l'unico posto in cui si decide cosa fa quella casella mentre si
+scrive: la chiamano sia la scheda del venditore sia il modulo
+dell'allieva, perche' due copie vorrebbero dire un numero accettato di
+qua e rifiutato di la', sullo stesso documento. Il paese viaggia col
+campo (`paeseFiscale`, scritto da `campoFiscale`). Due regole, e sono
+tutte e due protezioni: **se c'e' una lettera non si tocca niente** (un
+italiano che vive a Lugano in quella casella ci scrive il suo codice
+fiscale, e levargli le lettere per fare spazio ai punti sarebbe, al
+contrario, il guasto da cui veniamo) e **si raggruppa solo cio' che sta
+diventando un AVS**, cioe' le cifre che cominciano per 756. Un punto non
+si appiccica mai in coda a un gruppo finito: con «756.» gia' scritto il
+tasto cancella toglierebbe il punto, la formattazione lo rimetterebbe, e
+la casella sembrerebbe inchiodata. Prove in
+`prove/residenza-svizzera.test.jsx`, dove si batte una cifra alla volta.
+
 **I DUE STATI SUBITO DOPO IL NOME** (7/11/2026, dettato dal titolare
 dopo averlo provato davvero: «l'ordine deve essere nome, cognome, stato
 di nascita, stato di residenza, poi i dati della nascita e tutto il
