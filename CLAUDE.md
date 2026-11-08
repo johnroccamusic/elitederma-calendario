@@ -3765,14 +3765,19 @@ iscrizioni sono di questa fiera» vorrebbero dire due numeri diversi
 sulla stessa fiera, e quello sbagliato sarebbe sempre quello che si
 guarda.
 
-**Quello che NON è stato toccato, e va deciso:** il **Conto** della
-fiera. Oggi dice se l'evento è andato in pari sulle sue spese e sulle
-vendite del banco, in imponibile; le iscrizioni ai corsi non ci entrano.
-Farle entrare cambierebbe un numero di soldi che ha una convenzione sua
-— e «quanto ha reso la fiera» con dentro un corso che partirà a gennaio
-è una domanda diversa da «la fiera si è pagata». Da chiedere, non da
-indovinare. E il flag **non va sul modulo dell'allieva**: è roba nostra,
-quindi non sta in `CAMPI_MODULO` e non ha una spunta in Impostazioni.
+**Il Conto della fiera NON cambia, ed è deciso** (8/11/2026, il
+titolare: «non devo farci entrare le iscrizioni, elencale e basta»). Il
+Conto continua a dire una cosa sola: se l'evento è andato in pari sulle
+sue spese e sulle vendite del banco, in imponibile. Le iscrizioni ai
+corsi restano fuori, e la sezione nuova le **elenca** senza entrare in
+nessun totale di quel riquadro — «quanto ha reso la fiera» con dentro un
+corso che partirà a gennaio sarebbe una risposta a un'altra domanda. I
+due numeri in cima a «Iscrizioni in fiera» (pattuito e incassato)
+appartengono a quella sezione e non si sommano a niente altrove: chi
+guarda il Conto legge la fiera, chi guarda la sezione legge i corsi.
+
+E il flag **non va sul modulo dell'allieva**: è roba nostra, quindi non
+sta in `CAMPI_MODULO` e non ha una spunta in Impostazioni.
 
 Prove in `prove/vendita-fiera.test.jsx` (32): le regole — il giorno a
 Roma contro il giorno UTC, quali fiere il flag può nominare, le
