@@ -87,6 +87,8 @@ import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import FlagVenditaFiera from "./eventi/FlagVenditaFiera.jsx";
 import { testoErroreFunzione } from "./errore-funzione.js";
+import { cercaProdottiPerTesto } from "./pos/prezzo-al-banco.js";
+import { periodoFiera, oggiRoma } from "./eventi/fiera-iscrizioni.js";
 import { statoDi, aggiornaStatoDopoAcconto, iscrittiAttiviDi } from "./iscrizioni/stato.js";
 import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
 import { INDIRIZZO_APP } from "./indirizzo.js";
@@ -5669,6 +5671,45 @@ export function scontiPerRigaCarrello({
     sconti = riproporzionaSconti({ sconti, lordi, concordata, scontoApplicato });
   }
   return dettagliDelleRighe(righe, lordi, sconti);
+}
+// LA SIMULAZIONE DEL BANCO: i prezzi di UN prodotto, come li fa il POS.
+//
+// Chiesta dal titolare l'8/11/2026 per l'assistente: «quando scrivo un
+// nome di un prodotto mi dice il prezzo normale, poi se sono in fiera mi
+// dice sconto fiera in contanti, il prezzo finale, e sconto fiera POS, il
+// prezzo finale. In pratica una specie di simulazione del POS banco.»
+//
+// NON RICALCOLA NIENTE. Costruisce un carrello di una riga — come fa
+// `aggiungiAlCarrello` — e lo passa a `scontiPerRigaCarrello`, la stessa
+// funzione che scrive il prezzo sullo scontrino, una volta per metodo di
+// pagamento, esattamente come `fasceDelPagamento`. Un secondo conto qui
+// vorrebbe dire un prezzo detto dall'assistente e un prezzo incassato dal
+// banco che possono non coincidere: e' il guasto del 7/11/2026, quando le
+// due copie della stessa formula si sono staccate per davvero.
+export function prezziAlBancoDi(prodotto, { fasceCarta = null, fasceContanti = null, quantita = 1 } = {}) {
+  const prezzo = prezzoAlPubblico(prodotto);
+  if (!(prezzo > 0)) return null;
+  const pezzi = Math.max(1, Number(quantita) || 1);
+  const carrello = [{ prodottoId: prodotto.id, nome: prodotto.nome, prezzo, quantita: pezzi }];
+  const prodottiPerId = { [prodotto.id]: prodotto };
+  const subtotale = round2(prezzo * pezzi);
+  const conto = (fasce, contanti) => {
+    const righe = scontiPerRigaCarrello({ carrello, prodottiPerId, subtotale, scontoApplicato: null, fasce, contanti });
+    const r = righe[0] || {};
+    return { pct: r.pct || 0, sconto: r.sconto || 0, totale: r.totale ?? subtotale, unitario: r.unitario ?? prezzo };
+  };
+  // Senza costo d'acquisto in anagrafica non c'e' margine, quindi non c'e'
+  // niente da cedere e la fascia vale zero. Il prodotto si nomina
+  // comunque, col prezzo pieno, e si dice perche': «non risulta il costo
+  // d'acquisto» e' un'informazione, un prodotto che non si trova e' un
+  // dubbio.
+  const senzaMargine = marginePercentualeDi(prodotto) == null;
+  return {
+    id: prodotto.id, nome: prodotto.nome || "", sku: prodotto.sku || "",
+    quantita: pezzi, listino: subtotale, senzaMargine,
+    contanti: fasceCarta ? conto(fasceCorsiPerPagamento(fasceCarta, fasceContanti, true), true) : null,
+    carta: fasceCarta ? conto(fasceCarta, false) : null,
+  };
 }
 // IL RIPROPORZIONAMENTO, IN UN POSTO SOLO. Se la somma delle righe non fa
 // lo sconto del totale — per i centesimi, per il tetto al subtotale, o
@@ -85497,6 +85538,43 @@ function Gestionale() {
   // risolto dalla distinta: ogni pagina che chiede un margine ottiene la
   // stessa risposta, senza doversi ricordare di risolverlo da sola.
   const prodottiShop = useMemo(() => conCostoDeiBundle(prodottiShopGrezzi, bundleComponenti), [prodottiShopGrezzi, bundleComponenti]);
+  // I PREZZI DEL BANCO PER L'ASSISTENTE (8/11/2026).
+  //
+  // Le due tabelle della fiera sono le stesse che legge il POS (Genera
+  // Coupon -> Sconti eventi), non una copia: se domani si cambia una
+  // percentuale la', l'assistente la dice da subito.
+  const [fasceEventiCartaAssistente] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CARTA, null);
+  const [fasceEventiContantiAssistente] = useImpostazioneCondivisa(CHIAVE_FASCE_EVENTI_CONTANTI, []);
+  // «SE SONO IN FIERA»: una fiera i cui giorni contengono oggi. Il giorno
+  // lo decide `periodoFiera` + `oggiRoma`, gli stessi di «Iscrizioni in
+  // fiera»: due idee di «i giorni della fiera» un giorno si staccano.
+  const fieraApertaOggi = useMemo(() => {
+    const oggi = oggiRoma();
+    return (eventi || []).find((e) => {
+      if (!e?.id || e.stato === "annullato") return false;
+      const p = periodoFiera(e);
+      return !!p && p.dal <= oggi && oggi <= p.al;
+    }) || null;
+  }, [eventi]);
+  // useMemo e non useCallback: in questo file useCallback non e' importato
+  const prezziAlBanco = useMemo(() => (testo) => {
+    const trovati = cercaProdottiPerTesto(testo, prodottiShop);
+    if (!trovati.length) return null;
+    // la tabella carta decide se lo sconto fiera esiste: e' la stessa
+    // condizione del POS (`tabellaFieraCarta`), dove una serie tutta a
+    // zero vuol dire «nessuno l'ha scritta»
+    const tabellaCarta = serieScontoScritta(fasceEventiCartaAssistente) ? fasceEventiCartaAssistente : null;
+    const inFiera = !!fieraApertaOggi && !!tabellaCarta;
+    return {
+      fiera: inFiera ? { nome: fieraApertaOggi.nome || "", citta: fieraApertaOggi.citta || "" } : null,
+      prodotti: trovati
+        .map((pr) => prezziAlBancoDi(pr, {
+          fasceCarta: inFiera ? tabellaCarta : null,
+          fasceContanti: fasceEventiContantiAssistente,
+        }))
+        .filter(Boolean),
+    };
+  }, [prodottiShop, fasceEventiCartaAssistente, fasceEventiContantiAssistente, fieraApertaOggi]);
   const [impostazioniIva, setImpostazioniIva] = useState(null);
   const [intestazioneSocieta, setIntestazioneSocieta] = useState(null);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
@@ -87505,6 +87583,7 @@ function Gestionale() {
             ruolo={ruoloUtente === "programmatore" || ruoloUtente === "amministratore" ? "amministrazione"
               : utenteLoggato.masterId ? "master" : utenteLoggato.assistenteId ? "assistenti"
               : (venditoreLoggato || utenteLoggato.venditoreId) ? "venditori" : "tutti"}
+            prezziAlBanco={prezziAlBanco}
             onApriRegolamenti={() => setView("regolamenti")}
           />
         </Suspense>

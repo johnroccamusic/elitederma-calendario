@@ -3653,6 +3653,90 @@ cancella niente. In `prove/residenza-a-cascata.test.jsx` la prova che
 diceva «una residenza svizzera apre in scrittura libera» adesso dice
 il contrario: era giusta finché quell'elenco non c'era.
 
+### «Scrivo un prodotto e mi dice i prezzi del banco» (8/11/2026)
+
+Il titolare: «quando scrivo un nome di un prodotto mi dice il prezzo
+normale, poi se sono in fiera mi dice sconto fiera in contanti, il prezzo
+finale, e sconto fiera POS, il prezzo finale. In pratica una specie di
+simulazione del POS banco».
+
+**Risponde il browser, non il modello.** Scritto un nome di prodotto
+nell'assistente flottante, la risposta compare **subito**: i prezzi li sa
+gia' l'app, e chiederli a un modello vorrebbe dire aspettare, pagare, e
+far dire delle cifre a chi puo' sbagliarle. Se il testo non nomina nessun
+prodotto la domanda va al modello come sempre.
+
+**E il conto e' quello del POS, non un secondo conto.** `prezziAlBancoDi`
+(App.jsx, accanto a `scontiPerRigaCarrello`) costruisce un carrello di
+UNA riga — come fa `aggiungiAlCarrello` — e lo passa a
+`scontiPerRigaCarrello`, la stessa funzione che scrive il prezzo sullo
+scontrino, una volta per metodo di pagamento, esattamente come
+`fasceDelPagamento`. Un secondo conto qui vorrebbe dire un prezzo detto
+dall'assistente e un prezzo incassato dal banco che possono non
+coincidere: e' il guasto del 7/11/2026, quando le due copie della stessa
+formula si sono staccate per davvero. Una prova confronta le due strade
+sugli stessi centesimi.
+
+Per lo stesso motivo la simulazione **nasce in App.jsx e arriva al
+pannello come prop** (`prezziAlBanco`): il conto vive dove vivono le
+funzioni del POS, e il pannello — che App.jsx importa — non puo'
+importarlo indietro. Senza la prop il pannello funziona come prima.
+
+**«Se sono in fiera»** vuol dire: c'e' un evento i cui giorni contengono
+oggi (`periodoFiera` + `oggiRoma`, gli stessi di «Iscrizioni in fiera»:
+due idee dei giorni di una fiera un giorno si staccano) **e** la tabella
+carta degli eventi e' scritta. Altrimenti si legge il solo prezzo di
+listino, e la riga lo dice. Le due tabelle sono quelle che legge il POS
+(Genera Coupon -> Sconti eventi): cambiata una percentuale li',
+l'assistente la dice da subito.
+
+Il riconoscimento del testo sta in `src/pos/prezzo-al-banco.js`, e **li'
+dentro non si calcola nessun prezzo**. Ogni parola scritta dev'essere
+l'inizio di una parola del nome o dello sku («lamin ess» trova «Kit
+laminazione essential»), le paroline e le parole del prezzo si buttano, e
+serve almeno una parola di tre lettere: senza quelle due prudenze «come
+registro un cliente» diventerebbe la ricerca di un prodotto. Un prodotto
+**senza costo d'acquisto** si nomina lo stesso, col prezzo pieno, e dice
+perche' non ha sconto: un prodotto che non si trova e' un dubbio.
+
+Prove in `prove/prezzo-al-banco.test.jsx` (13).
+
+### L'errore di una edge function dice perche' (8/11/2026)
+
+Scrivendo nell'assistente arrivava **«Edge Function returned a non-2xx
+status code»**. La funzione il motivo lo diceva — nel corpo, con
+`{ ok: false, errore }` e stato 502 — ma `supabase.functions.invoke`
+davanti a una risposta non-2xx lascia `data` **nullo** e appende il corpo
+a `error.context`: quindi il classico `data?.errore || error?.message`
+mostra sempre la frase inutile. **Un errore che non dice niente manda a
+cercare il guasto nel posto sbagliato**, ed e' costata una diagnosi —
+chiave, dati e permessi, tutti innocenti.
+
+`testoErroreFunzione` quel corpo lo leggeva gia', ma viveva dentro
+App.jsx: ora sta in **`src/errore-funzione.js`**, un posto solo, e la
+usano il monolite (9 punti), l'assistente flottante, Chiedi ai dati e
+Regolamenti. Nel banco di prova `rispondiCon` accetta una `Response`,
+cosi' una risposta che NON e' 2xx si puo' provare: prima era impossibile,
+ed e' il motivo per cui nessuna prova aveva preso questo caso.
+
+**E il motivo, appena l'errore ha parlato, era questo:** «Il modello ha
+risposto 400: "thinking.type.enabled" is not supported for this model.
+Use "thinking.type.adaptive" and "output_config.effort"». Su
+`claude-sonnet-5-5` il **tetto di token del ragionamento non esiste
+piu'**: `budget_tokens` e' rifiutato, e si dice quanto impegnarsi
+(`output_config.effort`) invece di quanti token. `assistente-regole`
+manda ora `thinking: { type: "adaptive" }` con **`effort: "low"`**, che e'
+il gradino di chi deve rispondere subito — la risposta al banco si
+ascolta in piedi. Era l'unico punto in tutte le edge function che mandava
+un budget.
+
+Da qui una regola per quando l'assistente «non risponde»: **il motivo e'
+quasi sempre gia' scritto**, nel corpo della risposta o nei log della
+funzione. Si guarda quello prima di sospettare la chiave, i dati o i
+permessi.
+
+Prove in `prove/errore-funzione.test.jsx` (5).
+
 ### «Vendita fiera»: l'iscrizione chiusa al banco (8/11/2026)
 
 Il titolare, con la fiera di Napoli aperta: «nel modulo iscrizione in

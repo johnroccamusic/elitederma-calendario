@@ -73,16 +73,81 @@ function Testo({ testo }) {
 // rileggere: «dalle regole» e' oro (una decisione presa), i dati sono
 // verdi (un numero vero, controllabile qui sotto), la guida e' navy, il
 // ragionamento e' azzurro e dichiara di non essere una regola.
-const BORDO_REGISTRO = { regole: GOLD, misto: GOLD, dati: "#2F7D63", guida: NAVY, conversazione: CREAM_BORDER, ragionamento: "#8FA3C9" };
+const BORDO_REGISTRO = { regole: GOLD, misto: GOLD, dati: "#2F7D63", guida: NAVY, conversazione: CREAM_BORDER, ragionamento: "#8FA3C9", prezzo: "#2F7D63" };
 const ETICHETTA_REGISTRO = {
   misto: "In parte dalle regole, in parte un ragionamento",
   ragionamento: "Un ragionamento, non una regola scritta",
   dati: "Dai dati dell'app, adesso",
   guida: "Come funziona l'app",
+  prezzo: "I prezzi del banco, adesso",
 };
-const COLORE_ETICHETTA = { dati: "#2F7D63", guida: NAVY, misto: "#4C6A9A", ragionamento: "#4C6A9A" };
+const COLORE_ETICHETTA = { dati: "#2F7D63", guida: NAVY, misto: "#4C6A9A", ragionamento: "#4C6A9A", prezzo: "#2F7D63" };
 
-export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi = [], isMobile = false, onApriRegolamenti = null }) {
+// ---------- I PREZZI DEL BANCO ----------
+// Il conto non e' qui: arriva gia' fatto da `prezziAlBancoDi` (App.jsx),
+// che e' il conto del POS. Qui si legge e si dice.
+function euro(n) {
+  return `${(Number(n) || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} \u20ac`;
+}
+function pct(n) {
+  const v = Number(n) || 0;
+  return `${v.toLocaleString("it-IT", { maximumFractionDigits: 1 })}%`;
+}
+
+// Quello che la voce legge: le stesse cifre della scheda, in una frase.
+export function testoDeiPrezzi(prezzi) {
+  const righe = (prezzi?.prodotti || []).map((p) => {
+    const pezzi = [`${p.nome}: prezzo normale ${euro(p.listino)}`];
+    if (p.contanti) pezzi.push(`in contanti meno ${pct(p.contanti.pct)}, ${euro(p.contanti.totale)}`);
+    if (p.carta) pezzi.push(`col POS meno ${pct(p.carta.pct)}, ${euro(p.carta.totale)}`);
+    return pezzi.join("; ");
+  });
+  const testa = prezzi?.fiera ? `Prezzi al banco di ${prezzi.fiera.nome}. ` : "Nessuna fiera aperta oggi, quindi il prezzo e' quello di listino. ";
+  return testa + righe.join(". ");
+}
+
+function RigaPrezzo({ etichetta, percentuale, importo, forte = false }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0" }}>
+      <span style={{ flex: "1 1 auto", minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED }}>{etichetta}</span>
+      {percentuale != null && (
+        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2F7D63", whiteSpace: "nowrap" }}>-{pct(percentuale)}</span>
+      )}
+      <span style={{ ...fontDisplay, fontSize: forte ? 15 : 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{euro(importo)}</span>
+    </div>
+  );
+}
+
+function SchedaPrezzi({ prezzi }) {
+  return (
+    <div data-campo="prezzi-al-banco">
+      {prezzi.fiera
+        ? <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            Al banco di <b style={{ color: NAVY }}>{prezzi.fiera.nome}</b>
+          </div>
+        : <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            Nessuna fiera aperta oggi: al banco si paga il listino.
+          </div>}
+      {prezzi.prodotti.map((p) => (
+        <div key={p.id} data-campo="prezzo-prodotto" style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 7, marginTop: 7 }}>
+          <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{p.nome}</div>
+          <RigaPrezzo etichetta="Prezzo normale" importo={p.listino} />
+          {p.contanti && <RigaPrezzo etichetta="Fiera, in contanti" percentuale={p.contanti.pct} importo={p.contanti.totale} forte />}
+          {p.carta && <RigaPrezzo etichetta="Fiera, POS o carta" percentuale={p.carta.pct} importo={p.carta.totale} forte />}
+          {/* senza costo d'acquisto non c'e' margine da cedere: lo dice,
+              invece di mostrare uno sconto a zero senza motivo */}
+          {p.senzaMargine && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: "#B3261E", marginTop: 3 }}>
+              Su questo nessuno sconto: non risulta il costo d'acquisto.
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi = [], isMobile = false, onApriRegolamenti = null, prezziAlBanco = null }) {
   const [aperto, setAperto] = useState(false);
   // LA SCHEDA PROPOSTA: quando chi amministra da' una disposizione in
   // dialogo, l'assistente la rimanda gia' scritta come regola. Resta qui,
@@ -128,6 +193,22 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi =
   // lo usano sia il tasto «Chiedi» sia la conversazione a voce
   async function rispondi(d) {
     setOccupato(true);
+    // IL NOME DI UN PRODOTTO SI RISPONDE QUI, SENZA IL MODELLO.
+    //
+    // Chiesto dal titolare l'8/11/2026: «una specie di simulazione del
+    // POS banco». I prezzi li calcola il POS (`prezziAlBancoDi`), quindi
+    // non c'e' niente da chiedere a un modello — e chiederglielo
+    // vorrebbe dire aspettare, pagare, e far dire delle cifre a chi puo'
+    // sbagliarle. Se il testo non nomina nessun prodotto si prosegue
+    // come sempre.
+    try {
+      const prezzi = prezziAlBanco?.(d);
+      if (prezzi?.prodotti?.length) {
+        setScambi((s) => [...s, { domanda: d, prezzi, registro: "prezzo" }]);
+        setOccupato(false);
+        return testoDeiPrezzi(prezzi);
+      }
+    } catch { /* se la simulazione non riesce, risponde il modello */ }
     const cronologia = scambiRef.current.filter((s) => s.risposta).slice(-3).map((s) => ({ domanda: s.domanda, risposta: s.risposta }));
     try {
       const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, permessi, cronologia } });
@@ -264,7 +345,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi =
                           {ETICHETTA_REGISTRO[s.registro]}
                         </div>
                       )}
-                      <Testo testo={s.risposta} />
+                      {s.prezzi ? <SchedaPrezzi prezzi={s.prezzi} /> : <Testo testo={s.risposta} />}
                       {s.registro === "dati" && <Numeri righe={s.righe} totale={s.totaleRighe} sql={s.sql} nota={s.nota} />}
                       {s.citati?.length > 0 && (
                         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>

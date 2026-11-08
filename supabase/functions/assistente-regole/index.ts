@@ -68,10 +68,17 @@ import { esitoInterrogazione, registroFinale, senzaRisposta } from "../_shared/a
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const MODELLO = "claude-sonnet-5-5";
-// Quanto puo' pensare prima di parlare. Il ragionamento esteso e' quello
-// che gli fa notare che un risultato non torna; tenuto corto perche' la
-// risposta spesso viene letta ad alta voce e si aspetta in piedi.
-const PENSIERO = 1600;
+// QUANTO PUO' PENSARE PRIMA DI RISPONDERE. Il ragionamento esteso e'
+// quello che gli fa notare che un risultato non torna.
+//
+// Era un tetto di token (`budget_tokens: 1600`), scelto corto perche' la
+// risposta spesso si ascolta in piedi al banco. Dall'8/11/2026 quel
+// tetto NON ESISTE PIU' su questo modello: la richiesta torna 400
+// («"thinking.type.enabled" is not supported for this model») e
+// l'assistente smette di rispondere a chiunque. Si dice quanto
+// impegnarsi, non quanti token: `low` e' il gradino di chi deve
+// rispondere subito.
+const IMPEGNO = "low";
 const TETTO_RISPOSTA = 3200;
 // Cinque interrogazioni bastano a guardare cosa esiste, correggere il
 // filtro e rispondere. Oltre, si risponde con quello che si ha.
@@ -160,7 +167,8 @@ async function chiediAlModello(chiave: string, system: string, messaggi: unknown
     model: MODELLO,
     max_tokens: TETTO_RISPOSTA,
     system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-    thinking: { type: "enabled", budget_tokens: PENSIERO },
+    thinking: { type: "adaptive" },
+    output_config: { effort: IMPEGNO },
     messages: messaggi,
   };
   if (strumenti.length) corpo.tools = strumenti;
