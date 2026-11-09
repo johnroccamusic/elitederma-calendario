@@ -3585,11 +3585,11 @@ Il PDF che l'allieva riceve allegato alla conferma scriveva ancora «Dati
 dell'allievo/a» e «Codice fiscale» mentre la schermata diceva «Dati
 anagrafici» e «Identificativo fiscale personale (TIN)». Non e' una
 differenza di stile: chiamare «codice fiscale» un AHV svizzero e' dire
-una cosa falsa dentro un documento che una persona sottoscrive. Allineato
-— e **va pubblicata `modulo-ricevuto`**, che e' la funzione che compone
-quel PDF: finche' non lo e', ogni copia nuova esce con le parole vecchie.
-I PDF gia' archiviati non si toccano e non si devono toccare: sono la
-fotografia di quello che quella persona ha firmato quel giorno.
+una cosa falsa dentro un documento che una persona sottoscrive. Allineato,
+e **`modulo-ricevuto` e' pubblicata** (versione 28, verificata il
+9/11/2026: i tre file in produzione sono identici al repo). I PDF gia'
+archiviati non si toccano e non si devono toccare: sono la fotografia di
+quello che quella persona ha firmato quel giorno.
 
 **L'area si chiama «Dati anagrafici»** e non piu' «Dati dell'allievo», e
 dentro ha un'intestazione sua: **«Dati residenza:»**, subito dopo il
@@ -3700,6 +3700,36 @@ registro un cliente» diventerebbe la ricerca di un prodotto. Un prodotto
 perche' non ha sconto: un prodotto che non si trova e' un dubbio.
 
 Prove in `prove/prezzo-al-banco.test.jsx` (13).
+
+### Le edge function dell'assistente, pubblicate (9/11/2026)
+
+Il titolare, davanti al tondo che rispondeva ancora 400: «l'assistente non
+trova ancora nulla». Il motivo era che **la correzione viveva solo nel
+repo**: su `claude-sonnet-5-5` il tetto di token del ragionamento non
+esiste piu' (`thinking.type.enabled` -> 400), era corretto dall'8/11 e non
+era mai stato pubblicato. Una funzione non pubblicata non e' un ramo che
+non si usa: e' un tasto che fa un'altra cosa.
+
+Pubblicate, dopo il «si» del titolare:
+
+- **`assistente-regole` v7**, che porta anche il lavoro del 4/11 rimasto
+  in attesa (`analisi_copertura`, il riquadro «DA QUANDO CI SONO I DATI» e
+  le quattro regole sul periodo);
+- **`analisi-domanda` v5**: in produzione c'era ancora quella del
+  25/10/2026, con **sei viste** invece di quattordici. «Chiedi ai dati»
+  non sapeva niente di calendario, corsi, kit, prodotti e costi dei kit,
+  e nemmeno delle date di copertura.
+- **`modulo-ricevuto`: niente da fare.** La versione 28 era gia' allineata
+  al repo, diciture del PDF comprese; la riga che la dava in attesa era
+  vecchia. **Prima di pubblicare si guarda cosa c'e' di la'**: il
+  confronto fra i file serviti e quelli del repo dice in un secondo se
+  c'e' davvero qualcosa da mandare.
+
+**E si verifica dopo, non si dichiara.** Pubblicata una funzione, la si
+rilegge (`get_edge_function`) e si confrontano i file **byte per byte**
+con quelli del repo: su `assistente-regole` i quattro file risultano
+identici. Vale la stessa regola del deploy su Vercel — lo sha, non
+l'impressione.
 
 ### «Importa pacchetto»: la lista di un altro kit (9/11/2026)
 
