@@ -26614,6 +26614,24 @@ function TendinaCercabile({ valore, onCambia, voci, placeholder = "Tutti", style
 
 function CampoRicerca({ value, onChange, placeholder, style }) {
   const ref = React.useRef(null);
+  const scritto = String(value ?? "") !== "";
+  // SVUOTARE LA RIGA E' UN TASTO, non venti tocchi su «cancella».
+  // Chiesto dal titolare al banco della fiera: si cerca un prodotto, si
+  // mette nel carrello, e per cercare il prossimo il nome di prima e'
+  // ancora li'. Su un telefono quella casella si svuota tenendo premuto
+  // il tasto di cancellazione, col prodotto appena venduto in mano.
+  //
+  // Il tasto chiama `onChange` con una riga vuota, cosi' chi usa il campo
+  // non deve sapere niente di questo: i trenta punti dell'app che lo
+  // montano leggono tutti e solo `e.target.value`, e il loro «ricerca
+  // cambiata» si svuota per la strada che gia' conoscono — filtri che si
+  // riazzerano e pagina che torna alla prima compresi.
+  function svuota() {
+    onChange?.({ target: { value: "" }, currentTarget: { value: "" }, preventDefault() {}, stopPropagation() {} });
+    // e si torna nella casella: si svuota per scrivere un altro nome,
+    // non per guardarla vuota. Sul telefono riapre la tastiera.
+    ref.current?.focus();
+  }
   return (
     <div style={{ position: "relative", ...style }}>
       <input
@@ -26623,8 +26641,22 @@ function CampoRicerca({ value, onChange, placeholder, style }) {
         placeholder={placeholder}
         enterKeyHint="search"
         onKeyDown={(e) => { if (e.key === "Enter") ref.current?.blur(); }}
-        style={{ ...inputStyle, paddingRight: 44, width: "100%", boxSizing: "border-box", border: "none", boxShadow: INCAVO_LEGGERO, background: "#fff" }}
+        style={{ ...inputStyle, paddingRight: scritto ? 82 : 44, width: "100%", boxSizing: "border-box", border: "none", boxShadow: INCAVO_LEGGERO, background: "#fff" }}
       />
+      {/* la × compare solo con qualcosa scritto: su una casella vuota
+          sarebbe un tasto che non fa niente, cioe' un dubbio */}
+      {scritto && (
+        <button
+          type="button"
+          onClick={svuota}
+          data-campo="svuota-ricerca"
+          title="Svuota la ricerca"
+          aria-label="Svuota la ricerca"
+          style={{ position: "absolute", right: 42, top: "50%", transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: GRIGIO_LEGGIBILE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+        </button>
+      )}
       <button
         type="button"
         onClick={() => ref.current?.blur()}

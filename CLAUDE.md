@@ -3701,6 +3701,42 @@ perche' non ha sconto: un prodotto che non si trova e' un dubbio.
 
 Prove in `prove/prezzo-al-banco.test.jsx` (13).
 
+### La riga della ricerca si svuota con un tasto (9/11/2026)
+
+Il titolare, dal banco: «quando cerchi un prodotto e lo inserisci, sulla
+riga dove hai scritto il vecchio nome per la ricerca ci vuole il tasto
+cancella per svuotare la riga». Il nome di prima resta scritto anche dopo
+che il prodotto e' nel carrello — e deve restare, perche' al banco si
+batte lo stesso prodotto due volte — ma per cercare il prossimo si
+cancellava lettera per lettera, col prodotto appena venduto in una mano e
+il telefono nell'altra.
+
+La × sta dentro **`CampoRicerca`**, cioe' **in tutte e trenta le righe di
+ricerca dell'app** e non solo in quella del POS: una casella che non si
+svuota e' la stessa noia in Gestione magazzino, nello Storico allievi e
+nello Scadenzario, e aggiungere il tasto in un posto solo vorrebbe dire
+due idee di cos'e' una riga di ricerca.
+
+Tre cose decise li' dentro:
+
+- **compare solo con qualcosa scritto.** Su una casella vuota sarebbe un
+  tasto che non fa niente, cioe' un dubbio;
+- **svuota chiamando `onChange` con una riga vuota**, invece di azzerare
+  uno stato suo. I trenta punti che montano il campo leggono tutti e solo
+  `e.target.value`, quindi il loro «la ricerca e' cambiata» passa dalla
+  strada che conoscono gia': `cambiaFiltro` riporta il POS alla prima
+  pagina, `cambiaRicerca` svuota la selezione. Un tasto che svuotasse la
+  casella lasciando l'elenco filtrato sarebbe peggio di nessun tasto;
+- **il fuoco torna nella casella.** Si svuota per scrivere un altro nome,
+  non per guardarla vuota: sul telefono la tastiera resta aperta.
+
+Resta accanto alla lente, che non cerca niente — chiude la tastiera — e
+per questo serve ancora quando si e' finito di scrivere. Prove in
+`prove/svuota-la-ricerca.test.jsx` (3), col banco vero montato: senza
+niente scritto il tasto non c'e', scritto «pigmento» l'elenco si
+restringe e il tasto compare, premuto la riga e' vuota **e tutti i
+prodotti sono tornati**.
+
 ### L'errore di una edge function dice perche' (8/11/2026)
 
 Scrivendo nell'assistente arrivava **«Edge Function returned a non-2xx
