@@ -5,7 +5,7 @@
 // spunta si salva sull'edizione.
 import { describe, it, expect } from "vitest";
 import React from "react";
-import { listaRaccoltaMateriale, RaccoltaMateriale } from "../src/App.jsx";
+import { listaRaccoltaMateriale, RaccoltaMateriale, repartoPerProdotto, SENZA_REPARTO } from "../src/App.jsx";
 import { monta, attendi, clicca } from "./aiuto.js";
 
 const KIT_PRO = { id: "k1", nome: "Pacchetto PRO Nuovo", corso_id: "c1", tipo: "kit" };
@@ -83,5 +83,71 @@ describe("la pagina di raccolta", () => {
     expect(p2.nodo.querySelector("[data-avanzamento]").textContent).toContain("7 di 10 pezzi");
     expect(p2.tasto("Azzera le spunte")).toBeTruthy();
     await p2.smonta();
+  });
+});
+
+// LA RACCOLTA SI LEGGE REPARTO PER REPARTO (9/11/2026).
+//
+// Il titolare: «la lista è una confusione sia per noi che per la
+// logistica». Chi prepara gira fra gli scaffali, e una fila unica di
+// trenta righe in ordine alfabetico lo fa andare avanti e indietro: ora
+// le righe stanno sotto il loro reparto, e ogni reparto dice quante ne
+// restano — è quello che dice se si può passare al prossimo.
+describe("la raccolta divisa per reparto", () => {
+  const CATEGORIE = [
+    { id: "cat-aghi", nome: "Aghi", categoria_padre_id: null },
+    { id: "cat-aghi-uni", nome: "Aghi Universali", categoria_padre_id: "cat-aghi" },
+    { id: "cat-derm", nome: "Dermografi", categoria_padre_id: null },
+  ];
+  const LEGAMI = [
+    { prodotto_id: "p-aghi", categoria_id: "cat-aghi-uni" },
+    { prodotto_id: "p-horus", categoria_id: "cat-derm" },
+    // p-misteriosa non ha categoria
+  ];
+  const RIGHE = [
+    { chiave: "prodotto::p-aghi", prodottoId: "p-aghi", nome: "Aghi 1RL (5 pz)", quantita: 7, da: ["3 × PRO"] },
+    { chiave: "prodotto::p-horus", prodottoId: "p-horus", nome: "Dermografo Horus", quantita: 3, da: ["riserva"] },
+    { chiave: "prodotto::p-mist", prodottoId: "p-mist", nome: "Scatola senza nome", quantita: 1, da: ["extra"] },
+  ];
+
+  it("ogni riga sta sotto il suo scaffale, e il mucchio senza categoria in fondo", async () => {
+    const p = await monta(
+      <RaccoltaMateriale titolo="NEEDLING · Roma" righe={RIGHE} spunte={{}}
+        onSpunta={() => {}} onAzzera={() => {}} onChiudi={() => {}}
+        repartoDi={repartoPerProdotto(LEGAMI, CATEGORIE)} />,
+    );
+    const testo = p.testo();
+    expect(testo.indexOf("Aghi")).toBeLessThan(testo.indexOf("Dermografi"));
+    expect(testo.indexOf("Dermografi")).toBeLessThan(testo.indexOf(SENZA_REPARTO));
+    // la sottocategoria non compare: si raggruppa per il reparto
+    expect(testo).not.toMatch(/Aghi Universali/);
+    // tutte e tre le righe ci sono ancora
+    expect(p.nodo.querySelectorAll("[data-riga-raccolta]").length).toBe(3);
+    await p.smonta();
+  });
+
+  it("ogni reparto dice quante ne restano, e quando è finito lo dice", async () => {
+    const p = await monta(
+      <RaccoltaMateriale titolo="NEEDLING · Roma" righe={RIGHE}
+        spunte={{ "prodotto::p-horus": { il: "2026-11-09T10:00:00Z", da: "Raf" } }}
+        onSpunta={() => {}} onAzzera={() => {}} onChiudi={() => {}}
+        repartoDi={repartoPerProdotto(LEGAMI, CATEGORIE)} />,
+    );
+    const testo = p.testo();
+    expect(testo).toMatch(/Dermografi\s*1 su 1 · fatto/);
+    expect(testo).toMatch(/Aghi\s*0 di 1/);
+    await p.smonta();
+  });
+
+  it("senza la mappa dei reparti la pagina funziona come prima", async () => {
+    // una pagina che si rompesse perché mancano le categorie sarebbe
+    // peggio di una pagina senza divisioni
+    const p = await monta(
+      <RaccoltaMateriale titolo="NEEDLING · Roma" righe={RIGHE} spunte={{}}
+        onSpunta={() => {}} onAzzera={() => {}} onChiudi={() => {}} />,
+    );
+    expect(p.nodo.querySelectorAll("[data-riga-raccolta]").length).toBe(3);
+    expect(p.testo()).toMatch(new RegExp(SENZA_REPARTO));
+    await p.smonta();
   });
 });

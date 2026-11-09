@@ -1000,6 +1000,87 @@ function categoriaImplicitaDaAltre(id, ids, categorieProdotti) {
 }
 // le righe prodotto-categoria come se ogni padre fosse scritto: e' quello
 // che leggono POS e magazzino al posto della tabella nuda
+// IL REPARTO DI UN PRODOTTO: la categoria RADICE dell'albero dello shop
+// (Aghi, TUTTI I PIGMENTI, Lash Extension…), non la sottocategoria.
+//
+// Chiesto dal titolare il 9/11/2026: «quando creo un kit e inserisco i
+// prodotti li devi dividere per categorie e assegnare l'immagine, la
+// lista è una confusione sia per noi che per la logistica».
+//
+// Perché la RADICE e non la categoria più precisa, misurato sui dati
+// veri: dei 174 prodotti che stanno dentro ai kit, 47 appartengono a più
+// di una categoria, e quasi sempre sono la radice PIÙ una sua figlia
+// («Aghi» + «Aghi Universali»). Raggruppare per la figlia spaccherebbe i
+// pigmenti in Eyebrows/Lips/Eyeliner/Trico, e «Dilution» sta in quattro
+// di quelle insieme — non esisterebbe nemmeno una risposta giusta. Il
+// reparto invece è lo scaffale, che è la domanda di chi prepara.
+//
+// Un prodotto in più REPARTI (il calibro sta in Accessori, HENNE e
+// Progettazione) finisce nel primo in ordine alfabetico: non è il più
+// intelligente, è quello che non cambia da un giorno all'altro — e una
+// lista di raccolta che riordina le righe fa perdere il segno fra uno
+// scaffale e l'altro.
+function repartoPerProdotto(prodottiCategorie, categorieProdotti) {
+  const perId = new Map((categorieProdotti || []).map((c) => [c.id, c]));
+  // la guardia non è teorica: una categoria che si dichiara figlia di se
+  // stessa (o un anello fra due) qui girerebbe per sempre, e la pagina
+  // non si aprirebbe più senza dire perché
+  const radice = (id, passi = 0) => {
+    const c = perId.get(id);
+    if (!c) return null;
+    if (!c.categoria_padre_id || passi > 8) return c;
+    return radice(c.categoria_padre_id, passi + 1) || c;
+  };
+  const mappa = new Map();
+  (prodottiCategorie || []).forEach((pc) => {
+    const r = radice(pc.categoria_id);
+    if (!r) return;
+    const gia = mappa.get(pc.prodotto_id);
+    if (!gia || String(r.nome || "").localeCompare(String(gia.nome || ""), "it") < 0) mappa.set(pc.prodotto_id, r);
+  });
+  return mappa;
+}
+const SENZA_REPARTO = "Senza categoria";
+// Le righe divise per reparto, nell'ordine in cui si gira fra gli
+// scaffali: i reparti in ordine alfabetico e «Senza categoria» in fondo,
+// perché è il mucchio di quello che non ha un posto suo e non deve stare
+// davanti a quello che ce l'ha. Dentro ogni reparto l'ordine di partenza
+// non si tocca.
+function raggruppaPerReparto(righe, repartoDi, prodottoDi = (r) => r.prodottoId) {
+  const gruppi = new Map();
+  (righe || []).forEach((r) => {
+    const nome = repartoDi?.get?.(prodottoDi(r))?.nome || SENZA_REPARTO;
+    if (!gruppi.has(nome)) gruppi.set(nome, []);
+    gruppi.get(nome).push(r);
+  });
+  return [...gruppi.entries()]
+    .map(([nome, dentro]) => ({ nome, righe: dentro }))
+    .sort((a, b) =>
+      (a.nome === SENZA_REPARTO ? 1 : 0) - (b.nome === SENZA_REPARTO ? 1 : 0)
+      || a.nome.localeCompare(b.nome, "it"));
+}
+// l'intestazione di un reparto: la stessa in tutte e due le pagine, o
+// una lista divisa per categorie somiglierebbe a due cose diverse
+function IntestazioneReparto({ nome, nota }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", margin: "12px 0 4px", paddingBottom: 3, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <span style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{nome}</span>
+      {nota ? <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{nota}</span> : null}
+    </div>
+  );
+}
+// il riquadro della foto di un prodotto: lo usano la raccolta in
+// logistica e il contenuto del kit, e due riquadri diversi per la stessa
+// foto si noterebbero passando da una pagina all'altra
+function RiquadroFotoProdotto({ url, lato = 40 }) {
+  return (
+    <span style={{ width: lato, height: lato, borderRadius: 9, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: 2 }}>
+      {url
+        ? <img src={url} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+        : <span style={{ ...fontBody, fontSize: 14, color: MUTED }}>·</span>}
+    </span>
+  );
+}
 function collegamentiConPadri(prodottiCategorie, categorieProdotti) {
   const perProdotto = {};
   (prodottiCategorie || []).forEach((pc) => { (perProdotto[pc.prodotto_id] ||= []).push(pc.categoria_id); });
@@ -80000,7 +80081,7 @@ function listaRaccoltaMateriale({ iscrittiEdizione, statoEdizione, kitDefinizion
 // o si chiude la pagina a meta', si riprende da dove si era. L'ordine
 // delle righe non cambia mentre si spunta, o chi raccoglie perde il
 // segno fra uno scaffale e l'altro.
-function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {} }) {
+function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {}, repartoDi = null }) {
   const prese = righe.filter((r) => spunte?.[r.chiave]).length;
   const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
   const pezziPresi = righe.filter((r) => spunte?.[r.chiave]).reduce((s, r) => s + r.quantita, 0);
@@ -80032,7 +80113,19 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
       </div>
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "12px 16px 90px" }}>
         {righe.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Non c'è ancora niente da raccogliere: nessun iscritto ha scelto un kit e non ci sono accessori.</div>}
-        {righe.map((r) => {
+        {raggruppaPerReparto(righe, repartoDi).map((g) => (
+        <div key={g.nome}>
+        {/* quante ne restano in QUESTO scaffale: è il numero che dice se
+            si può passare al prossimo, e sta accanto al suo nome invece
+            che solo in cima alla pagina */}
+        <IntestazioneReparto
+          nome={g.nome}
+          nota={(() => {
+            const prese = g.righe.filter((r) => spunte?.[r.chiave]).length;
+            return prese === g.righe.length ? `${g.righe.length} su ${g.righe.length} · fatto` : `${prese} di ${g.righe.length}`;
+          })()}
+        />
+        {g.righe.map((r) => {
           const presa = !!spunte?.[r.chiave];
           const url = r.prodottoId ? immaginePerProdotto[r.prodottoId] : null;
           return (
@@ -80045,9 +80138,7 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
               }}
             >
               <span style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: presa ? "#2E7D32" : NAVY, minWidth: 44, textAlign: "center", flexShrink: 0 }}>{r.quantita}</span>
-              <span style={{ width: 40, height: 40, borderRadius: 9, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: 2 }}>
-                {url ? <img src={url} alt="" loading="lazy" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ ...fontBody, fontSize: 14, color: MUTED }}>·</span>}
-              </span>
+              <RiquadroFotoProdotto url={url} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", ...fontBody, fontSize: 15, fontWeight: 700, color: presa ? "#2E7D32" : NAVY, overflowWrap: "anywhere", textDecoration: presa ? "line-through" : "none", textDecorationColor: "#8BC48B" }}>{r.nome}</span>
                 <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
@@ -80059,6 +80150,8 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
             </button>
           );
         })}
+        </div>
+        ))}
         {prese > 0 && onAzzera && (
           <button type="button" onClick={() => { if (window.confirm("Togliere tutte le spunte? La lista resta, si ricomincia a raccogliere.")) onAzzera(); }}
             style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", background: "none", border: "none", cursor: "pointer", marginTop: 10, padding: 6 }}>
@@ -80070,7 +80163,7 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
   );
 }
 
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], categorieProdotti = [], prodottiCategorie = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   const oggiStr = dataOggiStr();
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
@@ -80210,6 +80303,9 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId: corso?.id || null, dataInizio: corsoData.data_inizio || null,
   }), [iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corso?.id, corsoData.data_inizio]);
   const spunteRaccolta = righeRaccolta.filter((r) => (statoEdizione.checklist || {})[r.chiave]).length;
+  // lo scaffale di ogni prodotto: la raccolta si legge reparto per
+  // reparto, come si gira in magazzino
+  const repartoDi = useMemo(() => repartoPerProdotto(prodottiCategorie, categorieProdotti), [prodottiCategorie, categorieProdotti]);
 
   function FotoProdotto({ prodottoId, lato = 34 }) {
     const url = immaginePerProdotto[prodottoId];
@@ -80352,6 +80448,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           righe={righeRaccolta}
           spunte={statoEdizione.checklist || {}}
           immaginePerProdotto={immaginePerProdotto}
+          repartoDi={repartoDi}
           onSpunta={(chiave, acceso) => {
             const attuali = { ...(statoEdizione.checklist || {}) };
             if (acceso) attuali[chiave] = { il: new Date().toISOString(), da: nomeUtente || null }; else delete attuali[chiave];
@@ -80727,7 +80824,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, prodottiImmagini = [], bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, ruoloUtente, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, prodottiImmagini = [], categorieProdotti = [], prodottiCategorie = [], bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, ruoloUtente, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
   // Chi programma non viene mai chiuso fuori. Le fasi servono a impedire
   // che qualcuno cambi per distrazione una scatola gia' partita, non a
   // impedire di rimediare a un errore: quando il dato in app e la realta'
@@ -81455,6 +81552,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
             ) : (
               <PannelloPreparazioneKit
+                categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
                 corsoData={edizioneSel}
                 corso={corsoById[edizioneSel.corso_id]}
                 loc={locById[edizioneSel.location_id]}
@@ -81801,7 +81899,7 @@ function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop,
     </div>
   );
 }
-function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia, onDuplicato, pacchettiImportabili = [] }) {
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia, onDuplicato, pacchettiImportabili = [], repartoDi = null, immaginePerProdotto = {} }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
@@ -82203,8 +82301,14 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         <div style={{ marginTop: 10, marginBottom: 10 }}>
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
           {risultatiKit.map((p) => (
-            <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={rigaRisultato}>
-              {p.nome} <span style={{ color: MUTED, fontSize: 12 }}>· in stock {p.quantita ?? 0}</span>
+            <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={{ ...rigaRisultato, display: "flex", alignItems: "center", gap: 10 }}>
+              <RiquadroFotoProdotto url={immaginePerProdotto[p.id]} lato={30} />
+              <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                {p.nome}
+                <span style={{ color: MUTED, fontSize: 12 }}>
+                  {" · "}{repartoDi?.get?.(p.id)?.nome || SENZA_REPARTO} · in stock {p.quantita ?? 0}
+                </span>
+              </span>
             </div>
           ))}
         </div>
@@ -82224,16 +82328,28 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Dermografo da acquistare a parte</span>
         </label>
       )}
-      {aperto && prodottiKit.map((r) => {
-        const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
-        return (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
-            <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 56, padding: "4px 6px" }} />
-            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-          </div>
-        );
-      })}
+      {/* IL CONTENUTO, DIVISO PER REPARTO E CON LA FOTO. Un kit sono
+          venti-trenta righe, e in fila indiana aghi, pigmenti e cartine
+          si somigliano tutti: chi lo compone non vede cosa manca e chi
+          lo prepara non trova niente. Il nome adesso VA A CAPO invece di
+          essere tagliato: quello che non ci stava era la fine del nome,
+          che su questi prodotti è il formato («Box 10 pz»). */}
+      {aperto && raggruppaPerReparto(prodottiKit, repartoDi, (r) => r.prodotto_id).map((g) => (
+        <div key={g.nome}>
+          <IntestazioneReparto nome={g.nome} nota={`${g.righe.length} ${g.righe.length === 1 ? "riga" : "righe"}`} />
+          {g.righe.map((r) => {
+            const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+            return (
+              <div key={r.id} data-riga-kit="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
+                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
+                <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 56, padding: "4px 6px" }} />
+                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -82355,7 +82471,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 // pacchetti speciali senza corso) con i suoi pacchetti sotto e il tasto
 // per crearne uno nuovo — sempre visibile, senza bisogno di "creare" un
 // contenitore prima di poter vedere l'elenco dei corsi
-function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni, kitApertoId, onImpostaAperto, kitCopiato, onCopia, pacchettiImportabili = [] }) {
+function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni, kitApertoId, onImpostaAperto, kitCopiato, onCopia, pacchettiImportabili = [], repartoDi = null, immaginePerProdotto = {} }) {
   const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -82483,6 +82599,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
             evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
             kitApertoId={kitApertoId} onImpostaAperto={onImpostaAperto} kitCopiato={kitCopiato} onCopia={onCopia}
             pacchettiImportabili={pacchettiImportabili}
+            repartoDi={repartoDi} immaginePerProdotto={immaginePerProdotto}
             onDuplicato={spostaSottoOriginale}
           />
         )
@@ -82495,7 +82612,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
 // da Setting > Documenti e brand): tutti i corsi sono sempre visibili,
 // con i loro pacchetti sotto — ogni pacchetto è anche ciò che compare
 // nella tendina "Pacchetto/Kit" del modulo di iscrizione per quel corso
-function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
+function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKitProdotti, prodottiShop, categorieProdotti = [], prodottiCategorie = [], prodottiImmagini = [], onBack, ricarica }) {
   const isMobile = useIsMobile();
   const corsiOrdinati = corsi.slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const ordinaPacchetti = (arr) => arr.slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
@@ -82532,6 +82649,17 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
         diploma_path: k.diploma_path || null, diploma_nome: k.diploma_nome || null,
       }));
   }, [kitDefinizioni, corsiKitProdotti, corsi]);
+
+  // lo scaffale e la foto di ogni prodotto: si compongono qui, una volta
+  // per la pagina, e scendono a tutte le schede
+  const repartoDi = useMemo(() => repartoPerProdotto(prodottiCategorie, categorieProdotti), [prodottiCategorie, categorieProdotti]);
+  const immaginePerProdotto = useMemo(() => {
+    const mappa = {};
+    [...(prodottiImmagini || [])]
+      .sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+      .forEach((im) => { if (!mappa[im.prodotto_id]) mappa[im.prodotto_id] = im.url; });
+    return mappa;
+  }, [prodottiImmagini]);
 
   // un clic fuori da qualunque pacchetto lo richiude: con venti prodotti
   // aperti la pagina diventa lunghissima e per chiuderla bisognava
@@ -82570,6 +82698,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
             setKitDefinizioni={setKitDefinizioni}
             kitApertoId={kitApertoId} onImpostaAperto={setKitApertoId} kitCopiato={kitCopiato} onCopia={onCopia}
             pacchettiImportabili={pacchettiImportabili}
+            repartoDi={repartoDi} immaginePerProdotto={immaginePerProdotto}
           />
         ))}
 
@@ -82579,6 +82708,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
           setKitDefinizioni={setKitDefinizioni}
           kitApertoId={kitApertoId} onImpostaAperto={setKitApertoId} kitCopiato={kitCopiato} onCopia={onCopia}
           pacchettiImportabili={pacchettiImportabili}
+          repartoDi={repartoDi} immaginePerProdotto={immaginePerProdotto}
         />
       </div>
     </div>
@@ -86391,11 +86521,11 @@ function Gestionale() {
     compensipremi: [],
     gestionepunti: ["master", "vendite_shop", "prodotti_shop", "punti_master_impostazioni", "regole_referral_automatico", "coupon"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "eventi", "eventi_materiali"],
-    spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
+    spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "prodotti_immagini", "categorie_prodotti", "prodotti_categorie", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti", "sync_shop_esiti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location", "prodotti_shop"],
-    contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
+    contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop", "prodotti_immagini", "categorie_prodotti", "prodotti_categorie"],
     statisticamaster: ["vendite_shop_storico", "prodotti_shop", "master", "target_vendite_prodotti"],
     gestionemaster: ["master", "venditori", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionevenditori: ["venditori", "master"],
@@ -89224,6 +89354,7 @@ function Gestionale() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} inventarioSede={inventarioSede}
           prodottiImmagini={prodottiImmagini}
+          categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
           prodottiApertiMagazzino={prodottiApertiMagazzino}
           utenteLoggato={utenteLoggato}
           ruoloUtente={ruoloUtente}
@@ -89251,6 +89382,7 @@ function Gestionale() {
       {view === "contenutokit" && (
         <PaginaContenutoKit
           corsi={corsi} kitDefinizioni={kitDefinizioni} setKitDefinizioni={setKitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
+          categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
@@ -89469,5 +89601,5 @@ export {
   listaRaccoltaMateriale, RaccoltaMateriale,
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
-  PaginaContenutoKit,
+  PaginaContenutoKit, repartoPerProdotto, raggruppaPerReparto, SENZA_REPARTO,
 };

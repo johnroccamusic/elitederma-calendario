@@ -3731,6 +3731,70 @@ con quelli del repo: su `assistente-regole` i quattro file risultano
 identici. Vale la stessa regola del deploy su Vercel — lo sha, non
 l'impressione.
 
+### I prodotti di un kit si leggono per reparto, con la foto (9/11/2026)
+
+Il titolare: «quando creo un kit e inserisco i prodotti li devi dividere
+per categorie e assegnare l'immagine, la lista è una confusione sia per
+noi che per la logistica. Sia nella Dashboard di creazione che in
+logistica per la preparazione».
+
+Un kit sono venti-trenta righe, e in fila indiana aghi, pigmenti e
+cartine si somigliano tutti: chi lo compone non vede cosa manca, chi lo
+prepara non trova niente. Ora, in **tutte e due** le pagine, le righe
+stanno sotto il loro **reparto** e ognuna ha la sua **foto**.
+
+**QUALE categoria, ed è la decisione vera.** Si raggruppa per la
+categoria **radice** dell'albero dello shop (Aghi, TUTTI I PIGMENTI, Lash
+Extension), non per la sottocategoria. Misurato sui dati: dei **174
+prodotti che stanno dentro ai kit, 47 appartengono a più di una
+categoria**, e quasi sempre sono la radice **più** una sua figlia («Aghi»
++ «Aghi Universali»). Per la figlia i pigmenti si spaccherebbero in
+Eyebrows/Lips/Eyeliner/Trico — e «Dilution» sta in quattro di quelle
+insieme, quindi non esisterebbe nemmeno una risposta giusta. Il reparto
+invece è **lo scaffale**, che è la domanda di chi prepara.
+
+Un prodotto in più REPARTI (il calibro sta in Accessori, HENNE e
+Progettazione) finisce nel primo in ordine alfabetico: non è il più
+intelligente, è quello **che non cambia da un giorno all'altro** — una
+lista di raccolta che riordina le righe fa perdere il segno fra uno
+scaffale e l'altro. Chi non ha nessuna categoria (3 prodotti su 174) va
+in «Senza categoria», **in fondo**: è il mucchio di quello che non ha un
+posto suo, e non deve stare davanti a quello che ce l'ha.
+
+`repartoPerProdotto` e `raggruppaPerReparto` stanno **in un posto solo**,
+accanto a `collegamentiConPadri`, e le usano le due pagine: due idee di
+«che reparto è questo prodotto» vorrebbero dire lo stesso ago sotto due
+intestazioni diverse, a seconda di chi guarda. Stessa cosa per
+`RiquadroFotoProdotto` e `IntestazioneReparto`. La risalita al padre ha
+una **guardia a otto passi**: una categoria che si dichiara figlia di sé
+stessa girerebbe per sempre, e la pagina non si aprirebbe più senza dire
+perché.
+
+Due cose in più, trovate strada facendo:
+
+- **in logistica ogni reparto dice quante ne restano** («Aghi · 2 di 5»,
+  e «fatto» quando è finito): è il numero che dice se si può passare allo
+  scaffale dopo, e in cima alla pagina c'era solo il totale;
+- **nel kit il nome del prodotto non si taglia più**, va a capo. Era in
+  un riquadro con l'ellissi, e quello che spariva era la **fine** del
+  nome — che su questi prodotti è il formato («Box 10 pz», «ago
+  singolo»), cioè la cosa che distingue due righe quasi uguali. È la
+  stessa trappola della percentuale di sconto al banco del 7/11.
+
+**E le due tabelle vanno chieste**: `categorie_prodotti` e
+`prodotti_categorie` sono state aggiunte alla mappa delle viste di
+`App.jsx` per `contenutokit` e `spedizionicorsi`. Senza, l'elenco
+uscirebbe tutto «Senza categoria» e non lo direbbe nessuno — è la regola
+di «elenco vuoto = tabella non chiesta».
+
+Prove in `prove/kit-per-reparto.test.jsx` (10) e in
+`prove/raccolta-materiale.test.jsx` (3 nuove), con le pagine montate: la
+radice che vince sulla figlia, la radice più figlia che fa UN reparto e
+non due, l'anello che non blocca niente, l'ordine dei reparti, la foto
+che compare solo a chi ce l'ha, e la raccolta che **senza la mappa dei
+reparti funziona come prima** — una pagina che si rompe perché mancano le
+categorie sarebbe peggio di una pagina senza divisioni.
+
 ### «Importa pacchetto»: la lista di un altro kit (9/11/2026)
 
 Il titolare: «quando creo un nuovo pacchetto di un corso ho solo i tasti
