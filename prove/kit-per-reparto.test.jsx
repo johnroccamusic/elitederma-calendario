@@ -85,16 +85,23 @@ const RIGHE = [
   { id: "r1", kit_id: "k1", prodotto_id: "p1", tipo: "kit", quantita: 2 },
   { id: "r2", kit_id: "k1", prodotto_id: "p2", tipo: "kit", quantita: 1 },
   { id: "r3", kit_id: "k1", prodotto_id: "p3", tipo: "kit", quantita: 5 },
+  // gli ACCESSORI DIDATTICA sono una lista a parte, del corso e non del
+  // pacchetto: e' quella che il titolare aveva davanti il 9/11 quando ha
+  // detto «non vedo categorie nella lista» — trenta righe in fila
+  { id: "a1", kit_id: null, corso_id: "c1", prodotto_id: "p2", tipo: "accessorio", quantita: 1 },
+  { id: "a2", kit_id: null, corso_id: "c1", prodotto_id: "p4", tipo: "accessorio", quantita: 1 },
 ];
 const PRODOTTI = [
   { id: "p1", nome: "Pigmento Arizona", quantita: 10 },
   { id: "p2", nome: "Ago 3RL LT - 0,25 - ago singolo", quantita: 50 },
   { id: "p3", nome: "Cartine misuratrici", quantita: 7 },
+  { id: "p4", nome: "Guanti in nitrile pacco da 100 pz - Taglia M", quantita: 3 },
 ];
 const LEGAMI = [
   { prodotto_id: "p1", categoria_id: "cat-brows" },
   { prodotto_id: "p1", categoria_id: "cat-pig" },
   { prodotto_id: "p2", categoria_id: "cat-aghi-uni" },
+  { prodotto_id: "p4", categoria_id: "cat-acc" },
   // p3 senza categoria, di proposito
 ];
 const IMMAGINI = [{ prodotto_id: "p1", url: "https://esempio/arizona.jpg", ordine: 1 }];
@@ -163,6 +170,58 @@ describe("il contenuto del kit, nella pagina", () => {
     const riga = [...p.nodo.querySelectorAll("[data-riga-kit]")]
       .find((d) => (d.textContent || "").includes("Cartine misuratrici"));
     expect(riga.querySelector("input").value).toBe("5");
+    await p.smonta();
+  });
+});
+
+// ---------------------------------------------------------------------
+// GLI ACCESSORI DIDATTICA, che sono una lista a parte (9/11/2026).
+//
+// Il titolare, dopo la prima versione: «non vedo categorie nella lista»,
+// con davanti «Accessori didattica» — trentuno righe in fila indiana.
+// Era vero: quella lista non e' il contenuto di un pacchetto, e' del
+// CORSO, e la disegna un altro componente che era rimasto com'era. La
+// lezione e' che «la lista dei prodotti di un kit» per chi la usa e'
+// UNA cosa, anche quando nel codice sono due.
+describe("gli accessori didattica", () => {
+  const apriAccessori = async (p) => clicca(p.tasto("Accessori didattica"));
+
+  it("sono divisi per reparto come il contenuto del kit", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await apriAccessori(p);
+    const righe = [...p.nodo.querySelectorAll("[data-riga-accessorio]")];
+    expect(righe.length).toBe(2);
+    // i guanti stanno in «Accessori», l'ago in «Aghi»: due intestazioni,
+    // nella scheda degli accessori e non da qualche altra parte
+    const scheda = righe[0].closest("div[style]").parentElement.closest("div");
+    const titoli = [...p.nodo.querySelectorAll("[data-reparto]")].map((x) => x.getAttribute("data-reparto"));
+    expect(titoli).toContain("Accessori");
+    expect(titoli).toContain("Aghi");
+    expect(scheda).toBeTruthy();
+    await p.smonta();
+  });
+
+  it("ogni accessorio ha il suo riquadro per la foto", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await apriAccessori(p);
+    const righe = [...p.nodo.querySelectorAll("[data-riga-accessorio]")];
+    for (const r of righe) expect(r.querySelector("span")).toBeTruthy();
+    await p.smonta();
+  });
+
+  it("il nome lungo non si taglia più", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await apriAccessori(p);
+    const riga = [...p.nodo.querySelectorAll("[data-riga-accessorio]")]
+      .find((d) => (d.textContent || "").includes("Taglia M"));
+    expect(riga, "la riga dei guanti").toBeTruthy();
+    const nome = [...riga.querySelectorAll("span")]
+      .find((x) => (x.textContent || "").includes("Taglia M"));
+    expect(nome.style.textOverflow).not.toBe("ellipsis");
+    expect(nome.style.whiteSpace).not.toBe("nowrap");
     await p.smonta();
   });
 });

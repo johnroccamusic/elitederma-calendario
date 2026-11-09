@@ -1063,7 +1063,7 @@ function raggruppaPerReparto(righe, repartoDi, prodottoDi = (r) => r.prodottoId)
 // una lista divisa per categorie somiglierebbe a due cose diverse
 function IntestazioneReparto({ nome, nota }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", margin: "12px 0 4px", paddingBottom: 3, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+    <div data-reparto={nome} style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", margin: "12px 0 4px", paddingBottom: 3, borderBottom: `1px solid ${CREAM_BORDER}` }}>
       <span style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{nome}</span>
       {nota ? <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{nota}</span> : null}
     </div>
@@ -82358,7 +82358,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 // specifico ma a tutto il corso — vengono mostrati e scaricati dal
 // magazzino insieme a QUALUNQUE kit/pacchetto scelto per l'edizione,
 // tramite "corso_id" su corsi_kit_prodotti (kit_id resta nullo)
-function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto, onChiudi }) {
+function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto, onChiudi, repartoDi = null, immaginePerProdotto = {} }) {
   const [ricerca, setRicerca] = useState("");
   const [corsoOrigineId, setCorsoOrigineId] = useState("");
   const [copiando, setCopiando] = useState(false);
@@ -82430,7 +82430,13 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
         <div style={{ marginBottom: 10 }}>
           <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
           {risultati.map((p) => (
-            <div key={p.id} onClick={() => aggiungi(p.id)} style={rigaRisultato}>{p.nome}</div>
+            <div key={p.id} onClick={() => aggiungi(p.id)} style={{ ...rigaRisultato, display: "flex", alignItems: "center", gap: 10 }}>
+              <RiquadroFotoProdotto url={immaginePerProdotto[p.id]} lato={30} />
+              <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                {p.nome}
+                <span style={{ color: MUTED, fontSize: 12 }}>{" · "}{repartoDi?.get?.(p.id)?.nome || SENZA_REPARTO}</span>
+              </span>
+            </div>
           ))}
         </div>
       )}
@@ -82455,15 +82461,21 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 
       {righe.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio ancora.</div>
-      ) : righe.map((r) => {
-        const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
-        return (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
-            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-          </div>
-        );
-      })}
+      ) : raggruppaPerReparto(righe, repartoDi, (r) => r.prodotto_id).map((g) => (
+        <div key={g.nome}>
+          <IntestazioneReparto nome={g.nome} nota={`${g.righe.length} ${g.righe.length === 1 ? "riga" : "righe"}`} />
+          {g.righe.map((r) => {
+            const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+            return (
+              <div key={r.id} data-riga-accessorio="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
+                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
+                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -82604,7 +82616,10 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
           />
         )
       ))}
-      <SchedaAccessoriCorso corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica} aperto={mostraAccessori} onChiudi={() => setMostraAccessori(false)} />
+      <SchedaAccessoriCorso
+        corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop}
+        repartoDi={repartoDi} immaginePerProdotto={immaginePerProdotto}
+        ricarica={ricarica} aperto={mostraAccessori} onChiudi={() => setMostraAccessori(false)} />
     </div>
   );
 }

@@ -3787,7 +3787,18 @@ Due cose in più, trovate strada facendo:
 uscirebbe tutto «Senza categoria» e non lo direbbe nessuno — è la regola
 di «elenco vuoto = tabella non chiesta».
 
-Prove in `prove/kit-per-reparto.test.jsx` (10) e in
+**E LA LISTA CHE AVEVA DAVANTI ERA UN'ALTRA** (9/11/2026, subito dopo:
+«non vedo categorie nella lista»). Aveva ragione: quello che guardava era
+**«Accessori didattica»** — trentuno righe in fila indiana — che non e'
+il contenuto di un pacchetto ma una lista del **corso**, disegnata da un
+altro componente (`SchedaAccessoriCorso`) rimasto com'era. La lezione
+vale oltre questo caso: **«la lista dei prodotti di un kit» per chi la
+usa e' UNA cosa, anche quando nel codice sono due** — una correzione
+messa su una sola delle due strade che portano allo stesso posto non e'
+una correzione (gia' scritto il 2/11 per la cache del sito, e ricapitato
+qui).
+
+Prove in `prove/kit-per-reparto.test.jsx` (13) e in
 `prove/raccolta-materiale.test.jsx` (3 nuove), con le pagine montate: la
 radice che vince sulla figlia, la radice più figlia che fa UN reparto e
 non due, l'anello che non blocca niente, l'ordine dei reparti, la foto
