@@ -3701,6 +3701,62 @@ perche' non ha sconto: un prodotto che non si trova e' un dubbio.
 
 Prove in `prove/prezzo-al-banco.test.jsx` (13).
 
+### «Importa pacchetto»: la lista di un altro kit (9/11/2026)
+
+Il titolare: «quando creo un nuovo pacchetto di un corso ho solo i tasti
+duplica e + prodotto e non ho "importa pacchetto" che mi permetterebbe di
+importare la stessa lista di prodotti associata ad un altro pacchetto
+esistente».
+
+**Si poteva gia' fare, e questo e' il punto.** Copia/Incolla esisteva, ma
+quei due tasti compaiono **solo mentre un altro pacchetto e' aperto**:
+Copia sta su quello aperto, Incolla su tutti gli altri. Su un pacchetto
+appena creato si vedevano davvero solo «Duplica» e «+ Prodotto», e chi non
+sapeva gia' della coppia non aveva modo di scoprirla. E' la stessa famiglia
+del «POS fisico» del 7/11/2026: **una scelta annidata la trova solo chi sa
+gia' che esiste.**
+
+Ora ogni pacchetto ha **«Importa pacchetto»**, sempre: si preme sul
+pacchetto che deve RICEVERE — che e' dove sta la persona — e si scegli da
+quale prendere la lista, anche di un altro corso. L'elenco dice nome, corso
+e quanti prodotti porta: il corso serve perche' due kit si chiamano uguale
+in corsi diversi, e il conteggio e' l'unico modo di accorgersi di aver
+scelto il pacchetto sbagliato **prima** di premere.
+
+Quattro cose decise li' dentro:
+
+- **La scrittura e' una sola** (`sostituisciContenuto`), usata da Incolla e
+  da Importa. Due strade che arrivano allo stesso posto, e due copie del
+  conto vorrebbero dire due idee di cosa succede al contenuto di prima.
+- **Sostituisce, non aggiunge**, come Incolla ha sempre fatto, e la
+  conferma dice i due numeri — «Righe adesso: 2. Dopo: 12, prese da «KIT
+  BASE» (PMU BASE)». I numeri si dicono **come numeri** e non dentro una
+  frase che deve funzionare al singolare e al plurale: «Le 1 righe» si
+  legge come un errore, e un messaggio scritto male lo si salta.
+- **Un pacchetto vuoto non si puo' importare.** Importarlo vorrebbe dire
+  svuotare questo, che non e' quello che uno si aspetta premendo
+  «Importa»: resta fuori dall'elenco.
+- **Gli accessori didattica non viaggiano** (`tipo = 'accessorio'`): sono
+  del corso, non del pacchetto. E dopo l'importazione **il pacchetto si
+  apre**, perche' un elenco che si riempie senza mostrarsi va ricontrollato
+  a mano.
+
+L'elenco dei pacchetti con il loro contenuto si compone **una volta per la
+pagina** (`pacchettiImportabili` in `PaginaContenutoKit`) e non dentro ogni
+scheda: venti schede che se lo rifanno da sole sono lo stesso conto
+ripetuto venti volte a ogni lettera battuta nella ricerca.
+
+**Resta da decidere:** adesso Copia/Incolla e Importa fanno la stessa cosa
+per due strade. Importa la fa da sola e si vede sempre; la coppia non e'
+stata tolta perche' nessuno l'ha chiesto, ma tre tasti per un lavoro solo
+sono due di troppo.
+
+Prove in `prove/importa-pacchetto.test.jsx` (7), con la pagina vera
+montata. Una cosa trovata dal banco: **la scheda si cerca per nome e non
+per posizione** — i corsi sono in ordine alfabetico, quindi LAMINAZIONE
+BASE sta sopra PMU BASE, e al primo giro la prova guardava il kit
+sbagliato dicendo di guardare quello giusto.
+
 ### La riga della ricerca si svuota con un tasto (9/11/2026)
 
 Il titolare, dal banco: «quando cerchi un prodotto e lo inserisci, sulla

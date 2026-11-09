@@ -81801,10 +81801,19 @@ function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop,
     </div>
   );
 }
-function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia, onDuplicato }) {
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia, onDuplicato, pacchettiImportabili = [] }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
+  // «Importa pacchetto»: si preme QUI, sul pacchetto che deve ricevere,
+  // e si scegli da quale altro prendere la lista. Prima la stessa cosa si
+  // poteva fare solo con Copia/Incolla, che pero' compaiono unicamente
+  // mentre un altro pacchetto e' APERTO: su un pacchetto appena creato si
+  // vedevano solo «Duplica» e «+ Prodotto», e chi non sapeva gia' della
+  // coppia non poteva scoprirla. E' la lezione del POS del 7/11: una
+  // scelta annidata la trova solo chi sa che esiste.
+  const [mostraImporta, setMostraImporta] = useState(false);
+  const [ricercaImporta, setRicercaImporta] = useState("");
   // contenuto ripiegato di default: con molti prodotti nel kit la pagina
   // diventava una lista lunghissima da scorrere per ogni pacchetto — solo
   // un pacchetto alla volta può essere aperto in tutta la pagina (stato
@@ -81895,31 +81904,64 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   // quello copiato da un altro (cancella prima le righe esistenti, poi
   // inserisce la copia) — non un'aggiunta: rispecchia "si incolla tutto
   // il contenuto" richiesto esplicitamente
-  async function incolla() {
-    if (!kitCopiato || kitCopiato.id === kit.id) return;
-    // sostituire non è aggiungere: quello che c'era qui dentro sparisce, e
-    // su un pacchetto da trenta righe è un lavoro che non torna indietro.
-    // La conferma dice i due numeri, così si vede subito se si sta
-    // incollando sul pacchetto sbagliato
+  // LA SCRITTURA E' UNA SOLA, per «Incolla» e per «Importa pacchetto»:
+  // due strade che portano allo stesso posto, e due copie del conto
+  // vorrebbero dire due idee di cosa succede al contenuto di prima.
+  //
+  // Sostituire non è aggiungere: quello che c'era qui dentro sparisce, e
+  // su un pacchetto da trenta righe è un lavoro che non torna indietro.
+  // La conferma dice i due numeri e da dove arriva la lista, così si vede
+  // subito se si sta scrivendo sul pacchetto sbagliato.
+  async function sostituisciContenuto(prodotti, daDove) {
     const quante = prodottiKit.length;
+    // i due numeri si dicono come numeri e non dentro una frase che deve
+    // andare bene al singolare e al plurale: «Le 1 righe» si legge come
+    // un errore, e un messaggio scritto male lo si salta
     const messaggio = quante > 0
-      ? `Sostituire il contenuto di "${kit.nome}"?\n\nLe ${quante} righe che ci sono adesso vengono tolte e rimpiazzate dalle ${kitCopiato.prodotti.length} copiate. Gli accessori didattica non si toccano.`
-      : `Incollare ${kitCopiato.prodotti.length} prodotti in "${kit.nome}"?`;
-    if (!window.confirm(messaggio)) return;
+      ? `Sostituire il contenuto di "${kit.nome}"?\n\nRighe adesso: ${quante}. Dopo: ${prodotti.length}, prese da ${daDove}.\n\nQuelle di adesso vengono tolte; gli accessori didattica non si toccano.`
+      : `Copiare in "${kit.nome}" i ${prodotti.length} prodotti di ${daDove}?`;
+    if (!window.confirm(messaggio)) return false;
     const { error: erroreDelete } = await supabase.from("corsi_kit_prodotti").delete().eq("kit_id", kit.id).eq("tipo", "kit");
-    if (erroreDelete) { window.alert("Errore: " + testoErrore(erroreDelete)); return; }
-    if (kitCopiato.prodotti.length > 0) {
+    if (erroreDelete) { window.alert("Errore: " + testoErrore(erroreDelete)); return false; }
+    if (prodotti.length > 0) {
       const { error: erroreInsert } = await supabase.from("corsi_kit_prodotti").insert(
-        kitCopiato.prodotti.map((p) => ({ kit_id: kit.id, prodotto_id: p.prodotto_id, tipo: "kit", quantita: p.quantita }))
+        prodotti.map((p) => ({ kit_id: kit.id, prodotto_id: p.prodotto_id, tipo: "kit", quantita: p.quantita }))
       );
-      if (erroreInsert) { window.alert("Errore: " + testoErrore(erroreInsert)); return; }
+      if (erroreInsert) { window.alert("Errore: " + testoErrore(erroreInsert)); return false; }
     }
     ricarica(["corsi_kit_prodotti"]);
+    return true;
+  }
+  async function incolla() {
+    if (!kitCopiato || kitCopiato.id === kit.id) return;
+    await sostituisciContenuto(kitCopiato.prodotti, "quello copiato");
+  }
+  async function importaDa(fonte) {
+    if (!fonte || fonte.id === kit.id) return;
+    const fatto = await sostituisciContenuto(fonte.prodotti, `«${fonte.nome}» (${fonte.corso})`);
+    if (!fatto) return;
+    setMostraImporta(false); setRicercaImporta("");
+    // e il pacchetto si apre: si guarda sempre cosa è arrivato dentro, e
+    // un elenco che si riempie senza mostrarsi va ricontrollato a mano
+    onImpostaAperto(kit.id);
   }
 
   const risultatiKit = ricercaKit.trim()
     ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaKit.trim().toLowerCase())).slice(0, 8)
     : [];
+  // da quali pacchetti si può importare: tutti quelli che hanno davvero
+  // dei prodotti dentro, questo escluso. Un pacchetto vuoto resta fuori —
+  // importarlo vorrebbe dire svuotare questo, che non è quello che uno si
+  // aspetta premendo «Importa». Quelli dello STESSO CORSO vengono per
+  // primi, perché sono quelli da cui si copia quasi sempre.
+  const qImporta = ricercaImporta.trim().toLowerCase();
+  const importabili = (pacchettiImportabili || [])
+    .filter((p) => p.id !== kit.id && p.prodotti.length > 0)
+    .filter((p) => !qImporta || `${p.nome} ${p.corso}`.toLowerCase().includes(qImporta))
+    .sort((a, b) => {
+      const mio = (p) => (kit.corso_id && p.corso_id === kit.corso_id ? 0 : 1);
+      return mio(a) - mio(b) || a.corso.localeCompare(b.corso) || a.nome.localeCompare(b.nome);
+    });
   const pillBtn = { ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" };
 
   // il diploma di questo pacchetto: il file va nello stesso bucket dei
@@ -82016,6 +82058,14 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           <button onClick={incolla} style={pillBtn}>Incolla</button>
         )}
         <button onClick={duplica} title="Crea una copia di questo pacchetto, con lo stesso contenuto" style={pillBtn}>Duplica</button>
+        <button
+          onClick={() => { setMostraImporta((v) => !v); setRicercaImporta(""); }}
+          data-campo="importa-pacchetto"
+          title="Prende in questo pacchetto la stessa lista di prodotti di un altro, anche di un altro corso"
+          style={pillBtn}
+        >
+          Importa pacchetto
+        </button>
         <button onClick={() => { setMostraRicercaKit((v) => !v); onImpostaAperto(kit.id); }} style={pillBtn}>+ Prodotto</button>
         <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
@@ -82044,6 +82094,28 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         {caricandoDiploma && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Carico…</span>}
       </div>
 
+      {mostraImporta && (
+        <div style={{ marginTop: 10, marginBottom: 10 }}>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            Da quale pacchetto prendo la lista? Quello che c’è qui dentro adesso viene sostituito.
+          </div>
+          <CampoRicerca value={ricercaImporta} onChange={(e) => setRicercaImporta(e.target.value)} placeholder="Cerca un pacchetto, anche di un altro corso…" />
+          {importabili.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 2px" }}>
+              {qImporta ? "Nessun pacchetto con questo nome." : "Non c\u2019\u00e8 nessun altro pacchetto con dei prodotti dentro."}
+            </div>
+          ) : importabili.slice(0, 12).map((p) => (
+            <div key={p.id} data-campo="pacchetto-da-importare" onClick={() => importaDa(p)} style={rigaRisultato}>
+              {p.nome} <span style={{ color: MUTED, fontSize: 12 }}>· {p.corso} · {p.prodotti.length} prodott{p.prodotti.length === 1 ? "o" : "i"}</span>
+            </div>
+          ))}
+          {importabili.length > 12 && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "6px 2px" }}>
+              Mostrati 12 di {importabili.length}: scrivi qualche lettera per restringere.
+            </div>
+          )}
+        </div>
+      )}
       {aperto && mostraRicercaKit && (
         <div style={{ marginTop: 10, marginBottom: 10 }}>
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
@@ -82200,7 +82272,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 // pacchetti speciali senza corso) con i suoi pacchetti sotto e il tasto
 // per crearne uno nuovo — sempre visibile, senza bisogno di "creare" un
 // contenitore prima di poter vedere l'elenco dei corsi
-function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni, kitApertoId, onImpostaAperto, kitCopiato, onCopia }) {
+function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni, kitApertoId, onImpostaAperto, kitCopiato, onCopia, pacchettiImportabili = [] }) {
   const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -82327,6 +82399,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
             trascinando={trascinatoId === k.id}
             evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
             kitApertoId={kitApertoId} onImpostaAperto={onImpostaAperto} kitCopiato={kitCopiato} onCopia={onCopia}
+            pacchettiImportabili={pacchettiImportabili}
             onDuplicato={spostaSottoOriginale}
           />
         )
@@ -82351,6 +82424,28 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
   const [kitApertoId, setKitApertoId] = useState(null);
   const [kitCopiato, setKitCopiato] = useState(null);
   function onCopia(kitId, prodotti) { setKitCopiato({ id: kitId, prodotti }); }
+
+  // TUTTI I PACCHETTI CON IL LORO CONTENUTO, per «Importa pacchetto».
+  // Si compone qui, una volta per la pagina, e non dentro ogni scheda:
+  // ogni scheda che si rifacesse l’elenco per conto suo sarebbe lo stesso
+  // conto ripetuto venti volte a ogni battitura nella ricerca.
+  // I divisori restano fuori: sono righe di separazione, non pacchetti.
+  const pacchettiImportabili = useMemo(() => {
+    const perKit = {};
+    (corsiKitProdotti || []).forEach((r) => {
+      if (r.tipo !== "kit") return;
+      (perKit[r.kit_id] ||= []).push({ prodotto_id: r.prodotto_id, quantita: r.quantita });
+    });
+    const nomeCorso = {};
+    (corsi || []).forEach((c) => { nomeCorso[c.id] = c.nome; });
+    return (kitDefinizioni || [])
+      .filter((k) => k.tipo !== "divisore")
+      .map((k) => ({
+        id: k.id, nome: k.nome, corso_id: k.corso_id || null,
+        corso: k.corso_id ? (nomeCorso[k.corso_id] || "corso non in elenco") : "Pacchetti speciali",
+        prodotti: perKit[k.id] || [],
+      }));
+  }, [kitDefinizioni, corsiKitProdotti, corsi]);
 
   // un clic fuori da qualunque pacchetto lo richiude: con venti prodotti
   // aperti la pagina diventa lunghissima e per chiuderla bisognava
@@ -82388,6 +82483,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
             corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
             setKitDefinizioni={setKitDefinizioni}
             kitApertoId={kitApertoId} onImpostaAperto={setKitApertoId} kitCopiato={kitCopiato} onCopia={onCopia}
+            pacchettiImportabili={pacchettiImportabili}
           />
         ))}
 
@@ -82396,6 +82492,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
           corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
           setKitDefinizioni={setKitDefinizioni}
           kitApertoId={kitApertoId} onImpostaAperto={setKitApertoId} kitCopiato={kitCopiato} onCopia={onCopia}
+          pacchettiImportabili={pacchettiImportabili}
         />
       </div>
     </div>
@@ -89286,4 +89383,5 @@ export {
   listaRaccoltaMateriale, RaccoltaMateriale,
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
+  PaginaContenutoKit,
 };
