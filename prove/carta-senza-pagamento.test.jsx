@@ -38,11 +38,30 @@ async function banco({ utente, ruolo }) {
   return { ...p, incassa };
 }
 
+// DAL 9/11/2026 IL BANCO NON SI APRE SU NESSUN METODO (il titolare:
+// «dopo una vendita si resetta ogni tipo di pagamento e l'operatore deve
+// scegliere ogni volta come chiuderla»). Quindi la carta va scelta prima
+// di poterne provare il blocco: è il gesto vero di chi incassa.
+const scegli = async (p, etichetta) => {
+  const tasto = [...p.nodo.querySelectorAll("button")].find((b) => new RegExp(etichetta).test(b.textContent || ""));
+  expect(tasto, `il tasto ${etichetta}`).toBeTruthy();
+  await clicca(tasto); await attendi(60);
+  return [...p.nodo.querySelectorAll("button")].find((b) => /incassa/i.test(b.textContent || "") && !/vendita registrata/i.test(b.textContent || ""));
+};
+
 describe("il tasto Incassa vendita con la carta", () => {
-  it("per una master resta spento, e dice che la carta si chiude dal QR", async () => {
+  it("senza aver scelto come si paga resta spento, e lo dice", async () => {
     const p = await banco({ utente: MASTER, ruolo: "user" });
     expect(p.incassa).toBeTruthy();
     expect(p.incassa.disabled).toBe(true);
+    expect(p.nodo.querySelector('[data-campo="scegli-il-metodo"]'), "la riga che dice di scegliere").toBeTruthy();
+    expect(p.testo()).toMatch(/dopo ogni vendita non resta niente di scelto/);
+  });
+
+  it("scelta Stripe resta spento, e dice che la carta si chiude dal QR", async () => {
+    const p = await banco({ utente: MASTER, ruolo: "user" });
+    const incassa = await scegli(p, "Stripe");
+    expect(incassa.disabled).toBe(true);
     expect(p.nodo.querySelector('[data-campo="carta-senza-pagamento"]')).toBeTruthy();
     expect(p.testo()).toMatch(/si chiude da sola quando il pagamento arriva/);
   });
@@ -56,10 +75,44 @@ describe("il tasto Incassa vendita con la carta", () => {
     expect(p.nodo.querySelector('[data-campo="carta-senza-pagamento"]')).toBe(null);
   });
 
-  it("per chi amministra col POS fisico si preme: ha visto lo scontrino", async () => {
+  it("per chi amministra, scelto il POS fisico si preme: ha visto lo scontrino", async () => {
     const p = await banco({ utente: ADMIN, ruolo: "amministratore" });
-    expect(p.incassa).toBeTruthy();
-    expect(p.incassa.disabled).toBe(false);
+    expect(p.incassa.disabled, "prima di scegliere resta spento").toBe(true);
+    const incassa = await scegli(p, "POS fisico");
+    expect(incassa.disabled).toBe(false);
     expect(p.testo()).toMatch(/POS fisico/);
+  });
+});
+
+// DOPO UNA VENDITA NON RESTA NIENTE DI SCELTO (9/11/2026).
+//
+// Il titolare, dopo il caso di Rossella Becarelli: «non far restare il
+// POS in nessuna condizione vendita dopo vendita. Quindi dopo una
+// vendita si resetta ogni tipo di pagamento e l'operatore deve
+// scegliere ogni volta come chiuderla».
+//
+// Non è una preferenza: l'8/11 una vendita in contanti si è portata
+// dietro il codice del QR del cliente di prima, e quel pagamento —
+// risultando già usato — non è mai stato recuperato. 274,61 € incassati
+// e nessun ordine in logistica.
+describe("dopo una vendita il banco non resta su nessun metodo", () => {
+  it("«+ Nuova vendita» spegne il metodo scelto", async () => {
+    const p = await banco({ utente: MASTER, ruolo: "user" });
+    // si scegli contanti: il tasto si accende
+    const incassa = await scegli(p, "Contanti");
+    expect(incassa.disabled).toBe(false);
+    expect(p.nodo.querySelector('[data-campo="scegli-il-metodo"]')).toBe(null);
+
+    // e si ricomincia: niente resta scelto
+    const nuova = [...p.nodo.querySelectorAll("button")].find((b) => /\+ Nuova vendita/.test(b.textContent || ""));
+    expect(nuova, "il tasto per ricominciare").toBeTruthy();
+    await clicca(nuova); await attendi(80);
+
+    const tessera = [...p.nodo.querySelectorAll("div")]
+      .find((d) => d.style.cursor === "pointer" && (d.textContent || "").trim().startsWith("Pigmento"));
+    await clicca(tessera); await attendi(80);
+    const dopo = [...p.nodo.querySelectorAll("button")].find((b) => /incassa/i.test(b.textContent || "") && !/vendita registrata/i.test(b.textContent || ""));
+    expect(dopo.disabled, "senza scegliere non si incassa").toBe(true);
+    expect(p.nodo.querySelector('[data-campo="scegli-il-metodo"]')).toBeTruthy();
   });
 });

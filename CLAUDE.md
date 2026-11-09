@@ -3808,7 +3808,21 @@ E c'è un terzo effetto, da sapere quando si riconcilia: quella vendita
 in contanti porta il codice di un incasso Stripe, quindi la cassa della
 classe si aspetta 103,31 € di contante che nessuno ha dato.
 
-**Due difese, nessuna delle due è il promemoria di chi vende:**
+**E LA REGOLA NUOVA, dettata dal titolare lo stesso giorno:** «non far
+restare il POS in nessuna condizione vendita dopo vendita. Quindi dopo
+una vendita si resetta **ogni** tipo di pagamento e l'operatore deve
+scegliere ogni volta come chiuderla». **Sostituisce il «il banco si apre
+sul QR» del 7/11/2026**: una preselezione sul modo di incassare è
+esattamente la cosa che fa chiudere uno scontrino col metodo del cliente
+di prima. Ora il POS nasce — e torna dopo ogni vendita — **senza nessuno
+dei quattro tasti acceso**, «Incassa vendita» resta spento finché non se
+ne preme uno, e sopra al tasto c'è scritto perché («scegli come la
+cliente paga: dopo ogni vendita non resta niente di scelto»). L'omaggio,
+che non incassa, resta l'unica strada che non chiede un metodo. Un
+carrello **sospeso** invece riprende il metodo che era stato scelto: lì
+la scelta l'ha già fatta una persona.
+
+**Due difese in più sul codice, nessuna delle due è il promemoria di chi vende:**
 
 - `nuovaVendita` azzera **il QR insieme al carrello** (`richiestaQr`,
   `statoQr`, `msgQr`);
@@ -3822,11 +3836,30 @@ browser non è una regola: `vendite_shop_codice_solo_con_carta`
 riga che non la rispetta, POS-1794149866157, ed è quella dell'8/11:
 convalidare adesso vorrebbe dire impedire di correggerla.
 
-**Resta da sistemare a mano, ed è una decisione del titolare**: la
-vendita da 274,61 € non esiste in archivio (nessun movimento di
-magazzino, nessuna spedizione), e la riga da 103,31 € va staccata dal
-codice che non è suo. Sono soldi, merce e un pacco che una cliente
-aspetta: non si rimedia di iniziativa.
+**E IL RECUPERO NON POTEVA RIUSCIRE, nemmeno senza il codice rubato.**
+Andando a rimettere in pari i dati è saltato fuori un secondo guasto, più
+grave del primo perché spegne la rete di sicurezza:
+`registra_vendita_da_pagamento` — la funzione che ricostruisce una
+vendita dalle righe del pagamento, quella che usa il cron
+`recupera_vendite_qr_in_ritardo` — componeva la vendita con
+`metodo_pagamento = 'pos'` ma **senza `pagamento_codice`**. Dal
+23/10/2026 `registra_vendita_pos` pretende quel codice per accettare una
+vendita con la carta: quindi **ogni** recupero falliva con
+PAGAMENTO_NON_PROVATO. La rete c'era e non poteva prendere niente.
+Corretta con `20261109160000`, che aggiunge la sola chiave mancante
+sostituendo il testo della funzione viva invece di riscriverla a mano.
+
+**La riparazione, fatta il 9/11/2026 su autorizzazione del titolare:**
+tolto il codice `BFG5RE` dalla vendita in contanti (che resta in
+contanti, con la nota del perché), liberato il pagamento, scritto
+l'indirizzo della cliente nella richiesta — preso dalla **sua scheda di
+iscrizione**, è un'allieva di quella stessa classe — e poi
+`registra_vendita_da_pagamento('BFG5RE')`: è nata **POS-STRIPE-BFG5RE**,
+274,61 € (imponibile 225,09 + IVA 49,52), quattro righe, l'ordine di
+spedizione per Grosseto in stato «da spedire», e il magazzino sceso di 2
+Sensitive Cream, 2 A+B Peeling e 1 Glucan-Age. Tutte e due le righe
+portano scritto in nota cos'è successo: una ricostruzione si riconosce,
+o fra un anno sembra un dato nato così.
 
 ### I prodotti di un kit si leggono per reparto, con la foto (9/11/2026)
 

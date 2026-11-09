@@ -78,16 +78,21 @@ describe("il POS fisico al banco della fiera", () => {
     await p.smonta();
   });
 
-  it("ma si apre sul QR, che è l'unica carta che si prova", async () => {
-    // col terminale la vendita si registra senza che nessuno abbia visto
-    // i soldi arrivare: resta una dichiarazione, quindi non è la scelta
-    // di partenza di chi sta al banco
+  it("ma non si apre su NIENTE: il metodo si scegli ogni volta", async () => {
+    // Dal 9/11/2026 (il titolare: «dopo una vendita si resetta ogni tipo
+    // di pagamento e l'operatore deve scegliere ogni volta come
+    // chiuderla»). Sostituisce il «si apre sul QR» del 7/11: col
+    // terminale la vendita si registra senza che nessuno abbia visto i
+    // soldi arrivare, ma nemmeno il QR deve essere già acceso — una
+    // preselezione sul modo di incassare è la cosa che fa chiudere uno
+    // scontrino col metodo del cliente di prima.
     const p = await banco();
     const t = pulito(p);
-    // la scelta c'è, ma quella accesa è il QR: con il carrello vuoto è
-    // la sua frase che compare, non quella del terminale
-    expect(t).toContain("il QR si accende");
+    expect(t).not.toContain("il QR si accende");
     expect(t).not.toContain("Incassa sul terminale");
+    // i quattro tasti ci sono tutti, nessuno scelto
+    expect(t).toContain("Stripe");
+    expect(t).toContain("POS fisico");
     await p.smonta();
   });
 

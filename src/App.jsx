@@ -71906,7 +71906,9 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // agganciato solo finché il campo "Coupon (%)" non viene toccato a mano,
   // altrimenti diventerebbe uno sconto manuale spacciato per referral
   const [couponAttivo, setCouponAttivo] = useState(null);
-  const [metodoPagamento, setMetodoPagamento] = useState("pos");
+  // si apre senza nessun metodo scelto, come dopo ogni vendita: chi
+  // incassa sceglie, non conferma quello che ha trovato acceso
+  const [metodoPagamento, setMetodoPagamento] = useState(null);
   // Il pagamento con carta chiesto col QR: la cliente inquadra, paga e
   // compila da sola i dati di fatturazione sulla pagina di Stripe.
   // Non e' un metodo di pagamento in piu': e' il modo di incassare del
@@ -71933,7 +71935,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // puo' percorrere — e, peggio, una strada che non chiede nessuna
   // conferma a nessuno (la vendita la si dichiara incassata a mano).
   // Al banco di una master la carta e' il QR, e basta.
-  const [modoIncassoPos, setModoIncassoPos] = useState(chiAmministra ? "esterno" : "qr");
+  const [modoIncassoPos, setModoIncassoPos] = useState(null);
   // LA DOMANDA PRIMA DEL QR: "serve fattura?".
   //
   // Finche' vale `{ apriIlLink }` la domanda e' a schermo e il pagamento
@@ -72280,7 +72282,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   function ripristinaCarrello(c) {
     setCarrello(Array.isArray(c.carrello) ? c.carrello : []);
     setNote(c.note || "");
-    setMetodoPagamento(c.metodoPagamento || "pos");
+    setMetodoPagamento(c.metodoPagamento || null);
     // il terminale si ripristina solo a chi ce l'ha: un carrello sospeso
     // in fiera e ripreso dall'ufficio senza terminale mostrerebbe quattro
     // tasti e nessuno scelto, e manderebbe `terminale_fisico` su una
@@ -72594,7 +72596,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metodoPagamento, couponAttivo?.id, pctContantiCorsiPos]);
   function nuovaVendita() {
-    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setClientePos(""); setMsg(""); setScontoFiera(false);
+    // NESSUN METODO DI PAGAMENTO RESTA SCELTO (9/11/2026, il titolare:
+    // «non far restare il POS in nessuna condizione vendita dopo
+    // vendita. Dopo una vendita si resetta ogni tipo di pagamento e
+    // l'operatore deve scegliere ogni volta come chiuderla»).
+    //
+    // Sostituisce il «il banco si apre sul QR» del 7/11: una
+    // preselezione sul modo di incassare è la cosa che fa chiudere uno
+    // scontrino col metodo del cliente di prima — ed è esattamente così
+    // che l'8/11 una vendita in contanti si è portata dietro il codice
+    // di un incasso con la carta.
+    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento(null); setModoIncassoPos(null); setNote(""); setClientePos(""); setMsg(""); setScontoFiera(false);
     // la cifra scritta a mano vale per QUEL carrello: un arrotondamento
     // che resta acceso si ripete sullo scontrino dopo, e nessuno lo vede
     setScontoExtraValore("");
@@ -75405,8 +75417,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         // gia' svuotato.
         const cartaSenzaPagamento = !omaggioAttivo && metodoPagamento === "pos"
           && modoIncassoPos !== "esterno" && statoQr !== "pagato";
-        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim()) || carrelloTroppoPiccolo || cartaSenzaPagamento;
+        // e senza un metodo scelto non si incassa: è la regola del
+        // 9/11/2026, e qui è l'ultima porta
+        const senzaMetodo = !omaggioAttivo && !metodoPagamento;
+        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim()) || carrelloTroppoPiccolo || cartaSenzaPagamento || senzaMetodo;
         return (
+          <>
+          {senzaMetodo && carrello.length > 0 && (
+            <div data-campo="scegli-il-metodo" style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, fontWeight: 700, color: NOTTE.oro, marginBottom: 8, textAlign: "center", lineHeight: 1.45 }}>
+              Scegli come la cliente paga, qui sopra: dopo ogni vendita non resta niente di scelto.
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 10 }}>
           <button
             onClick={confermaVendita}
@@ -75458,6 +75479,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
             <span style={{ whiteSpace: "nowrap" }}>Salva carrello</span>
           </button>
           </div>
+          </>
         );
       })()}
       <div style={{ ...fontBody, fontSize: 11.5, color: NOTTE.soffuso, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
