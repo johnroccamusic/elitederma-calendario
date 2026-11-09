@@ -225,3 +225,51 @@ describe("gli accessori didattica", () => {
     await p.smonta();
   });
 });
+
+// QUANTO SI LEGGE (9/11/2026). Le misure le ha decise il titolare
+// guardando la pagina: «il titolo della categoria grande il doppio,
+// grassetto e al centro», poi «anche i caratteri dei prodotti sono
+// troppo piccoli, raddoppiali e triplica quelli del titolo». Erano 11 e
+// 13. Stanno in due costanti sole, e questa prova le inchioda: queste
+// liste si leggono in piedi con lo scatolone in mano, e il giorno che
+// qualcuno le rimpicciolisce «per far stare più righe» se ne accorge
+// qui invece che in magazzino.
+describe("quanto si legge", () => {
+  it("il titolo del reparto è grande, in grassetto e al centro", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(p.tasto("prodotti"));
+    const titolo = p.nodo.querySelector('[data-reparto="Aghi"] span');
+    expect(titolo.style.fontSize).toBe("33px");
+    expect(Number(titolo.style.fontWeight)).toBeGreaterThanOrEqual(700);
+    expect(titolo.style.textAlign).toBe("center");
+    // e va a capo invece di uscire dal riquadro: «TUTTI I PIGMENTI» a 33
+    // su un telefono non ci sta
+    expect(titolo.style.overflowWrap).toBe("anywhere");
+    await p.smonta();
+  });
+
+  it("il nome del prodotto è il doppio di prima", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(p.tasto("prodotti"));
+    const riga = [...p.nodo.querySelectorAll("[data-riga-kit]")]
+      .find((d) => (d.textContent || "").includes("Arizona"));
+    const nome = [...riga.querySelectorAll("span")].find((x) => (x.textContent || "").trim() === "Pigmento Arizona");
+    expect(nome.style.fontSize).toBe("26px");
+    await p.smonta();
+  });
+
+  it("e negli accessori didattica si legge uguale", async () => {
+    // tre scale diverse per la stessa lista si notano passando da una
+    // pagina all'altra
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(p.tasto("Accessori didattica"));
+    const riga = [...p.nodo.querySelectorAll("[data-riga-accessorio]")]
+      .find((d) => (d.textContent || "").includes("Taglia M"));
+    const nome = [...riga.querySelectorAll("span")].find((x) => (x.textContent || "").includes("Taglia M"));
+    expect(nome.style.fontSize).toBe("26px");
+    await p.smonta();
+  });
+});

@@ -3787,6 +3787,24 @@ Due cose in più, trovate strada facendo:
 uscirebbe tutto «Senza categoria» e non lo direbbe nessuno — è la regola
 di «elenco vuoto = tabella non chiesta».
 
+**QUANTO SI LEGGONO** (9/11/2026, misure dettate dal titolare guardando
+la pagina: «il titolo della categoria grande il doppio, grassetto e al
+centro», e subito dopo «anche i caratteri dei prodotti sono troppo
+piccoli, raddoppiali e triplica quelli del titolo»). Erano 11 e 13: il
+titolo del reparto per tre (**33**, al centro, in grassetto, a capo
+invece che fuori dal riquadro — «TUTTI I PIGMENTI» a 33 su un telefono
+non ci sta), il nome del prodotto per due (**26**), e con essi la foto
+(46), la casella della quantità e la crocetta, che a quel punto erano
+diventate francobolli.
+
+Le due misure stanno in **due costanti sole** (`TESTO_REPARTO`,
+`TESTO_PRODOTTO_KIT`) lette da tutte e tre le liste, raccolta in
+logistica compresa: tre scale diverse per la stessa lista si notano
+passando da una pagina all'altra. Non sono misure di gusto — queste
+liste si leggono **in piedi, con lo scatolone in mano** — e una prova le
+inchioda, così il giorno che qualcuno le rimpicciolisce «per far stare
+più righe» se ne accorge nel banco di prova invece che in magazzino.
+
 **E LA LISTA CHE AVEVA DAVANTI ERA UN'ALTRA** (9/11/2026, subito dopo:
 «non vedo categorie nella lista»). Aveva ragione: quello che guardava era
 **«Accessori didattica»** — trentuno righe in fila indiana — che non e'
@@ -3798,7 +3816,7 @@ messa su una sola delle due strade che portano allo stesso posto non e'
 una correzione (gia' scritto il 2/11 per la cache del sito, e ricapitato
 qui).
 
-Prove in `prove/kit-per-reparto.test.jsx` (13) e in
+Prove in `prove/kit-per-reparto.test.jsx` (16) e in
 `prove/raccolta-materiale.test.jsx` (3 nuove), con le pagine montate: la
 radice che vince sulla figlia, la radice più figlia che fa UN reparto e
 non due, l'anello che non blocca niente, l'ordine dei reparti, la foto

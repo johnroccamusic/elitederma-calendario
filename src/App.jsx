@@ -1059,13 +1059,30 @@ function raggruppaPerReparto(righe, repartoDi, prodottoDi = (r) => r.prodottoId)
       (a.nome === SENZA_REPARTO ? 1 : 0) - (b.nome === SENZA_REPARTO ? 1 : 0)
       || a.nome.localeCompare(b.nome, "it"));
 }
+// QUANTO SI LEGGONO QUESTE LISTE. Due misure, scritte qui una volta
+// sola perche' le usano tutte e tre le liste dei prodotti di un kit (il
+// contenuto, gli accessori didattica e la raccolta in logistica): tre
+// scale diverse per la stessa lista si notano passando da una pagina
+// all'altra.
+//
+// I numeri li ha decisi il titolare il 9/11/2026, guardando la pagina:
+// «il titolo della categoria grande il doppio, grassetto e al centro»,
+// e subito dopo «anche i caratteri dei prodotti sono troppo piccoli,
+// raddoppiali e triplica quelli del titolo». Erano 11 e 13: il titolo
+// per tre, il prodotto per due. Non sono misure di gusto — queste liste
+// si leggono in piedi, con lo scatolone in mano.
+const TESTO_REPARTO = 33;
+const TESTO_PRODOTTO_KIT = 26;
 // l'intestazione di un reparto: la stessa in tutte e due le pagine, o
 // una lista divisa per categorie somiglierebbe a due cose diverse
 function IntestazioneReparto({ nome, nota }) {
   return (
-    <div data-reparto={nome} style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", margin: "12px 0 4px", paddingBottom: 3, borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <span style={{ ...fontBody, fontSize: 11, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>{nome}</span>
-      {nota ? <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{nota}</span> : null}
+    <div data-reparto={nome} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, margin: "22px 0 8px", paddingBottom: 6, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      {/* al centro e in grande: e' il cartello dello scaffale, non
+          un'etichetta di campo. Va a capo invece di uscire dal riquadro,
+          perche' «TUTTI I PIGMENTI» a 33 su un telefono non ci sta */}
+      <span style={{ ...fontDisplay, fontSize: TESTO_REPARTO, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.1, textAlign: "center", overflowWrap: "anywhere" }}>{nome}</span>
+      {nota ? <span style={{ ...fontBody, fontSize: 15, color: MUTED, textAlign: "center" }}>{nota}</span> : null}
     </div>
   );
 }
@@ -80137,10 +80154,10 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
                 boxShadow: presa ? "none" : "0 1px 2px rgba(14,27,51,0.05)",
               }}
             >
-              <span style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: presa ? "#2E7D32" : NAVY, minWidth: 44, textAlign: "center", flexShrink: 0 }}>{r.quantita}</span>
+              <span style={{ ...fontDisplay, fontSize: 34, fontWeight: 800, color: presa ? "#2E7D32" : NAVY, minWidth: 54, textAlign: "center", flexShrink: 0 }}>{r.quantita}</span>
               <RiquadroFotoProdotto url={url} />
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", ...fontBody, fontSize: 15, fontWeight: 700, color: presa ? "#2E7D32" : NAVY, overflowWrap: "anywhere", textDecoration: presa ? "line-through" : "none", textDecorationColor: "#8BC48B" }}>{r.nome}</span>
+                <span style={{ display: "block", ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, fontWeight: 700, color: presa ? "#2E7D32" : NAVY, overflowWrap: "anywhere", textDecoration: presa ? "line-through" : "none", textDecorationColor: "#8BC48B" }}>{r.nome}</span>
                 <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
                   {r.da.join(" · ")}
                   {presa && spunte[r.chiave]?.da ? ` · preso da ${spunte[r.chiave].da}` : ""}
@@ -82341,10 +82358,10 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
             const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
             return (
               <div key={r.id} data-riga-kit="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
-                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
-                <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 56, padding: "4px 6px" }} />
-                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={46} />
+                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
+                <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 76, padding: "6px 8px", fontSize: 20, fontWeight: 700, textAlign: "center" }} />
+                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 20, padding: 6 }}>✕</button>
               </div>
             );
           })}
@@ -82468,9 +82485,9 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
             const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
             return (
               <div key={r.id} data-riga-accessorio="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
-                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
-                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={46} />
+                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
+                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 20, padding: 6 }}>✕</button>
               </div>
             );
           })}
