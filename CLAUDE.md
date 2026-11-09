@@ -3731,6 +3731,43 @@ con quelli del repo: su `assistente-regole` i quattro file risultano
 identici. Vale la stessa regola del deploy su Vercel — lo sha, non
 l'impressione.
 
+### «Ho associato il diploma» e il database dice di no (9/11/2026)
+
+Il titolare, davanti all'avviso «CLAUDIA CECCHI: il pacchetto "MICRO
+INDIVIDUALE" non ha un modello di diploma»: **«questo messaggio è falso,
+ho associato il diploma»**.
+
+**Misurato prima di toccare qualunque cosa, e l'avviso diceva il vero:**
+il pacchetto `MICRO INDIVIDUALE` (uno solo con quel nome) ha
+`diploma_path` **null**; l'iscritta è collegata per `kit_id` proprio a
+quello, quindi non è il caso del pacchetto «scritto ma non collegato»;
+nel secchio `diploma-templates` **nessun file è stato caricato oggi** —
+l'ultimo è del 29/10; e il pacchetto è nato **oggi alle 12:31**, mentre
+il tasto «Importa diploma» è andato in produzione **alle 12:53**. Delle
+56 tipologie di kit, 51 hanno un diploma e 5 no.
+
+Quello che resta è un'ipotesi, e come tale va detta: il gesto è stato
+fatto prima che quel tasto esistesse, oppure su un'altra scheda. Ma il
+punto non è ricostruire il clic — **è che non si poteva sapere**, ed è
+quello che è stato corretto.
+
+**UN UPDATE SENZA SELECT MENTE, e qui è costata una discussione.**
+PostgREST risponde «va bene» anche a un update che non ha cambiato
+NESSUNA riga (regola già scritta in questo file, e già pagata una volta).
+Le tre strade del diploma — carica il PDF, importa da un altro pacchetto,
+togli — scrivevano senza contare le righe: chi premeva vedeva una pagina
+che non protestava e se ne andava convinto di aver fatto. Adesso tutte e
+tre fanno `.select("id")`, contano, e se sono zero lo dicono con una
+frase sola (`NESSUNA_RIGA_DIPLOMA`): «il database non ha cambiato nessuna
+riga… ricarica la pagina e riprova». Prove in
+`prove/importa-pacchetto.test.jsx`: a zero righe parla, a una riga tace.
+
+**La regola generale, da applicare oltre il diploma:** quando qualcuno
+dice «l'ho fatto» e l'app dice di no, prima si guarda **il dato** — e poi
+si guarda se quella scrittura era in grado di accorgersi di non aver
+scritto. Restano senza conteggio le altre scritture della stessa scheda
+(nome del pacchetto, quantità, contenuto): stesso rischio, da sistemare.
+
 ### I prodotti di un kit si leggono per reparto, con la foto (9/11/2026)
 
 Il titolare: «quando creo un kit e inserisco i prodotti li devi dividere

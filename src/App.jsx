@@ -1089,6 +1089,20 @@ function IntestazioneReparto({ nome, nota }) {
     </div>
   );
 }
+// QUANDO UNA SCRITTURA NON TOCCA NESSUNA RIGA, SI DICE.
+//
+// Il 9/11/2026 il titolare: «questo messaggio è falso, ho associato il
+// diploma» — e il database diceva di no. Qualunque sia stato il gesto,
+// il guasto possibile è sempre lo stesso: PostgREST risponde «va bene»
+// anche a un update che non ha cambiato NIENTE (vedi «Update senza
+// select mente» in CLAUDE.md). Senza contare le righe, chi preme vede
+// una pagina che non protesta e se ne va convinto di aver fatto; la
+// bugia si scopre in tipografia, davanti all'allieva.
+//
+// Le tre strade del diploma — carica, importa, togli — adesso contano
+// le righe cambiate e, se sono zero, lo dicono con questa frase sola.
+const NESSUNA_RIGA_DIPLOMA = (nome) =>
+  `Il diploma NON è stato associato a "${nome}": il database non ha cambiato nessuna riga.\n\nQuasi sempre vuol dire che quel pacchetto non esiste più com'era — rinominato, cancellato o ricreato da un altro dispositivo. Ricarica la pagina e riprova: se il pacchetto c'è ancora, la seconda volta va.`;
 // il riquadro della foto di un prodotto: lo usano la raccolta in
 // logistica e il contenuto del kit, e due riquadri diversi per la stessa
 // foto si noterebbero passando da una pagina all'altra
@@ -82099,8 +82113,9 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     const percorso = `kit-${kit.id}/diploma-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from("diploma-templates").upload(percorso, file);
     if (erroreUpload) { setCaricandoDiploma(false); window.alert("Errore nel caricamento: " + erroreUpload.message); return; }
-    const { error } = await supabase.from("kit_definizioni").update({ diploma_path: percorso, diploma_nome: file.name }).eq("id", kit.id);
+    const { data: scritte, error } = await supabase.from("kit_definizioni").update({ diploma_path: percorso, diploma_nome: file.name }).eq("id", kit.id).select("id");
     if (error) { setCaricandoDiploma(false); window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(scritte || []).length) { setCaricandoDiploma(false); window.alert(NESSUNA_RIGA_DIPLOMA(kit.nome)); return; }
 
     // Il primo diploma di un corso vale per tutti i suoi pacchetti: quasi
     // sempre il foglio è lo stesso, e caricarlo dieci volte sarebbe solo
@@ -82131,8 +82146,9 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   // dei diplomi con quel modello, il modello deve restare rintracciabile
   async function togliDiploma() {
     if (!window.confirm(`Togliere il diploma associato a "${kit.nome}"?`)) return;
-    const { error } = await supabase.from("kit_definizioni").update({ diploma_path: null, diploma_nome: null }).eq("id", kit.id);
+    const { data, error } = await supabase.from("kit_definizioni").update({ diploma_path: null, diploma_nome: null }).eq("id", kit.id).select("id");
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) { window.alert(NESSUNA_RIGA_DIPLOMA(kit.nome)); return; }
     ricarica(["kit_definizioni"]);
   }
   // I DIPLOMI GIA' CARICATI, uno per FILE e non uno per pacchetto: lo
@@ -82174,9 +82190,10 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   // mirato, e scrivere di nascosto su pacchetti che nessuno ha nominato
   // sarebbe una sorpresa.
   async function importaDiploma(d) {
-    const { error } = await supabase.from("kit_definizioni")
-      .update({ diploma_path: d.percorso, diploma_nome: d.nome }).eq("id", kit.id);
+    const { data, error } = await supabase.from("kit_definizioni")
+      .update({ diploma_path: d.percorso, diploma_nome: d.nome }).eq("id", kit.id).select("id");
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) { window.alert(NESSUNA_RIGA_DIPLOMA(kit.nome)); return; }
     setMostraImportaDiploma(false); setRicercaDiploma("");
     ricarica(["kit_definizioni"]);
   }

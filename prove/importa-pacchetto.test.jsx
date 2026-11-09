@@ -222,9 +222,11 @@ describe("importa diploma", () => {
   it("scelto, scrive il percorso e il nome su QUESTO pacchetto", async () => {
     const scritte = [];
     rispondiCon({
+      // la riga tornata indietro è quella che dice che la scrittura è
+      // arrivata davvero: senza, l'app non potrebbe saperlo
       "/rest/v1/kit_definizioni": (corpo, indirizzo) => {
         if (corpo) scritte.push({ corpo, indirizzo });
-        return [];
+        return [{ id: "k2" }];
       },
     });
     const p = await pagina();
@@ -266,6 +268,45 @@ describe("importa diploma", () => {
     const voci = vociDiploma(p).map((v) => v.textContent);
     expect(voci.length).toBe(1);
     expect(voci[0]).toMatch(/Diploma laminazione\.pdf/);
+    await p.smonta();
+  });
+});
+
+// UNA SCRITTURA CHE NON TOCCA NIENTE SI DICE (9/11/2026).
+//
+// Il titolare, davanti a «il pacchetto non ha un modello di diploma»:
+// «questo messaggio è falso, ho associato il diploma». Il database
+// diceva di no. Qualunque sia stato il gesto, il guasto POSSIBILE è
+// sempre lo stesso: PostgREST risponde «va bene» anche a un update che
+// non ha cambiato nessuna riga, e chi preme se ne va convinto di aver
+// fatto. Da qui in poi l'app conta le righe e, se sono zero, lo dice.
+describe("quando il database non cambia niente", () => {
+  it("l'importazione del diploma lo dice invece di far finta", async () => {
+    const detti = [];
+    const vecchioAlert = window.alert;
+    window.alert = (m) => detti.push(m);
+    rispondiCon({ "/rest/v1/kit_definizioni": () => [] });
+    const p = await pagina();
+    await clicca(tastoDiploma(p, "KIT NUOVO"));
+    await clicca(vociDiploma(p)[0]);
+    await attendi(80);
+    expect(detti.join(" ")).toMatch(/NON è stato associato/);
+    expect(detti.join(" ")).toMatch(/Ricarica la pagina/);
+    window.alert = vecchioAlert;
+    await p.smonta();
+  });
+
+  it("e con la riga cambiata non dice niente", async () => {
+    const detti = [];
+    const vecchioAlert = window.alert;
+    window.alert = (m) => detti.push(m);
+    rispondiCon({ "/rest/v1/kit_definizioni": () => [{ id: "k2" }] });
+    const p = await pagina();
+    await clicca(tastoDiploma(p, "KIT NUOVO"));
+    await clicca(vociDiploma(p)[0]);
+    await attendi(80);
+    expect(detti).toEqual([]);
+    window.alert = vecchioAlert;
     await p.smonta();
   });
 });
