@@ -82050,14 +82050,14 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   // su un pacchetto da trenta righe è un lavoro che non torna indietro.
   // La conferma dice i due numeri e da dove arriva la lista, così si vede
   // subito se si sta scrivendo sul pacchetto sbagliato.
-  async function sostituisciContenuto(prodotti, daDove) {
+  async function sostituisciContenuto(prodotti, daDove, inPiu = "") {
     const quante = prodottiKit.length;
     // i due numeri si dicono come numeri e non dentro una frase che deve
     // andare bene al singolare e al plurale: «Le 1 righe» si legge come
     // un errore, e un messaggio scritto male lo si salta
     const messaggio = quante > 0
-      ? `Sostituire il contenuto di "${kit.nome}"?\n\nRighe adesso: ${quante}. Dopo: ${prodotti.length}, prese da ${daDove}.\n\nQuelle di adesso vengono tolte; gli accessori didattica non si toccano.`
-      : `Copiare in "${kit.nome}" i ${prodotti.length} prodotti di ${daDove}?`;
+      ? `Sostituire il contenuto di "${kit.nome}"?\n\nRighe adesso: ${quante}. Dopo: ${prodotti.length}, prese da ${daDove}.\n\nQuelle di adesso vengono tolte; gli accessori didattica non si toccano.${inPiu}`
+      : `Copiare in "${kit.nome}" i ${prodotti.length} prodotti di ${daDove}?${inPiu}`;
     if (!window.confirm(messaggio)) return false;
     const { error: erroreDelete } = await supabase.from("corsi_kit_prodotti").delete().eq("kit_id", kit.id).eq("tipo", "kit");
     if (erroreDelete) { window.alert("Errore: " + testoErrore(erroreDelete)); return false; }
@@ -82076,8 +82076,34 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   }
   async function importaDa(fonte) {
     if (!fonte || fonte.id === kit.id) return;
-    const fatto = await sostituisciContenuto(fonte.prodotti, `«${fonte.nome}» (${fonte.corso})`);
+    // IL DIPLOMA VIAGGIA COL PACCHETTO, se qui non ce n'è uno.
+    //
+    // Il 9/11/2026 il titolare: «provo ad importare il diploma da un
+    // altro corso e non me lo importa». «Duplica» la copia se lo porta
+    // dietro da sempre; «Importa pacchetto» no, prendeva solo i
+    // prodotti. Due tasti vicini e due idee diverse di cosa sia «il
+    // pacchetto»: chi importa un pacchetto si aspetta il pacchetto, non
+    // metà. Resta «Importa diploma» per prendere il solo foglio.
+    //
+    // Un diploma GIÀ scritto qui non si tocca mai: può essere quello
+    // sostituito apposta su questo pacchetto, ed è la stessa regola del
+    // primo caricamento di un corso.
+    const prendoAncheIlDiploma = !kit.diploma_path && !!fonte.diploma_path;
+    const fatto = await sostituisciContenuto(
+      fonte.prodotti,
+      `«${fonte.nome}» (${fonte.corso})`,
+      prendoAncheIlDiploma ? `\n\nArriva anche il diploma «${fonte.diploma_nome || "diploma"}», che qui manca.` : "",
+    );
     if (!fatto) return;
+    if (prendoAncheIlDiploma) {
+      const { data, error } = await supabase.from("kit_definizioni")
+        .update({ diploma_path: fonte.diploma_path, diploma_nome: fonte.diploma_nome || null })
+        .eq("id", kit.id).select("id");
+      // il contenuto è già arrivato: se il diploma non si scrive lo si
+      // dice e basta, invece di far sembrare fallito tutto il gesto
+      if (error || !(data || []).length) window.alert(NESSUNA_RIGA_DIPLOMA(kit.nome));
+      ricarica(["kit_definizioni"]);
+    }
     setMostraImporta(false); setRicercaImporta("");
     // e il pacchetto si apre: si guarda sempre cosa è arrivato dentro, e
     // un elenco che si riempie senza mostrarsi va ricontrollato a mano

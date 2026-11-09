@@ -310,3 +310,57 @@ describe("quando il database non cambia niente", () => {
     await p.smonta();
   });
 });
+
+// «NON ME LO IMPORTA»: il diploma viaggia col pacchetto (9/11/2026).
+//
+// Il titolare: «provo ad importare il diploma da un altro corso e non me
+// lo importa». «Duplica» il diploma se lo porta dietro da sempre;
+// «Importa pacchetto» prendeva solo i prodotti. Due tasti vicini e due
+// idee diverse di cosa sia «il pacchetto»: chi ne importa uno si
+// aspetta il pacchetto, non metà.
+describe("importando un pacchetto arriva anche il diploma", () => {
+  it("se qui non ce n'è uno, lo scrive e lo dice nella conferma", async () => {
+    let detto = "";
+    const vecchiaConferma = window.confirm;
+    window.confirm = (m) => { detto = m; return true; };
+    const scritte = [];
+    rispondiCon({
+      "/rest/v1/corsi_kit_prodotti": (corpo) => { if (corpo) scritte.push(corpo); return [{ id: "x" }]; },
+      "/rest/v1/kit_definizioni": (corpo, indirizzo) => { if (corpo) scritte.push({ corpo, indirizzo }); return [{ id: "k2" }]; },
+    });
+    const p = await pagina();
+    await clicca(tastiImporta(p).find((b) => schedaDi(p, "KIT NUOVO").contains(b)));
+    await clicca(vociElenco(p)[0]); // KIT BASE, che ha il diploma PMU
+    await attendi(120);
+
+    expect(detto, "la conferma lo dice prima").toMatch(/Arriva anche il diploma «Diploma PMU\.pdf»/);
+    const diploma = scritte.find((x) => x?.corpo?.diploma_path);
+    expect(diploma, "la scrittura del diploma").toBeTruthy();
+    expect(diploma.corpo.diploma_path).toBe("kit-k1/diploma-1.pdf");
+    expect(diploma.indirizzo).toMatch(/id=eq\.k2/);
+    window.confirm = vecchiaConferma;
+    await p.smonta();
+  });
+
+  it("un diploma già scritto qui NON si tocca", async () => {
+    // può essere quello sostituito apposta su questo pacchetto: stessa
+    // regola del primo caricamento di un corso
+    let detto = "";
+    const vecchiaConferma = window.confirm;
+    window.confirm = (m) => { detto = m; return true; };
+    const scritte = [];
+    rispondiCon({
+      "/rest/v1/corsi_kit_prodotti": (corpo) => { if (corpo) scritte.push(corpo); return [{ id: "x" }]; },
+      "/rest/v1/kit_definizioni": (corpo, indirizzo) => { if (corpo) scritte.push({ corpo, indirizzo }); return [{ id: "k3" }]; },
+    });
+    const p = await pagina();
+    // KIT LAMINA ha già il suo diploma
+    await clicca(tastiImporta(p).find((b) => schedaDi(p, "KIT LAMINA").contains(b)));
+    await clicca(vociElenco(p)[0]);
+    await attendi(120);
+    expect(detto).not.toMatch(/Arriva anche il diploma/);
+    expect(scritte.find((x) => x?.corpo?.diploma_path)).toBeFalsy();
+    window.confirm = vecchiaConferma;
+    await p.smonta();
+  });
+});

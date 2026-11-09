@@ -3762,6 +3762,18 @@ frase sola (`NESSUNA_RIGA_DIPLOMA`): «il database non ha cambiato nessuna
 riga… ricarica la pagina e riprova». Prove in
 `prove/importa-pacchetto.test.jsx`: a zero righe parla, a una riga tace.
 
+**E «IMPORTA PACCHETTO» NON PORTAVA IL DIPLOMA** (9/11/2026, stesso
+giro: «provo ad importare il diploma da un altro corso e non me lo
+importa»). **«Duplica» il diploma se lo porta dietro da sempre**;
+«Importa pacchetto» prendeva solo i prodotti. Due tasti vicini e due
+idee diverse di cosa sia «il pacchetto» — e chi ne importa uno si
+aspetta il pacchetto, non metà. Ora il diploma viaggia col contenuto
+**quando qui non ce n'è uno**, la conferma lo dice prima («arriva anche
+il diploma «X», che qui manca»), e un diploma già scritto su questo
+pacchetto **non si tocca mai**: può essere quello sostituito apposta, ed
+è la stessa regola del primo caricamento di un corso. «Importa diploma»
+resta per prendere il solo foglio.
+
 **La regola generale, da applicare oltre il diploma:** quando qualcuno
 dice «l'ho fatto» e l'app dice di no, prima si guarda **il dato** — e poi
 si guarda se quella scrittura era in grado di accorgersi di non aver
