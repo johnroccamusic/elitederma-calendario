@@ -24,11 +24,15 @@ const CORSI = [
   { id: "c1", nome: "PMU BASE" },
   { id: "c2", nome: "LAMINAZIONE BASE" },
 ];
+// due pacchetti portano lo STESSO file di diploma: e' il caso normale,
+// perche' il primo diploma caricato su un corso si attacca da se' a
+// tutti i suoi pacchetti che non ne hanno uno
+const DIPLOMA_PMU = { diploma_path: "kit-k1/diploma-1.pdf", diploma_nome: "Diploma PMU.pdf" };
 const KIT = [
-  { id: "k1", nome: "KIT BASE", corso_id: "c1", ordine: 1, tipo: "kit" },
+  { id: "k1", nome: "KIT BASE", corso_id: "c1", ordine: 1, tipo: "kit", ...DIPLOMA_PMU },
   { id: "k2", nome: "KIT NUOVO", corso_id: "c1", ordine: 2, tipo: "kit" },
-  { id: "k3", nome: "KIT LAMINA", corso_id: "c2", ordine: 1, tipo: "kit" },
-  { id: "k4", nome: "KIT VUOTO", corso_id: "c2", ordine: 2, tipo: "kit" },
+  { id: "k3", nome: "KIT LAMINA", corso_id: "c2", ordine: 1, tipo: "kit", diploma_path: "kit-k3/diploma-9.pdf", diploma_nome: "Diploma laminazione.pdf" },
+  { id: "k4", nome: "KIT VUOTO", corso_id: "c2", ordine: 2, tipo: "kit", ...DIPLOMA_PMU },
 ];
 const RIGHE = [
   { id: "r1", kit_id: "k1", prodotto_id: "p1", tipo: "kit", quantita: 2 },
@@ -174,6 +178,94 @@ describe("importa pacchetto", () => {
     expect(schede(p).length).toBe(4);
     // nessun elenco aperto finché non si preme
     expect(vociElenco(p).length).toBe(0);
+    await p.smonta();
+  });
+});
+
+// ---------------------------------------------------------------------
+// «IMPORTA DIPLOMA» (9/11/2026, chiesto subito dopo: «mi serve anche
+// importa diploma»).
+//
+// Stessa storia del contenuto: il foglio del diploma e' quasi sempre
+// quello di un altro pacchetto, e l'unica strada era ricaricare il PDF —
+// cioe' tenere in giro copie dello stesso file che un giorno si
+// scostano, e nessuno sa quale sia stata stampata.
+const tastoDiploma = (p, nome) => schedaDi(p, nome).querySelector('[data-campo="importa-diploma"]');
+const vociDiploma = (p) => [...p.nodo.querySelectorAll('[data-campo="diploma-da-importare"]')];
+
+describe("importa diploma", () => {
+  it("il tasto c'è su un pacchetto senza diploma, e non su uno che ce l'ha", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    expect(tastoDiploma(p, "KIT NUOVO"), "su quello senza").toBeTruthy();
+    // chi il diploma ce l'ha vede il file associato e la crocetta per
+    // toglierlo: per cambiarlo si passa da lì, come prima
+    expect(tastoDiploma(p, "KIT BASE"), "su quello che ce l'ha").toBe(null);
+    await p.smonta();
+  });
+
+  it("l'elenco è uno per FILE, non uno per pacchetto", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(tastoDiploma(p, "KIT NUOVO"));
+    const voci = vociDiploma(p).map((v) => v.textContent);
+    // KIT BASE e KIT VUOTO hanno lo stesso file: una riga sola
+    expect(voci.length).toBe(2);
+    expect(voci[0]).toMatch(/Diploma PMU\.pdf/);
+    expect(voci[0]).toMatch(/lo usano 2 pacchetti/);
+    expect(voci[1]).toMatch(/Diploma laminazione\.pdf/);
+    // e quello del proprio corso viene per primo
+    expect(voci[0]).toMatch(/PMU BASE/);
+    await p.smonta();
+  });
+
+  it("scelto, scrive il percorso e il nome su QUESTO pacchetto", async () => {
+    const scritte = [];
+    rispondiCon({
+      "/rest/v1/kit_definizioni": (corpo, indirizzo) => {
+        if (corpo) scritte.push({ corpo, indirizzo });
+        return [];
+      },
+    });
+    const p = await pagina();
+    await clicca(tastoDiploma(p, "KIT NUOVO"));
+    await clicca(vociDiploma(p)[0]);
+    await attendi(80);
+
+    const scritta = scritte.find((x) => x.corpo?.diploma_path);
+    expect(scritta, "l'aggiornamento").toBeTruthy();
+    expect(scritta.corpo.diploma_path).toBe("kit-k1/diploma-1.pdf");
+    expect(scritta.corpo.diploma_nome).toBe("Diploma PMU.pdf");
+    // su quel pacchetto e su nessun altro
+    expect(scritta.indirizzo).toMatch(/id=eq\.k2/);
+    await p.smonta();
+  });
+
+  it("se nessun pacchetto ha un diploma il tasto non c'è", async () => {
+    // un tasto che apre un elenco vuoto manda a cercare una cosa che non
+    // esiste: meglio il solo campo per caricare il file
+    rispondiCon({});
+    const senza = KIT.map((k) => ({ ...k, diploma_path: null, diploma_nome: null }));
+    const p = await monta(
+      <PaginaContenutoKit
+        corsi={CORSI} kitDefinizioni={senza} setKitDefinizioni={() => {}}
+        corsiKitProdotti={RIGHE} prodottiShop={PRODOTTI}
+        onBack={() => {}} ricarica={() => {}}
+      />
+    );
+    expect(p.nodo.querySelector('[data-campo="importa-diploma"]')).toBe(null);
+    await p.smonta();
+  });
+
+  it("si cerca per nome del file, del pacchetto o del corso", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(tastoDiploma(p, "KIT NUOVO"));
+    const casella = p.campi().find((i) => /Cerca per nome del file/.test(i.placeholder || ""));
+    await scrivi(casella, "laminaz");
+    const voci = vociDiploma(p).map((v) => v.textContent);
+    expect(voci.length).toBe(1);
+    expect(voci[0]).toMatch(/Diploma laminazione\.pdf/);
     await p.smonta();
   });
 });

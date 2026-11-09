@@ -81814,6 +81814,12 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   // scelta annidata la trova solo chi sa che esiste.
   const [mostraImporta, setMostraImporta] = useState(false);
   const [ricercaImporta, setRicercaImporta] = useState("");
+  // e lo stesso per il DIPLOMA: il foglio di un corso e' quasi sempre lo
+  // stesso di un altro pacchetto, e ricaricare il PDF ogni volta vuol
+  // dire tenere in giro copie dello stesso file che un giorno si
+  // scostano — quella corretta e quella che qualcuno ha stampato
+  const [mostraImportaDiploma, setMostraImportaDiploma] = useState(false);
+  const [ricercaDiploma, setRicercaDiploma] = useState("");
   // contenuto ripiegato di default: con molti prodotti nel kit la pagina
   // diventava una lista lunghissima da scorrere per ogni pacchetto — solo
   // un pacchetto alla volta può essere aperto in tutta la pagina (stato
@@ -82011,6 +82017,51 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
   }
+  // I DIPLOMI GIA' CARICATI, uno per FILE e non uno per pacchetto: lo
+  // stesso foglio sta addosso a tutti i pacchetti di un corso (glielo
+  // scrive `associaDiploma` al primo caricamento), e venti righe
+  // identiche in un elenco non sono venti scelte. Accanto a ognuno si
+  // legge da dove arriva e quanti pacchetti lo usano gia'.
+  const qDiploma = ricercaDiploma.trim().toLowerCase();
+  const diplomiTutti = (() => {
+    const perFile = new Map();
+    const ordinati = (pacchettiImportabili || [])
+      .filter((p) => p.id !== kit.id && p.diploma_path)
+      .sort((a, b) => {
+        const mio = (x) => (kit.corso_id && x.corso_id === kit.corso_id ? 0 : 1);
+        return mio(a) - mio(b) || a.corso.localeCompare(b.corso) || a.nome.localeCompare(b.nome);
+      });
+    for (const p of ordinati) {
+      const gia = perFile.get(p.diploma_path);
+      if (gia) { gia.quanti += 1; continue; }
+      perFile.set(p.diploma_path, {
+        percorso: p.diploma_path, nome: p.diploma_nome || "diploma",
+        da: p.nome, corso: p.corso, quanti: 1,
+      });
+    }
+    return [...perFile.values()];
+  })();
+  const diplomiImportabili = qDiploma
+    ? diplomiTutti.filter((d) => `${d.nome} ${d.da} ${d.corso}`.toLowerCase().includes(qDiploma))
+    : diplomiTutti;
+  // si copia il PERCORSO, non il file: il modello del diploma e' uno solo
+  // nel secchio, ed e' gia' cosi' che funziona fra i pacchetti dello
+  // stesso corso. Sostituirlo su un pacchetto carica un file nuovo e non
+  // tocca gli altri; toglierlo non cancella niente dal secchio, perche'
+  // se qualcuno ci ha stampato dei diplomi quel file deve restare.
+  //
+  // E scrive SOLO su questo pacchetto. Il caricamento del primo diploma
+  // di un corso lo passa anche agli altri che non ne hanno — li' e' il
+  // caso normale, lo stesso foglio per tutti —; importare e' un gesto
+  // mirato, e scrivere di nascosto su pacchetti che nessuno ha nominato
+  // sarebbe una sorpresa.
+  async function importaDiploma(d) {
+    const { error } = await supabase.from("kit_definizioni")
+      .update({ diploma_path: d.percorso, diploma_nome: d.nome }).eq("id", kit.id);
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    setMostraImportaDiploma(false); setRicercaDiploma("");
+    ricarica(["kit_definizioni"]);
+  }
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
 
   return (
@@ -82089,10 +82140,42 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
               style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", minWidth: 180, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 10px" }}
               onChange={(e) => associaDiploma(e.target.files?.[0] || null)}
             />
+            {/* il tasto c'e' solo se da qualche parte un diploma c'e'
+                davvero: offrire di importare da un elenco vuoto manda a
+                cercare una cosa che non esiste */}
+            {diplomiTutti.length > 0 && (
+              <button
+                onClick={() => { setMostraImportaDiploma((v) => !v); setRicercaDiploma(""); }}
+                data-campo="importa-diploma"
+                title="Usa su questo pacchetto lo stesso diploma di un altro, senza ricaricare il file"
+                style={pillBtn}
+              >
+                Importa diploma
+              </button>
+            )}
           </>
         )}
         {caricandoDiploma && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Carico…</span>}
       </div>
+
+      {mostraImportaDiploma && !kit.diploma_path && (
+        <div style={{ marginTop: 10, marginBottom: 10 }}>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+            Quale diploma? È lo stesso file, non una copia: il giorno che va cambiato si sostituisce su un pacchetto alla volta.
+          </div>
+          <CampoRicerca value={ricercaDiploma} onChange={(e) => setRicercaDiploma(e.target.value)} placeholder="Cerca per nome del file, pacchetto o corso…" />
+          {diplomiImportabili.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 2px" }}>Nessun diploma con questo nome.</div>
+          ) : diplomiImportabili.slice(0, 12).map((d) => (
+            <div key={d.percorso} data-campo="diploma-da-importare" onClick={() => importaDiploma(d)} style={rigaRisultato}>
+              {d.nome}
+              <span style={{ color: MUTED, fontSize: 12 }}>
+                {" · "}{d.da} · {d.corso}{d.quanti > 1 ? ` · lo usano ${d.quanti} pacchetti` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {mostraImporta && (
         <div style={{ marginTop: 10, marginBottom: 10 }}>
@@ -82444,6 +82527,9 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
         id: k.id, nome: k.nome, corso_id: k.corso_id || null,
         corso: k.corso_id ? (nomeCorso[k.corso_id] || "corso non in elenco") : "Pacchetti speciali",
         prodotti: perKit[k.id] || [],
+        // servono a «Importa diploma»: il percorso nel secchio e il nome
+        // del file come lo vede chi lo ha caricato
+        diploma_path: k.diploma_path || null, diploma_nome: k.diploma_nome || null,
       }));
   }, [kitDefinizioni, corsiKitProdotti, corsi]);
 

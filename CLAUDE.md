@@ -3781,7 +3781,31 @@ per due strade. Importa la fa da sola e si vede sempre; la coppia non e'
 stata tolta perche' nessuno l'ha chiesto, ma tre tasti per un lavoro solo
 sono due di troppo.
 
-Prove in `prove/importa-pacchetto.test.jsx` (7), con la pagina vera
+**E lo stesso per il DIPLOMA** (9/11/2026, chiesto subito dopo: «mi serve
+anche importa diploma»). Il foglio e' quasi sempre quello di un altro
+pacchetto, e l'unica strada era ricaricare il PDF — cioe' tenere nel
+secchio copie dello stesso file che un giorno si scostano, e nessuno sa
+quale sia stata stampata.
+
+- **Si copia il PERCORSO, non il file.** Il modello resta uno solo nel
+  secchio, ed e' gia' cosi' che funziona fra i pacchetti di uno stesso
+  corso. Sostituirlo su un pacchetto carica un file nuovo e non tocca gli
+  altri; toglierlo non cancella niente, perche' se qualcuno ci ha
+  stampato dei diplomi quel file deve restare rintracciabile.
+- **L'elenco e' uno per FILE, non uno per pacchetto.** Lo stesso foglio
+  sta addosso a tutti i pacchetti di un corso, e venti righe identiche
+  non sono venti scelte: si raggruppa per percorso e accanto si legge da
+  dove arriva e quanti pacchetti lo usano gia'.
+- **Scrive solo su questo pacchetto.** Il caricamento del PRIMO diploma
+  di un corso lo passa anche agli altri che non ne hanno — li' e' il caso
+  normale, lo stesso foglio per tutti; importare e' un gesto mirato, e
+  scrivere di nascosto su pacchetti che nessuno ha nominato sarebbe una
+  sorpresa.
+- **Il tasto non c'e' se nessun pacchetto ha un diploma**, e non c'e' su
+  chi il diploma ce l'ha gia': li' si legge il file associato e la
+  crocetta per toglierlo, come prima.
+
+Prove in `prove/importa-pacchetto.test.jsx` (12), con la pagina vera
 montata. Una cosa trovata dal banco: **la scheda si cerca per nome e non
 per posizione** — i corsi sono in ordine alfabetico, quindi LAMINAZIONE
 BASE sta sopra PMU BASE, e al primo giro la prova guardava il kit
