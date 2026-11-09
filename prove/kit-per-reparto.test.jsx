@@ -227,10 +227,11 @@ describe("gli accessori didattica", () => {
 });
 
 // QUANTO SI LEGGE (9/11/2026). Le misure le ha decise il titolare
-// guardando la pagina: «il titolo della categoria grande il doppio,
-// grassetto e al centro», poi «anche i caratteri dei prodotti sono
-// troppo piccoli, raddoppiali e triplica quelli del titolo». Erano 11 e
-// 13. Stanno in due costanti sole, e questa prova le inchioda: queste
+// guardando la pagina e correggendo due volte: «grande il doppio,
+// grassetto e al centro», poi «raddoppiali e triplica quelli del
+// titolo» (33 e 26), infine «ora è troppo, riducili del 40%». Da 11 e
+// 13 si arriva a 20 e 16. Stanno in due costanti sole, e questa prova
+// le inchioda: queste
 // liste si leggono in piedi con lo scatolone in mano, e il giorno che
 // qualcuno le rimpicciolisce «per far stare più righe» se ne accorge
 // qui invece che in magazzino.
@@ -240,7 +241,7 @@ describe("quanto si legge", () => {
     const p = await pagina();
     await clicca(p.tasto("prodotti"));
     const titolo = p.nodo.querySelector('[data-reparto="Aghi"] span');
-    expect(titolo.style.fontSize).toBe("33px");
+    expect(titolo.style.fontSize).toBe("20px");
     expect(Number(titolo.style.fontWeight)).toBeGreaterThanOrEqual(700);
     expect(titolo.style.textAlign).toBe("center");
     // e va a capo invece di uscire dal riquadro: «TUTTI I PIGMENTI» a 33
@@ -249,14 +250,14 @@ describe("quanto si legge", () => {
     await p.smonta();
   });
 
-  it("il nome del prodotto è il doppio di prima", async () => {
+  it("il nome del prodotto è più grande di prima, ma non enorme", async () => {
     rispondiCon({});
     const p = await pagina();
     await clicca(p.tasto("prodotti"));
     const riga = [...p.nodo.querySelectorAll("[data-riga-kit]")]
       .find((d) => (d.textContent || "").includes("Arizona"));
     const nome = [...riga.querySelectorAll("span")].find((x) => (x.textContent || "").trim() === "Pigmento Arizona");
-    expect(nome.style.fontSize).toBe("26px");
+    expect(nome.style.fontSize).toBe("16px");
     await p.smonta();
   });
 
@@ -269,7 +270,7 @@ describe("quanto si legge", () => {
     const riga = [...p.nodo.querySelectorAll("[data-riga-accessorio]")]
       .find((d) => (d.textContent || "").includes("Taglia M"));
     const nome = [...riga.querySelectorAll("span")].find((x) => (x.textContent || "").includes("Taglia M"));
-    expect(nome.style.fontSize).toBe("26px");
+    expect(nome.style.fontSize).toBe("16px");
     await p.smonta();
   });
 });

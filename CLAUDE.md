@@ -3787,15 +3787,21 @@ Due cose in più, trovate strada facendo:
 uscirebbe tutto «Senza categoria» e non lo direbbe nessuno — è la regola
 di «elenco vuoto = tabella non chiesta».
 
-**QUANTO SI LEGGONO** (9/11/2026, misure dettate dal titolare guardando
-la pagina: «il titolo della categoria grande il doppio, grassetto e al
-centro», e subito dopo «anche i caratteri dei prodotti sono troppo
-piccoli, raddoppiali e triplica quelli del titolo»). Erano 11 e 13: il
-titolo del reparto per tre (**33**, al centro, in grassetto, a capo
-invece che fuori dal riquadro — «TUTTI I PIGMENTI» a 33 su un telefono
-non ci sta), il nome del prodotto per due (**26**), e con essi la foto
-(46), la casella della quantità e la crocetta, che a quel punto erano
-diventate francobolli.
+**QUANTO SI LEGGONO** (9/11/2026). Le misure le ha dettate il titolare
+guardando la pagina, e **correggendo due volte**: «il titolo della
+categoria grande il doppio, grassetto e al centro», poi «anche i
+caratteri dei prodotti sono troppo piccoli, raddoppiali e triplica
+quelli del titolo» (33 e 26), infine «ora è troppo, riducili del 40%».
+Da 11 e 13 si arriva a **20** per il titolo del reparto — al centro, in
+grassetto, e a capo invece che fuori dal riquadro, perché «TUTTI I
+PIGMENTI» in grande su un telefono non ci sta — e a **16** per il nome
+del prodotto, con la foto (34), la casella della quantità e la crocetta
+riportate in proporzione: a testo grande erano diventate francobolli, e
+a testo piccolo sarebbero rimaste enormi.
+
+Vale la pena tenere il giro intero: una misura giusta non si sceglie a
+tavolino, si trova guardando la pagina due o tre volte. Il modo di
+sbagliare peggiore sarebbe stato fermarsi al primo numero.
 
 Le due misure stanno in **due costanti sole** (`TESTO_REPARTO`,
 `TESTO_PRODOTTO_KIT`) lette da tutte e tre le liste, raccolta in
