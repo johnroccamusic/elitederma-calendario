@@ -5826,6 +5826,34 @@ export function prezziAlBancoDi(prodotto, { fasceCarta = null, fasceContanti = n
     carta: fasceCarta ? conto(fasceCarta, false) : null,
   };
 }
+// IL CODICE DEL QR SI SCRIVE SOLO SU UNA VENDITA CON LA CARTA.
+//
+// L'8/11/2026 alle 14:57 una cliente ha pagato col QR 274,61 € (due
+// Sensitive Cream, un Glucan-Age, due A+B Peeling e 6,90 di spedizione).
+// Tre secondi dopo il banco ha registrato un ALTRO carrello — 103,31 €,
+// in CONTANTI, tre prodotti diversi, consegnato in aula — e quella
+// vendita si e' portata dietro il codice `BFG5RE` del pagamento appena
+// riuscito, perche' `richiestaQr` restava nello stato del POS dopo la
+// vendita precedente.
+//
+// Il danno e' doppio, e la seconda meta' e' quella che ha fatto sparire
+// l'ordine: il pagamento risultava gia' legato a una vendita, quindi il
+// recupero automatico (`recupera_vendite_qr_in_ritardo`) non ha mai
+// registrato la vendita vera — e in logistica non e' comparso niente da
+// spedire, mentre alla cliente i soldi erano stati presi.
+//
+// Due difese, e nessuna delle due e' il promemoria di chi vende:
+// `nuovaVendita` azzera il QR insieme al carrello, e questa funzione —
+// l'ultima parola — scrive il codice solo dove un codice puo' esistere.
+// In archivio c'era UNA riga sbagliata su diciannove: questa.
+export function codiceIncassoDaRegistrare({ codiceQr = null, metodoPagamento = null, splittato = false, omaggio = false } = {}) {
+  if (!codiceQr || omaggio) return null;
+  // «misto» e' meta' contante e meta' carta: la parte a carta passa dal
+  // QR, quindi il codice ci va. Contanti e buono no, mai.
+  if (splittato || metodoPagamento === "pos") return codiceQr;
+  return null;
+}
+
 // IL RIPROPORZIONAMENTO, IN UN POSTO SOLO. Se la somma delle righe non fa
 // lo sconto del totale — per i centesimi, per il tetto al subtotale, o
 // perche' il totale l'ha deciso un conto piu' in su — le righe si tirano
@@ -72574,6 +72602,13 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     // la sua cifra si ripeterebbe sullo scontrino dopo, e il contante
     // di un'altra cliente finirebbe in questa vendita
     setPagamentoSplittato(false); setContantiSplitValore("");
+    // IL QR MUORE CON IL SUO CARRELLO. Restava nello stato, e il
+    // carrello dopo — anche pagato in contanti — si portava dietro il
+    // codice del pagamento di prima: in archivio una vendita legata a
+    // un incasso che non era suo, e soprattutto il pagamento vero dato
+    // per «gia' registrato», quindi mai recuperato. Vedi
+    // codiceIncassoDaRegistrare.
+    setRichiestaQr(null); setStatoQr("in_attesa"); setMsgQr("");
     // l'acquisto personale vale per quel carrello, non resta acceso: i
     // punti appena spesi sono finiti, e il carrello dopo ripone la domanda
     setAcquistoPersonale(false); setRitiroAttivo(false);
@@ -73499,7 +73534,9 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       // scriversi, questo invece entra nella stessa transazione della
       // vendita, e il recupero automatico guarda anche qui prima di
       // registrarne un'altra.
-      pagamento_codice: richiestaQr?.codice || null,
+      pagamento_codice: codiceIncassoDaRegistrare({
+        codiceQr: richiestaQr?.codice || null, metodoPagamento, splittato: !!splitConto, omaggio: omaggioAttivo,
+      }),
       // L'amministrazione ha battuto sul terminale e visto lo scontrino:
       // e' l'unica carta che si registra senza un pagamento col QR, e il
       // database (registra_vendita_pos) pretende questo segno per

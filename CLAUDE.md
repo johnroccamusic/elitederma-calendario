@@ -3780,6 +3780,54 @@ si guarda se quella scrittura era in grado di accorgersi di non aver
 scritto. Restano senza conteggio le altre scritture della stessa scheda
 (nome del pacchetto, quantità, contenuto): stesso rischio, da sistemare.
 
+### Pagata col QR, mai registrata: il codice passava alla vendita dopo (9/11/2026)
+
+Dalla logistica: «Tommaso ieri ha fatto un ordine di aula di 274,61 a
+nome di Vecarelli Rossella. **A lei sono stati scalati ma non mi compare
+ordine**».
+
+**Com'è andata, al secondo.** L'8/11 alle **14:57:43** il pagamento col
+QR `BFG5RE` di **274,61 €** risulta pagato: due Sensitive Cream, un
+Glucan-Age, due A+B Peeling e **6,90 di spedizione** (quindi merce da
+spedire, non da consegnare in aula). Alle **14:57:46** — tre secondi
+dopo — il banco registra un ALTRO carrello: **103,31 €, in CONTANTI**,
+tre prodotti diversi, consegnato in aula. E quella vendita si porta
+dietro `pagamento_codice = BFG5RE`, perché **`richiestaQr` restava nello
+stato del POS dopo la vendita precedente**: `nuovaVendita` azzerava
+carrello, sconti, splittato e spedizione, ma non il QR.
+
+**La seconda metà del danno è quella che ha fatto sparire l'ordine.** Il
+pagamento risultava già legato a una vendita, e la regola «un pagamento
+vale per UNA vendita» (23/10/2026) ha fatto il resto: il recupero
+automatico `recupera_vendite_qr_in_ritardo` l'ha visto come già
+registrato e non ha mai scritto la vendita vera. Soldi presi, niente in
+logistica, **e nessun errore da nessuna parte** — il guasto del 19/10 al
+contrario, e invisibile allo stesso modo.
+
+E c'è un terzo effetto, da sapere quando si riconcilia: quella vendita
+in contanti porta il codice di un incasso Stripe, quindi la cassa della
+classe si aspetta 103,31 € di contante che nessuno ha dato.
+
+**Due difese, nessuna delle due è il promemoria di chi vende:**
+
+- `nuovaVendita` azzera **il QR insieme al carrello** (`richiestaQr`,
+  `statoQr`, `msgQr`);
+- `codiceIncassoDaRegistrare` è l'ultima parola sul payload: il codice
+  si scrive solo su `pos` o su uno **splittato** (dove la parte a carta
+  passa davvero dal QR), **mai** su contanti, buono o omaggio.
+
+E la regola sta anche nel database, perché una regola che vive solo nel
+browser non è una regola: `vendite_shop_codice_solo_con_carta`
+(`20261109150000`), **NOT VALID** di proposito — in archivio c'è **una**
+riga che non la rispetta, POS-1794149866157, ed è quella dell'8/11:
+convalidare adesso vorrebbe dire impedire di correggerla.
+
+**Resta da sistemare a mano, ed è una decisione del titolare**: la
+vendita da 274,61 € non esiste in archivio (nessun movimento di
+magazzino, nessuna spedizione), e la riga da 103,31 € va staccata dal
+codice che non è suo. Sono soldi, merce e un pacco che una cliente
+aspetta: non si rimedia di iniziativa.
+
 ### I prodotti di un kit si leggono per reparto, con la foto (9/11/2026)
 
 Il titolare: «quando creo un kit e inserisco i prodotti li devi dividere
