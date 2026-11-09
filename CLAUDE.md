@@ -3780,6 +3780,120 @@ si guarda se quella scrittura era in grado di accorgersi di non aver
 scritto. Restano senza conteggio le altre scritture della stessa scheda
 (nome del pacchetto, quantità, contenuto): stesso rischio, da sistemare.
 
+### «Prezzi corso di PMU»: l'assistente mostra la locandina (9/11/2026)
+
+Il titolare: «quando all'agente AI chiedo prezzi corso di PMU, vorrei che
+mi mostrasse nella chat la locandina, che se è composta di più pagine
+posso sfogliare col dito facendo slide da destra verso sinistra, e col
+pinch posso zoomare per vedere i prezzi».
+
+**Perché non può risponderlo il modello.** Il prezzo di un corso **non
+esiste nei dati**: sta scritto sulle locandine di «Prezzi corsi», che
+sono immagini e PDF in un secchio. È perfino scritto nel catalogo che
+l'assistente legge — «il prezzo di un corso non esiste nei dati» — e
+finora la risposta era quella: «non ce l'ho, guarda in Prezzi corsi». Il
+foglio invece ce l'abbiamo, e si mostra. Le cifre **non si riscrivono a
+parole**: una cifra ricopiata da qualcuno è una cifra che un giorno
+sbaglia, e la voce dice solo che la locandina c'è e quante pagine ha.
+
+**La parola che distingue le due domande è «corso».** In anagrafica ci
+sono quattro prodotti che si chiamano PMU (Dispensa PMU, Specchio PMU…),
+e «prezzi PMU» deve continuare a essere la simulazione del banco dell'8/11.
+Quando il testo dice «corso» — o «locandina», o «listino» — risponde
+prima la locandina; senza quella parola l'ordine resta quello di prima, e
+la locandina ha comunque un **secondo giro** quando nessun prodotto
+combacia e si sta chiedendo un prezzo.
+
+Il riconoscimento sta in `src/regole/locandina-corso.js` e lì dentro non
+si disegna e non si legge niente. Due giri, e il secondo serve a un caso
+vero: «quanto costa il corso di PMU **a Milano**» non deve finire a mani
+vuote per colpa di «Milano», che nel nome di un file non c'è e non ci
+sarà mai — quindi se nessuna locandina prende *tutte* le parole, e la
+domanda chiede chiaramente il prezzo di un corso, bastano le parole che
+combaciano. Quel secondo giro **non si fa senza «corso» e senza
+«prezzo»**, o «come funziona il PMU base» mostrerebbe sei cartelli di
+prezzi invece di una spiegazione.
+
+**Un PDF di tre pagine sono tre pagine.** «Prezzi Microblading» è un PDF
+di tre pagine: si disegnano come immagini in App.jsx, dove vive già
+`getPdfjsLib`, e il visore riceve **solo immagini** — di PDF non sa
+niente, e con lo stesso componente si sfoglierebbe un diploma. Non un
+lettore PDF dentro la chat: su iPhone un PDF in un iframe non si sfoglia
+e spesso non si vede nemmeno. Il PDF dei prezzi del needling pesa 52 MB,
+e Supabase risponde a richieste a pezzi (verificato: `206` con
+`content-range`), quindi pdf.js scarica le pagine che serve e non il
+file intero.
+
+**L'elenco delle locandine si legge in un posto solo** (`leggiLocandine`):
+lo usano la pagina «Prezzi corsi» e l'assistente. Due letture scritte due
+volte vorrebbero dire due idee di cos'è una locandina — una delle due si
+dimenticherebbe il PDF chiamato `.png` (ce n'è uno) o la data attaccata
+all'indirizzo che aggira la cache — e quello che si vede nella chat non
+sarebbe quello che c'è nella pagina. L'assistente lo rilegge **al massimo
+ogni cinque minuti**: non è una copia per sempre, una locandina caricata
+adesso deve comparire senza riaprire l'app.
+
+**Vale il permesso `prezzicorsi`.** L'assistente mostra solo le aree che
+quella persona vede, e un cartello dei prezzi mostrato a chi quella
+tessera non l'ha sarebbe un'area aperta da una porta di servizio. Come
+tutti i limiti per persona, finché l'account Supabase è uno per tutti
+decide **cosa l'app mostra** e non cosa la sessione potrebbe leggere: il
+secchio è pubblico e la policy di `storage.objects` vale per
+`authenticated`.
+
+**Il gesto, e le tre decisioni che lo rendono usabile**
+(`src/regole/SfogliaLocandine.jsx`):
+
+- **Il dito in verticale resta della chat.** Il pannello
+  dell'assistente scorre: prendersi anche quel gesto vorrebbe dire una
+  conversazione che non si può più far scorrere passando sopra una
+  locandina. Si guarda la direzione dei primi 8 px e si decide una volta
+  — `sfoglia` o `scorre` — e il riquadro della chat dichiara
+  `touch-action: pan-y`, a tutto schermo `none`.
+- **I listener si attaccano a mano, con `{ passive: false }`.** React
+  registra `touchmove` come listener **passivo**: da dentro un
+  `preventDefault()` non fa niente, e il browser continuerebbe a
+  scorrere e a zoomare di suo mentre si sfoglia.
+- **Il gesto si decide sul gesto, non su quello che è già disegnato.**
+  Zoom, spostamento e corsa del dito vivono anche in un ref. React
+  accorpa i cambi di stato e li disegna dopo: il dito alzato leggeva i
+  valori di *prima* del gesto e la pagina restava dov'era. Lo stato
+  serve a disegnare, il ref a decidere — e lo ha trovato il banco di
+  prova, dove le prove sfogliavano due volte di fila.
+
+Lo zoom cresce **intorno al punto fra le due dita** (allargando, la riga
+che si stava leggendo resta dov'è), il pan non porta mai l'immagine fuori
+dal riquadro, e cambiando pagina si riparte da intera. A tutto schermo si
+chiude col tasto e con Esc e **non** toccando il fondo: con due dita
+addosso a una foto un tocco di troppo è normale, e chiudere per sbaglio
+quello che si sta leggendo è peggio. Nel riquadro della chat il tocco
+**apre**: in un pannello da 380 px una locandina è un francobollo, e
+sfogliarla lì serve a scegliere, non a leggere.
+
+Un'altra trovata dal banco: la freccia «›» sta **dentro** il riquadro che
+si tocca, quindi premerla cambiava pagina *e* apriva lo schermo pieno —
+due cose per un dito solo.
+
+**Quello che non è stato toccato:** le edge function. Il prompt
+dell'assistente continua a dire «il prezzo di un corso non esiste nei
+dati», che è vero e che vale per le domande in cui la locandina non si
+riconosce; insegnargli che adesso l'app il foglio lo mostra vuole una
+pubblicazione, e le edge function si pubblicano quando lo dice il
+titolare. E una cosa da sapere sui nomi dei file, perché la ricerca è
+quella: `Lamazione-individuale-Sopracciglia-Koreana.png` ha un errore di
+battitura nel nome, quindi «laminazione individuale» non la trova —
+quella si corregge rinominando il file in Prezzi corsi, non nel codice.
+
+Prove in `prove/locandina-del-corso.test.jsx` (23), sui **nomi veri** dei
+24 file del secchio: «prezzi corso di PMU» trova le sei del PMU col
+riepilogo per primo, «come registro un cliente» non ne trova nessuna,
+«prezzi PMU» resta dei prodotti; e il gesto toccato per davvero — il dito
+che sfoglia, quello verticale che non sfoglia niente, il bordo che non va
+oltre, le due dita che ingrandiscono e il tocco che apre. **Il pinch vero
+però lo prova solo un pollice su un telefono**: jsdom non fa il layout, e
+il banco visivo di `prove/banco/` non ha una postazione per questa
+galleria.
+
 ### Pagata col QR, mai registrata: il codice passava alla vendita dopo (9/11/2026)
 
 Dalla logistica: «Tommaso ieri ha fatto un ordine di aula di 274,61 a

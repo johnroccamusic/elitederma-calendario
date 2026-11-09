@@ -28,24 +28,25 @@ export const PAROLE_NEUTRE = new Set([
 // Le stesse regole del comune di nascita: si cerca come si scrive, ogni
 // parola e' l'INIZIO di una parola del nome. «lamin ess» trova «Kit
 // laminazione essential», e le paroline di mezzo non vanno sapute.
-export function parolePerCerca(testo) {
+// `neutre` si puo' cambiare: le locandine dei corsi buttano anche
+// «corso» e «locandina» (vedi regole/locandina-corso.js), e passando un
+// insieme VUOTO la stessa funzione serve a spezzare un nome. Una seconda
+// copia di questo taglio vorrebbe dire due idee di «stessa parola», e il
+// giorno che una impara un accento in piu' le due ricerche si staccano.
+export function parolePerCerca(testo, neutre = PAROLE_NEUTRE) {
   return String(testo || "")
     .toLowerCase()
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .split(" ")
-    .filter((p) => p && !PAROLE_NEUTRE.has(p));
+    .filter((p) => p && !neutre.has(p));
 }
 
-function pezziDelNome(nome) {
-  return String(nome || "")
-    .toLowerCase()
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean);
+// spezzare un nome e' la stessa cosa, con nessuna parola da buttare
+const NIENTE_DA_BUTTARE = new Set();
+export function pezziDelNome(nome) {
+  return parolePerCerca(nome, NIENTE_DA_BUTTARE);
 }
 
 // Risponde con i prodotti che quel testo nomina, i piu' probabili per

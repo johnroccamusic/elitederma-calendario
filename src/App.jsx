@@ -88,6 +88,7 @@ import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import FlagVenditaFiera from "./eventi/FlagVenditaFiera.jsx";
 import { testoErroreFunzione } from "./errore-funzione.js";
 import { cercaProdottiPerTesto } from "./pos/prezzo-al-banco.js";
+import { cercaLocandinePerTesto } from "./regole/locandina-corso.js";
 import { periodoFiera, oggiRoma } from "./eventi/fiera-iscrizioni.js";
 import { statoDi, aggiornaStatoDopoAcconto, iscrittiAttiviDi } from "./iscrizioni/stato.js";
 import { inviaModulo, linkModulo } from "./iscrizioni/invio.js";
@@ -17246,6 +17247,109 @@ function nomeFileUnico(baseSicura, estensione, nomiEsistenti) {
 // "Aggiungi", sempre in coda alla griglia); tutti possono scaricare una
 // locandina — su mobile, se il telefono lo supporta, tramite la
 // condivisione nativa così finisce direttamente nella galleria foto
+const SECCHIO_LOCANDINE = "locandine-corsi";
+
+// L'ELENCO DELLE LOCANDINE, IN UN POSTO SOLO.
+//
+// Lo leggono la pagina «Prezzi corsi» e l'assistente flottante (vedi
+// `locandineDellaDomanda`): due letture scritte due volte vorrebbero
+// dire due idee di che cosa sia una locandina — una delle due si
+// dimenticherebbe il PDF chiamato .png, o la data attaccata
+// all'indirizzo — e quello che si vede nella chat non sarebbe quello che
+// c'e' nella pagina.
+//
+// L'indirizzo pubblico di un file dipende solo dal suo nome: cancellare
+// una locandina e ricaricarne un'altra con lo stesso nome dava lo stesso
+// indirizzo di prima, e il browser (con la cache di Supabase dietro)
+// continuava a mostrare la vecchia immagine per un'ora buona. Attaccando
+// la data dell'ultima modifica l'indirizzo cambia insieme al file, e la
+// nuova immagine si vede subito.
+async function leggiLocandine() {
+  const { data, error } = await supabase.storage.from(SECCHIO_LOCANDINE).list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
+  if (error) return { locandine: [], errore: error.message };
+  const file = (data || []).filter((f) => ESTENSIONI_LOCANDINE.test(f.name));
+  return {
+    errore: null,
+    locandine: file.map((f) => {
+      const base = supabase.storage.from(SECCHIO_LOCANDINE).getPublicUrl(f.name).data.publicUrl;
+      const versione = f.updated_at || f.created_at || "";
+      return {
+        nome: f.name,
+        titolo: titoloDaNomeFile(f.name),
+        // il tipo vero lo dice il file, non il nome: ce n'e' uno chiamato .png che e' un PDF
+        pdf: f.metadata?.mimetype === "application/pdf" || eUnPdf(f.name),
+        url: versione ? `${base}?v=${encodeURIComponent(versione)}` : base,
+      };
+    }),
+  };
+}
+
+// L'elenco costa una richiesta, e l'assistente lo chiede a ogni domanda
+// che nomina un corso: si rilegge al massimo ogni cinque minuti. Non e'
+// una cache per sempre — una locandina caricata adesso deve comparire
+// nella chat senza riaprire l'app.
+const RILEGGI_LOCANDINE_DOPO = 5 * 60 * 1000;
+let _locandineViste = { quando: 0, elenco: null };
+async function locandineDaMostrare() {
+  if (_locandineViste.elenco && Date.now() - _locandineViste.quando < RILEGGI_LOCANDINE_DOPO) return _locandineViste.elenco;
+  const { locandine, errore } = await leggiLocandine();
+  if (errore) return _locandineViste.elenco || [];
+  _locandineViste = { quando: Date.now(), elenco: locandine };
+  return locandine;
+}
+
+// UN PDF DIVENTA LE SUE PAGINE, COME IMMAGINI.
+//
+// «Prezzi Microblading» e' un PDF di tre pagine, e «se e' composta di
+// piu' pagine la sfoglio col dito»: quelle tre pagine devono essere tre
+// pagine da sfogliare, non un lettore PDF dentro la chat (su iPhone un
+// PDF in un iframe non si sfoglia e spesso non si vede nemmeno).
+//
+// Si disegnano qui, dove vive `getPdfjsLib` e dove gli altri PDF
+// dell'app si disegnano gia': il visore (`SfogliaLocandine`) riceve solo
+// immagini e di PDF non sa niente.
+const MAX_PAGINE_LOCANDINA = 12;
+const LARGO_PAGINA_PDF = 1400; // abbastanza per leggere i prezzi col pinch
+const _paginePdf = new Map(); // url (con la sua versione) -> pagine disegnate
+async function paginePdfComeImmagini(loc) {
+  if (_paginePdf.has(loc.url)) return _paginePdf.get(loc.url);
+  const pagine = [];
+  try {
+    const pdfjs = await getPdfjsLib();
+    const doc = await pdfjs.getDocument({ url: loc.url }).promise;
+    const quante = Math.min(doc.numPages, MAX_PAGINE_LOCANDINA);
+    for (let n = 1; n <= quante; n++) {
+      const pagina = await doc.getPage(n);
+      const base = pagina.getViewport({ scale: 1 });
+      const viewport = pagina.getViewport({ scale: Math.min(2.5, LARGO_PAGINA_PDF / base.width) });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
+      await pagina.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      const pezzo = await new Promise((risolvi) => canvas.toBlob(risolvi, "image/jpeg", 0.88));
+      pagine.push({
+        chiave: `${loc.nome}#${n}`, titolo: loc.titolo, pagina: n, di: quante,
+        url: pezzo ? URL.createObjectURL(pezzo) : canvas.toDataURL("image/jpeg", 0.88),
+      });
+    }
+  } catch {
+    // un PDF che non si apre si NOMINA: una locandina che manca in
+    // silenzio manda a cercare un prezzo che nessuno trovera'
+    return [{ chiave: `${loc.nome}#0`, titolo: loc.titolo, pagina: 1, di: 1, guasta: `«${loc.titolo}»: non riesco a disegnare questo PDF. Aprilo da Prezzi corsi.` }];
+  }
+  _paginePdf.set(loc.url, pagine);
+  return pagine;
+}
+
+// le pagine da sfogliare: un'immagine e' una pagina, un PDF sono le sue
+async function pagineDelleLocandine(locandine) {
+  const pagine = [];
+  for (const loc of locandine) {
+    if (loc.pdf) pagine.push(...(await paginePdfComeImmagini(loc)));
+    else pagine.push({ chiave: loc.nome, titolo: loc.titolo, pagina: 1, di: 1, url: loc.url });
+  }
+  return pagine.slice(0, MAX_PAGINE_LOCANDINA * 2);
+}
+
 // ---------- Modulistica ----------
 // La cartella dei moduli: contratti, liberatorie, schede da far compilare,
 // qualunque documento che serve piu' volte. Vive nella cartella
@@ -17456,26 +17560,12 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
   }
 
   async function ricaricaLocandine() {
-    const { data, error } = await supabase.storage.from("locandine-corsi").list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
-    if (error) { window.alert("Errore nel caricare le locandine: " + error.message); return; }
-    const file = (data || []).filter((f) => ESTENSIONI_LOCANDINE.test(f.name));
-    // L'indirizzo pubblico di un file dipende solo dal suo nome: cancellare
-    // una locandina e ricaricarne un'altra con lo stesso nome dava lo
-    // stesso indirizzo di prima, e il browser (con la cache di Supabase
-    // dietro) continuava a mostrare la vecchia immagine per un'ora buona.
-    // Attaccando la data dell'ultima modifica l'indirizzo cambia insieme al
-    // file, e la nuova immagine si vede subito.
-    setLocandine(file.map((f) => {
-      const base = supabase.storage.from("locandine-corsi").getPublicUrl(f.name).data.publicUrl;
-      const versione = f.updated_at || f.created_at || "";
-      return {
-        nome: f.name,
-        titolo: titoloDaNomeFile(f.name),
-        // il tipo vero lo dice il file, non il nome: ce n'e' uno chiamato .png che e' un PDF
-        pdf: f.metadata?.mimetype === "application/pdf" || eUnPdf(f.name),
-        url: versione ? `${base}?v=${encodeURIComponent(versione)}` : base,
-      };
-    }));
+    // la lettura sta fuori (`leggiLocandine`): la stessa che usa
+    // l'assistente, cosi' nella chat compare quello che c'e' qui
+    const { locandine: lette, errore } = await leggiLocandine();
+    if (errore) { window.alert("Errore nel caricare le locandine: " + errore); return; }
+    _locandineViste = { quando: Date.now(), elenco: lette };
+    setLocandine(lette);
   }
 
   useEffect(() => {
@@ -87281,6 +87371,26 @@ function Gestionale() {
     if (ruoloUtente === "programmatore") return true;
     return !!(utenteLoggato && (utenteLoggato.permessi || []).includes(chiave));
   }
+  // LA LOCANDINA DEI PREZZI PER L'ASSISTENTE (9/11/2026).
+  //
+  // Il titolare: «quando chiedo prezzi corso di PMU, mostrami la
+  // locandina nella chat». Il prezzo di un corso non sta nei dati — sta
+  // su quei fogli — quindi non c'e' niente da chiedere a un modello: il
+  // foglio si trova qui e si mostra.
+  //
+  // Vale il permesso della tessera: `prezzicorsi`. L'assistente mostra
+  // solo le aree che quella persona vede, e un cartello dei prezzi
+  // mostrato a chi quella tessera non l'ha sarebbe un'area aperta da una
+  // porta di servizio. Senza il permesso torna null, e la domanda va al
+  // modello come sempre.
+  async function locandineDellaDomanda(testo) {
+    if (!tastoAbilitato("prezzicorsi")) return null;
+    const locandine = await locandineDaMostrare();
+    const trovate = cercaLocandinePerTesto(testo, locandine);
+    if (!trovate.length) return null;
+    const pagine = await pagineDelleLocandine(trovate);
+    return pagine.length ? { pagine } : null;
+  }
   // Le viste che sono anche un tasto della home (TASTI_HOME) non
   // chiedono più nessuna password: l'accesso è già deciso dai permessi
   // di chi ha fatto login (in teoria il tasto è già disabilitato in home
@@ -88066,6 +88176,7 @@ function Gestionale() {
               : utenteLoggato.masterId ? "master" : utenteLoggato.assistenteId ? "assistenti"
               : (venditoreLoggato || utenteLoggato.venditoreId) ? "venditori" : "tutti"}
             prezziAlBanco={prezziAlBanco}
+            locandineCorso={locandineDellaDomanda}
             onApriRegolamenti={() => setView("regolamenti")}
           />
         </Suspense>

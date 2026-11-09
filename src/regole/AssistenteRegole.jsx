@@ -16,6 +16,8 @@ import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay } from 
 import { voceDisponibile, leggi, leggiNaturale, zittisci, ascoltaUnaFrase } from "./voce.js";
 import { DESTINATARI } from "./PaginaRegolamenti.jsx";
 import { testoErroreFunzione } from "../errore-funzione.js";
+import SfogliaLocandine from "./SfogliaLocandine.jsx";
+import { nominaUnCorso, chiedeUnPrezzo, testoDelleLocandine } from "./locandina-corso.js";
 
 // I NUMERI E IL CONTO, sotto una risposta presa dai dati. Chiusi, perche'
 // chi chiede «che corso c'e' a Bari» vuole la risposta; apribili, perche'
@@ -73,15 +75,20 @@ function Testo({ testo }) {
 // rileggere: «dalle regole» e' oro (una decisione presa), i dati sono
 // verdi (un numero vero, controllabile qui sotto), la guida e' navy, il
 // ragionamento e' azzurro e dichiara di non essere una regola.
-const BORDO_REGISTRO = { regole: GOLD, misto: GOLD, dati: "#2F7D63", guida: NAVY, conversazione: CREAM_BORDER, ragionamento: "#8FA3C9", prezzo: "#2F7D63" };
+// La locandina e' ORO come le regole, e non e' pigrizia: un cartello dei
+// prezzi e' una cosa DECISA e scritta da chi comanda, esattamente come
+// una scheda di Regolamenti. I dati sono verdi perche' si possono
+// ricontare; una locandina no, si legge.
+const BORDO_REGISTRO = { regole: GOLD, misto: GOLD, dati: "#2F7D63", guida: NAVY, conversazione: CREAM_BORDER, ragionamento: "#8FA3C9", prezzo: "#2F7D63", locandina: GOLD };
 const ETICHETTA_REGISTRO = {
   misto: "In parte dalle regole, in parte un ragionamento",
   ragionamento: "Un ragionamento, non una regola scritta",
   dati: "Dai dati dell'app, adesso",
   guida: "Come funziona l'app",
   prezzo: "I prezzi del banco, adesso",
+  locandina: "La locandina dei prezzi del corso",
 };
-const COLORE_ETICHETTA = { dati: "#2F7D63", guida: NAVY, misto: "#4C6A9A", ragionamento: "#4C6A9A", prezzo: "#2F7D63" };
+const COLORE_ETICHETTA = { dati: "#2F7D63", guida: NAVY, misto: "#4C6A9A", ragionamento: "#4C6A9A", prezzo: "#2F7D63", locandina: GOLD };
 
 // ---------- I PREZZI DEL BANCO ----------
 // Il conto non e' qui: arriva gia' fatto da `prezziAlBancoDi` (App.jsx),
@@ -147,7 +154,7 @@ function SchedaPrezzi({ prezzi }) {
   );
 }
 
-export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi = [], isMobile = false, onApriRegolamenti = null, prezziAlBanco = null }) {
+export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi = [], isMobile = false, onApriRegolamenti = null, prezziAlBanco = null, locandineCorso = null }) {
   const [aperto, setAperto] = useState(false);
   // LA SCHEDA PROPOSTA: quando chi amministra da' una disposizione in
   // dialogo, l'assistente la rimanda gia' scritta come regola. Resta qui,
@@ -191,24 +198,54 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi =
 
   // manda una domanda e torna il testo della risposta (o dell'errore):
   // lo usano sia il tasto «Chiedi» sia la conversazione a voce
-  async function rispondi(d) {
-    setOccupato(true);
-    // IL NOME DI UN PRODOTTO SI RISPONDE QUI, SENZA IL MODELLO.
-    //
-    // Chiesto dal titolare l'8/11/2026: «una specie di simulazione del
-    // POS banco». I prezzi li calcola il POS (`prezziAlBancoDi`), quindi
-    // non c'e' niente da chiedere a un modello — e chiederglielo
-    // vorrebbe dire aspettare, pagare, e far dire delle cifre a chi puo'
-    // sbagliarle. Se il testo non nomina nessun prodotto si prosegue
-    // come sempre.
+  // IL NOME DI UN PRODOTTO SI RISPONDE QUI, SENZA IL MODELLO.
+  //
+  // Chiesto dal titolare l'8/11/2026: «una specie di simulazione del POS
+  // banco». I prezzi li calcola il POS (`prezziAlBancoDi`), quindi non
+  // c'e' niente da chiedere a un modello — e chiederglielo vorrebbe dire
+  // aspettare, pagare, e far dire delle cifre a chi puo' sbagliarle.
+  function prezziDelBanco(d) {
     try {
       const prezzi = prezziAlBanco?.(d);
-      if (prezzi?.prodotti?.length) {
-        setScambi((s) => [...s, { domanda: d, prezzi, registro: "prezzo" }]);
-        setOccupato(false);
-        return testoDeiPrezzi(prezzi);
-      }
-    } catch { /* se la simulazione non riesce, risponde il modello */ }
+      if (!prezzi?.prodotti?.length) return null;
+      setScambi((s) => [...s, { domanda: d, prezzi, registro: "prezzo" }]);
+      return testoDeiPrezzi(prezzi);
+    } catch { return null; /* se la simulazione non riesce, risponde il modello */ }
+  }
+  // E IL PREZZO DI UN CORSO STA SU UN FOGLIO (9/11/2026).
+  //
+  // Il titolare: «quando chiedo prezzi corso di PMU, mostrami nella chat
+  // la locandina». Quelle cifre non esistono nei dati, stanno sui
+  // cartelli di «Prezzi corsi»: si mostra il foglio, che si sfoglia e si
+  // allarga, e non si prova a dire a parole quello che c'e' scritto —
+  // una cifra riscritta da qualcuno e' una cifra che un giorno sbaglia.
+  async function locandinaDelCorso(d) {
+    try {
+      const trovate = await locandineCorso?.(d);
+      if (!trovate?.pagine?.length) return null;
+      const risposta = testoDelleLocandine(trovate.pagine);
+      setScambi((s) => [...s, { domanda: d, pagine: trovate.pagine, risposta, registro: "locandina" }]);
+      return risposta;
+    } catch { return null; }
+  }
+
+  async function rispondi(d) {
+    setOccupato(true);
+    // CHI PARLA PRIMA FRA LE DUE SCORCIATOIE: lo decide la parola
+    // «corso». «prezzi PMU» sono i quattro prodotti che si chiamano PMU
+    // in anagrafica (Dispensa PMU, Specchio PMU...) e il banco deve
+    // continuare a rispondere per quelli; «prezzi CORSO di PMU» e' la
+    // locandina. Senza quella parola l'ordine resta quello di prima, e
+    // la locandina ha comunque un secondo giro quando nessun prodotto
+    // combacia e si sta chiedendo un prezzo.
+    const scorciatoie = nominaUnCorso(d)
+      ? [locandinaDelCorso, prezziDelBanco]
+      : [prezziDelBanco, chiedeUnPrezzo(d) ? locandinaDelCorso : null];
+    for (const scorciatoia of scorciatoie) {
+      if (!scorciatoia) continue;
+      const detto = await scorciatoia(d);
+      if (detto) { setOccupato(false); return detto; }
+    }
     const cronologia = scambiRef.current.filter((s) => s.risposta).slice(-3).map((s) => ({ domanda: s.domanda, risposta: s.risposta }));
     try {
       const { data, error } = await supabase.functions.invoke("assistente-regole", { body: { domanda: d, ruolo, chi, permessi, cronologia } });
@@ -326,6 +363,7 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi =
                   <div>• <b>le regole</b> — «quanto sconto posso fare in aula?»</div>
                   <div>• <b>come funziona l'app</b> — «dove segno il modulo ricevuto?»</div>
                   <div>• <b>i dati</b> — «che corso c'è a novembre a Bari?», «chi tiene il PMU di Milano?», «quanto costa il kit laminazione?»</div>
+                  <div>• <b>i prezzi di un corso</b> — «prezzi corso di PMU»: ti mostro la locandina, da sfogliare e da allargare</div>
                 </div>
                 <div style={{ marginTop: 6 }}>Dice sempre da dove viene la risposta: dalle regole, dalla guida, dai dati (con i numeri sotto, da aprire) o come ragionamento. Vede solo le aree che vedi tu, e non ha i dati personali delle allieve.</div>
                 {onApriRegolamenti && <div style={{ marginTop: 8 }}><button type="button" onClick={() => { setAperto(false); onApriRegolamenti(); }} style={{ all: "unset", cursor: "pointer", color: NAVY, textDecoration: "underline", fontSize: 12.5 }}>Leggi tutte le regole</button></div>}
@@ -345,7 +383,9 @@ export default function AssistenteRegole({ ruolo = "tutti", chi = "", permessi =
                           {ETICHETTA_REGISTRO[s.registro]}
                         </div>
                       )}
-                      {s.prezzi ? <SchedaPrezzi prezzi={s.prezzi} /> : <Testo testo={s.risposta} />}
+                      {s.pagine?.length
+                        ? <><SfogliaLocandine pagine={s.pagine} /><div style={{ marginTop: 6 }}><Testo testo={s.risposta} /></div></>
+                        : s.prezzi ? <SchedaPrezzi prezzi={s.prezzi} /> : <Testo testo={s.risposta} />}
                       {s.registro === "dati" && <Numeri righe={s.righe} totale={s.totaleRighe} sql={s.sql} nota={s.nota} />}
                       {s.citati?.length > 0 && (
                         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>
