@@ -315,8 +315,22 @@ Deno.serve(async (req) => {
     }
     const esito = await risposta.json();
     for (const riga of esito?.update || []) {
-      if (riga?.error) falliti.push(`${chiE(Number(riga.id))}: ${riga.error.message}`);
-      else { scritti += 1; riusciti.add(Number(riga.id)); }
+      // UN PRODOTTO CHE SI STA NASCONDENDO E NON ESISTE PIU' E' NASCOSTO
+      // (10/11/2026). «Kit henne business (id 672): ID non valido»
+      // tornava rosso a ogni giro, da sempre: in app e' fuori catalogo,
+      // il riallineamento provava a metterlo in privato sul sito e di la'
+      // il prodotto non c'e' piu' (404). Era il risultato voluto, scritto
+      // come un guasto — e un elenco di errori che contiene sempre la
+      // stessa riga innocua smette di essere letto. Vale SOLO per chi si
+      // stava nascondendo: su un prodotto in vendita un id che non esiste
+      // e' un guasto vero, e deve continuare a dirlo.
+      const idWoo = Number(riga?.id);
+      const siStavaNascondendo = nascosti.some((n) => n.woo === idWoo);
+      const nonEsistePiu = /invalid_id|non valido|invalid id/i.test(
+        `${riga?.error?.code || ""} ${riga?.error?.message || ""}`);
+      if (riga?.error && siStavaNascondendo && nonEsistePiu) { riusciti.add(idWoo); continue; }
+      if (riga?.error) falliti.push(`${chiE(idWoo)}: ${riga.error.message}`);
+      else { scritti += 1; riusciti.add(idWoo); }
     }
   }
 

@@ -1400,6 +1400,39 @@ che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
 resta come rete per far vedere la pagina se la query fallisce, ma non è più
 quello che si firma. Prove in `prove/testi-contratto.test.js`.
 
+### Gli snippet di WordPress si importano, non si incollano (10/11/2026)
+
+Gli snippet stanno in `wordpress/` come file PHP veri — si leggono, si
+correggono, `php -l` li controlla — ma su WordPress si mettono da
+**Snippets → Importa**, che vuole un `.json`. Incollarli nell'editor di
+Code Snippets, su uno lungo, rovina il testo (gia' pagato). Ora
+`node wordpress/genera-json.mjs` scrive `wordpress/json/`: un file per
+snippet, pronto da importare.
+
+Tre cose che il generatore fa apposta: il nome e' il **Plugin Name**
+dell'intestazione, cioe' il nome con cui quello snippet e' gia'
+installato — se non coincide l'importazione ne crea un SECONDO accanto al
+vecchio, e due snippet uguali attivi insieme fanno girare lo stesso
+codice due volte; il `<?php` iniziale si toglie, perche' Code Snippets lo
+mette da se'; e `-ORIGINALE` resta fuori, perche' non e' uno snippet da
+installare ma la copia di com'era prima un altro — importarla vorrebbe
+dire due motori di sconto sullo stesso carrello.
+
+**E la PURGE di Varnish adesso va al SERVER.** Era mandata a
+`home_url('/')`, cioe' all'indirizzo pubblico: usciva su internet,
+passava da Cloudflare — che una PURGE non sa cosa sia — e tornava **400**.
+Varnish, che sta sulla stessa macchina, non la vedeva nemmeno. E' il
+motivo per cui lo svuotamento completo rispondeva «ok» senza cambiare
+niente, e per cui le pagine «si sistemavano da sole» dopo qualche ora:
+scadevano, non venivano svuotate. Ora si chiama `127.0.0.1` con
+l'intestazione `Host` del dominio. **Su quale porta ascolti non si puo'
+sapere da qui** (su Cloudways sta davanti ad Apache: 80 o 8080), quindi
+si prova in ordine — 80, 8080, l'indirizzo pubblico — ci si ferma alla
+prima che risponde, e **quale ha risposto resta scritto nei passi**: senza,
+al prossimo guasto si ricomincerebbe a indovinare. Resta il ripiego
+pagina-per-pagina se nessuna funziona. **Va importato per valere**: nel
+repo e' corretto, sul sito no.
+
 ### I contatti del CRM: si torna dov'eravamo, e i titoli ordinano (10/11/2026)
 
 Il titolare: «nei contatti scaricati dal CRM abbiamo messo dei filtri e
@@ -1496,9 +1529,16 @@ notturno (`woo-riallinea-shop`) la scrive anche sui prodotti semplici che
 hanno il back order acceso — solo su quelli: sugli altri quella meta non
 la guarda nessuno, e una scrittura inutile è solo un rischio.
 
-**Va pubblicato per vedersi**: finché `woo-gestisci-prodotto` e
-`woo-riallinea-shop` non sono pubblicate e il riallineamento non è
-passato, sul sito resta la frase di prima. E restano **quattro prodotti
+**Pubblicate e allineate il 10/11/2026** (`woo-gestisci-prodotto` v31,
+`woo-riallinea-shop` v25; un giro completo ha scritto 183 giacenze,
+`falliti: []` per la prima volta). **E la frase ancora non si vede**, per
+una ragione che non e' nostra: lo snippet
+`wordpress/elitederma-backorder-messaggio.php` **non e' mai stato
+installato** sul sito, quindi WooCommerce mette la sua. Verificato sulla
+pagina dell'Espositore del Siero chiesta con un parametro in coda (che
+aggira la cache): classe `available-on-backorder` e non
+`elitederma-backorder`. Il `.json` da importare sta in
+`wordpress/json/elitederma-backorder-messaggio.json`. E restano **quattro prodotti
 con una frase propria** («Disponibile in circa 4 giorni», «…lavorativi»):
 scritte a mano, non si toccano da sé — per allinearle si svuota il campo
 sulla scheda, e vale la predefinita.
