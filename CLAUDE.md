@@ -1400,6 +1400,58 @@ che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
 resta come rete per far vedere la pagina se la query fallisce, ma non è più
 quello che si firma. Prove in `prove/testi-contratto.test.js`.
 
+### Un impegno è legato alla sua riga, e la segue da sé (10/11/2026)
+
+Il titolare: «devi vincolare sempre gli impegni di spesa
+indissolubilmente alla riga che li ha generati e modificarli in tempo
+reale, mai lasciare relitti». È il passo che mancava a «Il cash rinviato
+segue il Riepilogo» del 30/10: lì l'importo **mostrato** seguiva già la
+riga, ma quello **scritto** restava, e il relitto lo doveva togliere una
+persona da «Impegni senza riga». Decisione ribaltata: adesso si allinea
+l'app.
+
+Il legame è la chiave, `cash_<tipo>_<rigaId>`, e non cambia mai. Il
+Riepilogo della classe mette in fila quanto ogni riga prevede **adesso**
+in contanti e `allineaImpegniAllaClasse` (pura, provata senza database)
+decide; applica la pagina, che poi rilegge. Tre regole:
+
+- **cash a zero, o riga che non c'è più** → `stato = 'annullato'`, **non
+  cancellato**. Sparisce da tutte le liste — scadenziario, Quadro
+  impegni, «Impegni senza riga» filtrano `aperto`/`parzialmente_coperto`
+  — e resta scritto quanto era, da quando e per cosa. Un debito
+  cancellato non lascia niente da controllare, e qualcuno un giorno
+  chiederà dov'erano finiti quei 150 €. I due motivi si dicono
+  **separati** («la riga non c'è più» ≠ «la classe non prevede più
+  contanti»): sono due storie diverse, e chi legge deve capire quale;
+- **cash cambiato** → si riscrive `importo_previsto`;
+- **impegno coperto anche solo in parte** (`importo_coperto > 0`) → **non
+  si tocca**. Quei soldi sono in parte usciti davvero, e riscriverli o
+  annullarli di nascosto vuol dire muovere una cassa da una pagina che
+  sta facendo un'altra cosa. Resta in «Impegni senza riga» con il tasto a
+  mano e il motivo scritto accanto. Stessa cosa per una chiave il cui
+  contante è già una spesa pagata.
+
+Quello che l'allineamento fa **si dice**: un riquadro verde nel Riepilogo
+elenca cosa è stato annullato o riscritto. Un debito che cambia in
+silenzio è la stessa famiglia di guasti da cui veniamo.
+
+**E il rinvio è diventato un upsert**, in tutti e due i punti che lo
+scrivono (`rinviaCashAgliImpegni` e «Disponi pagamenti»).
+`impegno.chiave_origine` è **unica**: da quando un impegno si annulla
+invece di essere cancellato, la sua riga resta a occupare la chiave, e un
+`insert` sarebbe fallito con 23505 — cioè non si sarebbe più potuta
+rimandare nello scadenziario una quota che ci era già stata. Un impegno
+annullato **rinasce** con l'importo di adesso; uno `chiuso` o `coperto`
+no, e si dice perché: quei soldi sono usciti.
+
+**Cosa NON tocca**, ed è voluto: le chiavi senza `cash_`
+(`alloggio_…`, `location_…`, `master_…`) sono la parte a **bonifico**, e
+quella non è un impegno — è una voce virtuale che lo Scadenzario
+ricalcola a ogni lettura (`importiRicalcolati`), quindi i 300 € a
+bonifico di Angelica erano già giusti da soli. Prove in
+`prove/impegni-seguono-la-riga.test.js` (12), compreso il caso di Udine
+per intero.
+
 ### Il cash rinviato segue il Riepilogo (30/10/2026)
 
 Udine, LAMINAZIONE BASE del 28/10: lo Scadenzario passivo mostrava per

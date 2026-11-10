@@ -30637,38 +30637,93 @@ function PannelloRiepilogoAmministrativo({
   // alloggio e location, che hanno altre chiavi, non si toccano
   const impegniDisposti = (impegni || []).filter((x) => x.origine_id === corsoData.id && String(x.chiave_origine || "").startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"));
 
-  // Gli impegni rimasti senza la riga che li aveva generati.
+  // IL LEGAME FRA UN IMPEGNO E LA SUA RIGA E' LA CHIAVE, E LA RIGA
+  // COMANDA (10/11/2026). Qui si rimette in fila quanto ogni riga prevede
+  // ADESSO in contanti, chiave per chiave: e' l'unico numero vero, e
+  // l'impegno lo segue — vedi allineaImpegniAllaClasse.
   //
-  // Si toglie a un'allieva la quota del suo venditore, o si cambia il
-  // tutor: la riga sparisce dal riepilogo, ma nello scadenziario quei
-  // soldi restano scritti e nessuno li vede piu' qui dentro. E' successo
-  // su Reggio Calabria - cento euro a SIMONA, ancora aperti, con la
-  // quota ormai a zero.
-  //
-  // Non si cancellano da soli: un impegno e' un debito, e sparire da
-  // solo e' peggio che restare. Si mostrano, e si tolgono premendo.
-  //
-  // Vale anche quando la riga c'e' ancora ma la sua quota in contanti e'
-  // scesa a zero: a Udine (28/10/2026) il compenso della master era
-  // diviso a meta', "Disponi pagamenti" ha rinviato 150 € di contanti,
-  // poi il bonifico e' stato portato a 300 e i 150 sono rimasti nello
-  // scadenziario come dovuti. Prima l'impegno teneva viva la sua stessa
-  // chiave (cashRinviato) e nessuno lo vedeva piu' qui dentro.
-  const chiaviVive = new Set([
-    ...righeSpeseTutte.filter((r) => (r.cash || 0) > 0 || r.cashPagato).map((r) => chiaveCashRiga(r)),
-    ...venditoriDecisi.filter((v) => v.suoCash > 0).map((v) => `cash_venditore_${v.rigaId}`),
+  // Si legge dalle righe GREZZE: dopo la passeggiata della busta il cash
+  // della riga "Quota venditore" e' gia' stato scalato dei rinvii, e
+  // usarlo qui vorrebbe dire credere che quella quota sia calata da se'.
+  // I venditori stanno uno per uno, con la loro chiave, perche' ognuno ha
+  // il suo impegno.
+  const cashDiOggi = new Map([
+    ...righeSpeseGrezze.map((r) => [chiaveCashRiga(r), round2(r.cash || 0)]),
+    ...righeVenditoriCash.map((v) => [`cash_venditore_${v.rigaId}`, round2(v.suoCash || 0)]),
   ]);
-  const impegniOrfani = (impegni || []).filter((x) =>
-    x.origine_id === corsoData.id
-    && String(x.chiave_origine || "").startsWith("cash_")
-    && !chiaviVive.has(x.chiave_origine)
-    && (x.stato === "aperto" || x.stato === "parzialmente_coperto"));
+  // le chiavi il cui contante e' GIA' una spesa pagata: li' l'impegno non
+  // si tocca per nessun motivo, qualunque cosa dica la riga adesso
+  const chiaviConSpesa = new Set([...chiaviSpeseEsistenti, ...chiaviPagateDalloScadenziario]);
+  const allineamentoImpegni = allineaImpegniAllaClasse({ impegni, corsoDataId: corsoData.id, cashDiOggi, protette: chiaviConSpesa });
+  // la firma di quello che c'e' da fare: serve a non riscrivere due volte
+  // la stessa cosa mentre la pagina si ridisegna
+  const firmaAllineamento = [
+    ...allineamentoImpegni.daAnnullare.map((x) => `A:${x.impegno.id}`),
+    ...allineamentoImpegni.daRiscrivere.map((x) => `R:${x.impegno.id}:${x.a}`),
+  ].join("|");
+  const allineamentoInVolo = useRef("");
+  const [impegniAllineati, setImpegniAllineati] = useState([]);
+  // L'allineamento si applica DA SE'. Niente cron e niente in sottofondo:
+  // succede qui, nella pagina che ha in mano la classe, appena i due
+  // numeri divergono — per un flag spostato adesso o per una quota tolta
+  // ieri da un'altra pagina. Dopo la scrittura si rilegge, la divergenza
+  // non c'e' piu' e non si riparte: la firma lo garantisce comunque.
+  useEffect(() => {
+    if (!firmaAllineamento) return;
+    if (allineamentoInVolo.current === firmaAllineamento) return;
+    allineamentoInVolo.current = firmaAllineamento;
+    const { daAnnullare, daRiscrivere } = allineamentoImpegni;
+    (async () => {
+      const ora = new Date().toISOString();
+      const fatti = [];
+      // "annullato" e non cancellato: sparisce da tutte le liste (filtrano
+      // aperto/parzialmente_coperto) ma resta scritto quanto era
+      for (const x of daAnnullare) {
+        const { data, error } = await supabase.from("impegno")
+          .update({ stato: "annullato", updated_at: ora }).eq("id", x.impegno.id).select("id");
+        if (error) { setMsg("Impegno non allineato: " + testoErrore(error)); return; }
+        if (!data || data.length === 0) { setMsg("Impegno non allineato: il database non ha cambiato nessuna riga. Ricarica la pagina."); return; }
+        fatti.push(`${x.impegno.descrizione}: tolto dallo scadenziario, ${x.motivo}`);
+      }
+      for (const x of daRiscrivere) {
+        const { data, error } = await supabase.from("impegno")
+          .update({ importo_previsto: x.a, updated_at: ora }).eq("id", x.impegno.id).select("id");
+        if (error) { setMsg("Impegno non allineato: " + testoErrore(error)); return; }
+        if (!data || data.length === 0) { setMsg("Impegno non allineato: il database non ha cambiato nessuna riga. Ricarica la pagina."); return; }
+        fatti.push(`${x.impegno.descrizione}: nello scadenziario da ${fmtEuroErp2(x.da)} a ${fmtEuroErp2(x.a)}`);
+      }
+      setImpegniAllineati(fatti);
+      ricarica(["impegno"]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmaAllineamento]);
+
+  // Gli impegni che l'app NON PUO' allineare da se'.
+  //
+  // Dal 10/11/2026 un impegno segue la riga che l'ha generato e si
+  // annulla da se' quando quella riga non prevede piu' contanti, o quando
+  // la riga non c'e' piu' (vedi allineaImpegniAllaClasse). Resta un caso
+  // solo in cui non si tocca: quando una parte di quei soldi e' GIA'
+  // STATA COPERTA. Li' riscrivere o annullare di nascosto vorrebbe dire
+  // muovere una cassa da una pagina che sta facendo un'altra cosa: si
+  // mostra, con scritto accanto perche', e lo toglie una persona.
+  //
+  // I due casi che ci portano, ed erano entrambi veri: una quota di
+  // venditore tolta a un'allieva o un tutor cambiato (Reggio Calabria,
+  // cento euro a SIMONA ancora aperti con la quota a zero), e il cash
+  // passato a zero (Udine, 28/10/2026, i 150 € del compenso master
+  // rimasti dopo che il bonifico era stato portato a 300).
+  const impegniOrfani = allineamentoImpegni.intoccabili.map((x) => ({ ...x.impegno, motivoNonToccabile: x.motivo }));
   const [togliendoOrfano, setTogliendoOrfano] = useState(null);
   async function togliImpegnoOrfano(x) {
     setTogliendoOrfano(x.id);
-    const { error } = await supabase.from("impegno").delete().eq("id", x.id);
+    // "annullato" e non cancellato, come fa l'allineamento automatico:
+    // sparisce da tutte le liste e resta scritto quanto era.
+    const { data, error } = await supabase.from("impegno")
+      .update({ stato: "annullato", updated_at: new Date().toISOString() }).eq("id", x.id).select("id");
     setTogliendoOrfano(null);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    if (!data || data.length === 0) { setMsg("Il database non ha cambiato nessuna riga: ricarica la pagina e riprova."); return; }
     setMsg(`${x.descrizione}: tolto dallo scadenziario. Su questa classe non c'e' piu' una quota che lo giustifichi.`);
     ricarica(["impegno"]);
   }
@@ -30679,11 +30734,26 @@ function PannelloRiepilogoAmministrativo({
   // di averlo pagato, o a lasciare la busta in rosso.
   async function rinviaCashAgliImpegni(r) {
     const chiave = chiaveCashRiga(r);
-    const { error } = await supabase.from("impegno").insert({
+    // UPSERT e non insert: la chiave e' unica, e da quando un impegno si
+    // annulla invece di essere cancellato (10/11/2026) la riga di una
+    // quota rinviata e poi annullata resta li' a occupare la chiave. Un
+    // insert fallirebbe con 23505 — cioe' non si potrebbe piu' rimandare
+    // nello scadenziario una quota che ci era gia' stata. Qui l'impegno
+    // annullato RINASCE con l'importo di adesso.
+    //
+    // Uno chiuso o coperto no: quei soldi sono usciti, e rimetterli fra
+    // le cose da pagare vorrebbe dire pagarli due volte.
+    const giaCiEra = (impegni || []).find((x) => x.chiave_origine === chiave);
+    if (giaCiEra && (giaCiEra.stato === "chiuso" || giaCiEra.stato === "coperto")) {
+      setMsg(`"${r.nome}": questa quota in contanti risulta gia' saldata dallo scadenziario. Non si rimanda.`);
+      return;
+    }
+    const { error } = await supabase.from("impegno").upsert({
       descrizione: `${r.nome} — contanti non coperti`,
       origine_tipo: "corso", origine_id: corsoData.id, chiave_origine: chiave,
       importo_previsto: round2(r.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
-    });
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "chiave_origine" });
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setMsg(`${r.nome}: ${fmtEuroErp2(r.cash)} in contanti nello scadenziario passivo, non pesa più sulla busta di questo corso.`);
     ricarica(["impegno"]);
@@ -30791,8 +30861,13 @@ function PannelloRiepilogoAmministrativo({
         descrizione: `${x.nome} — contanti non coperti`,
         origine_tipo: "corso", origine_id: corsoData.id, chiave_origine: x.chiave,
         importo_previsto: round2(x.cash), data_prevista: corsoData.data_fine || dataOggiStr(), stato: "aperto",
+        updated_at: new Date().toISOString(),
       }));
-      const { error } = await supabase.from("impegno").insert(righe);
+      // upsert per lo stesso motivo di rinviaCashAgliImpegni: un impegno
+      // annullato dall'allineamento tiene ancora la sua chiave, e con un
+      // insert "Disponi pagamenti" fallirebbe in blocco sulla seconda
+      // volta
+      const { error } = await supabase.from("impegno").upsert(righe, { onConflict: "chiave_origine" });
       if (error) { setRegistrandoCash(false); setMsg("Errore: " + testoErrore(error)); return; }
     }
     setRegistrandoCash(false);
@@ -31722,30 +31797,50 @@ function PannelloRiepilogoAmministrativo({
                     )}
                   </div>
 
-                  {/* Gli impegni rimasti senza la riga che li aveva
-                      generati: una quota tolta, un tutor cambiato. Nel
-                      riepilogo quella riga non c'e' piu', nello
-                      scadenziario i soldi sono ancora scritti, e nessuno
-                      li vede piu' da nessuna delle due parti. */}
+                  {/* Quello che l'allineamento ha sistemato da se': un
+                      impegno annullato o riscritto perche' la sua riga e'
+                      cambiata. Si dice, invece di cambiare un debito in
+                      silenzio. */}
+                  {impegniAllineati.length > 0 && (
+                    <div style={{ background: "#F2F7F2", border: "1px solid #CFE0CF", borderRadius: 12, padding: "12px 14px", marginTop: 12 }}>
+                      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E6B3E", marginBottom: 6 }}>
+                        {impegniAllineati.length === 1 ? "Un impegno è stato allineato" : `${impegniAllineati.length} impegni sono stati allineati`} alla classe
+                      </div>
+                      {impegniAllineati.map((t, k) => (
+                        <div key={k} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.45 }}>{t}</div>
+                      ))}
+                      <div style={{ ...fontBody, fontSize: 11.5, color: "#2E6B3E", lineHeight: 1.45, marginTop: 4 }}>
+                        Un impegno segue sempre la riga che l'ha generato. Non viene cancellato: resta scritto quanto era,
+                        fuori da scadenziario e Quadro impegni.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Gli impegni che l'app non puo' allineare da se':
+                      quelli con una parte dei soldi gia' coperta. Li' non
+                      si tocca niente, si dice perche' e lo toglie una
+                      persona. */}
                   {impegniOrfani.length > 0 && (
                     <div style={{ background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "12px 14px", marginTop: 12 }}>
                       <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", marginBottom: 8 }}>
-                        {impegniOrfani.length === 1 ? "Una voce è rimasta" : `${impegniOrfani.length} voci sono rimaste`} nello scadenziario senza una riga che la giustifichi
+                        {impegniOrfani.length === 1 ? "Una voce è rimasta" : `${impegniOrfani.length} voci sono rimaste`} nello scadenziario e non si possono allineare da sole
                       </div>
                       {impegniOrfani.map((x) => (
-                        <div key={x.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                          <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 220px", minWidth: 0 }}>
-                            {x.descrizione} — <b>{fmtEuroErp2(x.importo_previsto)}</b>
-                          </span>
-                          <Button variant="ghost" onClick={() => togliImpegnoOrfano(x)} disabled={togliendoOrfano === x.id}>
-                            {togliendoOrfano === x.id ? "Tolgo…" : "Togli dallo scadenziario"}
-                          </Button>
+                        <div key={x.id} style={{ marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 220px", minWidth: 0 }}>
+                              {x.descrizione} — <b>{fmtEuroErp2(x.importo_previsto)}</b>
+                            </span>
+                            <Button variant="ghost" onClick={() => togliImpegnoOrfano(x)} disabled={togliendoOrfano === x.id}>
+                              {togliendoOrfano === x.id ? "Tolgo…" : "Togli dallo scadenziario"}
+                            </Button>
+                          </div>
+                          <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", lineHeight: 1.45 }}>{x.motivoNonToccabile}</div>
                         </div>
                       ))}
                       <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6D1D", lineHeight: 1.45, marginTop: 4 }}>
-                        Succede quando si toglie la quota di un venditore, o si cambia il tutor di un'allieva, dopo averla mandata
-                        nello scadenziario. Non si cancella da sola: un impegno è un debito, e sparire da solo sarebbe peggio
-                        che restare.
+                        Una parte di questi soldi è già stata coperta, quindi l'app non li riscrive e non li annulla da sé:
+                        toccarli vorrebbe dire muovere una cassa da qui. Lo decide una persona.
                       </div>
                     </div>
                   )}
@@ -45476,6 +45571,83 @@ function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRica
         scadenza: x.data_prevista || null,
       };
     });
+}
+
+// GLI IMPEGNI SEGUONO LA RIGA CHE LI HA GENERATI (10/11/2026)
+//
+// Il titolare: «devi vincolare sempre gli impegni di spesa
+// indissolubilmente alla riga che li ha generati e modificarli in tempo
+// reale, mai lasciare relitti».
+//
+// Un impegno nasce quando la quota in contanti di una riga del Riepilogo
+// non sta nella busta: si manda nello scadenziario passivo con la chiave
+// "cash_<tipo>_<rigaId>", che E' il legame con la riga. Da quel momento
+// pero' la cifra restava congelata e la riga poteva cambiare sotto —
+// Udine, 28/10/2026: compenso master 300 diviso a meta', 150 € di
+// contanti rinviati, poi il bonifico portato a 300 e il cash a 0, e i 150
+// rimasti scritti come dovuti accanto ai 300.
+//
+// Dal 30/10/2026 l'importo MOSTRATO seguiva gia' la riga
+// (cashRicalcolati): la riga diceva 0 € e «non e' piu' dovuto». Ma quello
+// SCRITTO restava, e toccava a una persona togliere il relitto da
+// «Impegni senza riga». Adesso si allinea da se'.
+//
+// Qui dentro non si scrive niente: si decide. Applica chi chiama
+// (allineaImpegniCash in SchedaData), cosi' la regola si puo' provare
+// senza database e senza montare una pagina.
+//
+// Tre regole, e ognuna per un motivo:
+//
+//   - CASH A ZERO, O RIGA CHE NON C'E' PIU' -> stato "annullato", e non
+//     cancellato. Sparisce da tutte le liste — tutte filtrano
+//     aperto/parzialmente_coperto — ma resta scritto quanto era, da
+//     quando e per cosa. Un debito cancellato non lascia niente da
+//     controllare, e qualcuno un giorno chiedera' dov'erano finiti quei
+//     150 euro.
+//   - CASH CAMBIATO -> si riscrive importo_previsto. La riga comanda: e'
+//     la stessa regola di cashRicalcolati, portata da quello che si vede
+//     a quello che e' scritto.
+//   - IMPEGNO COPERTO ANCHE SOLO IN PARTE -> NON SI TOCCA. Quei soldi
+//     sono in parte usciti davvero: riscriverli o annullarli di nascosto
+//     vorrebbe dire muovere una cassa da una pagina che sta facendo
+//     un'altra cosa. Resta in «Impegni senza riga» col tasto a mano, e
+//     la pagina dice perche'.
+//
+// `cashDiOggi` e' la mappa chiave -> contanti che il Riepilogo prevede
+// ADESSO per quella riga. Una chiave ASSENTE vuol dire che la riga non
+// esiste piu' (quota di un venditore togliata, tutor cambiato); una
+// chiave che vale 0 vuol dire che la riga c'e' ma non prevede piu'
+// contanti. Sono due motivi diversi e si dicono diversi, perche' chi
+// legge deve poter capire cos'e' successo senza chiederlo a nessuno.
+//
+// `protette` sono le chiavi che non si toccano comunque: il cash di
+// quella riga e' gia' uscito dalla busta ed e' gia' una spesa pagata.
+export function allineaImpegniAllaClasse({ impegni, corsoDataId, cashDiOggi, protette = new Set() }) {
+  const daAnnullare = [];
+  const daRiscrivere = [];
+  const intoccabili = [];
+  (impegni || []).forEach((x) => {
+    const chiave = String(x.chiave_origine || "");
+    if (!chiave.startsWith("cash_")) return;
+    if (x.origine_id !== corsoDataId) return;
+    if (x.stato !== "aperto" && x.stato !== "parzialmente_coperto") return;
+    if (protette.has(chiave)) return;
+    const coperto = round2(Number(x.importo_coperto) || 0);
+    const previsto = round2(Number(x.importo_previsto) || 0);
+    const haRiga = cashDiOggi instanceof Map ? cashDiOggi.has(chiave) : Object.prototype.hasOwnProperty.call(cashDiOggi || {}, chiave);
+    const adesso = haRiga ? round2(Number(cashDiOggi instanceof Map ? cashDiOggi.get(chiave) : cashDiOggi[chiave]) || 0) : null;
+    if (adesso === previsto) return;
+    if (coperto > 0) {
+      intoccabili.push({ impegno: x, motivo: adesso == null
+        ? `la riga che l'ha generato non c'è più, ma ${fmtEuroErp2(coperto)} sono già stati coperti`
+        : `oggi la classe prevede ${fmtEuroErp2(adesso)}, ma ${fmtEuroErp2(coperto)} sono già stati coperti` });
+      return;
+    }
+    if (adesso == null) { daAnnullare.push({ impegno: x, motivo: "la riga che l'ha generato non c'è più" }); return; }
+    if (adesso <= 0) { daAnnullare.push({ impegno: x, motivo: "la classe non prevede più contanti per questa voce" }); return; }
+    daRiscrivere.push({ impegno: x, da: previsto, a: adesso });
+  });
+  return { daAnnullare, daRiscrivere, intoccabili };
 }
 
 function prossimaScadenzaAbbonamento(dataStr, periodicita) {
