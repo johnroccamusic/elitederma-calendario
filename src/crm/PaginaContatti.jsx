@@ -596,8 +596,23 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
           {totale === 0 && !caricando && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 0" }}>Nessun contatto con questi filtri.</div>}
           {/* I TITOLI DELLE COLONNE. Stesse misure delle righe qui sotto
               (le tre `flex`), o i titoli starebbero sopra un'altra
-              colonna — che e' peggio di non averli. */}
-          {esito.righe.length > 0 && (
+              colonna — che e' peggio di non averli.
+
+              SUL TELEFONO non ci sono colonne: la riga si impila, e tre
+              righe di titoli sopra una lista impilata sarebbero titoli
+              che non stanno sopra niente. Li' restano i soli titoli che
+              si premono, in fila dietro «Ordina per» — stesso
+              componente, stessa freccia, stesso gesto. */}
+          {esito.righe.length > 0 && isMobile && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0 7px" }} data-intestazioni>
+              <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Ordina per</span>
+              <TitoloColonna campo="nome" etichetta="Nome" ordine={ordine} onOrdina={cambiaOrdine} />
+              <TitoloColonna campo="dove" etichetta="Dove" ordine={ordine} onOrdina={cambiaOrdine} />
+              <TitoloColonna campo="richieste" etichetta="Richieste" ordine={ordine} onOrdina={cambiaOrdine} />
+              <TitoloColonna campo="ultimo_contatto" etichetta="Ultimo contatto" ordine={ordine} onOrdina={cambiaOrdine} />
+            </div>
+          )}
+          {esito.righe.length > 0 && !isMobile && (
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0 7px" }} data-intestazioni>
               <span style={{ flex: "1 1 200px", minWidth: 0, display: "flex", gap: 10, alignItems: "center" }}>
                 <TitoloColonna campo="nome" etichetta="Nome" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per nome, come si legge qui" />
@@ -606,7 +621,7 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
               <span style={{ flex: "2 1 240px", minWidth: 0 }}>
                 <TitoloColonna etichetta="Corsi richiesti" ordine={ordine} onOrdina={cambiaOrdine} />
               </span>
-              <span style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-end", flex: "1 1 220px", minWidth: 0 }}>
+              <span style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", flex: "1 1 220px", minWidth: 0 }}>
                 <TitoloColonna etichetta="Qualifica" ordine={ordine} onOrdina={cambiaOrdine} />
                 <TitoloColonna campo="richieste" etichetta="Richieste" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per quante richieste ha fatto" />
                 <TitoloColonna campo="ultimo_contatto" etichetta="Ultimo contatto" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per la data che si legge qui: chi non ne ha una va in fondo" />
