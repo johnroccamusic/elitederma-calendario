@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import PaginaContatti, { cronologiaRichieste, riassuntoFiltri, filtriPerIlDatabase, etichettaQualifica, nomeDi } from "../src/crm/PaginaContatti.jsx";
-import { monta, attendi, clicca } from "./aiuto.js";
+import { monta, attendi, clicca, scegli } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
 const VALORI = {
@@ -186,6 +186,117 @@ describe("la scheda del contatto dice le mail di campagna ricevute", () => {
     await attendi(200);
     const riga = p.nodo.querySelector("[data-campagna-ricevuta]");
     expect(riga.textContent).toContain("aperta · Emilia-Romagna · 30/10/2026");
+    await p.smonta();
+  });
+});
+
+// ------------------------------------------------------------------
+// DOV'ERAVAMO RIMASTI (10/11/2026). Il titolare: messi i filtri, aperta
+// una mail, «indietro» usciva dalla pagina invece di riportare alla
+// lista com'era.
+describe("tornare indietro riporta alla lista con i suoi filtri", () => {
+  it("con una campagna aperta, l'Indietro dell'app torna alla lista e i filtri sono ancora quelli", async () => {
+    const chiamate = [];
+    prepara(chiamate);
+    let intercetto = null;
+    const registra = (fn) => { intercetto = fn; };
+    const p = await monta(<PaginaContatti onBack={() => {}} registraInterceptaIndietro={registra} />);
+    await attendi(200);
+    // sulla lista non c'e' niente da intercettare: «indietro» esce dalla
+    // pagina, ed e' giusto
+    expect(intercetto).toBe(null);
+    await scegli(p.nodo.querySelector('select[data-filtro="Regione"]'), "LOMBARDIA");
+    await attendi(250);
+    await clicca(p.tasto("Componi mail"));
+    await attendi(200);
+    expect(p.testo()).toContain("Componi mail");
+    // adesso «indietro» vuol dire «torna alla lista», e lo sa la pagina
+    expect(typeof intercetto).toBe("function");
+    const { act } = await import("react");
+    await act(async () => { intercetto(); });
+    await attendi(200);
+    const t = p.testo().replace(/\s+/g, " ");
+    expect(t).toContain("1 contatto");
+    expect(p.nodo.querySelector('select[data-filtro="Regione"]').value).toBe("LOMBARDIA");
+    expect(chiamate[chiamate.length - 1].filtri).toEqual({ regione: "LOMBARDIA" });
+    await p.smonta();
+  });
+
+  it("uscendo e rientrando si riapre dov'era: filtri, pagina e ordine", async () => {
+    const chiamate = [];
+    prepara(chiamate);
+    let ricordato = null;
+    const ricorda = (s) => { ricordato = s; };
+    const prima = await monta(<PaginaContatti onBack={() => {}} onStato={ricorda} />);
+    await attendi(200);
+    await scegli(prima.nodo.querySelector('select[data-filtro="Regione"]'), "LOMBARDIA");
+    await attendi(250);
+    await clicca(prima.nodo.querySelector('[data-ordina="nome"]'));
+    await attendi(250);
+    await prima.smonta();
+    expect(ricordato).toMatchObject({ filtri: { regione: "LOMBARDIA" }, da: 0, ordine: { campo: "nome", verso: "asc" } });
+
+    chiamate.length = 0;
+    const poi = await monta(<PaginaContatti onBack={() => {}} statoIniziale={ricordato} />);
+    await attendi(200);
+    expect(poi.nodo.querySelector('select[data-filtro="Regione"]').value).toBe("LOMBARDIA");
+    expect(chiamate[0]).toMatchObject({ filtri: { regione: "LOMBARDIA" }, ordina: "nome", verso: "asc" });
+    // e senza quelle due prop la pagina parte pulita, come ha sempre fatto
+    chiamate.length = 0;
+    const vergine = await monta(<PaginaContatti onBack={() => {}} />);
+    await attendi(200);
+    expect(chiamate[0]).toMatchObject({ filtri: {}, da: 0, ordina: null, verso: null });
+    await poi.smonta(); await vergine.smonta();
+  });
+});
+
+// ------------------------------------------------------------------
+// I TITOLI DELLE COLONNE (10/11/2026): si premono, e a ordinare e' il
+// database — la lista e' una pagina di 50 su 23.757.
+describe("i titoli delle colonne ordinano la lista", () => {
+  it("premendo «Nome» si chiede l'ordine al database: crescente, decrescente, poi di nuovo naturale", async () => {
+    const chiamate = [];
+    prepara(chiamate);
+    const p = await monta(<PaginaContatti onBack={() => {}} />);
+    await attendi(200);
+    const titolo = () => p.nodo.querySelector('[data-ordina="nome"]');
+    expect(titolo().textContent).toBe("Nome");
+    await clicca(titolo()); await attendi(250);
+    expect(chiamate[chiamate.length - 1]).toMatchObject({ ordina: "nome", verso: "asc" });
+    expect(titolo().textContent).toContain("\u25B2");
+    await clicca(titolo()); await attendi(250);
+    expect(chiamate[chiamate.length - 1]).toMatchObject({ ordina: "nome", verso: "desc" });
+    expect(titolo().textContent).toContain("\u25BC");
+    await clicca(titolo()); await attendi(250);
+    expect(chiamate[chiamate.length - 1]).toMatchObject({ ordina: null, verso: null });
+    expect(titolo().textContent).toBe("Nome");
+    await p.smonta();
+  });
+
+  it("si ordina anche per data e per quante richieste, e cambiando ordine si torna alla prima pagina", async () => {
+    const chiamate = [];
+    prepara(chiamate);
+    const p = await monta(<PaginaContatti onBack={() => {}} />);
+    await attendi(200);
+    await clicca(p.nodo.querySelector('[data-ordina="ultimo_contatto"]'));
+    await attendi(250);
+    expect(chiamate[chiamate.length - 1]).toMatchObject({ ordina: "ultimo_contatto", verso: "asc", da: 0 });
+    await clicca(p.nodo.querySelector('[data-ordina="richieste"]'));
+    await attendi(250);
+    expect(chiamate[chiamate.length - 1]).toMatchObject({ ordina: "richieste", verso: "asc", da: 0 });
+    await p.smonta();
+  });
+
+  it("«Corsi richiesti» e «Qualifica» sono titoli e basta: non promettono un ordine che non c'è", async () => {
+    const chiamate = [];
+    prepara(chiamate);
+    const p = await monta(<PaginaContatti onBack={() => {}} />);
+    await attendi(200);
+    const intestazioni = p.nodo.querySelector("[data-intestazioni]");
+    expect(intestazioni.textContent).toContain("Corsi richiesti");
+    expect(intestazioni.textContent).toContain("Qualifica");
+    const premibili = [...intestazioni.querySelectorAll("button")].map((b) => b.getAttribute("data-ordina"));
+    expect(premibili).toEqual(["nome", "dove", "richieste", "ultimo_contatto"]);
     await p.smonta();
   });
 });

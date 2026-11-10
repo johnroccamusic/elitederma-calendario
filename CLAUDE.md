@@ -1400,6 +1400,109 @@ che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
 resta come rete per far vedere la pagina se la query fallisce, ma non è più
 quello che si firma. Prove in `prove/testi-contratto.test.js`.
 
+### I contatti del CRM: si torna dov'eravamo, e i titoli ordinano (10/11/2026)
+
+Il titolare: «nei contatti scaricati dal CRM abbiamo messo dei filtri e
+poi abbiamo provato ad aprire una mail. Quando abbiamo fatto indietro,
+invece di tornare ai contatti con i filtri che avevamo messo, è proprio
+uscito». Erano **due** cose, e una sola non bastava.
+
+**«Componi mail» e «Campagne» non cambiano la `view` dell'app**: sono
+sotto-viste della pagina Contatti. Quindi l'Indietro in alto — e con esso
+il gesto di scorrimento e il tasto fisico di Android — non le vedeva e
+tornava alla schermata *prima* dei contatti, saltando la pagina intera.
+Rimediato come per il calendario di Gestione corsi e i modali di Setting:
+finché una sotto-vista è aperta la pagina registra cosa vuol dire
+«indietro» lì dentro (`registraInterceptaIndietro`). Scegliendo i
+destinatari di una campagna già aperta, «indietro» è la campagna — lo
+stesso posto a cui porta «Torna alla campagna».
+
+**E i filtri vivevano solo nella pagina**, quindi uscire li buttava via:
+con «Avanti», o rientrando dal CRM, si ripartiva da 23.757 contatti e
+dalla ricerca da rifare. Ora la pagina consegna a chi la monta filtri,
+pagina, ordine e scheda aperta (`onStato`) e li riprende da lì
+(`statoIniziale`). Due scelte: la memoria sta nel **genitore** e non in
+una variabile di modulo — una memoria che nessuno può spegnere, e due
+prove della stessa pagina si passerebbero i filtri — ed è un **ref**, non
+uno stato: quei valori non disegnano niente, e in uno stato
+ridisegnerebbero App a ogni lettera scritta nella ricerca.
+
+**I titoli delle colonne si premono** (chiesto subito dopo: «metti il
+titolo delle colonne sull'elenco, cliccando il quale si possono ordinare
+per nome, per ordine alfabetico o per data»). Prima l'elenco non aveva
+nessuna intestazione: un nome, un luogo e una data senza sapere che erano
+colonne. Si ordina per **Nome**, **Dove**, **Richieste** e **Ultimo
+contatto**; il gesto è quello delle tabelle del gestionale — crescente,
+decrescente, al terzo tocco l'ordine naturale — e si riparte dalla prima
+pagina.
+
+**A ordinare è il database** (`crm_cerca_contatti`, migrazione
+`20261110140000`): quello che si vede è **una pagina di 50 su 23.757**, e
+ordinare le 50 che si vedono vorrebbe dire mettere in fila un campione
+scelto con un altro ordine — un elenco che sembra alfabetico e non lo è.
+Il nome della colonna non entra mai nella query: entra in un `case` che
+restituisce una delle espressioni scritte nella funzione, e qualunque
+altra cosa vale l'ordine naturale.
+
+**Si ordina per quello che si legge**, mai per una colonna nascosta, e
+sono tre decisioni:
+
+- il **nome** è «nome cognome» (poi `nome_originale`, poi l'email), come
+  lo scrive `nomeDi`. L'ordine naturale di prima era per `cognome`:
+  alfabetico per il database, disordinato per chi guarda, perché la prima
+  parola che si legge è il nome;
+- **dove** è comune, o provincia, o regione, o la città scritta in Vetta:
+  la stessa scaletta della riga;
+- la **data** è quella che la riga mostra: l'ultimo contatto *solo* se la
+  persona ha una richiesta con data certa, altrimenti la data della
+  vendita, altrimenti niente. Ordinare per `ultimo_contatto_il` metterebbe
+  in fila 16.327 persone secondo il 9 marzo 2026 — il giorno del
+  caricamento in blocco da Vetta, una data che la pagina non mostra
+  apposta. Chi non ha niente da mostrare va in fondo in tutti e due i
+  versi.
+
+**Qualifica non si ordina, ed è voluto**: a video si legge l'etichetta
+(«Cliente»), nel database il valore di Vetta («CLIENTI»), e i due ordini
+alfabetici non coincidono. Tradurre le etichette anche in SQL vorrebbe
+dire la stessa tabella scritta in due posti. Per raccogliere i clienti
+c'è già il filtro Qualifica, che è lo strumento giusto.
+
+**E in coda all'ordine c'è sempre l'`id`.** Senza un criterio unico due
+righe uguali escono in ordine diverso a due letture diverse, e con
+`limit/offset` la stessa persona compare in due pagine e un'altra in
+nessuna. Succedeva anche prima con «cognome, nome», ma ordinando per
+numero di richieste i pari sono migliaia. Prove in
+`prove/crm-contatti.test.jsx` (11).
+
+### «Disponibile su ordinazione» non l'avevamo scritta noi (10/11/2026)
+
+Il titolare, davanti alla scheda dell'Espositore del Siero: «puoi
+cambiare Disponibile su ordinazione in "Disponibile in 4 giorni"?».
+
+Quella frase è di **WooCommerce**, e compare ogni volta che il prodotto
+arriva al sito senza la nostra. Succedeva in due casi, e tutti e due
+erano buchi veri: **un bundle** eredita il back order dai componenti, e
+se il componente non aveva una frase scritta il bundle partiva con il
+vuoto; **un prodotto semplice** manda quella meta solo quando qualcuno
+salva la sua scheda, quindi i 20 prodotti ordinabili a scorte zero su cui
+nessuno aveva mai premuto Salva erano al sito senza frase. In archivio le
+frasi erano quattro su ventiquattro prodotti, e in tre versioni diverse.
+
+Adesso la frase sta in **un posto solo** (`BACKORDER_TESTO_PREDEFINITO` in
+`_shared/bundle.js`), la leggono la scheda del gestionale e le due edge
+function che scrivono sul sito, e **il vuoto non arriva mai a
+WooCommerce**: `messaggioBackorder` ci mette quella predefinita. Il giro
+notturno (`woo-riallinea-shop`) la scrive anche sui prodotti semplici che
+hanno il back order acceso — solo su quelli: sugli altri quella meta non
+la guarda nessuno, e una scrittura inutile è solo un rischio.
+
+**Va pubblicato per vedersi**: finché `woo-gestisci-prodotto` e
+`woo-riallinea-shop` non sono pubblicate e il riallineamento non è
+passato, sul sito resta la frase di prima. E restano **quattro prodotti
+con una frase propria** («Disponibile in circa 4 giorni», «…lavorativi»):
+scritte a mano, non si toccano da sé — per allinearle si svuota il campo
+sulla scheda, e vale la predefinita.
+
 ### Un impegno è legato alla sua riga, e la segue da sé (10/11/2026)
 
 Il titolare: «devi vincolare sempre gli impegni di spesa

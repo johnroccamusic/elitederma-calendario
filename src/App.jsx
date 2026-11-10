@@ -101,6 +101,7 @@ import StrisciaSalvataggi from "./salvataggi/StrisciaSalvataggi.jsx";
 import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi } from "./salvataggi/stato.js";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import { statoSincronizzazione, ultimoGiroRiuscito, minutiDa, daQuanto, MINUTI_MASSIMI_SENZA_SYNC } from "../supabase/functions/_shared/sync-vigilanza.js";
+import { BACKORDER_TESTO_PREDEFINITO, messaggioBackorder } from "../supabase/functions/_shared/bundle.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -63932,10 +63933,13 @@ function disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerI
 // scrive "Esaurito" ne' "Disponibili 0": si scrive quando arriva, ed e'
 // l'unica cosa che al cliente interessi sapere.
 //
-// Il testo sta qui e non nel database perche' e' una promessa
-// commerciale, non un dato del prodotto: il giorno che i giorni
-// lavorativi diventano tre si cambia questa riga, non duecento schede.
-const BACKORDER_TESTO_PREDEFINITO = "Disponibile in circa 4 giorni lavorativi";
+// Il testo sta in un posto solo e non nel database perche' e' una
+// promessa commerciale, non un dato del prodotto: il giorno che i giorni
+// diventano tre si cambia quella riga, non duecento schede. E sta in
+// `_shared/bundle.js` perche' la stessa frase la devono dire anche le due
+// edge function che la mandano al sito: qui la si legge, di la' si
+// scrive, e due copie vorrebbero dire una scheda che promette una cosa e
+// un sito che ne scrive un'altra.
 // Il back order vale solo dove il prodotto e' davvero in vendita: sullo
 // shop online o al banco. Su un articolo che non si vende da nessuna
 // parte — un componente di magazzino, una bozza, un prodotto ritirato —
@@ -63953,8 +63957,7 @@ function backorderAttivo(p) {
   return alBanco || pubblicatoSuShop(p);
 }
 function backorderMessaggio(p) {
-  const scritto = String(p?.backorder_messaggio || "").trim();
-  return scritto || BACKORDER_TESTO_PREDEFINITO;
+  return messaggioBackorder(p?.backorder_messaggio);
 }
 // ---------- Regola unica di scarico dello stock ----------
 // Nessuna giacenza può finire sotto zero, da nessun punto dell'app.
@@ -87085,6 +87088,16 @@ function Gestionale() {
   const interceptaIndietroRef = React.useRef(null);
   const registraInterceptaIndietro = React.useCallback((fn) => { interceptaIndietroRef.current = fn; }, []);
 
+  // DOV'ERAVAMO RIMASTI NEI CONTATTI DEL CRM (10/11/2026). La lista dei
+  // contatti si monta e si smonta con la sua schermata, quindi uscire e
+  // rientrare — o tornarci con Avanti — buttava via filtri, pagina e
+  // ordine, e la ricerca era da rifare su 23.757 righe. Qui si tiene da
+  // parte quello che la pagina consegna. Un REF e non uno stato: questi
+  // numeri non disegnano niente, e metterli in uno stato vorrebbe dire
+  // ridisegnare l'app intera a ogni lettera scritta nella ricerca.
+  const statoCrmContattiRef = React.useRef(null);
+  const ricordaCrmContatti = React.useCallback((stato) => { statoCrmContattiRef.current = stato; }, []);
+
   useEffect(() => {
     const precedente = statoAttualeRef.current;
     const cambiato = precedente.view !== view || precedente.corsoDataAperta !== corsoDataAperta || !stessoSottoVista(precedente.sottoVistaScheda, sottoVistaScheda);
@@ -89885,6 +89898,9 @@ function Gestionale() {
         <PaginaCrmContatti
           utente={utenteLoggato?.nome || venditoreLoggato?.nome || ""}
           onBack={() => setView("crmallievi")}
+          registraInterceptaIndietro={registraInterceptaIndietro}
+          statoIniziale={statoCrmContattiRef.current}
+          onStato={ricordaCrmContatti}
           titolo={etichettaTasto("crm", "crmcontatti", "Contatti")}
         />
       )}

@@ -15,6 +15,8 @@ import {
   componibiliDa,
   campiBackorderBundle,
   messaggioBackorderBundle,
+  messaggioBackorder,
+  BACKORDER_TESTO_PREDEFINITO,
 } from "../supabase/functions/_shared/bundle.js";
 
 describe("quanti bundle si compongono", () => {
@@ -128,8 +130,17 @@ describe("quale frase legge il cliente", () => {
     expect(frase).toBe("Mascara in arrivo");
   });
 
-  it("se nessuno l'ha scritta resta vuota, e vale il testo del sito", () => {
-    expect(messaggioBackorderBundle(null, [{ per: 10, giacenza: 7, backorder: true, messaggio: null }])).toBe("");
-    expect(messaggioBackorderBundle("   ", [])).toBe("");
+  // 10/11/2026: prima qui tornava una stringa vuota, e il titolare sulla
+  // scheda dell'Espositore del Siero leggeva «Disponibile su
+  // ordinazione» — la frase di WooCommerce, che non dice quando arriva.
+  // Vuoto non vuol dire «nessuna frase»: vuol dire «la frase di
+  // WooCommerce», quindi non si manda mai.
+  it("se nessuno l'ha scritta vale quella predefinita, mai il vuoto", () => {
+    expect(messaggioBackorderBundle(null, [{ per: 10, giacenza: 7, backorder: true, messaggio: null }])).toBe(BACKORDER_TESTO_PREDEFINITO);
+    expect(messaggioBackorderBundle("   ", [])).toBe(BACKORDER_TESTO_PREDEFINITO);
+    expect(messaggioBackorder("")).toBe(BACKORDER_TESTO_PREDEFINITO);
+    expect(messaggioBackorder("  Arriva lunedì  ")).toBe("Arriva lunedì");
+    // la frase dettata dal titolare, parola per parola
+    expect(BACKORDER_TESTO_PREDEFINITO).toBe("Disponibile in 4 giorni");
   });
 });

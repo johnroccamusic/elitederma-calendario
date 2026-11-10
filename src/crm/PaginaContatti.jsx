@@ -154,6 +154,37 @@ function Tendina({ etichetta, valore, onCambia, opzioni, tutto = "Tutti", larghe
   );
 }
 
+// IL TITOLO DI UNA COLONNA, che si preme per ordinare (10/11/2026).
+//
+// Chiesto dal titolare: «metti il titolo delle colonne sull'elenco,
+// cliccando il quale si possono ordinare per nome, per ordine alfabetico o
+// per data». Prima l'elenco non aveva nessuna intestazione: si leggeva un
+// nome, un luogo e una data senza sapere che quelle tre cose erano
+// colonne, ne' che si potevano mettere in fila.
+//
+// A ORDINARE E' IL DATABASE, non questa pagina: quello che si vede e' UNA
+// pagina di 50 su 23.757, e ordinare le 50 che si vedono vorrebbe dire
+// mettere in ordine un campione scelto con un altro ordine — un elenco che
+// sembra alfabetico e non lo e'. Qui si decide solo cosa chiedere; la
+// regola di cosa si puo' ordinare, e per quale valore, sta nella funzione
+// `crm_cerca_contatti` (migrazione 20261110140000).
+//
+// Un titolo senza `campo` non si preme: «Corsi richiesti» e «Qualifica»
+// sono li' per dire cos'e' quella colonna, non per promettere un
+// ordinamento che non c'e'. La qualifica si raccoglie col suo filtro.
+function TitoloColonna({ campo = null, etichetta, ordine, onOrdina, titolo }) {
+  const attiva = !!campo && ordine?.campo === campo;
+  const comune = { ...fontBody, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" };
+  if (!campo) return <span style={{ ...comune, color: MUTED }}>{etichetta}</span>;
+  return (
+    <button type="button" onClick={() => onOrdina(campo)} data-ordina={campo}
+      title={titolo || `Ordina per ${etichetta.toLowerCase()}`}
+      style={{ ...comune, color: attiva ? NAVY : MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", userSelect: "none" }}>
+      {etichetta}{attiva ? (ordine.verso === "asc" ? " \u25B2" : " \u25BC") : ""}
+    </button>
+  );
+}
+
 function Spunta({ etichetta, valore, onCambia }) {
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: NAVY, cursor: "pointer" }}>
@@ -297,7 +328,31 @@ export function nomeDi(c) {
 
 // ----------------------------------------------------------------- la pagina
 
-export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "" }) {
+// DOV'ERAVAMO RIMASTI (10/11/2026).
+//
+// Il titolare: «nei contatti scaricati dal CRM abbiamo messo dei filtri e
+// poi abbiamo provato ad aprire una mail. Quando abbiamo fatto indietro,
+// invece di tornare ai contatti con i filtri che avevamo messo, e' proprio
+// uscito. Deve tornare indietro nel punto in cui eravamo sulla lista con i
+// filtri che avevamo impostato.»
+//
+// Erano due cose insieme. La prima: «Componi mail» e «Campagne» non
+// cambiano la `view` dell'app — sono sotto-viste di questa pagina — quindi
+// l'Indietro in alto (e il gesto di scorrimento, e il tasto fisico di
+// Android) non le vedeva e tornava alla schermata PRIMA dei contatti,
+// saltando la pagina intera. Si rimedia come per il calendario di
+// Gestione corsi e per i modali di Setting: finche' una sotto-vista e'
+// aperta, questa pagina registra cosa vuol dire «indietro» qui dentro.
+//
+// La seconda: i filtri vivevano solo qui, quindi uscire dalla pagina li
+// buttava via — e con «Avanti», o rientrando dal CRM, si ripartiva da
+// 23.757 contatti e dalla ricerca da rifare. Ora la pagina consegna a chi
+// la monta (`onStato`) filtri, pagina, ordine e scheda aperta, e li
+// riprende da li' (`statoIniziale`). Chi non passa quelle due prop si
+// comporta esattamente come prima: la memoria sta nel genitore, non in una
+// variabile di modulo, altrimenti sarebbe una memoria che nessuno puo'
+// spegnere — e due prove della stessa pagina si passerebbero i filtri.
+export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "", registraInterceptaIndietro = null, statoIniziale = null, onStato = null }) {
   const isMobile = useIsMobile();
   // le tre viste: la lista, l'elenco delle campagne fatte, una campagna
   // aperta (nuova dai filtri correnti, o una gia' esistente)
@@ -307,16 +362,42 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
   // alla campagna
   const perCampagna = vista.nome === "lista" ? vista.perCampagna || null : null;
   const [congelando, setCongelando] = useState(false);
-  const [filtri, setFiltri] = useState(FILTRI_VUOTI);
-  const [cercaScritto, setCercaScritto] = useState("");
-  const [da, setDa] = useState(0);
+  const [filtri, setFiltri] = useState(() => ({ ...FILTRI_VUOTI, ...(statoIniziale?.filtri || {}) }));
+  const [cercaScritto, setCercaScritto] = useState(() => statoIniziale?.filtri?.cerca || "");
+  const [da, setDa] = useState(() => Number(statoIniziale?.da) || 0);
+  // l'ordine della lista: { campo, verso } oppure null = quello naturale
+  // del database (ultimo contatto, dal piu' recente)
+  const [ordine, setOrdine] = useState(() => statoIniziale?.ordine || null);
   const [valori, setValori] = useState(null);
   const [esito, setEsito] = useState({ totale: null, righe: [] });
   const [caricando, setCaricando] = useState(false);
   const [errore, setErrore] = useState("");
-  const [apertoId, setApertoId] = useState(null);
+  const [apertoId, setApertoId] = useState(() => statoIniziale?.apertoId || null);
   const [giro, setGiro] = useState(0);
   const ultimaRichiesta = useRef(0);
+
+  // quello che si deve ritrovare tornando qui. Si consegna a ogni
+  // cambiamento: chi lo riceve lo mette da parte (un ref, non uno stato,
+  // o l'app intera si ridisegnerebbe a ogni filtro toccato).
+  useEffect(() => { onStato?.({ filtri, da, ordine, apertoId }); }, [filtri, da, ordine, apertoId, onStato]);
+
+  // L'INDIETRO DELL'APP TORNA ALLA LISTA, non fuori dalla pagina. Quando
+  // si stanno scegliendo i destinatari di una campagna gia' aperta,
+  // «indietro» e' la campagna: e' il giro da cui si e' arrivati, ed e'
+  // quello che fa il tasto «Torna alla campagna» qui sopra.
+  useEffect(() => {
+    if (!registraInterceptaIndietro) return undefined;
+    if (vista.nome === "componi" || vista.nome === "campagne") {
+      registraInterceptaIndietro(() => setVista({ nome: "lista" }));
+      return () => registraInterceptaIndietro(null);
+    }
+    if (vista.perCampagna) {
+      registraInterceptaIndietro(() => setVista({ nome: "componi", campagna: vista.perCampagna }));
+      return () => registraInterceptaIndietro(null);
+    }
+    registraInterceptaIndietro(null);
+    return undefined;
+  }, [vista, registraInterceptaIndietro]);
 
   useEffect(() => {
     supabase.rpc("crm_filtri_valori").then(({ data, error }) => {
@@ -335,13 +416,13 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
   useEffect(() => {
     const n = ++ultimaRichiesta.current;
     setCaricando(true); setErrore("");
-    supabase.rpc("crm_cerca_contatti", { filtri: filtriDb, da, quanti: PER_PAGINA }).then(({ data, error }) => {
+    supabase.rpc("crm_cerca_contatti", { filtri: filtriDb, da, quanti: PER_PAGINA, ordina: ordine?.campo || null, verso: ordine?.verso || null }).then(({ data, error }) => {
       if (n !== ultimaRichiesta.current) return;   // e' arrivata prima una richiesta piu' nuova
       setCaricando(false);
       if (error) { setErrore("Non riesco a leggere i contatti: " + error.message); return; }
       setEsito({ totale: Number(data?.totale) || 0, righe: Array.isArray(data?.righe) ? data.righe : [] });
     });
-  }, [filtriDb, da, giro]);
+  }, [filtriDb, da, giro, ordine]);
 
   const cambia = (k, v) => {
     setDa(0); setApertoId(null);
@@ -356,6 +437,20 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
     });
   };
   const azzera = () => { setFiltri(FILTRI_VUOTI); setCercaScritto(""); setDa(0); setApertoId(null); };
+  // Premendo un titolo: prima crescente, poi decrescente, al terzo tocco si
+  // torna all'ordine naturale. E' lo stesso gesto delle tabelle del
+  // gestionale (`useOrdinamentoTabella`), e si riparte dalla prima pagina:
+  // restare alla 7 vuol dire guardare le righe dalla 301 alla 350 di un
+  // elenco che nel frattempo e' diventato un altro.
+  const cambiaOrdine = (campo) => {
+    if (!campo) return;
+    setDa(0); setApertoId(null);
+    setOrdine((prec) => {
+      if (prec?.campo !== campo) return { campo, verso: "asc" };
+      if (prec.verso === "asc") return { campo, verso: "desc" };
+      return null;
+    });
+  };
 
   const province = useMemo(() => (valori?.province || []).filter((p) => !filtri.regione || p.regione === filtri.regione), [valori, filtri.regione]);
   const comuni = useMemo(() => (valori?.comuni || []).filter((c) => !filtri.provincia || c.provincia === filtri.provincia).filter((c) => filtri.provincia || !filtri.regione || province.some((p) => p.valore === c.provincia)), [valori, filtri.provincia, filtri.regione, province]);
@@ -499,6 +594,25 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
         {/* LA LISTA: una riga per contatto, la scheda si apre premendo */}
         <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "4px 12px" : "6px 16px" }}>
           {totale === 0 && !caricando && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 0" }}>Nessun contatto con questi filtri.</div>}
+          {/* I TITOLI DELLE COLONNE. Stesse misure delle righe qui sotto
+              (le tre `flex`), o i titoli starebbero sopra un'altra
+              colonna — che e' peggio di non averli. */}
+          {esito.righe.length > 0 && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0 7px" }} data-intestazioni>
+              <span style={{ flex: "1 1 200px", minWidth: 0, display: "flex", gap: 10, alignItems: "center" }}>
+                <TitoloColonna campo="nome" etichetta="Nome" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per nome, come si legge qui" />
+                <TitoloColonna campo="dove" etichetta="Dove" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per comune, o per quello che c'è al suo posto" />
+              </span>
+              <span style={{ flex: "2 1 240px", minWidth: 0 }}>
+                <TitoloColonna etichetta="Corsi richiesti" ordine={ordine} onOrdina={cambiaOrdine} />
+              </span>
+              <span style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-end", flex: "1 1 220px", minWidth: 0 }}>
+                <TitoloColonna etichetta="Qualifica" ordine={ordine} onOrdina={cambiaOrdine} />
+                <TitoloColonna campo="richieste" etichetta="Richieste" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per quante richieste ha fatto" />
+                <TitoloColonna campo="ultimo_contatto" etichetta="Ultimo contatto" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per la data che si legge qui: chi non ne ha una va in fondo" />
+              </span>
+            </div>
+          )}
           {esito.righe.map((c) => {
             const aperto = apertoId === c.id;
             const luogo = c.comune || c.provincia || c.regione || (c.citta_originale ? `${c.citta_originale} (?)` : "");

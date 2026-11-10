@@ -45,7 +45,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 // la regola del back order ereditato dai componenti: la stessa che usa
 // il giro degli ordini online, in un posto solo (vedi _shared/bundle.js)
-import { bundleOrdinabileAZero, campiBackorderBundle, messaggioBackorderBundle } from "../_shared/bundle.js";
+import { bundleOrdinabileAZero, campiBackorderBundle, messaggioBackorder, messaggioBackorderBundle } from "../_shared/bundle.js";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -226,7 +226,16 @@ Deno.serve(async (req) => {
     // vendita al banco, e senza di lui un espositore resterebbe
     // indisponibile fino al prossimo ordine online.
     if (ereditaBackorder === null) {
-      daAggiornare.push({ id: woo, stock_quantity: disponibile });
+      // LA FRASE DEL BACK ORDER VIAGGIA ANCHE SUI PRODOTTI SEMPLICI
+      // (10/11/2026). Prima quella meta la scriveva solo il salvataggio
+      // della scheda, quindi i prodotti ordinabili a scorte zero su cui
+      // nessuno aveva mai premuto Salva arrivavano al sito senza frase —
+      // e il cliente leggeva «Disponibile su ordinazione», di
+      // WooCommerce. Si scrive solo a chi ha il back order acceso: su
+      // tutti gli altri quella meta non la guarda nessuno, e una
+      // scrittura inutile e' solo un rischio.
+      daAggiornare.push({ id: woo, stock_quantity: disponibile,
+        ...(p.backorder_attivo === true ? campiBackorderBundle(true, messaggioBackorder(p.backorder_messaggio)) : {}) });
     } else {
       daAggiornare.push({ id: woo, stock_quantity: disponibile, ...campiBackorderBundle(ereditaBackorder, messaggioEreditato) });
       if (p.backorder_attivo !== ereditaBackorder) backorderDaScrivere.push({ id: p.id as string, woo, acceso: ereditaBackorder });

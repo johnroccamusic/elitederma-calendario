@@ -33,6 +33,31 @@
 // dei due sarebbe giusta soltanto per meta' delle vendite, e nessuno si
 // accorgerebbe di quale meta'.
 
+// LA FRASE CHE IL CLIENTE LEGGE QUANDO I PEZZI SONO FINITI (10/11/2026).
+//
+// Dettata dal titolare, che sulla scheda dell'Espositore del Siero
+// leggeva ancora «Disponibile su ordinazione»: «puoi cambiare Disponibile
+// su ordinazione in "Disponibile in 4 giorni"?».
+//
+// «Disponibile su ordinazione» non l'abbiamo scritta noi: e' la frase di
+// WooCommerce, e compare ogni volta che il prodotto non porta la nostra.
+// Sta QUI, in un posto solo, perche' la stessa frase la dicono tre
+// strade — la scheda prodotto del gestionale, il salvataggio verso il
+// sito (`woo-gestisci-prodotto`) e il riallineamento notturno
+// (`woo-riallinea-shop`) — e tre copie vorrebbero dire tre promesse
+// diverse sullo stesso scaffale.
+export const BACKORDER_TESTO_PREDEFINITO = "Disponibile in 4 giorni";
+
+/**
+ * La frase da mandare al sito per un prodotto: la sua, se qualcuno ne ha
+ * scritta una, altrimenti quella predefinita. Mai una stringa vuota: il
+ * vuoto non lascia il prodotto senza frase, lo lascia con QUELLA DI
+ * WOOCOMMERCE, che e' il motivo per cui questa funzione esiste.
+ */
+export function messaggioBackorder(scritto) {
+  return String(scritto || "").trim() || BACKORDER_TESTO_PREDEFINITO;
+}
+
 /**
  * Il bundle e' ordinabile anche quando i pezzi non bastano a comporlo?
  *
@@ -96,16 +121,16 @@ export function campiBackorderBundle(ordinabile, messaggio) {
  * La frase da mostrare. Quella scritta sul bundle comanda — se qualcuno
  * l'ha scritta la' e' perche' per l'espositore vale una cosa diversa —
  * altrimenti vale quella del componente che lo blocca, che e' la stessa
- * che il cliente legge sul pezzo singolo. Vuota = il testo predefinito
- * del sito.
+ * che il cliente legge sul pezzo singolo. Dove non c'e'
+ * scritto niente vale la frase predefinita: al sito non deve mai arrivare
+ * un vuoto, o il cliente legge quella di WooCommerce.
  */
 export function messaggioBackorderBundle(delBundle, componenti) {
   const mio = String(delBundle || "").trim();
   if (mio) return mio;
   const righe = (componenti || []).filter((c) => Number(c?.per) > 0);
-  if (righe.length === 0) return "";
   const possibili = righe.map((c) => componibiliDa(c));
-  const minimo = Math.min(...possibili);
+  const minimo = righe.length ? Math.min(...possibili) : 0;
   const bloccante = righe.find((c, i) => possibili[i] === minimo && c.backorder === true);
-  return String(bloccante?.messaggio || "").trim();
+  return messaggioBackorder(bloccante?.messaggio);
 }

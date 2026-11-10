@@ -38,6 +38,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { svuotaCacheSito } from "../_shared/cacheSito.ts";
 import { decodificaEntita } from "../_shared/testo.ts";
+// la frase del back order sta in un posto solo, con le regole dei bundle
+import { messaggioBackorder } from "../_shared/bundle.js";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -132,7 +134,10 @@ Deno.serve(async (req) => {
       // frase; quando lo snippet non c'e' — ed e' il caso di oggi — resta
       // almeno la frase di WooCommerce invece del silenzio.
       backorders: acceso ? "notify" : "no",
-      meta_data: [{ key: "_elitederma_backorder_messaggio", value: acceso ? String(backorderMessaggio || "") : "" }],
+      // acceso senza frase vorrebbe dire la frase di WooCommerce
+      // («Disponibile su ordinazione»), che non e' nostra e non dice
+      // quando arriva: vale quella predefinita
+      meta_data: [{ key: "_elitederma_backorder_messaggio", value: acceso ? messaggioBackorder(backorderMessaggio) : "" }],
     };
   }
 
