@@ -1543,6 +1543,54 @@ con una frase propria** («Disponibile in circa 4 giorni», «…lavorativi»):
 scritte a mano, non si toccano da sé — per allinearle si svuota il campo
 sulla scheda, e vale la predefinita.
 
+### Da cellulare la scheda di un corso si legge in verticale (10/11/2026)
+
+Il titolare: «da cellulare in operativo corsi fai in modo che tutti i dati
+di ciascun corso si leggano nella scheda in verticale senza scorrere
+lateralmente».
+
+La fascia degli incarichi aveva **nove colonne a misura fissa** — 86, 150,
+26, 44, …, 186, 96 — circa novecento pixel, piu' i duecento del pannello
+di sinistra. Su un telefono da trecentonovanta quella fascia scorreva di
+lato **dentro** una pagina che scorre in su e in giu': hotel, camera e
+note hotel non erano scomodi, erano **invisibili** — una striscia che
+scorre dentro qualcosa che scorre non dice di poter essere trascinata.
+
+Adesso, sotto i 700 px (`useIsMobile`), la scheda e' una colonna sola:
+
+- il pannello di sinistra — data, corso, citta', sede — **sta sopra**
+  invece che a fianco, e il filo che lo divide dagli incarichi cambia
+  lato con lui;
+- **ogni dato prende una riga sua con la sua etichetta sopra** (Nome,
+  Nota, Viaggio, Hotel, Camera, Note hotel). «Avvisata» e il tasto che
+  aggiunge o toglie la riga stanno in cima accanto alla pastiglia del
+  ruolo, che e' quello che si guarda per primo;
+- **le intestazioni della fascia si spengono**: servono a dire a cosa
+  corrisponde una colonna, e senza colonne sono una fila di parole da
+  scorrere;
+- il **nome del corso resta grande e va a capo**. Il corpo calcolato
+  (`corpoNome`) esiste per far stare il nome nei duecento pixel del
+  pannello: sul telefono il pannello e' largo quanto la scheda, e
+  rimpicciolire un nome che ha tutta la larghezza lo rende illeggibile
+  per niente;
+- la finestrella **«Aggiungi docente» si apre verso dentro**: il «+» sta
+  all'estremita' destra della riga, e aperta a sinistra del tasto quella
+  finestra da 220 px finirebbe oltre il bordo;
+- «Carico assegnazioni master» passa da **quattro colonne a due**: a 1fr
+  non scorreva niente, ma ogni nome finiva nei puntini.
+
+**Le colonne fisse restano sul computer**, ed e' l'altra meta' del
+lavoro: «niente scorrimento» si otterrebbe anche buttando via la tabella
+di chi lavora al monitor, dove quelle nove colonne sono il motivo per cui
+tre righe si confrontano a colpo d'occhio.
+
+Prove in `prove/operativo-corsi-da-cellulare.test.jsx` (3). Guardano la
+**causa** e non l'effetto: jsdom non impagina, quindi la larghezza vera
+non si misura — si controlla che a 390 px non esistano piu' ne'
+`overflow-x: auto` ne' la colonna da `186px`, che ogni etichetta ci sia,
+e che a 1400 px la griglia e le intestazioni siano ancora al loro posto.
+Il **pollice su un telefono vero** resta l'unica prova del resto.
+
 ### Un impegno è legato alla sua riga, e la segue da sé (10/11/2026)
 
 Il titolare: «devi vincolare sempre gli impegni di spesa

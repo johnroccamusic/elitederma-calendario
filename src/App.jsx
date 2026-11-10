@@ -8155,6 +8155,9 @@ function ModaleGestisciSede({ cd, location, locationPrezzi = [], onClose, onSalv
 function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, hotelPrezzi, hotelPeriodi, locationPrezzi = [], assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio, titolo = "Operativo corsi" }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  // da cellulare la scheda di ogni corso si legge in verticale: vedi
+  // "DA CELLULARE LA RIGA DIVENTA UNA COLONNA" dentro rigaIncaricoScheda
+  const telefono = useIsMobile();
 
   // aggiunta/rimozione ottimistica delle righe "docente extra": "ricarica"
   // rifà l'intero fetchDati, troppo lento per sentirsi immediato — una
@@ -8669,6 +8672,79 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     leva: { sfondo: "#E7F2E9", testo: "#2E7D32" },
   };
   function rigaIncaricoScheda({ chiave, indice, tipo, etichetta, selettore, azione, avvisata, onAvvisata, valoreNota, onNota, viaggio, alloggio, pagato, valoreNotaViaggio, onNotaViaggio }) {
+    // DA CELLULARE LA RIGA DIVENTA UNA COLONNA (10/11/2026).
+    //
+    // Il titolare: «da cellulare in operativo corsi fai in modo che tutti
+    // i dati di ciascun corso si leggano nella scheda in verticale senza
+    // scorrere lateralmente».
+    //
+    // Le nove colonne della fascia degli incarichi misurano novecento
+    // pixel piu' il pannello di sinistra: su un telefono da trecentonovanta
+    // la scheda scorreva di lato, e hotel, camera e note hotel restavano
+    // fuori. Peggio: una fascia che scorre DENTRO una pagina che scorre
+    // non dice di poter essere trascinata — quei dati non erano scomodi,
+    // erano invisibili.
+    //
+    // Qui ogni dato prende una riga sua con la sua etichetta sopra. Le
+    // etichette in cima alla fascia servono a dire a cosa corrisponde una
+    // colonna: senza colonne non vogliono dire niente, e si spengono
+    // (vedi dove si disegnano). Nessun campo si restringe e nessuno esce
+    // dallo schermo: le colonne fisse sono la ragione per cui di la' si
+    // scorreva.
+    if (telefono) {
+      const campo = (nomeCampo, contenuto) => (
+        <div style={{ marginTop: 9, minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{nomeCampo}</div>
+          <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>{contenuto}</div>
+        </div>
+      );
+      return (
+        <div key={chiave} style={{ padding: "11px 13px 13px", background: indice % 2 ? "#FBFAF6" : "#fff", borderTop: `1px solid ${CREAM_BORDER}` }}>
+          {/* in cima quello che si guarda per primo: che ruolo e', se e'
+              stato avvisato, e il tasto che aggiunge o toglie la riga.
+              "Avvisata" si scrive per esteso perche' qui sopra non c'e'
+              piu' l'intestazione che lo diceva */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, background: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).sfondo, borderRadius: 10, padding: "6px 8px", flexShrink: 0 }}>
+              <IconaPersonaSemplice size={13} color={(COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo} />
+              <span style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: (COLORI_RUOLO[tipo] || COLORI_RUOLO.master).testo, whiteSpace: "nowrap" }}>{etichetta}</span>
+            </div>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Avvisata</span>
+              {flagAvvisata(avvisata, onAvvisata)}
+              {azione}
+            </div>
+          </div>
+          {campo("Nome", selettore)}
+          {campo("Nota", (
+            <input
+              style={{ ...campoStyle, minWidth: 0 }}
+              placeholder="Nota"
+              defaultValue={valoreNota || ""}
+              onBlur={(e) => { if (e.target.value !== (valoreNota || "")) onNota(e.target.value || null); }}
+            />
+          ))}
+          {campo("Viaggio", viaggio)}
+          {campo("Hotel", (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, background: "#F1F2F6", borderRadius: 10, padding: "7px 10px" }}>
+              <IconaEdificioErp size={14} color={NAVY} />
+              <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{alloggio}</div>
+            </div>
+          ))}
+          {campo("Camera", pagato)}
+          {/* le leve non viaggiano: senza nota di viaggio la riga non
+              mostra una casella che nessuno rilegge */}
+          {onNotaViaggio ? campo("Note hotel", (
+            <input
+              style={{ ...campoStyle, minWidth: 0 }}
+              placeholder="+ Nota"
+              defaultValue={valoreNotaViaggio || ""}
+              onBlur={(e) => { if (e.target.value !== (valoreNotaViaggio || "")) onNotaViaggio(e.target.value || null); }}
+            />
+          )) : null}
+        </div>
+      );
+    }
     return (
       // Griglia, non piu' una fila elastica. Con il flex ogni cella si
       // allargava o si stringeva secondo quello che aveva dentro, e la
@@ -8772,7 +8848,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 
           return (
             <div key={cd.id} style={{
-              display: "flex", alignItems: "stretch", background: "#fff",
+              display: "flex", flexDirection: telefono ? "column" : "row", alignItems: "stretch", background: "#fff",
               border: `1px solid ${CREAM_BORDER}`, borderLeft: `6px solid ${corso?.colore || NAVY}`,
               borderRadius: 16, marginBottom: 12, overflow: "hidden",
               boxShadow: "0 6px 18px -12px rgba(14,27,51,0.28)", opacity: concluso ? 0.72 : 1,
@@ -8780,7 +8856,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {/* A sinistra le cose che non cambiano riga per riga: quando,
                   quale corso, dove. Stanno ferme mentre a destra si
                   scorrono le persone. */}
-              <div style={{ flex: "0 0 " + LARGHEZZA_PANNELLO_SINISTRO + "px", minWidth: 0, padding: "9px 12px", borderRight: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{
+                flex: telefono ? "0 0 auto" : "0 0 " + LARGHEZZA_PANNELLO_SINISTRO + "px", minWidth: 0, padding: "9px 12px",
+                // sul telefono non sta a fianco ma sopra: il filo che lo
+                // divide dagli incarichi cambia lato con lui
+                borderRight: telefono ? "none" : `1px solid ${CREAM_BORDER}`,
+                borderBottom: telefono ? `1px solid ${CREAM_BORDER}` : "none",
+              }}>
                 {/* La data in una colonna sua e il nome del corso accanto,
                     non sotto. Prima stavano sulla stessa riga con il
                     permesso di andare a capo, e un nome lungo — "Sexyline
@@ -8792,7 +8874,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" }}>{sopra}</div>
                     <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 1 }}>{sotto}</div>
                   </div>
-                  <div title={nomeCorso} style={{ ...fontDisplay, fontSize: corpoNome, fontWeight: 700, color: NAVY, lineHeight: 1.15, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomeCorso}</div>
+                  {/* il corpo calcolato serve a far stare il nome nei
+                      duecento pixel del pannello: sul telefono il pannello
+                      e' largo quanto la scheda, quindi il nome resta
+                      grande e va a capo invece di restringersi */}
+                  <div title={nomeCorso} style={{ ...fontDisplay, fontSize: telefono ? 16 : corpoNome, fontWeight: 700, color: NAVY, lineHeight: 1.15, minWidth: 0, whiteSpace: telefono ? "normal" : "nowrap", overflow: telefono ? "visible" : "hidden", textOverflow: telefono ? "clip" : "ellipsis", overflowWrap: telefono ? "anywhere" : "normal" }}>{nomeCorso}</div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
@@ -8822,15 +8908,20 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                 </div>
               </div>
 
-              <div style={{ flex: 1, minWidth: 0, overflowX: "auto" }}>
+              <div style={{ flex: 1, minWidth: 0, overflowX: telefono ? "visible" : "auto" }}>
                 {/* le intestazioni: con le colonne fisse hanno finalmente
                     senso, prima avrebbero indicato posizioni che a ogni
-                    riga cadevano altrove */}
+                    riga cadevano altrove. Sul telefono le colonne non ci
+                    sono — ogni dato porta la sua etichetta accanto — e
+                    un'intestazione che indica una colonna che non esiste
+                    e' solo una fila di parole da scorrere */}
+                {!telefono && (
                 <div style={{ ...GRIGLIA_INCARICHI, padding: "7px 14px 5px" }}>
                   {ETICHETTE_INCARICHI.map((testo, i) => (
                     <div key={i} style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 2 || i === 3 ? "center" : "left", whiteSpace: "nowrap" }}>{testo}</div>
                   ))}
                 </div>
+                )}
                 {[
                   rigaIncaricoScheda({
                     chiave: `master-${cd.id}`,
@@ -8847,8 +8938,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       <div style={{ position: "relative", flexShrink: 0 }}>
                         <button onClick={() => apriAggiungiDocente(cd)} title="Aggiungi un docente (master, assistente o leva)" style={pulsantePiuDocenteStyle}>+</button>
                         {corsoDataAggiungiDocente?.id === cd.id && (
-                          <div style={{ position: "absolute", top: "calc(100% + 10px)", left: -8, zIndex: 30, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 10px 28px -8px rgba(14,27,51,0.35)", padding: 14, width: 220 }}>
-                            <div style={{ position: "absolute", top: -7, left: 14, width: 12, height: 12, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderTop: "none", borderRight: "none", transform: "rotate(135deg)" }} />
+                          // sul telefono il "+" sta all'estremita' destra
+                          // della riga: aperta a sinistra del tasto, la
+                          // finestrella da 220 px finirebbe oltre il bordo
+                          <div style={{ position: "absolute", top: "calc(100% + 10px)", left: telefono ? "auto" : -8, right: telefono ? -8 : "auto", zIndex: 30, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 10px 28px -8px rgba(14,27,51,0.35)", padding: 14, width: 220 }}>
+                            <div style={{ position: "absolute", top: -7, left: telefono ? "auto" : 14, right: telefono ? 14 : "auto", width: 12, height: 12, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderTop: "none", borderRight: "none", transform: "rotate(135deg)" }} />
                             <Field label="Aggiungi">
                               <select style={inputStyle} value={tipoDocenteScelto} onChange={(e) => setTipoDocenteScelto(e.target.value)}>
                                 <option value="master">Master</option>
@@ -8921,12 +9015,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   }
 
   return (
-    <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: telefono ? "24px 10px 48px" : "40px 20px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 4 }}>Team</div>
-            <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{titolo}</div>
+            <div style={{ ...fontDisplay, fontSize: telefono ? 24 : 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Organizza il team, gli assistenti e le trasferte per ogni corso</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -8995,7 +9089,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           {caricoAssegnazioni.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assegnazione ancora.</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridTemplateRows: `repeat(${Math.ceil(caricoAssegnazioni.length / 4)}, auto)`, gridAutoFlow: "column", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${telefono ? 2 : 4}, 1fr)`, gridTemplateRows: `repeat(${Math.ceil(caricoAssegnazioni.length / (telefono ? 2 : 4))}, auto)`, gridAutoFlow: "column", gap: 6 }}>
               {caricoAssegnazioni.map((p) => (
                 <div key={p.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 6px", background: "#fff" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -90038,4 +90132,5 @@ export {
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
   PaginaContenutoKit, repartoPerProdotto, raggruppaPerReparto, SENZA_REPARTO,
+  AssegnazioneMaster,
 };
