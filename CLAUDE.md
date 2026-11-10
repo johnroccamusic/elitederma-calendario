@@ -4837,6 +4837,12 @@ tutte e due nello stesso giro):
   pubblicazione) e, per essere certi del contenuto, si cerca **dentro il
   file servito** una stringa che prima non c'era — i nomi delle
   proprieta' sopravvivono alla minificazione, quelli delle variabili no;
+- **una pagina caricata a richiesta NON sta in `index-*.js`.** Quasi tutte
+  le pagine passano da `pezzo()`, quindi vivono in un file loro
+  (`PaginaContatti-CBimpW7U.js`): cercare una frase nuova dentro il bundle
+  principale non la trova mai, e l'attesa non finisce piu'. Si legge il
+  nome del pezzo **dentro** l'indice servito e si cerca li'. Costato
+  mezz'ora il 10/11/2026, a guardare un controllo che non poteva riuscire;
 - **interrogare il sito con una `curl` nuda, ripetuta, lo fa rispondere
   403 «Vercel Security Checkpoint»**, e sembra un guasto della
   pubblicazione. E' la protezione automatica che prende per robot un
