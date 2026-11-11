@@ -45737,11 +45737,21 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
   // meta', 150 € rinviati, poi il bonifico portato a 300 e i 150 rimasti
   // scritti nello scadenziario come se fossero ancora dovuti.
   const cashRicalcolati = new Map();
+  // Le classi per cui il conto e' stato DAVVERO rifatto. Serve a chi
+  // allinea gli impegni da fuori: una chiave che non sta in
+  // `cashRicalcolati` puo' voler dire due cose opposte — la riga non
+  // esiste piu', oppure quella classe non e' nemmeno stata guardata
+  // (troppo in la' nel tempo). Senza questo elenco un impegno di una
+  // classe futura verrebbe annullato perche' «la riga non c'e' piu'»,
+  // che e' falso e sarebbe il guasto peggiore: un debito cancellato
+  // senza che nessuno l'abbia deciso.
+  const classiConsiderate = new Set();
   (corsiDate || []).forEach((cd) => {
     // la soglia guarda l'inizio del corso: un corso gia' cominciato o
     // finito l'ha superata, e i suoi costi entrano tutti
     const entroLaSoglia = cd.data_inizio && cd.data_inizio <= addGiorni(oggiStr, GIORNI_ANTICIPO_SCADENZIARIO);
     if (!entroLaSoglia && !classiConSpesa.has(cd.id)) return;
+    classiConsiderate.add(cd.id);
     const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi });
     righeSpeseTutte.forEach((r) => cashRicalcolati.set(`cash_${r.tipo}_${r.rigaId}`, round2(r.cash || 0)));
     // i venditori hanno una chiave a testa (vedi righeVenditoriCash nel
@@ -45801,7 +45811,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       });
     });
   });
-  return { daPagareVirtuali: daPagare, importiRicalcolati, cashRicalcolati };
+  return { daPagareVirtuali: daPagare, importiRicalcolati, cashRicalcolati, classiConsiderate };
 }
 
 // Le quote in contanti che il Riepilogo di una classe ha mandato nello
@@ -45900,14 +45910,16 @@ function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRica
 //
 // `protette` sono le chiavi che non si toccano comunque: il cash di
 // quella riga e' gia' uscito dalla busta ed e' gia' una spesa pagata.
-export function allineaImpegniAllaClasse({ impegni, corsoDataId, cashDiOggi, protette = new Set() }) {
+export function allineaImpegniAllaClasse({ impegni, corsoDataId = null, classi = null, cashDiOggi, protette = new Set(), soloAnnullamenti = false }) {
   const daAnnullare = [];
   const daRiscrivere = [];
   const intoccabili = [];
   (impegni || []).forEach((x) => {
     const chiave = String(x.chiave_origine || "");
     if (!chiave.startsWith("cash_")) return;
-    if (x.origine_id !== corsoDataId) return;
+    // una classe sola (il Riepilogo che la tiene in mano) oppure un
+    // elenco di classi (lo Scadenzario, che le ha ricalcolate tutte)
+    if (corsoDataId ? x.origine_id !== corsoDataId : !(classi && classi.has(x.origine_id))) return;
     if (x.stato !== "aperto" && x.stato !== "parzialmente_coperto") return;
     if (protette.has(chiave)) return;
     const coperto = round2(Number(x.importo_coperto) || 0);
@@ -45923,6 +45935,13 @@ export function allineaImpegniAllaClasse({ impegni, corsoDataId, cashDiOggi, pro
     }
     if (adesso == null) { daAnnullare.push({ impegno: x, motivo: "la riga che l'ha generato non c'è più" }); return; }
     if (adesso <= 0) { daAnnullare.push({ impegno: x, motivo: "la classe non prevede più contanti per questa voce" }); return; }
+    // RISCRIVERE L'IMPORTO LO FA SOLO IL RIEPILOGO della classe, che ha in
+    // mano anche le scelte che si stanno facendo adesso (lo split di una
+    // quota, i giorni di presenza). Lo Scadenzario annulla cio' che non e'
+    // piu' dovuto e basta: quello che mostra e quello che si paga e' gia'
+    // la cifra viva, e due pagine che riscrivono lo stesso numero lo
+    // rimbalzerebbero avanti e indietro a ogni visita.
+    if (soloAnnullamenti) return;
     daRiscrivere.push({ impegno: x, da: previsto, a: adesso });
   });
   return { daAnnullare, daRiscrivere, intoccabili };
@@ -52535,7 +52554,55 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
     return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
   }
 
-  const { daPagareVirtuali, importiRicalcolati, cashRicalcolati } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
+  const { daPagareVirtuali, importiRicalcolati, cashRicalcolati, classiConsiderate } = calcolaVociScadenziario({ quoteVenditoriSplit, corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese, impegnoTabella, locationPrezzi });
+
+  // CIO' CHE NON E' PIU' DOVUTO SI TOGLIE DA SE', ANCHE DA QUI
+  // (11/11/2026). Il titolare, vedendo «Costo Alloggio — CASA MANUELA»
+  // a zero in fondo alla riga: «a cosa serve, se ti ho detto che negli
+  // impegni ci voglio solo spese collegate alla riga che le generano e un
+  // software che aggiorna in tempo reale queste spese».
+  //
+  // Aveva ragione. Dal 10/11 un impegno segue la sua riga e si annulla da
+  // se', ma quel lavoro lo faceva SOLO il Riepilogo della classe: finche'
+  // nessuno apriva quella classe, il relitto restava qui — a zero, con
+  // scritto «si toglie dal Riepilogo», cioe' un compito dato a una
+  // persona. Adesso si allinea la pagina in cui si guarda: questa ha
+  // appena rifatto il conto di tutte le classi, quindi sa gia' quali
+  // impegni non sono piu' dovuti.
+  //
+  // Qui si ANNULLA e non si riscrive nessun importo: vedi
+  // allineaImpegniAllaClasse. E si guarda solo dentro `classiConsiderate`:
+  // una chiave assente in una classe mai ricalcolata non vuol dire che la
+  // riga non c'e' piu'.
+  const chiaviConSpesaPassivo = new Set((spese || []).filter((x) => x.origine_scadenziario_chiave).map((x) => x.origine_scadenziario_chiave));
+  const allineamentoPassivo = allineaImpegniAllaClasse({
+    impegni: impegnoTabella, classi: classiConsiderate, cashDiOggi: cashRicalcolati,
+    protette: chiaviConSpesaPassivo, soloAnnullamenti: true,
+  });
+  const firmaAllineamentoPassivo = allineamentoPassivo.daAnnullare.map((x) => x.impegno.id).join("|");
+  const allineamentoPassivoInVolo = useRef("");
+  const [impegniTolti, setImpegniTolti] = useState([]);
+  useEffect(() => {
+    if (!firmaAllineamentoPassivo) return;
+    if (allineamentoPassivoInVolo.current === firmaAllineamentoPassivo) return;
+    allineamentoPassivoInVolo.current = firmaAllineamentoPassivo;
+    (async () => {
+      const ora = new Date().toISOString();
+      const fatti = [];
+      for (const x of allineamentoPassivo.daAnnullare) {
+        // "annullato" e non cancellato: sparisce da tutte le liste e resta
+        // scritto quanto era, da quando e per cosa — un debito cancellato
+        // non lascia niente da controllare
+        const { data, error } = await supabase.from("impegno")
+          .update({ stato: "annullato", updated_at: ora }).eq("id", x.impegno.id).select("id");
+        if (error || !data || data.length === 0) return; // si riprova alla prossima apertura
+        fatti.push(`${String(x.impegno.descrizione || "").replace(/ — contanti non coperti$/, "")}: ${x.motivo}`);
+      }
+      setImpegniTolti(fatti);
+      ricarica(["impegno"]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmaAllineamentoPassivo]);
 
   // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
   // (stato diverso da "pagata") resta qui finché non viene segnata
@@ -53672,6 +53739,23 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
 
             {subTabPassivo === "dapagare" && (
               <div style={{ ...cardStyle }}>
+                {/* QUELLO CHE SI E' TOLTO DA SE' SI DICE. Un debito che
+                    sparisce in silenzio e' la stessa famiglia di guasti da
+                    cui veniamo: chi guarda deve poter sapere che quella
+                    riga c'era, quanto valeva e perche' non c'e' piu'. */}
+                {impegniTolti.length > 0 && (
+                  <div style={{ border: "1px solid #C7E3C7", borderLeft: `4px solid #2E7D32`, borderRadius: 10, background: "#EAF5EA", padding: "10px 12px", marginBottom: 14 }}>
+                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#2E7D32" }}>
+                      {impegniTolti.length === 1 ? "Una voce non era più dovuta ed è stata tolta" : `${impegniTolti.length} voci non erano più dovute e sono state tolte`}
+                    </div>
+                    {impegniTolti.map((t, i) => (
+                      <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 4, lineHeight: 1.45 }}>{t}</div>
+                    ))}
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+                      Non si cancellano: restano scritte quanto erano e da quando, segnate come annullate.
+                    </div>
+                  </div>
+                )}
                 {elencoFiltratoPassivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
                 {elencoScadenzeConIntestazioni(elencoRaggruppatoPassivo, riepilogoMeseFiltratoPassivo, (item) => (
                   <RigaScadenziarioDaPagare

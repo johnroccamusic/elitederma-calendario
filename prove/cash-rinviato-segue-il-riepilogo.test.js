@@ -70,3 +70,24 @@ describe("il cash rinviato segue il Riepilogo", () => {
     expect(riga.nonPiuDovuto).toBe(false);
   });
 });
+
+// QUALI CLASSI SONO STATE DAVVERO RICALCOLATE (11/11/2026).
+//
+// Serve a chi allinea gli impegni dallo scadenziario: una chiave che non
+// sta in `cashRicalcolati` può voler dire due cose opposte — la riga non
+// esiste più, oppure quella classe non è stata nemmeno guardata perché è
+// troppo in là nel tempo. Senza questo elenco un impegno di una classe
+// futura verrebbe annullato perché «la riga non c'è più», cioè un debito
+// cancellato che nessuno ha deciso di cancellare.
+describe("le classi ricalcolate si dicono", () => {
+  it("una classe già cominciata c'è, una lontana nel futuro no", () => {
+    const LONTANA = "f74559cf-0000-0000-0000-000000000099";
+    const corsiDate = [
+      classe({ quota_bonifico: 300, quota_cash: 0 }),
+      { id: LONTANA, corso_id: "c1", master_id: "m1", data_inizio: "2099-01-01", data_fine: "2099-01-01" },
+    ];
+    const { classiConsiderate } = calcolaVociScadenziario({ ...base, corsiDate });
+    expect(classiConsiderate.has(CLASSE)).toBe(true);
+    expect(classiConsiderate.has(LONTANA)).toBe(false);
+  });
+});

@@ -1778,6 +1778,68 @@ cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
 altro modo le sfugge — non sostituisce la lettura del codice, la rende
 ripetibile.
 
+### Un impegno non più dovuto si toglie da sé anche dallo Scadenzario (11/11/2026)
+
+Il titolare, davanti a «Costo Alloggio — CASA MANUELA» a **zero** in
+fondo allo Scadenzario passivo: «a cosa serve, se ti ho detto che negli
+impegni ci voglio solo spese collegate alla riga che le generano e un
+software che aggiorna in tempo reale queste spese».
+
+**Aveva ragione, e il difetto era mio del giorno prima.** L'allineamento
+del 10/11 funziona, ma lo faceva **solo il Riepilogo della classe**:
+finché nessuno apriva *quella* classe, il relitto restava qui — a zero,
+con scritto «si toglie dal Riepilogo», cioè **un compito dato a una
+persona** proprio dove lui aveva chiesto che non ce ne fossero.
+«Tempo reale» non vuol dire «quando passi da quella pagina».
+
+**Il caso vero, misurato:** NEEDLING Roma 8-9/11, CASA MANUELA (RM), due
+notti, 180 €. Il pagamento dell'alloggio è passato a **bonifico**,
+quindi in contanti oggi non è più dovuto niente: l'impegno
+`cash_alloggio_<classe>` da 180 € era rimasto aperto dal 10/11 alle
+11:54.
+
+**Adesso si allinea anche la pagina in cui si guarda.** Lo Scadenzario
+ha appena rifatto il conto di tutte le classi (`cashRicalcolati`), quindi
+sa già quali impegni non sono più dovuti, e li annulla da sé con la
+stessa funzione pura del Riepilogo. Tre cose decise lì dentro:
+
+- **Da qui si ANNULLA, non si riscrive nessun importo**
+  (`soloAnnullamenti`). Riscrivere l'importo lo fa solo il Riepilogo, che
+  ha in mano anche le scelte che si stanno facendo adesso (lo split di
+  una quota, i giorni di presenza): due pagine che riscrivono lo stesso
+  numero lo rimbalzerebbero avanti e indietro a ogni visita. E non serve,
+  perché la cifra che lo Scadenzario mostra e che si paga è già quella
+  viva.
+- **Si guarda solo dentro le classi davvero ricalcolate**
+  (`classiConsiderate`, nuovo valore di ritorno di
+  `calcolaVociScadenziario`). Una chiave assente da `cashRicalcolati` può
+  voler dire due cose opposte: la riga non esiste più, **oppure** quella
+  classe non è stata nemmeno guardata perché è troppo in là nel tempo.
+  Senza quell'elenco un impegno di una classe futura sarebbe stato
+  annullato perché «la riga non c'è più» — un debito cancellato che
+  nessuno ha deciso di cancellare, che è il guasto peggiore possibile qui.
+- **Quello che si è tolto si dice**, in un riquadro verde in cima
+  all'elenco, con il motivo. Un debito che sparisce in silenzio è la
+  stessa famiglia di guasti da cui veniamo. E resta `annullato`, non
+  cancellato.
+
+Resta a mano **un caso solo**, e sempre lo stesso: l'impegno **coperto
+anche solo in parte**, dove quei soldi sono in parte usciti davvero. Lì
+si mostra col perché e lo toglie una persona.
+
+**Tre relitti veri in archivio, da decidere** (trovati guardando il
+dato): tre impegni del 18/08/2026 — due `location_…` e un
+`alloggio_…`, 561,20 + 561,20 + 240 € — la cui **classe non esiste più**.
+Non sono chiavi `cash_`, quindi non li tocca nessun allineamento e non
+compaiono in nessuna lista: sono righe morte che reggono solo una data.
+Si annullano con un `UPDATE`, che è una decisione del titolare.
+
+Prove: `prove/impegni-seguono-la-riga.test.js` (19, +7 sul giro dallo
+Scadenzario: il caso di Casa Manuela, nessuna riscrittura, la classe non
+ricalcolata che non si tocca, più classi in un colpo, il coperto e la
+chiave protetta) e `prove/cash-rinviato-segue-il-riepilogo.test.js` (6,
++1 su `classiConsiderate`).
+
 ### Un impegno è legato alla sua riga, e la segue da sé (10/11/2026)
 
 Il titolare: «devi vincolare sempre gli impegni di spesa
