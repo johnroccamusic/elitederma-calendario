@@ -1800,16 +1800,27 @@ contante di questa voce risulta già registrato come spesa pagata, quindi
 resta scritto ma non si paga una seconda volta»), invece di dare un
 compito a qualcuno.
 
-**Il caso vero, ed è un dato storto da decidere.** «Costo Alloggio — CASA
-MANUELA» resta visibile proprio per quel motivo, e la spesa che lo
-protegge è **attaccata a un'altra classe**: 180 € pagati il 21/09/2026 via
-PayPal, `classe_id` = NEEDLING Roma **20-21 settembre**, ma
-`origine_scadenziario_chiave` = `cash_alloggio_<classe di NOVEMBRE>`. Il
-pagamento è vero e sta sulla classe giusta; la **chiave** è di un'altra.
-Due effetti: il Riepilogo di novembre crede che il suo contante
-dell'alloggio sia già stato pagato, e l'impegno nato il 10/11 non si
-annulla perché «protetto». Si rimedia svuotando quella chiave sulla
-spesa — un `UPDATE` su una riga di denaro, quindi lo decide il titolare.
+**Il caso vero, e il dato storto che c'era sotto.** «Costo Alloggio —
+CASA MANUELA» restava visibile proprio per quel motivo, e la spesa che lo
+proteggeva era **attaccata a un'altra classe**: 180 € pagati il
+21/09/2026 via PayPal, `classe_id` = NEEDLING Roma **20-21 settembre**,
+ma `origine_scadenziario_chiave` = `cash_alloggio_<classe di NOVEMBRE>`.
+Il pagamento era vero e sulla classe giusta; la **chiave** era di
+un'altra. Due effetti: il Riepilogo di novembre credeva che il contante
+del suo alloggio fosse già pagato, e l'impegno nato il 10/11 non si
+annullava perché «protetto».
+
+**Risolto l'11/11/2026 su scelta del titolare**: svuotata la chiave su
+quella spesa, che resta com'era — 180 €, pagata il 21/09, sulla classe di
+settembre — con il perché scritto nella sua nota. Da lì l'impegno di
+novembre non è più protetto e si annulla da sé.
+
+Controllate le altre: in archivio ci sono **quattro** spese la cui chiave
+`cash_…` nomina un id diverso dal loro `classe_id`, e sono **tutte e
+quattro giuste** — la chiave di un assistente o di un master extra porta
+l'id della sua riga in `corsi_date_docenti`, non quello della classe.
+Chi controlla questa cosa deve risolvere l'id dalle due tabelle, non
+confrontarlo col `classe_id`.
 
 **Annullati i tre relitti del 18/08/2026** (due `location_…` e un
 `alloggio_…`, 561,20 + 561,20 + 240 €, classe cancellata), su sua parola:
