@@ -1591,6 +1591,64 @@ non si misura — si controlla che a 390 px non esistano piu' ne'
 e che a 1400 px la griglia e le intestazioni siano ancora al loro posto.
 Il **pollice su un telefono vero** resta l'unica prova del resto.
 
+### La sede occasionale anche su una classe già a calendario (11/11/2026)
+
+Seguito del punto qui sotto, e la **diagnosi giusta era un'altra**. Il
+titolare chiedeva «cliccando sugli hotel» di poter scegliere fra
+registrato e occasionale; il tasto che premeva era invece quello della
+**sede**: «clicco su gestisci, si apre una finestra che si chiama
+gestisci sede e dalla tendina ci sono solo le sedi registrate». Aveva
+ragione — e la prima correzione, fatta sull'alloggio, era nel posto
+sbagliato.
+
+**La lezione, che vale oltre questo caso:** quando qualcuno dice «non
+posso fare X», prima di correggere si fa dire **quale tasto preme**. Due
+celle accanto — Sede e Hotel — e l'una scambiata per l'altra sono una
+pubblicazione buttata. Qui è costata un giro intero.
+
+**Com'era**: la sede occasionale si poteva scrivere **solo creando il
+corso**. Una classe già a calendario che si spostava in uno studio non
+registrato non aveva dove dirlo: «Gestisci sede» offriva la sola tendina
+delle sedi della città. Adesso ha le due strade della creazione corso —
+**Sede registrata** e **Sede occasionale** — con la stessa forma (due
+tasti alti 44, mezza finestra). Salvando nasce una riga di `location`
+marcata `solo_edizione` / `occasionale`, come fa `creaDataCorso`, e se la
+riga del corso non si scrive la sede appena nata si porta via.
+
+Tre cose decise lì dentro, e ognuna è un modo di sbagliare:
+
+- **La città non si scrive, si vede.** Resta quella del calendario: da
+  lei dipendono le statistiche per zona e quello che le allieve hanno
+  letto iscrivendosi. La sede di questa volta nasce in quella città, e
+  per spostare un corso altrove si rifà la data. La regione si ricava
+  dalla città e si chiede solo quando non si sa.
+- **La fotografia sulla classe si riscrive.** `corsi_date` tiene città,
+  regione, indirizzo e telefono di dov'è stato *questo* corso, e quei
+  campi **vincono** sulla riga della sede: li legge la mail di conferma
+  dell'allieva. Scrivere il solo `location_id` avrebbe mandato la classe
+  in un posto e l'indirizzo dell'altro per mail. Vale anche per il
+  cambio fra due sedi **registrate**, che prima non lo faceva: oggi le
+  due cose coincidono su tutte e 115 le classi in archivio (controllato
+  prima di toccare) e devono continuare a coincidere.
+- **La tariffa della sede di prima non segue su un altro posto.** Questa
+  finestra riempie da sé il costo a giorno con la tariffa generale della
+  sede: passando a una sede occasionale quelle cifre sono di un posto in
+  cui non si va, e salvate diventano un costo di classe falso — che
+  nessuno mette in dubbio, perché l'ha scritto l'app. Si svuotano solo
+  se sono ancora *quelle della sede* (cioè non le ha trattate nessuno) e
+  tornano se si torna sulla strada di prima. Per lo stesso motivo il
+  **listino** della sede di prima non vale su una sede occasionale.
+
+E dopo il salvataggio si rilegge anche `location`: una sede nata adesso
+che l'elenco in memoria non conosce farebbe tornare la cella a dire
+«Gestisci» su un corso che una sede ce l'ha.
+
+Prove in `prove/sede-occasionale-da-gestisci.test.jsx` (7), con la
+finestra montata: le due strade, la sede che nasce nella città della
+classe, la fotografia riscritta (anche cambiando fra due sedi
+registrate), nessuna casella per la città, il nome obbligatorio, e la
+tariffa che si svuota e torna.
+
 ### L'alloggio di un corso si scegli, e si vede che si scegli (11/11/2026)
 
 Il titolare: «in operativo corsi, quando per un corso non è stato

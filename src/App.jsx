@@ -8003,13 +8003,33 @@ function ModaleGestisciSede({ cd, location, locationPrezzi = [], onClose, onSalv
   const [avvisata, setAvvisata] = useState(!!cd.sede_confermata);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  // LA SEDE OCCASIONALE ANCHE DA QUI (11/11/2026). Il titolare: «quando
+  // per un corso non e' stato assegnato, cliccando devi poter scegliere
+  // o una di quelle registrate o inserire una sede occasionale» — e
+  // premendo «Gestisci» trovava «dalla tendina ci sono solo le sedi
+  // registrate». Era vero: la strada occasionale esisteva soltanto
+  // creando il corso, quindi una classe gia' a calendario che si
+  // spostava in uno studio non registrato non aveva dove dirlo.
+  const [tipoSede, setTipoSede] = useState("registrata");
+  const [occ, setOcc] = useState({ nomeSede: "", indirizzo: "", telefono: "", regione: "" });
+  const occasionale = tipoSede === "occasionale";
+  // LA CITTA' NON CAMBIA, ed e' la regola di questa finestra da sempre:
+  // e' quella del calendario, e di la' dipendono le statistiche per zona
+  // e quello che le allieve hanno letto iscrivendosi. Quindi la sede di
+  // questa volta nasce nella citta' del corso: si vede, non si scrive.
+  // Per spostare un corso in un'altra citta' si rifa' la data.
+  const cittaDellaClasse = (cd.citta || locOriginale?.citta || cittaCorrente || "").trim();
+  const regioneDellaClasse = cd.regione || locOriginale?.regione || regioneDaCitta(cittaDellaClasse) || "";
 
   // Il listino della sede, se ce l'ha. Questa finestra prima non ne
   // sapeva niente: riempiva da sola le due caselle con la tariffa unica
   // della sede e le salvava sul corso, e siccome la cifra scritta qui
   // vince sul listino, il listino non entrava mai in gioco. Era il
   // motivo per cui le fasce di Napoli non si vedevano da nessuna parte.
-  const fasceSede = fasceLocationDi(locationPrezzi, locationIdScelta || cd.location_id);
+  const fasceSede = occasionale ? [] : fasceLocationDi(locationPrezzi, locationIdScelta || cd.location_id);
+  // con una sede di questa volta il listino della sede di prima non
+  // c'entra niente: lasciarlo valere scriverebbe sul corso la tariffa di
+  // un posto in cui non si va
   const haListino = fasceSede.some((f) => f.prezzo_cash != null || f.prezzo_bonifico != null);
   const contoListino = (cash) => costoLocationPerGiorni({
     fasce: fasceSede, dataInizio: cd.data_inizio, dataFine: cd.data_fine || cd.data_inizio, preferisciCash: cash,
@@ -8037,6 +8057,30 @@ function ModaleGestisciSede({ cd, location, locationPrezzi = [], onClose, onSalv
     return !comeLaSede;
   });
 
+  // LE DUE CIFRE NON SEGUONO SU UN ALTRO POSTO. Questa finestra riempie
+  // da se' il costo a giorno con la tariffa generale della sede: e'
+  // comodo finche' la sede e' quella, ma passando a una sede di questa
+  // volta quelle cifre sono di un posto in cui non si va — salvate,
+  // diventano un costo di classe falso, e un costo scritto dall'app non
+  // lo mette in dubbio nessuno. Si svuotano solo se sono ancora quelle
+  // della sede (cioe' non le ha trattate nessuno) e tornano indietro se
+  // si torna sulla strada di prima.
+  const [costiSedeDiPrima, setCostiSedeDiPrima] = useState(null);
+  function cambiaTipoSede(v) {
+    if (v === tipoSede) return;
+    if (v === "occasionale") {
+      const comeLaSede = overrideUgualeAllaSede(costoGiornoCash === "" ? null : parseNum(costoGiornoCash), loc?.costo_giornaliero_cash)
+        && overrideUgualeAllaSede(costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico), loc?.costo_giornaliero_bonifico);
+      if (comeLaSede) {
+        setCostiSedeDiPrima({ cash: costoGiornoCash, bonifico: costoGiornoBonifico });
+        setCostoGiornoCash(""); setCostoGiornoBonifico("");
+      }
+    } else if (costiSedeDiPrima && costoGiornoCash === "" && costoGiornoBonifico === "") {
+      setCostoGiornoCash(costiSedeDiPrima.cash); setCostoGiornoBonifico(costiSedeDiPrima.bonifico);
+    }
+    setTipoSede(v);
+  }
+
   useEffect(() => {
     if (!loc || haListino) return; // col listino le caselle restano vuote: comanda lui
     const vuoto = (v) => v === "" || Number(v) === 0;
@@ -8045,7 +8089,7 @@ function ModaleGestisciSede({ cd, location, locationPrezzi = [], onClose, onSalv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sedeCentrale = !!loc?.sede_centrale;
+  const sedeCentrale = !occasionale && !!loc?.sede_centrale;
   // col listino acceso e nessuna tariffa fissa, le due colonne del corso
   // vanno SVUOTATE: finche' restano scritte vincono loro
   const usaListino = haListino && !tariffaFissa;
@@ -8065,33 +8109,120 @@ function ModaleGestisciSede({ cd, location, locationPrezzi = [], onClose, onSalv
       scadenza_pagamento_location: sedeCentrale ? null : (tipoPagamento === "cash" ? null : (scadenza || null)),
       sede_confermata: avvisata,
     };
+    // LA FOTOGRAFIA SULLA CLASSE SI RISCRIVE, ed e' la parte che non si
+    // vede. `corsi_date` tiene citta', regione, indirizzo e telefono di
+    // dov'e' stato QUESTO corso, e quelli vincono sulla riga della sede:
+    // li legge la mail di conferma dell'allieva. Cambiare sede scrivendo
+    // il solo `location_id` avrebbe mandato una classe in un posto e
+    // l'indirizzo dell'altro per mail — oggi le due cose coincidono su
+    // tutte e 115 le classi in archivio (controllato), e devono
+    // continuare a coincidere.
+    const scattoDa = (l, occasionaleAdesso) => ({
+      citta: (occasionaleAdesso ? cittaDellaClasse : (l?.citta || l?.nome || "")).trim() || null,
+      regione: (occasionaleAdesso ? (occ.regione || regioneDellaClasse) : l?.regione) || null,
+      indirizzo: (occasionaleAdesso ? occ.indirizzo : l?.indirizzo || "").trim() || null,
+      telefono: (occasionaleAdesso ? occ.telefono : l?.telefono || "").trim() || null,
+      sede_occasionale: !!occasionaleAdesso,
+    });
+    // la sede di questa volta nasce prima della riga del corso: se la
+    // riga poi non si scrive, la sede appena nata si porta via — o resta
+    // in anagrafica una sede fantasma di cui nessuno sa il perche'
+    let sedeNataQui = null;
+    if (occasionale) {
+      const nomePosto = occ.nomeSede.trim();
+      if (!nomePosto) { setSalvando(false); setMsg("Serve almeno il nome del posto."); return; }
+      if (!cittaDellaClasse) { setSalvando(false); setMsg("Questa classe non ha una città scritta: la sede di questa volta non saprebbe dove nascere."); return; }
+      const { data, error: erroreSede } = await supabase.from("location").insert({
+        // `nome` e' la citta', come su tutte le sedi di questo database
+        nome: cittaDellaClasse.toUpperCase(),
+        nome_sede: nomePosto,
+        citta: cittaDellaClasse,
+        regione: occ.regione || regioneDellaClasse || null,
+        indirizzo: occ.indirizzo.trim() || null,
+        telefono: occ.telefono.trim() || null,
+        solo_edizione: true,
+        ricorrente_occasionale: "occasionale",
+      }).select("id").single();
+      if (erroreSede) { setSalvando(false); setMsg("Sede non creata: " + testoErrore(erroreSede)); return; }
+      sedeNataQui = data.id;
+      campi.location_id = data.id;
+      Object.assign(campi, scattoDa(null, true));
+    } else {
+      // la fotografia si riscrive solo se la sede si sa qual e': senza,
+      // la si lascia com'e' invece di svuotare citta' e indirizzo di una
+      // classe che li ha
+      const scelta = (location || []).find((l) => l.id === campi.location_id);
+      if (scelta) Object.assign(campi, scattoDa(scelta, false));
+    }
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", cd.id);
+    if (error) {
+      if (sedeNataQui) await supabase.from("location").delete().eq("id", sedeNataQui);
+      setSalvando(false); setMsg("Errore: " + testoErrore(error)); return;
+    }
     setSalvando(false);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     onSalvato();
   }
 
   return (
     <Modal title="Gestisci sede" onClose={onClose} maxWidth={480}>
-      {sediStessaCitta.length > 1 && (
-        <Field label="Sede">
-          <select style={inputStyle} value={locationIdScelta} onChange={(e) => setLocationIdScelta(e.target.value)}>
-            {sediStessaCitta.map((l) => (
-              <option key={l.id} value={l.id}>{l.nome_sede || l.nome.toUpperCase()}</option>
-            ))}
-          </select>
+      {/* LE DUE STRADE, come nella creazione corso: una delle sedi
+          registrate, o la sede di questa volta. Hanno la stessa forma di
+          la' — due tasti alti 44, mezza finestra ognuno — perche' sono la
+          prima scelta e non una rifinitura. */}
+      <Field label="Dove si tiene">
+        <div style={{ display: "flex", gap: 8 }}>
+          {[{ v: "registrata", l: "Sede registrata" }, { v: "occasionale", l: "Sede occasionale" }].map((t) => (
+            <button key={t.v} type="button" data-campo={`sede-${t.v}`} onClick={() => cambiaTipoSede(t.v)}
+              style={{ ...fontBody, flex: 1, minHeight: 44, fontSize: 13.5, fontWeight: 700, borderRadius: 12, cursor: "pointer", background: tipoSede === t.v ? NAVY : "#fff", color: tipoSede === t.v ? "#fff" : NAVY, border: `1px solid ${tipoSede === t.v ? NAVY : CREAM_BORDER}` }}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+      </Field>
+      {occasionale ? (
+        <Field label="La sede di questa volta">
+          <input style={{ ...inputStyle, marginBottom: 8 }} data-campo="sede-occ-nome" value={occ.nomeSede} onChange={(e) => setOcc((o) => ({ ...o, nomeSede: e.target.value }))} placeholder="Nome del posto (studio, hotel, centro…) *" />
+          <input style={{ ...inputStyle, marginBottom: 8 }} data-campo="sede-occ-indirizzo" value={occ.indirizzo} onChange={(e) => setOcc((o) => ({ ...o, indirizzo: e.target.value }))} placeholder="Via e civico" />
+          <input style={{ ...inputStyle, marginBottom: 8 }} data-campo="sede-occ-telefono" value={occ.telefono} onChange={(e) => setOcc((o) => ({ ...o, telefono: e.target.value }))} placeholder="Telefono del referente" />
+          {/* la citta' si vede e non si scrive: e' quella del calendario */}
+          <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700, marginBottom: regioneDellaClasse ? 0 : 8 }}>
+            {cittaDellaClasse ? toTitleCase(cittaDellaClasse) : "— questa classe non ha una città scritta —"}
+          </div>
+          {/* la regione serve alla statistica per zona: quasi sempre si
+              ricava dalla citta', e si chiede solo quando non si sa */}
+          {!regioneDellaClasse && (
+            <select style={{ ...inputStyle, marginBottom: 0 }} data-campo="sede-occ-regione" value={occ.regione} onChange={(e) => setOcc((o) => ({ ...o, regione: e.target.value }))}>
+              <option value="">Regione *</option>
+              {REGIONI.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          )}
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+            Resta la città del calendario: le statistiche per zona e quello che le allieve hanno letto iscrivendosi dipendono da lei — per spostare il corso in un’altra città si rifà la data. Il posto nasce come sede occasionale in <b style={{ color: NAVY }}>Impostazioni → Location</b>, non comparirà fra le sedi registrate, e indirizzo e telefono li legge la master sulla scheda del corso.
+          </div>
         </Field>
+      ) : (
+        <>
+          {sediStessaCitta.length > 1 && (
+            <Field label="Sede">
+              <select style={inputStyle} value={locationIdScelta} onChange={(e) => setLocationIdScelta(e.target.value)}>
+                {sediStessaCitta.map((l) => (
+                  <option key={l.id} value={l.id}>{l.nome_sede || l.nome.toUpperCase()}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <Field label="Nome sede">
+            <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
+              {loc?.nome_sede ? toTitleCase(loc.nome_sede) : "—"}
+            </div>
+          </Field>
+          <Field label="Città">
+            <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
+              {loc?.nome ? toTitleCase(loc.nome) : "—"}
+            </div>
+          </Field>
+        </>
       )}
-      <Field label="Nome sede">
-        <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
-          {loc?.nome_sede ? toTitleCase(loc.nome_sede) : "—"}
-        </div>
-      </Field>
-      <Field label="Città">
-        <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
-          {loc?.nome ? toTitleCase(loc.nome) : "—"}
-        </div>
-      </Field>
       {sedeCentrale ? (
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#E8F5E9", color: "#2E7D32", border: "1px solid #C8E6C9", borderRadius: 20, padding: "8px 16px", marginBottom: 16, ...fontBody, fontSize: 13, fontWeight: 700 }}>
           Sede Centrale
@@ -9214,7 +9345,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           location={location}
           locationPrezzi={locationPrezzi}
           onClose={() => setGestisciSede(null)}
-          onSalvato={() => { setGestisciSede(null); ricarica(["corsi_date"]); }}
+          // anche `location`: una sede di questa volta nasce qui, e senza
+          // rileggerla la riga del corso punterebbe a una sede che
+          // l'elenco in memoria non conosce — la cella tornerebbe a dire
+          // «Gestisci» su un corso che una sede ce l'ha
+          onSalvato={() => { setGestisciSede(null); ricarica(["corsi_date", "location"]); }}
         />
       )}
     </div>
@@ -90210,7 +90345,7 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento, serieScontoConPercentuali,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, quotaCoordinatorePerMese,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, ModaleGestisciSede, quotaCoordinatorePerMese,
   calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse, costoKitDellaClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
   movimentiKitDaDelta, righeScarico,
