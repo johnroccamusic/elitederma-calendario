@@ -1,0 +1,37 @@
+<!--
+  L'ICONA «GEMME DENTALI» NELLA FILA DELLE CATEGORIE IN HOME (11/11/2026)
+
+  DOVE VA: home page di elitederma.shop, che e' fatta in LiveCanvas (HTML
+  grezzo nel contenuto della pagina). Nella sezione con le icone tonde
+  — undici <a class="ed-cat"> di fila — va incollata ESATTAMENTE fra
+  «Henne'» e «Wear & Acc», perche' nel menu del sito la voce GEMME DENTALI
+  sta in quello stesso posto, fra HENNE e WEAR & ACC: due ordini diversi
+  per la stessa cosa si notano.
+
+  PERCHE' QUESTA FORMA, riga per riga (copiata dalle altre undici, non
+  inventata):
+
+  - src punta al ritaglio -300x300 e MAI all'originale. L'originale
+    caricato in libreria pesa 655 KB; i ritagli che WordPress ha generato
+    pesano 126 KB (300px) e 38 KB (150px), e 38 KB e' esattamente quanto
+    pesano le altre icone (henne' 40 KB, laminazione 39 KB, needling 37 KB,
+    accessori 41 KB). Con sizes="150px" il browser scarica il 150x150:
+    l'originale non viene mai chiesto. Nominarlo nel src vorrebbe dire
+    diciassette volte il peso per la stessa icona.
+  - l'indirizzo e' /product-category/gemme-dentali/ e non /gemme-dentali/,
+    che risponde 404 (verificato). Alcune icone usano il permalink corto
+    perche' per quelle categorie esiste una pagina vetrina; per le gemme
+    non esiste.
+  - width e height restano 300: servono al browser per tenere il posto
+    prima che l'immagine arrivi, e sono le misure del file nominato nel src.
+
+  DOPO AVER SALVATO: va svuotata la cache. La home arriva con
+  s-maxage=2592000 (trenta giorni) imposto da Cloudways, quindi senza lo
+  svuotamento l'icona non si vede e sembra che il salvataggio non abbia
+  funzionato. E' la stessa storia di «N2 Fixa» del 2/11 e degli espositori
+  del 4/11.
+-->
+<a class="ed-cat" href="https://elitederma.shop/product-category/gemme-dentali/">
+	<span class="ed-cat-ico"><img src="//elitederma.shop/wp-content/uploads/2026/11/icona-gemme-300x300.png" srcset="//elitederma.shop/wp-content/uploads/2026/11/icona-gemme-150x150.png 150w, //elitederma.shop/wp-content/uploads/2026/11/icona-gemme-300x300.png 300w" sizes="150px" width="300" height="300" loading="lazy" alt="Gemme dentali per decorazione dei denti"></span>
+	<span class="ed-cat-lab">Gemme Dentali</span>
+</a>
