@@ -7688,6 +7688,11 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
   const [scadenza, setScadenza] = useState(riga.scadenza_pagamento_alloggio || "");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  // se per questa riga un alloggio non e' ancora stato scelto: si guarda
+  // la riga com'e' arrivata e non `hotelId`, che cambia mentre si scegli
+  // — una frase che compare e sparisce sotto le dita si legge come un
+  // guasto, non come un aiuto
+  const senzaAlloggio = !riga.alloggio_id;
 
   // Il prezzo lo decide il listino: hotel + tipo di stanza + data di
   // check-in, perche' un periodo speciale vale solo nelle sue date.
@@ -7820,16 +7825,35 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, hotelPrezzi, hotelPe
   return (
     <Modal title="Gestisci alloggio" onClose={onClose} maxWidth={480}>
       <Field label="Alloggio">
-        {/* le stesse due strade della creazione corso: uno registrato in
-            anagrafica, o uno occasionale scritto qui per questa volta */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {/* LE DUE STRADE SI DEVONO VEDERE (11/11/2026). Il titolare,
+            davanti a un corso senza hotel: «cliccando sugli hotel devi
+            poter scegliere o un hotel alloggio di quelli registrati o
+            inserire alloggio occasionale». Le due strade c'erano dal
+            28/10, ma erano due pastiglie da 12,5 px appoggiate sopra una
+            tendina: chi apriva questa finestra leggeva per prima la
+            tendina e dava per scontato che fosse l'unica via — la stessa
+            famiglia del «POS fisico» nascosto dietro la scelta della
+            carta. Adesso hanno la forma che hanno nella creazione corso:
+            due tasti alti 44, mezza finestra ognuno, prima di tutto il
+            resto, perche' sono la prima scelta da fare e non una
+            rifinitura. */}
+        <div style={{ display: "flex", gap: 8, marginBottom: senzaAlloggio ? 7 : 10 }}>
           {[{ v: "registrato", l: "Registrato" }, { v: "occasionale", l: "Provvisorio / occasionale" }].map((t) => (
             <button key={t.v} type="button" data-campo={`alloggio-${t.v}`} onClick={() => { setTipoAlloggio(t.v); if (t.v === "occasionale") setHotelId(""); }}
-              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "7px 12px", borderRadius: 10, cursor: "pointer", background: tipoAlloggio === t.v ? NAVY : "#fff", color: tipoAlloggio === t.v ? "#fff" : NAVY, border: `1px solid ${tipoAlloggio === t.v ? NAVY : CREAM_BORDER}` }}>
+              style={{ ...fontBody, flex: 1, minHeight: 44, fontSize: 13, fontWeight: 700, padding: "7px 10px", borderRadius: 12, cursor: "pointer", background: tipoAlloggio === t.v ? NAVY : "#fff", color: tipoAlloggio === t.v ? "#fff" : NAVY, border: `1px solid ${tipoAlloggio === t.v ? NAVY : CREAM_BORDER}` }}>
               {t.l}
             </button>
           ))}
         </div>
+        {/* la riga che spiega le due strade compare SOLO quando un
+            alloggio non c'e' ancora: e' l'unico momento in cui serve
+            saperlo, e su una riga gia' a posto sarebbe una frase che si
+            impara a saltare */}
+        {senzaAlloggio && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
+            Per questo corso un alloggio non c’è ancora: scegline uno fra quelli <b style={{ color: NAVY }}>registrati</b> in anagrafica, oppure scrivi qui l’alloggio <b style={{ color: NAVY }}>di questa volta</b>.
+          </div>
+        )}
         {tipoAlloggio === "registrato" ? (
           <select style={inputStyle} value={hotelId} onChange={(e) => setHotelId(e.target.value)}>
             <option value="">— nessuno —</option>
@@ -8206,6 +8230,26 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const [gestisciSede, setGestisciSede] = useState(null);
   function hotelNomeDi(id) {
     return (hotel || []).find((h) => h.id === id)?.nome?.toUpperCase() || null;
+  }
+  // LA CELLA DELL'ALLOGGIO. Un alloggio che non c'e' diceva «Gestisci»,
+  // che e' una parola che non promette niente: il titolare, davanti a un
+  // corso senza hotel, non ha trovato le due strade che stanno un tocco
+  // piu' in dentro. Adesso la cella dice il gesto — «Scegli alloggio»,
+  // in rosso come la sede che manca — e il suggerimento dice le due
+  // strade, che sul computer e' dove si guarda. Il tasto sta QUI e non
+  // scritto due volte (master e docenti extra): due copie dello stesso
+  // tasto un giorno dicono due cose diverse.
+  function cellaAlloggio(cd, riga, tabella) {
+    const nome = hotelNomeDi(valoreCampo(riga, "alloggio_id"));
+    return (
+      <button
+        onClick={() => setGestisciAlloggio({ cd, riga, tabella })}
+        title={nome ? `${nome} — premi per cambiarlo, anche con un alloggio occasionale` : "Scegli un hotel fra quelli registrati, oppure inserisci un alloggio provvisorio solo per questo corso"}
+        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: nome ? NAVY : "#C0392B", background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}
+      >
+        {nome || "Scegli alloggio"}
+      </button>
+    );
   }
   // stesso importo suggerito che calcolaRigheSpeseCorso userebbe per
   // questa riga (pattuito per periodo con priorità, altrimenti tariffa a
@@ -8964,11 +9008,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     valoreNota: cd.note,
                     onNota: (v) => salvaCampo(cd.id, "note", v),
                     viaggio: cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file"),
-                    alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
-                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
-                      </button>
-                    ),
+                    alloggio: cellaAlloggio(cd, cd, "corsi_date"),
                     pagato: cellaHotelPagato(cd, cd.id),
                     valoreNotaViaggio: cd.note_viaggio,
                     onNotaViaggio: (v) => salvaCampo(cd.id, "note_viaggio", v),
@@ -8994,11 +9034,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     valoreNota: riga.note,
                     onNota: (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "note", v),
                     viaggio: cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file"),
-                    alloggio: (
-                      <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
-                        {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
-                      </button>
-                    ),
+                    alloggio: cellaAlloggio(cd, riga, "corsi_date_docenti"),
                     pagato: cellaHotelPagato(riga, cd.id),
                     // le leve non viaggiano: la nota di viaggio non ha
                     // senso per loro, e lasciarla vuota invitava a

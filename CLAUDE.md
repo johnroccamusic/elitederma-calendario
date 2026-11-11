@@ -1591,6 +1591,55 @@ non si misura — si controlla che a 390 px non esistano piu' ne'
 e che a 1400 px la griglia e le intestazioni siano ancora al loro posto.
 Il **pollice su un telefono vero** resta l'unica prova del resto.
 
+### L'alloggio di un corso si scegli, e si vede che si scegli (11/11/2026)
+
+Il titolare: «in operativo corsi, quando per un corso non è stato
+assegnato l'hotel, come succede per le sedi, che si può scegliere sede
+occasionale o sede già registrata, deve accadere la stessa cosa
+cliccando sugli hotel, che devi poter scegliere o un hotel alloggio di
+quelli registrati o inserire alloggio occasionale».
+
+**Le due strade c'erano, dal 28/10** (vedi «L'alloggio provvisorio in
+Operativo corsi»), e sono anche in produzione — controllato nel bundle
+servito, non nel repo. Quindi qui non c'era niente da costruire: c'era
+da **farle trovare**, ed è la stessa famiglia del «POS fisico» del
+7/11 e dell'«Importa pacchetto» del 9/11 — **una scelta annidata la
+trova solo chi sa già che esiste.**
+
+Due cose non si vedevano:
+
+- **la cella diceva «Gestisci»**, che è una parola che non promette
+  niente: non dice che lì dentro si scegli un hotel, e meno ancora che
+  si può scriverne uno nuovo. Adesso un corso senza alloggio dice
+  **«Scegli alloggio»**, in rosso come la sede che manca, e il
+  suggerimento nomina tutte e due le strade — sul computer è dove si
+  guarda prima di premere. Il tasto è scritto in **un posto solo**
+  (`cellaAlloggio`): era lo stesso tasto copiato due volte, per la
+  master e per i docenti extra;
+- **dentro la finestra erano due pastiglie da 12,5 px** appoggiate
+  sopra la tendina degli hotel: chi apriva leggeva per prima la tendina
+  e dava per scontato che fosse l'unica via. Adesso hanno la forma che
+  hanno nella creazione corso — due tasti alti 44, mezza finestra
+  ognuno, prima di tutto il resto — perché sono la prima scelta da
+  fare, non una rifinitura.
+
+**E la riga che spiega compare solo dove serve**: «per questo corso un
+alloggio non c'è ancora: scegline uno fra quelli registrati, oppure
+scrivi qui l'alloggio di questa volta» si vede soltanto quando
+l'alloggio manca. Su una riga già a posto sarebbe una frase che si
+impara a saltare, e si porterebbe dietro anche quelle che contano.
+
+**Resta un'asimmetria vera, da decidere:** la sede occasionale si può
+scrivere **solo alla creazione** del corso — «Gestisci sede», su una
+classe già fatta, non la offre, mentre l'alloggio sì. Nessuno l'ha
+chiesta: va ridetta, non indovinata.
+
+Prove in `prove/alloggio-occasionale-da-gestisci.test.jsx` (4): le due
+che c'erano sulla creazione dell'hotel occasionale, più la pagina vera
+montata — la cella che dice il gesto, il suggerimento che nomina le due
+strade, i due tasti alti 44 e non le pastiglie, e la riga di
+spiegazione che su un alloggio già scelto non c'è.
+
 ### Cancellare si chiede (11/11/2026)
 
 Il titolare: «ogni cancellazione nell'app che sia di prodotto o di
