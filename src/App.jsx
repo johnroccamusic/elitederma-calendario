@@ -31170,49 +31170,105 @@ function PannelloRiepilogoAmministrativo({
     ricarica(["spese", "impegno"]);
   }
 
-  async function segnaBustaRientrata(rientrata) {
-    // L'importo della busta si congela al clic. Se ci sono ancora quote
-    // in contanti da disporre, quel numero nasce gia' sbagliato: sono
-    // soldi che devono uscire dalla busta e finirebbero in cassa, e
-    // disponendoli dopo la busta non si ricalcola piu'. L'appendice
-    // questo controllo ce l'aveva dal primo giorno; la prima busta no,
-    // ed e' cosi' che in cassa e' entrato del contante gia' promesso.
-    if (rientrata && cashDaDisporreClasse > 0) {
-      setMsg(`Prima disponi i pagamenti: ci sono ${fmtEuroErp2(cashDaDisporreClasse)} di quote in contanti ancora da pagare, e in cassa entrerebbero anche quelli.`);
+  // LE TRE TAPPE DELLA PRIMA BUSTA (11/11/2026). Un tasto solo che cambia
+  // faccia: giallo la chiude e la manda via, arancione dichiara che e'
+  // arrivata, verde non si preme piu'. Sono due gesti distinti perche'
+  // sono due persone e due momenti — chi chiude la busta in una sede
+  // esterna non e' chi la riceve in amministrazione — e in mezzo passano
+  // dei giorni in cui quel contante non e' in nessun cassetto.
+  const statoBusta = statoPrimaBusta(corsoData);
+  const [salvandoBusta, setSalvandoBusta] = useState(false);
+
+  // SPEDIRE: la contabilita' della classe si chiude. L'importo si congela
+  // qui, non all'arrivo, perche' e' qui che qualcuno ha contato delle
+  // banconote e ha chiuso la busta. E le vendite in contanti di oggi
+  // prendono il numero 1, cosi' quelle che la master fa domani in aula
+  // aprono l'appendice invece di sommarsi a una busta che non c'e' piu'.
+  async function spedisciBusta() {
+    // Un pagamento ancora da disporre e' contante che deve USCIRE dalla
+    // busta: congelare adesso vuol dire spedire dei soldi gia' promessi a
+    // qualcun altro. Si dispone, oppure si rinvia allo scadenziario
+    // quello che la busta non copre — che e' esattamente il giro che si
+    // fa prima di chiuderla.
+    if (cashDaDisporreClasse > 0) {
+      setMsg(`Prima disponi i pagamenti: ci sono ${fmtEuroErp2(cashDaDisporreClasse)} di quote in contanti ancora da pagare. Quello che la busta non riesce a coprire si rinvia allo scadenziario passivo.`);
       return;
     }
-    // La prima busta non si riapre se dopo di lei e' gia' nata
-    // un'appendice: il suo importo e' stato contato, e quello che e'
-    // arrivato dopo ha la sua lista
-    if (!rientrata && (appendici.chiuse.length > 0 || (appendici.aperta && !appendici.aperta.vuota))) {
-      setMsg("La prima busta non si riapre: le vendite arrivate dopo stanno nell'appendice qui sotto.");
-      return;
-    }
-    const campi = rientrata
-      ? { busta_rientrata_il: dataOggiStr(), busta_importo: cassaContantiClasse }
-      : { busta_rientrata_il: null, busta_importo: null };
-    const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
-    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
-    // le vendite in contanti contate in questa busta si marcano come sue:
-    // una collegata al corso da domani in poi andra' nell'appendice
-    // Se questa seconda scrittura non riesce, la busta risulta rientrata
-    // ma le sue vendite restano senza numero: una vendita in contanti di
+    if (!window.confirm(`Spedire la busta con ${fmtEuroErp2(cassaContantiClasse)}?\n\nDa qui la contabilità di questa classe si chiude: non ci si aggiunge più niente, e le vendite in contanti che arrivano dopo aprono la busta 2 con una contabilità sua.\n\nL'importo si congela. I soldi entrano in cassa contanti solo quando qualcuno dichiara di averla ricevuta.`)) return;
+    setSalvandoBusta(true);
+    const { error } = await supabase.from("corsi_date").update({ busta_spedita_il: dataOggiStr(), busta_importo: cassaContantiClasse }).eq("id", corsoData.id);
+    if (error) { setSalvandoBusta(false); setMsg("Errore: " + testoErrore(error)); return; }
+    // Se questa seconda scrittura non riesce, la busta risulta partita ma
+    // le sue vendite restano senza numero: una vendita in contanti di
     // domani finirebbe dentro questa busta invece di aprire l'appendice.
     // E' un conto che non torna, quindi si dice.
-    const { error: erroreVendite } = rientrata
-      ? await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).in("metodo_pagamento", ["contanti", "misto"]).is("busta_numero", null)
-      : await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
+    const { error: erroreVendite } = await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).in("metodo_pagamento", ["contanti", "misto"]).is("busta_numero", null);
+    setSalvandoBusta(false);
     if (erroreVendite) {
-      setMsg(`Busta segnata, ma le vendite in contanti non sono state marcate: ${testoErrore(erroreVendite)}. Riprova, o i prossimi incassi finiranno nella busta sbagliata.`);
+      setMsg(`Busta spedita, ma le vendite in contanti non sono state marcate: ${testoErrore(erroreVendite)}. Riprova, o i prossimi incassi finiranno nella busta sbagliata.`);
       ricarica(["corsi_date", "vendite_shop"]);
       return;
     }
-    setMsg(rientrata ? "Busta segnata come rientrata: il contante è in cassa." : "Busta rimessa fuori dalla cassa.");
+    setMsg(`Busta spedita: ${fmtEuroErp2(cassaContantiClasse)} in viaggio. Entrano in cassa quando qualcuno la segna ricevuta.`);
+    ricarica(["corsi_date", "vendite_shop"]);
+  }
+
+  // RICEVERE: solo adesso quel contante e' nel cassetto, con la data di
+  // oggi. L'importo NON si ricalcola: si conferma quello che e' stato
+  // consegnato, non un numero che e' cambiato mentre la busta viaggiava.
+  // Se nel frattempo i conti si sono mossi lo dice il riquadro dello
+  // scostamento qui sotto, e lo decide una persona.
+  async function segnaBustaRicevuta() {
+    if (!bustaSpedita(corsoData)) return;
+    if (!window.confirm(`Confermare l'arrivo della busta con ${fmtEuroErp2(round2(corsoData.busta_importo || 0))}?\n\nDa qui questo contante è nella cassa contanti, con la data di oggi.`)) return;
+    setSalvandoBusta(true);
+    const { error } = await supabase.from("corsi_date").update({ busta_rientrata_il: dataOggiStr() }).eq("id", corsoData.id);
+    setSalvandoBusta(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`Busta ricevuta: ${fmtEuroErp2(round2(corsoData.busta_importo || 0))} entrati in cassa contanti.`);
+    ricarica(["corsi_date"]);
+  }
+
+  // UN PASSO INDIETRO, per correggere un errore appena fatto. Non e' un
+  // ripensamento qualunque: la busta e' un oggetto fisico, e questi due
+  // tasti servono a dire «non e' ancora arrivata» o «non e' ancora
+  // partita», non a rifare i conti.
+  async function tornaIndietroBusta() {
+    if (statoBusta === BUSTA_IN_CASSA) {
+      if (!window.confirm("Rimettere la busta fuori dalla cassa?\n\nTorna «in viaggio»: il suo importo esce dalla cassa contanti, ma la contabilità della classe resta chiusa.")) return;
+      setSalvandoBusta(true);
+      const { error } = await supabase.from("corsi_date").update({ busta_rientrata_il: null }).eq("id", corsoData.id);
+      setSalvandoBusta(false);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      setMsg("Busta rimessa fuori dalla cassa: risulta di nuovo in viaggio.");
+      ricarica(["corsi_date"]);
+      return;
+    }
+    if (statoBusta !== BUSTA_IN_VIAGGIO) return;
+    // La prima busta non si riapre se dopo di lei e' gia' nata
+    // un'appendice: il suo importo e' stato contato, e quello che e'
+    // arrivato dopo ha la sua lista
+    if (appendici.chiuse.length > 0 || (appendici.aperta && !appendici.aperta.vuota)) {
+      setMsg("La prima busta non si riapre: le vendite arrivate dopo stanno nell'appendice qui sotto.");
+      return;
+    }
+    if (!window.confirm("La busta non è partita?\n\nTorna aperta sul tavolo: si può aggiungere, e le sue vendite in contanti tornano a far parte di questa contabilità.")) return;
+    setSalvandoBusta(true);
+    const { error } = await supabase.from("corsi_date").update({ busta_spedita_il: null, busta_importo: null }).eq("id", corsoData.id);
+    if (error) { setSalvandoBusta(false); setMsg("Errore: " + testoErrore(error)); return; }
+    const { error: erroreVendite } = await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
+    setSalvandoBusta(false);
+    if (erroreVendite) {
+      setMsg(`Busta riaperta, ma le sue vendite hanno ancora il numero 1: ${testoErrore(erroreVendite)}. Finché resta così quegli incassi non tornano in questa contabilità.`);
+      ricarica(["corsi_date", "vendite_shop"]);
+      return;
+    }
+    setMsg("Busta riaperta: si può di nuovo aggiungere.");
     ricarica(["corsi_date", "vendite_shop"]);
   }
 
   // Quanto dicono OGGI i conti della classe, contro quello che e' stato
-  // congelato al clic. Il congelamento e' voluto — la cassa ha contato
+  // congelato alla spedizione. Il congelamento e' voluto — la cassa ha contato
   // delle banconote e ricalcolare in silenzio le farebbe ballare — ma
   // quando i due numeri si separano qualcuno deve poterlo vedere e
   // decidere. Succede soprattutto con le quote disposte DOPO aver messo
@@ -31287,39 +31343,62 @@ function PannelloRiepilogoAmministrativo({
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["spese"]);
   }
-  // La spunta: l'importo si congela e la cassa contanti lo somma. Le
-  // vendite dentro prendono il numero della busta, cosi' una vendita che
-  // arriva domani apre la busta dopo invece di finire in questa
-  async function segnaAppendiceInCassa() {
+  // L'APPENDICE HA LE STESSE TRE TAPPE DELLA PRIMA BUSTA. Spedirla scrive
+  // la sua riga in corsi_date_buste: da quel momento e' chiusa, le sue
+  // vendite prendono il suo numero — cosi' una vendita che arriva domani
+  // apre la busta dopo invece di finire in questa — e l'importo si
+  // congela. In cassa ci va solo quando arriva.
+  async function spedisciAppendice() {
     const a = appendici.aperta;
     if (!a || a.vuota) return;
-    if (a.cashDaDisporre > 0) { setMsg("Prima disponi i pagamenti, poi metti la busta in cassa."); return; }
-    if (!window.confirm(`Mettere in cassa la busta ${a.numero} con ${fmtEuroErp2(a.pulito)}?\n\nL'importo si congela: da qui in poi non si ricalcola.`)) return;
+    if (a.cashDaDisporre > 0) { setMsg("Prima disponi i pagamenti, poi spedisci la busta."); return; }
+    if (!window.confirm(`Spedire la busta ${a.numero} con ${fmtEuroErp2(a.pulito)}?\n\nSi chiude: le vendite in contanti che arrivano dopo apriranno la busta ${a.numero + 1}. L'importo si congela e entra in cassa quando qualcuno la riceve.`)) return;
     setSalvandoAppendice(true);
-    const { error } = await supabase.from("corsi_date_buste").insert({ corso_data_id: corsoData.id, numero: a.numero, rientrata_il: dataOggiStr(), importo: a.pulito });
+    const { error } = await supabase.from("corsi_date_buste").insert({ corso_data_id: corsoData.id, numero: a.numero, spedita_il: dataOggiStr(), rientrata_il: null, importo: a.pulito });
     if (error) { setSalvandoAppendice(false); setMsg("Errore: " + testoErrore(error)); return; }
     if (a.vendite.length > 0) {
       const { error: erroreVendite } = await supabase.from("vendite_shop")
         .update({ busta_numero: a.numero }).in("id", a.vendite.map((v) => v.id));
       if (erroreVendite) {
         setSalvandoAppendice(false);
-        setMsg(`Busta ${a.numero} messa in cassa, ma le sue vendite non hanno preso il numero: ${testoErrore(erroreVendite)}. Riaprila e rifalla, o quegli incassi finiranno anche nella busta dopo.`);
+        setMsg(`Busta ${a.numero} spedita, ma le sue vendite non hanno preso il numero: ${testoErrore(erroreVendite)}. Riaprila e rifalla, o quegli incassi finiranno anche nella busta dopo.`);
         await caricaBusteAppendici();
         return;
       }
     }
     setSalvandoAppendice(false);
-    setMsg(`Busta ${a.numero} in cassa: ${fmtEuroErp2(a.pulito)} entrati in cassa contanti.`);
+    setMsg(`Busta ${a.numero} spedita: ${fmtEuroErp2(a.pulito)} in viaggio.`);
     await caricaBusteAppendici();
     ricarica(["vendite_shop"]);
   }
-  // Solo l'ultima chiusa si puo' rimettere fuori, e solo per correggere
-  // un errore appena fatto: le sue vendite tornano senza busta e l'importo
-  // sparisce dalla cassa
+  // E' arrivata: adesso il suo importo congelato entra nella cassa
+  async function segnaAppendiceRicevuta(b) {
+    if (!b || b.rientrata_il) return;
+    if (!window.confirm(`Confermare l'arrivo della busta ${b.numero} con ${fmtEuroErp2(b.importo)}?\n\nDa qui questo contante è nella cassa contanti, con la data di oggi.`)) return;
+    setSalvandoAppendice(true);
+    const { error } = await supabase.from("corsi_date_buste").update({ rientrata_il: dataOggiStr() }).eq("id", b.id);
+    setSalvandoAppendice(false);
+    if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+    setMsg(`Busta ${b.numero} ricevuta: ${fmtEuroErp2(b.importo)} entrati in cassa contanti.`);
+    await caricaBusteAppendici();
+  }
+  // Solo l'ultima si puo' riportare indietro, e solo per correggere un
+  // errore appena fatto: da "in cassa" torna in viaggio, da "in viaggio"
+  // sparisce e le sue vendite tornano senza busta
   async function riapriUltimaAppendice() {
     const ultima = appendici.chiuse[appendici.chiuse.length - 1];
     if (!ultima) return;
-    if (!window.confirm(`Rimettere fuori dalla cassa la busta ${ultima.numero} (${fmtEuroErp2(ultima.importo)})?`)) return;
+    if (ultima.rientrata_il) {
+      if (!window.confirm(`Rimettere fuori dalla cassa la busta ${ultima.numero} (${fmtEuroErp2(ultima.importo)})?\n\nTorna «in viaggio»: esce dalla cassa contanti, ma resta chiusa.`)) return;
+      setSalvandoAppendice(true);
+      const { error } = await supabase.from("corsi_date_buste").update({ rientrata_il: null }).eq("id", ultima.id);
+      setSalvandoAppendice(false);
+      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      setMsg(`Busta ${ultima.numero} rimessa fuori dalla cassa: risulta di nuovo in viaggio.`);
+      await caricaBusteAppendici();
+      return;
+    }
+    if (!window.confirm(`La busta ${ultima.numero} (${fmtEuroErp2(ultima.importo)}) non è partita?\n\nTorna aperta: le sue vendite rientrano in questa contabilità.`)) return;
     setSalvandoAppendice(true);
     const { error } = await supabase.from("corsi_date_buste").delete().eq("id", ultima.id);
     if (error) { setSalvandoAppendice(false); setMsg("Errore: " + testoErrore(error)); return; }
@@ -31327,11 +31406,11 @@ function PannelloRiepilogoAmministrativo({
       .update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", ultima.numero);
     setSalvandoAppendice(false);
     if (erroreVendite) {
-      setMsg(`Busta ${ultima.numero} rimessa fuori, ma le sue vendite hanno ancora il suo numero: ${testoErrore(erroreVendite)}. Finché resta così quegli incassi non rientrano in nessuna busta.`);
+      setMsg(`Busta ${ultima.numero} riaperta, ma le sue vendite hanno ancora il suo numero: ${testoErrore(erroreVendite)}. Finché resta così quegli incassi non rientrano in nessuna busta.`);
       await caricaBusteAppendici();
       return;
     }
-    setMsg(`Busta ${ultima.numero} rimessa fuori dalla cassa.`);
+    setMsg(`Busta ${ultima.numero} riaperta.`);
     await caricaBusteAppendici();
     ricarica(["vendite_shop"]);
   }
@@ -32122,69 +32201,84 @@ function PannelloRiepilogoAmministrativo({
                     </div>
                   )}
 
-                  {/* La busta entra nella cassa contanti quando
-                      l'amministrazione dichiara di averla ricevuta, non
-                      quando il corso finisce: fino a quel momento quei
-                      contanti sono ancora in mano a qualcuno.
-                      Alla conferma l'importo si congela. Il contante contato
-                      e consegnato e' un fatto: ricalcolarlo domani dai dati
-                      della classe lo farebbe cambiare in silenzio se qualcuno
-                      corregge una quota o una spesa, e la cassa non
-                      tornerebbe piu' con quello che c'e' nel cassetto. */}
-                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>
-                        {corsoData.busta_rientrata_il ? "Busta rientrata in cassa" : "Busta in viaggio o fuori cassa"}
+                  {/* IL TASTO DELLE TRE TAPPE. Giallo: la busta e' ancora
+                      qui, premerlo la chiude e la manda via. Arancione: e'
+                      per strada, premerlo dichiara che e' arrivata e il
+                      contante entra in cassa. Verde: arrivata, non si preme
+                      piu'.
+
+                      L'importo si congela alla spedizione. Il contante
+                      contato e chiuso dentro una busta e' un fatto:
+                      ricalcolarlo domani dai dati della classe lo farebbe
+                      cambiare in silenzio se qualcuno corregge una quota o
+                      una spesa, e la cassa non tornerebbe piu' con quello
+                      che c'e' nel cassetto. */}
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+                      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: statoBusta === BUSTA_IN_CASSA ? "#2E7D32" : NAVY }}>
+                        {statoBusta === BUSTA_IN_CASSA ? "Busta ricevuta e in cassa" : statoBusta === BUSTA_IN_VIAGGIO ? "Busta in viaggio" : "La busta è ancora qui"}
                       </div>
-                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                        {corsoData.busta_rientrata_il
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
+                        {statoBusta === BUSTA_IN_CASSA
                           ? `${fmtData(corsoData.busta_rientrata_il)} — ${euroRiepilogo(corsoData.busta_importo || 0)} entrati in cassa contanti`
-                          : "Finché non la spunti, questo contante non entra nella cassa contanti."}
+                          : statoBusta === BUSTA_IN_VIAGGIO
+                            ? `Partita il ${fmtData(corsoData.busta_spedita_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. Entrano in cassa contanti quando premi qui a fianco, al suo arrivo.`
+                            : "Spedendola chiudi questa contabilità: non ci si aggiunge più niente, e le vendite in contanti che arrivano dopo aprono una busta loro."}
                       </div>
+                      {statoBusta !== BUSTA_APERTA && (
+                        <button onClick={tornaIndietroBusta} disabled={salvandoBusta} style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", textDecoration: "underline" }}>
+                          {statoBusta === BUSTA_IN_CASSA ? "Rimettila fuori dalla cassa" : "Non è partita, rimettila qui"}
+                        </button>
+                      )}
                     </div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: corsoData.busta_rientrata_il ? "#2E7D32" : NAVY }}>
-                      <input
-                        type="checkbox"
-                        checked={!!corsoData.busta_rientrata_il}
-                        onChange={(e) => segnaBustaRientrata(e.target.checked)}
-                        style={{ width: 20, height: 20, cursor: "pointer" }}
-                      />
-                      {corsoData.busta_rientrata_il ? "Busta in cassa" : "Ok, busta in cassa"}
-                    </label>
+                    <TastoBusta
+                      stato={statoBusta}
+                      disabilitato={salvandoBusta}
+                      onPremi={statoBusta === BUSTA_APERTA ? spedisciBusta : segnaBustaRicevuta}
+                      titolo={statoBusta === BUSTA_APERTA
+                        ? "Chiude la contabilità e manda via la busta: da qui non ci si aggiunge più niente"
+                        : statoBusta === BUSTA_IN_VIAGGIO
+                          ? "Premi quando la busta è arrivata: il contante entra nella cassa contanti"
+                          : "Arrivata: il contante è nella cassa contanti"}
+                    />
                   </div>
 
                   {/* l'avviso che i due numeri si sono separati. Non
                       ricalcola niente da solo: mostra i due importi e
                       lascia decidere, perche' dall'altra parte c'e' un
                       cassetto con dentro delle banconote vere */}
-                  {corsoData.busta_rientrata_il && Math.abs(bustaScostamento) > 0.01 && (
+                  {bustaSpedita(corsoData) && Math.abs(bustaScostamento) > 0.01 && (
                     <div style={{ marginTop: 10, background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                       <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", flex: "1 1 240px", lineHeight: 1.5 }}>
-                        In cassa sono entrati <b style={{ color: NAVY }}>{euroRiepilogo(bustaImportoCongelato)}</b>, ma i conti di oggi dicono <b style={{ color: NAVY }}>{euroRiepilogo(bustaImportoOggi)}</b>
+                        Nella busta sono stati chiusi <b style={{ color: NAVY }}>{euroRiepilogo(bustaImportoCongelato)}</b>, ma i conti di oggi dicono <b style={{ color: NAVY }}>{euroRiepilogo(bustaImportoOggi)}</b>
                         {bustaScostamento > 0
-                          ? ` — ${euroRiepilogo(bustaScostamento)} di troppo. Succede quando le quote in contanti sono state disposte dopo aver messo la busta in cassa: quei soldi erano già promessi a qualcuno.`
+                          ? ` — ${euroRiepilogo(bustaScostamento)} di troppo. Succede quando le quote in contanti sono state disposte dopo aver spedito la busta: quei soldi erano già promessi a qualcuno.`
                           : ` — ${euroRiepilogo(Math.abs(bustaScostamento))} in meno di quello che risulta ora.`}
                       </div>
                       <Button variant="ghost" onClick={aggiornaImportoBusta} style={{ flexShrink: 0 }}>Aggiorna l'importo</Button>
                     </div>
                   )}
 
-                  {/* Appendice vendite al corso: solo a prima busta chiusa.
-                      Le buste gia' in cassa stanno sopra, ripiegate su una
-                      riga; sotto c'e' quella aperta, con le vendite arrivate
-                      dopo, i pagamenti fatti con quei contanti, Disponi e la
-                      spunta. Compare quando c'e' qualcosa dentro, o basta un
-                      tasto per aggiungere un pagamento */}
-                  {corsoData.busta_rientrata_il && (appendici.chiuse.length > 0 || (appendici.aperta && !appendici.aperta.vuota)) && (
+                  {/* Appendice vendite al corso: compare appena la prima
+                      busta e' PARTITA, non quando arriva — e' quello il
+                      momento in cui la master resta in aula e continua a
+                      vendere. Le buste gia' chiuse stanno sopra, ripiegate
+                      su una riga ciascuna col proprio tasto; sotto c'e'
+                      quella aperta, con le vendite arrivate dopo, i
+                      pagamenti fatti con quei contanti, Disponi e il tasto
+                      giallo. */}
+                  {bustaSpedita(corsoData) && (appendici.chiuse.length > 0 || (appendici.aperta && !appendici.aperta.vuota)) && (
                     <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
                       <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 4 }}>Appendice vendite al corso</div>
                       <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, textAlign: "center", marginBottom: 12 }}>
-                        Vendite in contanti arrivate dopo la chiusura della busta. La prima busta resta com'è: questi contanti hanno una busta loro.
+                        Vendite in contanti arrivate dopo che la prima busta è partita. Quella resta com'è, chiusa: questi contanti hanno una busta loro, con la sua contabilità.
                       </div>
                       {appendici.chiuse.map((b, idx) => (
                         <details key={b.id} style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px" }}>
-                          <summary style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32", cursor: "pointer" }}>
-                            Busta {b.numero} in cassa — {fmtData(b.rientrata_il)} — {euroRiepilogo(b.importo || 0)}
+                          <summary style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: b.rientrata_il ? "#2E7D32" : "#C77A18", cursor: "pointer" }}>
+                            {b.rientrata_il
+                              ? `Busta ${b.numero} ricevuta e in cassa — ${fmtData(b.rientrata_il)} — ${euroRiepilogo(b.importo || 0)}`
+                              : `Busta ${b.numero} in viaggio — partita il ${fmtData(b.spedita_il)} — ${euroRiepilogo(b.importo || 0)}`}
                           </summary>
                           <div style={{ marginTop: 8 }}>
                             {b.righeProdotti.map((r) => (
@@ -32199,11 +32293,20 @@ function PannelloRiepilogoAmministrativo({
                                 <span style={{ whiteSpace: "nowrap" }}>€ {x.totale}</span>
                               </div>
                             ))}
-                            {idx === appendici.chiuse.length - 1 && (!appendici.aperta || appendici.aperta.vuota) && (
-                              <button onClick={riapriUltimaAppendice} disabled={salvandoAppendice} style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", textDecoration: "underline" }}>
-                                Rimetti fuori dalla cassa
-                              </button>
-                            )}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+                              {idx === appendici.chiuse.length - 1 && (!appendici.aperta || appendici.aperta.vuota) ? (
+                                <button onClick={riapriUltimaAppendice} disabled={salvandoAppendice} style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                                  {b.rientrata_il ? "Rimettila fuori dalla cassa" : "Non è partita, rimettila qui"}
+                                </button>
+                              ) : <span />}
+                              <TastoBusta
+                                stato={statoAppendice(b)}
+                                disabilitato={salvandoAppendice}
+                                onPremi={() => segnaAppendiceRicevuta(b)}
+                                etichetta={b.rientrata_il ? `Busta ${b.numero} ricevuta e in cassa` : `Busta ${b.numero} in viaggio`}
+                                titolo={b.rientrata_il ? "Arrivata: il contante è nella cassa contanti" : "Premi quando la busta è arrivata: il contante entra nella cassa contanti"}
+                              />
+                            </div>
                           </div>
                         </details>
                       ))}
@@ -32256,12 +32359,17 @@ function PannelloRiepilogoAmministrativo({
                                 )}
                               </div>
                             </div>
-                            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Finché non la spunti, questo contante non entra nella cassa contanti.</div>
-                              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
-                                <input type="checkbox" checked={false} onChange={segnaAppendiceInCassa} disabled={salvandoAppendice} style={{ width: 20, height: 20, cursor: "pointer" }} />
-                                Ok, busta {a.numero} in cassa
-                              </label>
+                            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", lineHeight: 1.45 }}>
+                                Spedendola si chiude: le vendite in contanti che arrivano dopo apriranno la busta {a.numero + 1}. In cassa contanti ci va quando qualcuno la riceve.
+                              </div>
+                              <TastoBusta
+                                stato={BUSTA_APERTA}
+                                disabilitato={salvandoAppendice}
+                                onPremi={spedisciAppendice}
+                                etichetta={`Spedisci busta ${a.numero}`}
+                                titolo="Chiude questa busta e la manda via: da qui non ci si aggiunge più niente"
+                              />
                             </div>
                           </div>
                         );
@@ -32271,7 +32379,7 @@ function PannelloRiepilogoAmministrativo({
                   {/* a prima busta chiusa e senza appendice: il tasto per
                       aprirne una con un pagamento. Le vendite ci arrivano
                       da sole dal POS */}
-                  {corsoData.busta_rientrata_il && appendici.aperta && appendici.aperta.vuota && (
+                  {bustaSpedita(corsoData) && appendici.aperta && appendici.aperta.vuota && (
                     <div style={{ marginTop: 10, textAlign: "right" }}>
                       <button onClick={aggiungiPagamentoAppendice} title="Apre la busta successiva con un pagamento in contanti" style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
                         + Pagamento in contanti dopo la chiusura (busta {appendici.aperta.numero})
@@ -49155,10 +49263,65 @@ function incassiProporzionali(originale, totaleRiga) {
     incasso_carta_eur: round2((Number(originale.incasso_carta_eur) || 0) * quota),
   };
 }
+// LE TRE TAPPE DI UNA BUSTA (11/11/2026). Il titolare: «Elena dispone i
+// pagamenti con i soldi contenuti nella busta o rinvia in scadenziario
+// passivo le spese che non ha potuto pagare. Da quel momento chiude la
+// busta e la porta via con se'. Non e' possibile aggiungere altro alla
+// busta.»
+//
+// Fino a oggi le tappe erano DUE, aperta e in cassa, e fra la mano di chi
+// chiude la busta a Milano e il cassetto di chi la riceve passano dei
+// giorni. In quei giorni ogni vendita in contanti della master che resta
+// in aula finiva dentro una busta gia' partita: contante contato di qua e
+// mai arrivato di la'. Adesso la tappa di mezzo esiste e ha una data sua.
+//
+//   APERTA      si vende, si incassa, si dispone. La busta e' sul tavolo.
+//   IN VIAGGIO  chiusa e partita (busta_spedita_il): la contabilita' non
+//               accetta piu' niente e le vendite che arrivano dopo aprono
+//               l'appendice. I soldi NON sono ancora in cassa.
+//   IN CASSA    arrivata (busta_rientrata_il): adesso quel contante entra
+//               nella cassa contanti.
+//
+// L'importo si congela alla SPEDIZIONE, non all'arrivo: e' li' che qualcuno
+// ha contato delle banconote e ha chiuso la busta. Chi la riceve conferma
+// quello che gli e' stato consegnato, non un numero ricalcolato nel
+// frattempo.
+const BUSTA_APERTA = "aperta";
+const BUSTA_IN_VIAGGIO = "in_viaggio";
+const BUSTA_IN_CASSA = "in_cassa";
+// «spedita» vuol dire contabilita' chiusa, ed e' la domanda che si fanno
+// tutte le letture. Guarda anche busta_rientrata_il perche' una busta
+// arrivata e' per forza partita: le 41 gia' in cassa sono state allineate
+// dalla migrazione, ma una lettura che si fida di una sola colonna
+// riaprirebbe la contabilita' di una classe chiusa se quella colonna
+// mancasse.
+function bustaSpedita(cd) {
+  return !!(cd?.busta_spedita_il || cd?.busta_rientrata_il);
+}
+function statoPrimaBusta(cd) {
+  if (cd?.busta_rientrata_il) return BUSTA_IN_CASSA;
+  return bustaSpedita(cd) ? BUSTA_IN_VIAGGIO : BUSTA_APERTA;
+}
+function statoAppendice(b) {
+  // una riga di corsi_date_buste nasce alla spedizione: esiste, quindi e'
+  // almeno partita
+  return b?.rientrata_il ? BUSTA_IN_CASSA : BUSTA_IN_VIAGGIO;
+}
+// Il tasto e' uno solo e cambia faccia a ogni tappa: giallo si preme per
+// spedire, arancione si preme quando arriva, verde non si preme piu'.
+// Tre tasti affiancati vorrebbero dire tre cose da fare invece di una
+// sola cosa che avanza.
+const ASPETTO_BUSTA = {
+  [BUSTA_APERTA]: { etichetta: "Spedisci busta", sfondo: "#F3C53F", bordo: "#D9A91F", testo: "#2A2F4A", premibile: true },
+  [BUSTA_IN_VIAGGIO]: { etichetta: "Busta in viaggio", sfondo: "#E08A1E", bordo: "#C77A18", testo: "#fff", premibile: true },
+  [BUSTA_IN_CASSA]: { etichetta: "Ricevuta e in cassa", sfondo: "#2E7D32", bordo: "#2E7D32", testo: "#fff", premibile: false },
+};
+
 // una vendita in contanti che non sta nella prima busta, quando la prima
-// busta e' gia' chiusa: e' materia di un'appendice
+// busta e' gia' partita: e' materia di un'appendice. La soglia e' la
+// SPEDIZIONE e non l'arrivo, ed e' tutto il punto di questa storia
 function venditaInAppendice(v, cd) {
-  return !!cd?.busta_rientrata_il && incassaContanti(v.metodo_pagamento) && v.busta_numero !== 1;
+  return bustaSpedita(cd) && incassaContanti(v.metodo_pagamento) && v.busta_numero !== 1;
 }
 // le vendite che il Riepilogo della classe conta nella prima busta: tutte
 // finche' la busta e' aperta, poi solo quelle contate quel giorno
@@ -49185,19 +49348,19 @@ function righeProdottiVendite(vendite) {
 }
 // Le appendici di una classe: quelle chiuse (una per riga di
 // corsi_date_buste, con l'importo congelato) e quella aperta, che esiste
-// solo se la prima busta e' gia' in cassa. L'aperta ha il numero dopo
+// solo se la prima busta e' gia' partita. L'aperta ha il numero dopo
 // l'ultima chiusa; raccoglie le vendite in contanti senza busta e i
 // pagamenti nati con quel numero. Il suo cash pulito segue la regola della
 // prima busta: scende solo con i pagamenti gia' disposti (data_pagamento),
 // non con quelli soltanto scritti.
 function contiAppendici({ cd, venditeShop, spese, buste }) {
-  if (!cd?.busta_rientrata_il) return { chiuse: [], aperta: null };
+  if (!bustaSpedita(cd)) return { chiuse: [], aperta: null };
   const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && incassaContanti(v.metodo_pagamento));
   const speseCorso = (spese || []).filter((x) => x.classe_id === cd.id && x.busta_numero > 1);
   const chiuse = (buste || []).filter((b) => b.corso_data_id === cd.id).sort((a, b) => a.numero - b.numero).map((b) => {
     const vendite = venditeCorso.filter((v) => v.busta_numero === b.numero);
     const speseBusta = speseCorso.filter((x) => x.busta_numero === b.numero);
-    return { ...b, vendite, righeProdotti: righeProdottiVendite(vendite), contanti: round2(vendite.reduce((s, v) => s + incassoContantiDi(v), 0)), spese: speseBusta, cashDisposto: round2(speseBusta.reduce((s, x) => s + (x.totale || 0), 0)) };
+    return { ...b, stato: statoAppendice(b), vendite, righeProdotti: righeProdottiVendite(vendite), contanti: round2(vendite.reduce((s, v) => s + incassoContantiDi(v), 0)), spese: speseBusta, cashDisposto: round2(speseBusta.reduce((s, x) => s + (x.totale || 0), 0)) };
   });
   const numero = chiuse.length > 0 ? chiuse[chiuse.length - 1].numero + 1 : 2;
   const vendite = venditeCorso.filter((v) => v.busta_numero == null);
@@ -49206,7 +49369,7 @@ function contiAppendici({ cd, venditeShop, spese, buste }) {
   const cashDisposto = round2(speseAperta.filter((x) => x.data_pagamento).reduce((s, x) => s + (x.totale || 0), 0));
   const cashDaDisporre = round2(speseAperta.filter((x) => !x.data_pagamento).reduce((s, x) => s + (x.totale || 0), 0));
   const aperta = {
-    numero, vendite, righeProdotti: righeProdottiVendite(vendite), contanti, spese: speseAperta, cashDisposto, cashDaDisporre,
+    numero, stato: BUSTA_APERTA, vendite, righeProdotti: righeProdottiVendite(vendite), contanti, spese: speseAperta, cashDisposto, cashDaDisporre,
     pulito: Math.max(0, round2(contanti - cashDisposto)),
     // un'appendice senza niente dentro non esiste ancora: non si mostra e
     // non conta come "in arrivo"
@@ -49217,23 +49380,53 @@ function contiAppendici({ cd, venditeShop, spese, buste }) {
 
 // Il semaforo della contabilita' di una classe. Tre stati, e si leggono
 // da lontano senza aprire niente:
-//   rosso     la busta non e' ancora in cassa: c'e' da lavorare
-//   arancione la busta e' in cassa, ma dopo sono arrivate vendite o
-//             incassi e c'e' un'appendice aperta da chiudere
-//   verde     tutto chiuso, niente in sospeso
+//   rosso     la busta non e' ancora partita: c'e' da lavorare
+//   arancione la busta e' per strada, oppure e' arrivata ma dopo di lei
+//             sono arrivate vendite o incassi e c'e' un'appendice da
+//             chiudere: in tutti e due i casi aspetta ancora qualcosa
+//   verde     tutto arrivato, niente in sospeso
 //
 // Vale per i corsi passati come per quelli futuri: un corso di domani e'
 // rosso perche' la sua busta non esiste ancora, ed e' giusto — il rosso
 // qui non vuol dire "sbagliato", vuol dire "non e' finita".
 const SEMAFORO_CONTABILITA = {
-  rosso: { colore: "#C0392B", sfondo: "#FBE4E1", testo: "Da chiudere: la busta non è ancora in cassa." },
-  arancione: { colore: "#C77A18", sfondo: "#FBEEDA", testo: "Busta in cassa, ma dopo sono arrivate vendite o incassi: c'è un'appendice da chiudere." },
-  verde: { colore: "#2E7D32", sfondo: "#E3F3E5", testo: "Chiuso: busta in cassa e niente in sospeso." },
+  rosso: { colore: "#C0392B", sfondo: "#FBE4E1", testo: "Da chiudere: la busta non è ancora stata spedita." },
+  arancione: { colore: "#C77A18", sfondo: "#FBEEDA", testo: "Aspetta ancora qualcosa: una busta è in viaggio, o c'è un'appendice da chiudere." },
+  verde: { colore: "#2E7D32", sfondo: "#E3F3E5", testo: "Chiuso: tutto ricevuto in cassa e niente in sospeso." },
 };
 function semaforoContabilita(cd, venditeShop, spese, buste) {
-  if (!cd?.busta_rientrata_il) return "rosso";
-  const { aperta } = contiAppendici({ cd, venditeShop, spese, buste });
+  if (!bustaSpedita(cd)) return "rosso";
+  const { chiuse, aperta } = contiAppendici({ cd, venditeShop, spese, buste });
+  // in viaggio e' arancione quanto un'appendice aperta: in tutti e due i
+  // casi c'e' del contante che non e' ancora nel cassetto
+  if (!cd.busta_rientrata_il || chiuse.some((b) => !b.rientrata_il)) return "arancione";
   return aperta && !aperta.vuota ? "arancione" : "verde";
+}
+
+// IL TASTO DELLA BUSTA, uno per tutte: la prima e ogni appendice. La sua
+// faccia la decide lo stato, e lo stato lo decidono due date. Un tasto per
+// ogni tappa, affiancati, direbbero che ci sono tre cose da fare: invece
+// ce n'e' una sola, che avanza.
+function TastoBusta({ stato, onPremi, disabilitato, titolo, etichetta }) {
+  const a = ASPETTO_BUSTA[stato] || ASPETTO_BUSTA[BUSTA_APERTA];
+  const premibile = a.premibile && !disabilitato;
+  return (
+    <button
+      onClick={premibile ? onPremi : undefined}
+      disabled={!premibile}
+      title={titolo}
+      style={{
+        ...fontBody, fontSize: 13.5, fontWeight: 700,
+        background: a.sfondo, color: a.testo, border: `1px solid ${a.bordo}`,
+        borderRadius: 999, padding: "11px 20px", minHeight: 44,
+        cursor: premibile ? "pointer" : "default",
+        opacity: a.premibile && disabilitato ? 0.6 : 1,
+        flexShrink: 0,
+      }}
+    >
+      {etichetta || a.etichetta}
+    </button>
+  );
 }
 
 // Una riga di pagamento dell'appendice: voce, importo, cestino. Piu'
@@ -49438,16 +49631,30 @@ function IconaAvvisoSpunta({ size = 20, color = "#fff" }) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
 }
 
-// Le contabilita' da approvare: le buste dei corsi finiti non ancora in
-// cassa (con contante dentro) e le appendici aperte. Le legge la cassa
-// contanti per la lista "Avvisi" e Contabilita' per il riquadro in cima
+// Le contabilita' da approvare: le buste dei corsi finiti non ancora
+// spedite (con contante dentro), quelle in viaggio e le appendici aperte.
+// Le legge la cassa contanti per la lista "Avvisi" e Contabilita' per il
+// riquadro in cima.
+//
+// Una busta IN VIAGGIO entra qui col suo importo gia' congelato, non con
+// un conto rifatto adesso: quella cifra e' il contante che e' stato messo
+// dentro e chiuso. Ed entra proprio perche' e' in viaggio — chi guarda la
+// cassa deve sapere cosa sta per arrivare.
 function contabilitaDaApprovare({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, quoteVenditoriSplit, locationPrezzi = [], spese, venditeShop, busteAppendici }) {
   const oggi = dataOggiStr();
   let totale = 0;
   const righe = [];
   (corsiDate || []).forEach((cd) => {
-    if (cd.busta_rientrata_il) {
-      const { aperta } = contiAppendici({ cd, venditeShop, spese, buste: busteAppendici });
+    if (bustaSpedita(cd)) {
+      const { chiuse, aperta } = contiAppendici({ cd, venditeShop, spese, buste: busteAppendici });
+      if (!cd.busta_rientrata_il) {
+        const inViaggio = round2(Number(cd.busta_importo) || 0);
+        if (inViaggio > 0) { totale += inViaggio; righe.push({ cd, importo: inViaggio, inViaggio: true }); }
+      }
+      chiuse.filter((b) => !b.rientrata_il).forEach((b) => {
+        const imp = round2(Number(b.importo) || 0);
+        if (imp > 0) { totale += imp; righe.push({ cd, importo: imp, appendice: b, inViaggio: true }); }
+      });
       if (aperta && !aperta.vuota && aperta.pulito > 0) { totale += aperta.pulito; righe.push({ cd, importo: aperta.pulito, appendice: aperta }); }
       return;
     }
@@ -49633,9 +49840,11 @@ export function PannelloCassaContanti({
   }
   useEffect(() => { carica(); }, []);
 
-  // le appendici chiuse entrano come le prime buste, con la data in cui
-  // sono rientrate
-  const appendiciRientrate = busteAppendici.filter((b) => b.rientrata_il >= (apertura?.aperta_il || "0000-00-00"));
+  // le appendici entrano come le prime buste, con la data in cui sono
+  // RIENTRATE: una spedita e non ancora arrivata e' per strada, e in
+  // cassa non c'e'. rientrata_il vuoto va escluso esplicitamente, o un
+  // confronto con null passerebbe per caso
+  const appendiciRientrate = busteAppendici.filter((b) => b.rientrata_il && b.rientrata_il >= (apertura?.aperta_il || "0000-00-00"));
   const totaleBuste = round2(buste.reduce((s, b) => s + (b.busta_importo || 0), 0) + appendiciRientrate.reduce((s, b) => s + (b.importo || 0), 0));
   const versamenti = round2((movimenti || []).filter((m) => m.tipo === "versamento").reduce((s, m) => s + (m.importo || 0), 0));
   const prelievi = round2((movimenti || []).filter((m) => m.tipo === "prelievo").reduce((s, m) => s + (m.importo || 0), 0));
@@ -49915,9 +50124,9 @@ export function PannelloCassaContanti({
         <div ref={rifBusteInArrivo} style={{ ...cardStyle, marginBottom: 14, scrollMarginTop: 16 }}>
           <TitoloSezioneRiepilogo grande>In arrivo</TitoloSezioneRiepilogo>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>
-            {busteInArrivo.quante} bust{busteInArrivo.quante === 1 ? "a" : "e"} per {euroRiepilogo(busteInArrivo.totale)}, ancora fuori. Si approvano dal Riepilogo amministrativo della classe: incassi, spese, Disponi pagamenti e poi la busta in cassa.
+            {busteInArrivo.quante} bust{busteInArrivo.quante === 1 ? "a" : "e"} per {euroRiepilogo(busteInArrivo.totale)}, ancora fuori. Si approvano dal Riepilogo amministrativo della classe: incassi, spese, Disponi pagamenti, «Spedisci busta», e all'arrivo si preme il tasto arancione.
           </div>
-          {busteInArrivo.righe.map(({ cd, importo, appendice }) => {
+          {busteInArrivo.righe.map(({ cd, importo, appendice, inViaggio }) => {
             const nomeCorso = (corsi || []).find((c) => c.id === cd.corso_id)?.nome || "Corso";
             const nomeSede = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
             return (
@@ -49940,8 +50149,10 @@ export function PannelloCassaContanti({
                 </div>
                 {/* solo un avviso: cosa manca per approvare. Il gesto sta
                     nella classe */}
-                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                  {appendice ? (appendice.cashDaDisporre > 0 ? "Appendice: pagamenti da disporre" : "Appendice da approvare") : "Da approvare"}
+                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: inViaggio ? "#C77A18" : "#8A6D1D", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  {inViaggio
+                    ? "In viaggio: da ricevere"
+                    : appendice ? (appendice.cashDaDisporre > 0 ? "Appendice: pagamenti da disporre" : "Appendice da approvare") : "Da approvare"}
                 </span>
               </div>
             );
@@ -58096,8 +58307,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
   // LA VENDITA ESCE DALLA BUSTA DELLA CLASSE. Vale per una cancellazione
   // e per un cambio di metodo da contanti a carta (27/10/2026): in tutti
   // e due i casi quel contante non sta piu' nella busta. Se la busta era
-  // gia' in cassa si riapre, o — se ha gia' delle appendici — il suo
-  // importo scende. Torna la frase da accodare al messaggio.
+  // gia' partita si riapre — torna sul tavolo, tasto giallo — o, se ha
+  // gia' delle appendici, il suo importo scende.
+  // Torna la frase da accodare al messaggio.
   async function sganciaDallaBusta(v, giaAnnullata = false) {
     let bustaRiaperta = "";
     if (incassaContanti(v.metodo_pagamento) && v.corso_data_id && !giaAnnullata && incassoContantiDi(v) > 0) {
@@ -58109,7 +58321,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
           const { error: e2 } = await supabase.from("corsi_date_buste").delete().eq("id", busta.id);
           if (!e2) bustaRiaperta = `. La busta ${v.busta_numero} del corso è uscita dalla cassa e torna fra le contabilità da approvare`;
         }
-      } else if (v.busta_numero === 1 && cd?.busta_rientrata_il) {
+      } else if (v.busta_numero === 1 && bustaSpedita(cd)) {
         const { data: appendici } = await supabase.from("corsi_date_buste").select("id").eq("corso_data_id", v.corso_data_id);
         if ((appendici || []).length > 0) {
           // la prima busta non si riapre se dopo di lei ci sono appendici:
@@ -58121,8 +58333,8 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
           if (!e2) bustaRiaperta = `. La busta del corso ha già delle appendici e non si riapre: il suo importo scende a ${fmtEuroErp2(nuovo)}`;
         } else {
           await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", v.corso_data_id).eq("busta_numero", 1);
-          const { error: e2 } = await supabase.from("corsi_date").update({ busta_rientrata_il: null, busta_importo: null }).eq("id", cd.id);
-          if (!e2) bustaRiaperta = ". La busta del corso è uscita dalla cassa e torna fra le contabilità da approvare";
+          const { error: e2 } = await supabase.from("corsi_date").update({ busta_rientrata_il: null, busta_spedita_il: null, busta_importo: null }).eq("id", cd.id);
+          if (!e2) bustaRiaperta = ". La busta del corso torna aperta sul tavolo e rientra fra le contabilità da approvare";
         }
       }
     }
@@ -58325,11 +58537,11 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     const saraContanti = nuovo === "contanti";
     let busta = "";
     if (cd && eraContanti && !saraContanti) {
-      if (v.busta_numero > 1) busta = `La busta ${v.busta_numero} del corso, già in cassa, si riapre e torna fra le contabilità da approvare.`;
-      else if (v.busta_numero === 1 && cd.busta_rientrata_il) busta = "La vendita esce dalla busta del corso già in cassa: la busta si riapre, o se ha già appendici il suo importo scende.";
+      if (v.busta_numero > 1) busta = `La busta ${v.busta_numero} del corso, già chiusa, si riapre e torna fra le contabilità da approvare.`;
+      else if (v.busta_numero === 1 && bustaSpedita(cd)) busta = "La vendita esce dalla busta del corso già chiusa: la busta torna aperta, o se ha già appendici il suo importo scende.";
       else busta = "Esce dal contante atteso in busta.";
     } else if (cd && !eraContanti && saraContanti) {
-      busta = cd.busta_rientrata_il ? "Entra nel contante atteso: nell'appendice della busta, perché la prima è già in cassa." : "Entra nel contante atteso in busta.";
+      busta = bustaSpedita(cd) ? "Entra nel contante atteso: nell'appendice della busta, perché la prima è già partita." : "Entra nel contante atteso in busta.";
     }
     setConfermaMetodo({
       id: v.id, nuovo, imponibile, iva, totale,
@@ -90455,6 +90667,8 @@ export {
   listaRaccoltaMateriale, RaccoltaMateriale,
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
+  bustaSpedita, statoPrimaBusta, statoAppendice, venditaInAppendice, semaforoContabilita, contabilitaDaApprovare,
+  BUSTA_APERTA, BUSTA_IN_VIAGGIO, BUSTA_IN_CASSA,
   PaginaContenutoKit, repartoPerProdotto, raggruppaPerReparto, SENZA_REPARTO,
-  AssegnazioneMaster,
+  AssegnazioneMaster, PannelloRiepilogoAmministrativo,
 };

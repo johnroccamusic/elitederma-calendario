@@ -1778,6 +1778,84 @@ cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
 altro modo le sfugge — non sostituisce la lettura del codice, la rende
 ripetibile.
 
+### La busta si spedisce, poi arriva (11/11/2026)
+
+Il titolare: «ci deve essere un tasto giallo che si chiama "spedisci
+busta". Lo usa Elena quando è a Milano o in una sede esterna. Dispone i
+pagamenti con i soldi contenuti nella busta o rinvia in scadenziario
+passivo le spese che non ha potuto pagare. Da quel momento chiude la busta
+e la porta via con sé. Non è possibile aggiungere altro alla busta. La
+master che però resta in classe potrebbe fare altre vendite in contanti
+che prima si andavano a sommare erratamente alla busta che era stata
+portata via.»
+
+**Il difetto era che le tappe erano due e i momenti sono tre.** Fino a ieri
+una busta era «aperta» oppure «in cassa», e la soglia che chiudeva la
+contabilità era l'ARRIVO in amministrazione. Ma fra la mano di chi la
+chiude in una sede esterna e il cassetto di chi la riceve passano dei
+giorni, e in quei giorni ogni vendita in contanti della master che resta in
+aula finiva dentro una busta già partita: contante contato di qua e mai
+arrivato di là. Ora la tappa di mezzo esiste e ha una data sua.
+
+**Un tasto solo che cambia faccia**, e non tre tasti affiancati — che
+direbbero che ci sono tre cose da fare, invece di una sola che avanza:
+
+| | Tasto | Cosa scrive | Cosa vuol dire |
+|---|---|---|---|
+| giallo | «Spedisci busta» | `busta_spedita_il`, `busta_importo` congelato, `busta_numero = 1` sulle vendite | la contabilità si chiude: non ci si aggiunge più niente |
+| arancione | «Busta in viaggio» | `busta_rientrata_il` | è arrivata: **adesso** quel contante entra nella cassa contanti |
+| verde | «Ricevuta e in cassa» | niente, non si preme | |
+
+Le stesse tre tappe valgono per ogni **appendice** (buste 2, 3…): la riga
+di `corsi_date_buste` adesso nasce alla **spedizione** (`spedita_il`), non
+all'arrivo, ed è lei a chiudere quella busta e a far nascere quella dopo.
+`rientrata_il` è diventata facoltativa: vuota = è per strada.
+
+Quattro decisioni, e ognuna per un motivo:
+
+- **L'importo si congela alla PARTENZA, non all'arrivo.** È lì che qualcuno
+  ha contato delle banconote e ha chiuso la busta. Chi la riceve conferma
+  quello che gli è stato consegnato, non un numero ricalcolato nel
+  frattempo — e se i conti si sono mossi mentre viaggiava lo dice il
+  riquadro dello scostamento, che lo decide una persona.
+- **Non si spedisce una busta con dentro dei soldi già promessi.** Con dei
+  pagamenti in contanti ancora da disporre il tasto rifiuta e dice le due
+  strade: disporli, oppure rinviare allo scadenziario passivo quello che la
+  busta non copre. È il giro che fa Elena prima di chiuderla, e senza il
+  controllo si spedirebbero soldi che devono uscire.
+- **La soglia di `venditaInAppendice` è `bustaSpedita`, non
+  `busta_rientrata_il`.** È tutta la correzione: una riga sola, e da lì
+  l'appendice si apre nel momento giusto. `bustaSpedita` guarda anche
+  `busta_rientrata_il` perché una busta arrivata è per forza partita — le
+  41 già in cassa sono state allineate dalla migrazione, ma una lettura che
+  si fida di una colonna sola riaprirebbe la contabilità di una classe
+  chiusa se quella colonna mancasse.
+- **Due passi indietro, non uno.** Da «in cassa» si torna **in viaggio**
+  (l'importo esce dalla cassa, la contabilità resta chiusa); da «in viaggio»
+  si torna **aperta**, e le vendite perdono il numero 1 — ma solo se dopo di
+  lei non è già nata un'appendice. Sono tasti per correggere un errore
+  appena fatto, non per rifare i conti.
+
+**Il semaforo e «In arrivo» seguono.** Rosso = non ancora spedita; arancione
+= in viaggio **oppure** con un'appendice da chiudere (in tutti e due i casi
+c'è del contante che non è nel cassetto); verde = tutto arrivato. Una busta
+in viaggio compare in «In arrivo» col suo importo **congelato** e non con un
+conto rifatto adesso, marcata «In viaggio: da ricevere»: chi guarda la cassa
+deve sapere cosa sta per arrivare.
+
+**La cassa contanti non è cambiata di una riga, ed è il punto**: legge solo
+`busta_rientrata_il` e, per le appendici, solo le righe con `rientrata_il`
+valorizzata — esplicitamente, perché un confronto di date con `null`
+passerebbe per caso.
+
+Migrazione `20261111160000_la_busta_si_spedisce.sql`, con rollback scritto
+dentro e il vincolo `corsi_date_busta_arrivata_solo_se_partita`: una busta
+non può essere arrivata senza essere partita. Prove in
+`prove/busta-si-spedisce.test.jsx` (15, la regola) e
+`prove/busta-si-spedisce-il-gesto.test.jsx` (7, il pannello montato per
+davvero: i tre tasti premuti uno per uno, cosa scrive ognuno, i due passi
+indietro e il rifiuto coi pagamenti da disporre).
+
 ### «Impegni senza riga» non esiste: via i rimandi a un posto che non c'è (11/11/2026)
 
 Il titolare: «mi continui a dire che c'è un'area che riguarda gli impegni
