@@ -1778,6 +1778,43 @@ cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
 altro modo le sfugge — non sostituisce la lettura del codice, la rende
 ripetibile.
 
+### «Impegni senza riga» non esiste: via i rimandi a un posto che non c'è (11/11/2026)
+
+Il titolare: «mi continui a dire che c'è un'area che riguarda gli impegni
+senza riga quando non esiste nessun posto con impegni senza riga che li
+genera». **È andato a cercarla e non l'ha trovata, perché non c'è.**
+
+Il riquadro del Riepilogo che una volta si chiamava così oggi compare
+**solo** per gli impegni già coperti in parte, e dice un'altra cosa («una
+voce è rimasta nello scadenziario e non si può allineare da sola»).
+Quel nome sopravviveva in due frasi dello Scadenzario, che mandavano in un
+posto che non esiste. **Una frase che manda da qualche parte deve nominare
+un posto che c'è** — e da quando queste righe si annullano da sé non c'è
+più niente da mandare a fare a nessuno. Tolto anche dai commenti, che
+promettevano lo stesso nome a chi legge il codice.
+
+**E adesso la riga a zero dice perché è ancora lì.** Dall'allineamento
+automatico resta visibile **un caso solo**: la chiave porta già una spesa
+pagata, e lì non si tocca niente di proposito. La riga lo scrive («il
+contante di questa voce risulta già registrato come spesa pagata, quindi
+resta scritto ma non si paga una seconda volta»), invece di dare un
+compito a qualcuno.
+
+**Il caso vero, ed è un dato storto da decidere.** «Costo Alloggio — CASA
+MANUELA» resta visibile proprio per quel motivo, e la spesa che lo
+protegge è **attaccata a un'altra classe**: 180 € pagati il 21/09/2026 via
+PayPal, `classe_id` = NEEDLING Roma **20-21 settembre**, ma
+`origine_scadenziario_chiave` = `cash_alloggio_<classe di NOVEMBRE>`. Il
+pagamento è vero e sta sulla classe giusta; la **chiave** è di un'altra.
+Due effetti: il Riepilogo di novembre crede che il suo contante
+dell'alloggio sia già stato pagato, e l'impegno nato il 10/11 non si
+annulla perché «protetto». Si rimedia svuotando quella chiave sulla
+spesa — un `UPDATE` su una riga di denaro, quindi lo decide il titolare.
+
+**Annullati i tre relitti del 18/08/2026** (due `location_…` e un
+`alloggio_…`, 561,20 + 561,20 + 240 €, classe cancellata), su sua parola:
+«erano prove». Restano scritti come `annullato`, non cancellati.
+
 ### Un impegno non più dovuto si toglie da sé anche dallo Scadenzario (11/11/2026)
 
 Il titolare, davanti a «Costo Alloggio — CASA MANUELA» a **zero** in

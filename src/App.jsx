@@ -45830,7 +45830,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
 // non prevede piu' contanti per quella voce, la riga resta — un impegno
 // e' un debito scritto, e sparire da solo e' peggio che restare — ma
 // vale zero, dice perche', e si toglie dal Riepilogo della classe.
-function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati = null }) {
+function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati = null, protette = null }) {
   const cdById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
   return (impegnoTabella || [])
     .filter((x) => String(x.chiave_origine || "").startsWith("cash_") && (x.stato === "aperto" || x.stato === "parzialmente_coperto"))
@@ -45842,16 +45842,33 @@ function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRica
       const vivo = cashRicalcolati && cashRicalcolati.has(x.chiave_origine) && coperto <= 0 ? cashRicalcolati.get(x.chiave_origine) : null;
       const totale = vivo == null ? scritto : vivo;
       const nonPiuDovuto = vivo != null && vivo <= 0;
+      // perche' una riga non piu' dovuta e' ancora qui. Dall'11/11/2026
+      // chi non e' piu' dovuto si annulla da se' appena si apre questo
+      // elenco, quindi resta visibile un caso solo: la chiave e' GIA' una
+      // spesa (il contante di quella voce risulta pagato), e li'
+      // l'allineamento non tocca niente di proposito.
+      const giaSpesa = !!(protette && protette.has(x.chiave_origine));
       return {
         key: x.chiave_origine, chiave: x.chiave_origine, tipo: "cash_rinviato", tipoRiga, impegno: x, corsoData: cd,
         nome: String(x.descrizione || "").replace(/ — contanti non coperti$/, ""),
         totale,
         importoScritto: scritto,
-        nonPiuDovuto,
+        nonPiuDovuto, giaSpesa,
         sottocategoriaId: categoriaGruppoPer(tipoRiga, categorieGruppi) || null,
         fornitore: null, iban: null,
+        // NIENTE RIMANDI A UN POSTO CHE NON ESISTE (11/11/2026). Qui
+        // c'era scritto «si toglie dal Riepilogo, in «Impegni senza
+        // riga»»: il titolare e' andato a cercarla e non l'ha trovata —
+        // «non esiste nessun posto con impegni senza riga». Aveva
+        // ragione: quel riquadro compare solo per gli impegni gia'
+        // coperti in parte, e di suo non si chiama piu' cosi'. Una frase
+        // che manda da qualche parte deve dire un posto che c'e', e
+        // soprattutto, da quando queste righe si annullano da se', non
+        // c'e' piu' niente da mandare a fare a nessuno.
         oggetto: nonPiuDovuto
-          ? `Rinviato per ${fmtEuroErp2(scritto)}, ma oggi il Riepilogo della classe non prevede contanti per questa voce: non è più dovuto. Si toglie dal Riepilogo, in «Impegni senza riga».`
+          ? (giaSpesa
+            ? `Non più dovuto: il contante di questa voce risulta già registrato come spesa pagata, quindi resta scritto ma non si paga una seconda volta. Era stato rinviato per ${fmtEuroErp2(scritto)}.`
+            : `Rinviato per ${fmtEuroErp2(scritto)}, ma oggi il Riepilogo della classe non prevede contanti per questa voce: non è più dovuto, e si toglie da sé.`)
           : vivo != null && vivo !== scritto
             ? `Quota in contanti rinviata dal corso · rinviata per ${fmtEuroErp2(scritto)}, oggi il Riepilogo dice ${fmtEuroErp2(vivo)}`
             : "Quota in contanti rinviata dal corso",
@@ -45877,8 +45894,8 @@ function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRica
 //
 // Dal 30/10/2026 l'importo MOSTRATO seguiva gia' la riga
 // (cashRicalcolati): la riga diceva 0 € e «non e' piu' dovuto». Ma quello
-// SCRITTO restava, e toccava a una persona togliere il relitto da
-// «Impegni senza riga». Adesso si allinea da se'.
+// SCRITTO restava, e toccava a una persona togliere il relitto a mano dal
+// Riepilogo della classe. Adesso si allinea da se'.
 //
 // Qui dentro non si scrive niente: si decide. Applica chi chiama
 // (allineaImpegniCash in SchedaData), cosi' la regola si puo' provare
@@ -45898,8 +45915,10 @@ function vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRica
 //   - IMPEGNO COPERTO ANCHE SOLO IN PARTE -> NON SI TOCCA. Quei soldi
 //     sono in parte usciti davvero: riscriverli o annullarli di nascosto
 //     vorrebbe dire muovere una cassa da una pagina che sta facendo
-//     un'altra cosa. Resta in «Impegni senza riga» col tasto a mano, e
-//     la pagina dice perche'.
+//     un'altra cosa. Resta nel riquadro del Riepilogo che dice «una voce
+//     e' rimasta nello scadenziario», col tasto a mano e il perche'
+//     scritto accanto. (Non si chiama «Impegni senza riga»: quel nome non
+//     esiste in nessuna pagina, e il titolare e' andato a cercarlo.)
 //
 // `cashDiOggi` e' la mappa chiave -> contanti che il Riepilogo prevede
 // ADESSO per quella riga. Una chiave ASSENTE vuol dire che la riga non
@@ -52694,7 +52713,7 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
   // le quote in contanti rinviate dalle classi: vere righe di impegno
   // sotto il nome la stessa riga delle voci a bonifico: corso, sede e
   // data ("IKE · Milano · 11 set"), niente altro
-  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati })
+  const cashRinviati = vociCashRinviate({ impegnoTabella, corsiDate, categorieGruppi, cashRicalcolati, protette: chiaviConSpesaPassivo })
     .map((x) => ({ ...x, oggetto: x.corsoData && !x.nonPiuDovuto && x.totale === x.importoScritto ? null : x.oggetto }));
   // Lo Scadenzario si legge per data di scadenza crescente: prima quello
   // che scade prima. Prima si ordinava per data del debito, che e' la
@@ -53775,7 +53794,9 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
                     categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
                     disabilitato={!item.sottocategoriaId || !!item.nonPiuDovuto}
                     motivoDisabilitato={item.nonPiuDovuto
-                      ? "Non c'è niente da pagare: il Riepilogo della classe non prevede più contanti per questa voce. Toglila da lì, in «Impegni senza riga»."
+                      ? (item.giaSpesa
+                        ? "Non c'è niente da pagare: il contante di questa voce risulta già registrato come spesa pagata."
+                        : "Non c'è niente da pagare: il Riepilogo della classe non prevede più contanti per questa voce, e questa riga si toglie da sé.")
                       : `Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
                     onRiconciliaDocumento={item.tipo && item.tipo !== "reale" ? (doc) => riconciliaConDocumento([item], doc) : null}

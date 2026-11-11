@@ -91,3 +91,39 @@ describe("le classi ricalcolate si dicono", () => {
     expect(classiConsiderate.has(LONTANA)).toBe(false);
   });
 });
+
+// NESSUN RIMANDO A UN POSTO CHE NON ESISTE (11/11/2026).
+//
+// Il titolare: «mi continui a dire che c'è un'area che riguarda gli
+// impegni senza riga quando non esiste nessun posto con impegni senza
+// riga». Aveva ragione: la riga a zero diceva «si toglie dal Riepilogo,
+// in «Impegni senza riga»», e quel nome non compare in nessuna pagina —
+// il riquadro del Riepilogo esiste solo per gli impegni già coperti in
+// parte e dice un'altra cosa. Una frase che manda da qualche parte deve
+// nominare un posto che c'è; e da quando queste righe si annullano da sé,
+// non c'è più niente da mandare a fare a nessuno.
+describe("una riga non più dovuta dice la verità su di sé", () => {
+  const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
+  const righe = (protette) => vociCashRinviate({
+    impegnoTabella: [IMPEGNO], corsiDate, categorieGruppi: [],
+    cashRicalcolati: calcolaVociScadenziario({ ...base, corsiDate }).cashRicalcolati,
+    protette,
+  });
+
+  it("non nomina «Impegni senza riga» e dice che si toglie da sé", () => {
+    const [riga] = righe(null);
+    expect(riga.nonPiuDovuto).toBe(true);
+    expect(riga.oggetto).not.toContain("Impegni senza riga");
+    expect(riga.oggetto).toContain("si toglie da sé");
+    expect(riga.giaSpesa).toBe(false);
+  });
+
+  it("se quel contante è già una spesa pagata, lo dice — è il solo caso che resta visibile", () => {
+    // è il caso di Casa Manuela: la chiave porta una spesa già pagata,
+    // quindi l'allineamento non la tocca di proposito e la riga resta
+    const [riga] = righe(new Set([IMPEGNO.chiave_origine]));
+    expect(riga.giaSpesa).toBe(true);
+    expect(riga.oggetto).toContain("già registrato come spesa pagata");
+    expect(riga.oggetto).not.toContain("Impegni senza riga");
+  });
+});
