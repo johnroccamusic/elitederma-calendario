@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
+import { confermaCancellazione, confermaRimozione } from "../ui/conferma.js";
 import SelettorePeriodo from "../ui/SelettorePeriodo.jsx";
 import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
@@ -433,7 +434,7 @@ function SchedaTeam({ eventoId, evento, persone, onCambiato }) {
             style={{ ...campoRiga, flex: "1 1 140px", minWidth: 0 }} defaultValue={r.ruolo || ""} placeholder="ruolo all'evento"
             onBlur={(e) => { if (e.target.value !== (r.ruolo || "")) salvaRiga("eventi_team", r.id, { ruolo: e.target.value.trim() || null }).then(ricarica); }}
           />
-          <TastoCestino onClick={() => eliminaRiga("eventi_team", r.id).then(ricarica)} />
+          <TastoCestino onClick={() => { if (!confermaCancellazione(`${r.nome || "questa riga"} dal team dell’evento`)) return; eliminaRiga("eventi_team", r.id).then(ricarica); }} />
         </div>
       ))}
     </>
@@ -822,7 +823,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
                 />
               </label>
               <span style={{ flex: "0 0 auto", paddingBottom: 4 }}>
-                <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
+                <TastoCestino onClick={() => { if (!confermaCancellazione(`${nomeVivo(r) || "questa riga"} dal materiale dell’evento`)) return; eliminaRiga("eventi_materiali", r.id).then(ricarica); }} />
               </span>
             </div>
             {/* Il rientro non si scrive, si conta (30/10/2026): la riga
@@ -898,7 +899,7 @@ function SchedaTrasferimenti({ eventoId, team }) {
                   onBlur={(e) => { if (e.target.value !== (r.chi || "")) salvaRiga("eventi_trasferimenti", r.id, { chi: e.target.value.trim() || null }).then(ricarica); }} />
               </Field>
             </div>
-            <TastoCestino onClick={() => eliminaRiga("eventi_trasferimenti", r.id).then(ricarica)} />
+            <TastoCestino onClick={() => { if (!confermaCancellazione("questo viaggio")) return; eliminaRiga("eventi_trasferimenti", r.id).then(ricarica); }} />
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Da"><input style={campoRiga} defaultValue={r.da_dove || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { da_dove: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
@@ -1012,7 +1013,7 @@ function SchedaHotel({ eventoId, evento, team, hotel }) {
                   <select style={{ ...campoRiga, flex: "0 0 140px" }} defaultValue={s.tipo || "matrimoniale"} onChange={(e) => salvaStanza(s.id, { tipo: e.target.value })}>
                     {TIPI_STANZA_EVENTO.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
-                  <TastoCestino titolo="Elimina la stanza" onClick={() => togliStanza(s.id)} />
+                  <TastoCestino titolo="Elimina la stanza" onClick={() => { if (!confermaCancellazione("questa stanza")) return; togliStanza(s.id); }} />
                 </div>
                 {/* chi ci dorme: si spuntano i nomi del team */}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
@@ -1723,6 +1724,18 @@ export function SchedaIscrizioniFiera({ evento, iscritti = [], corsi = [], corsi
   const p = periodoFiera(evento);
 
   async function segna(iscritto, eventoId) {
+    // TOGLIERE SI CHIEDE, SEGNARE NO (11/11/2026). Il titolare: «le
+    // iscritte della fiera non puoi poterne cancellare cosi' cliccando
+    // "non iscritta" e sparisce». Non si cancella niente — l'iscrizione
+    // resta dov'e', si stacca l'attribuzione — ma la riga ESCE
+    // dall'elenco che si ha davanti, e in un elenco di venti nomi il
+    // dito prende quello accanto. Segnare invece aggiunge, e un gesto
+    // che aggiunge si disfa col tasto di fianco: chiederlo sarebbe una
+    // domanda a cui si risponde sempre si'.
+    if (!eventoId && !confermaRimozione(
+      `${nomeDi(iscritto)} dalle iscrizioni di questa fiera`,
+      "L'iscrizione non si cancella: resta dov'è, e torna fra le iscrizioni di questi giorni da segnare.",
+    )) return;
     setOccupato(iscritto.id); setGuasto("");
     try {
       await segnaVenditaFiera(iscritto.id, eventoId);

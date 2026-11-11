@@ -15,6 +15,7 @@ import { CONSENSI } from "../content/consensi";
 import { Codice } from "./ArchivioConsensi.jsx";
 import { leggiConsensiCorsi, collegaConsensoACorso, scollegaConsensoDaCorso } from "./dati";
 import { NAVY, MUTED, CREAM_BORDER, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
+import { confermaRimozione } from "../ui/conferma.js";
 
 // A quali corsi vale questo consenso: si scelgono da una tendina e si
 // aggiungono uno alla volta. Una tendina a scelta multipla sembrava piu'
@@ -70,6 +71,10 @@ function CorsiDelConsenso({ modello, corsi, legami, onCambiato, isMobile }) {
     await onCambiato();
   }
   async function togli(id) {
+    if (!confermaRimozione(
+      "questo corso dal consenso",
+      "Il consenso e le firme già raccolte non si toccano: si stacca solo il collegamento, e il QR di questo modello non comparirà più nella scheda di quella classe.",
+    )) return;
     setOccupato(true); setMsg("");
     const errore = await scollegaConsensoDaCorso(id);
     setOccupato(false);

@@ -15,6 +15,7 @@ import {
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { qrSvg } from "./ui/qr.js";
+import { confermaCancellazione, confermaRimozione } from "./ui/conferma.js";
 import { caricaKitInAula } from "./rientri/pos";
 // LE PAGINE CHE SI APRONO A RICHIESTA.
 //
@@ -9377,6 +9378,7 @@ function PaginaAnalisiCodiciSconto({ corsi = [], location = [], corsiDate = [], 
     await caricaConferme();
   }
   async function togliConferma(k) {
+    if (!confermaCancellazione("questo periodo dal codice")) return;
     const { error } = await supabase.from("codici_periodi_corso").delete().eq("id", k.id);
     if (error) { setMsg("Non tolto: " + testoErrore(error)); return; }
     await caricaConferme();
@@ -15601,6 +15603,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     ricarica(["inventario_sede"]);
   }
   async function eliminaVoceInventario(id) {
+    if (!confermaCancellazione("questa voce dall'inventario della sede")) return;
     const { error } = await supabase.from("inventario_sede").delete().eq("id", id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["inventario_sede"]);
@@ -15638,6 +15641,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     ricarica(["magazzino_locale_consumabili"]);
   }
   async function rimuoviConsumabile(id) {
+    if (!confermaCancellazione("questo consumabile dal magazzino della sede")) return;
     const { error } = await supabase.from("magazzino_locale_consumabili").delete().eq("id", id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
@@ -26596,6 +26600,8 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
     setRicercaProdotto("");
   }
   function rimuoviProdottoObiettivo(prodottoId) {
+    const nome = (prodottiShop || []).find((p) => p.id === prodottoId)?.nome;
+    if (!confermaCancellazione(nome ? `"${nome}" dai prodotti dell'obiettivo` : "questo prodotto dall'obiettivo")) return;
     setProdottiObiettivo((prev) => prev.filter((p) => p.prodotto_id !== prodottoId));
   }
   function cambiaQuantitaMinima(prodottoId, valore) {
@@ -30811,6 +30817,10 @@ function PannelloRiepilogoAmministrativo({
   const impegniOrfani = allineamentoImpegni.intoccabili.map((x) => ({ ...x.impegno, motivoNonToccabile: x.motivo }));
   const [togliendoOrfano, setTogliendoOrfano] = useState(null);
   async function togliImpegnoOrfano(x) {
+    if (!confermaRimozione(
+      `${x.descrizione} dallo scadenziario`,
+      "L'impegno non si cancella: resta scritto quanto era e da quando, segnato come annullato.",
+    )) return;
     setTogliendoOrfano(x.id);
     // "annullato" e non cancellato, come fa l'allineamento automatico:
     // sparisce da tutte le liste e resta scritto quanto era.
@@ -30904,6 +30914,7 @@ function PannelloRiepilogoAmministrativo({
     setCostiExtra((prev) => prev.map((c, i) => (i === idx ? { ...c, [campo]: valore } : c)));
   }
   function rimuoviVoceCosto(idx) {
+    if (!confermaCancellazione(costiExtra[idx]?.titolo ? `la voce "${costiExtra[idx].titolo}"` : "questa voce di costo")) return;
     setCostiExtra((prev) => prev.filter((_, i) => i !== idx));
   }
   // Le tre funzioni che aggiungevano, modificavano e toglievano una riga
@@ -37959,6 +37970,7 @@ function RigaProgetto({ progetto, incaricabili, onSalva, onElimina, onArchivia, 
     scriviAssegnati([...assegnati, { id: libero.id, nome: libero.nome, tipo: libero.tipoAnagrafica }]);
   }
   function togliAssegnato(posizione) {
+    if (!confermaRimozione(`${assegnati[posizione]?.nome || "questa persona"} dagli incaricati del progetto`)) return;
     scriviAssegnati(assegnati.filter((_, i) => i !== posizione));
   }
   function chiudiModifica() {
@@ -49588,6 +49600,7 @@ export function PannelloCassaContanti({
   }
 
   async function eliminaRicorrente(id) {
+    if (!confermaCancellazione("questa spesa ricorrente")) return;
     const { error } = await supabase.from("cassa_spese_ricorrenti").delete().eq("id", id);
     if (error) { setMsg(`Non eliminato: ${testoErrore(error)}`); return; }
     carica();
@@ -50646,6 +50659,10 @@ function PannelloMovimentiBanca({ spese = [], fornitori = [], costiCategorie = [
   // sistemare. Una spesa nata da Contabilizza resta in prima nota: se non
   // la si vuole, si cancella da li'
   async function scollega(m) {
+    if (!confermaRimozione(
+      "il collegamento di questo movimento",
+      "Il movimento resta in estratto conto e torna fra quelli da riconciliare: quello a cui era collegato non si cancella.",
+    )) return;
     const { error } = await supabase.from("movimenti_banca").update({ stato: "nuovo", collegato_tipo: null, collegato_id: null, nota: null }).eq("id", m.id);
     if (error) { setMsg(`Non salvato: ${testoErrore(error)}`); return; }
     setMovimenti((prec) => (prec || []).map((x) => (x.id === m.id ? { ...x, stato: "nuovo", collegato_tipo: null, collegato_id: null, nota: null } : x)));
@@ -62803,6 +62820,7 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
     ricarica(["inventario_sede"]);
   }
   async function eliminaVoceInventario(id) {
+    if (!confermaCancellazione("questa voce dall'inventario della sede")) return;
     const { error } = await supabase.from("inventario_sede").delete().eq("id", id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["inventario_sede"]);
@@ -62827,6 +62845,7 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
     ricarica(["magazzino_locale_consumabili"]);
   }
   async function rimuoviConsumabile(id) {
+    if (!confermaCancellazione("questo consumabile dal magazzino della sede")) return;
     const { error } = await supabase.from("magazzino_locale_consumabili").delete().eq("id", id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["magazzino_locale_consumabili"]);
@@ -66176,7 +66195,9 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     setRicercaRientro("");
   }
   function rimuoviRientro(chiave) {
-    setProdottiRientranti((prev) => prev.filter((r) => r.chiave !== chiave));
+    const r = (prodottiRientranti || []).find((x) => x.chiave === chiave);
+    if (!confermaCancellazione(r?.prodotto?.nome ? `"${r.prodotto.nome}" dai prodotti che rientrano` : "questa riga dai prodotti che rientrano")) return;
+    setProdottiRientranti((prev) => prev.filter((r2) => r2.chiave !== chiave));
   }
   function cambiaQuantitaRientro(chiave, valore) {
     setProdottiRientranti((prev) => prev.map((r) => (r.chiave === chiave ? { ...r, quantitaResa: valore } : r)));
@@ -66190,7 +66211,9 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     setRicercaNuovoProdotto("");
   }
   function rimuoviUscita(prodottoId) {
-    setProdottiUscenti((prev) => prev.filter((u) => u.prodotto.id !== prodottoId));
+    const u = (prodottiUscenti || []).find((x) => x.prodotto?.id === prodottoId);
+    if (!confermaCancellazione(u?.prodotto?.nome ? `"${u.prodotto.nome}" dai prodotti che escono` : "questa riga dai prodotti che escono")) return;
+    setProdottiUscenti((prev) => prev.filter((u2) => u2.prodotto.id !== prodottoId));
   }
   function cambiaQuantitaUscita(prodottoId, delta) {
     setProdottiUscenti((prev) => prev.map((u) => (u.prodotto.id === prodottoId ? { ...u, quantita: Math.max(1, u.quantita + delta) } : u)));
@@ -66877,6 +66900,7 @@ function EditorFasceCompenso({ fasce, onCambia, opzioniImporta }) {
     salva(nuove);
   }
   function rimuoviRiga(idx) {
+    if (!confermaCancellazione("questa riga")) return;
     const nuove = righe.filter((_, i) => i !== idx);
     setRighe(nuove);
     salva(nuove);
@@ -68746,6 +68770,7 @@ function ListinoHotel({ hotelId, prezzi, periodi, ricarica }) {
   }
 
   async function eliminaFascia(id) {
+    if (!confermaCancellazione("questa fascia di prezzo dell'hotel")) return;
     const { error } = await supabase.from("hotel_prezzi").delete().eq("id", id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["hotel_prezzi"]);
@@ -69154,6 +69179,7 @@ function ListinoLocation({ locationId, prezzi, ricarica }) {
     ricarica(["location_prezzi"]);
   }
   async function eliminaFascia(id) {
+    if (!confermaCancellazione("questa fascia di prezzo della sede")) return;
     const { error } = await supabase.from("location_prezzi").delete().eq("id", id);
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     ricarica(["location_prezzi"]);
@@ -72583,6 +72609,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId ? { ...r, quantita: Math.max(1, r.quantita - 1) } : r)));
   }
   function rimuoviRiga(prodottoId) {
+    const riga = (carrello || []).find((r) => r.prodottoId === prodottoId);
+    if (!confermaCancellazione(riga?.nome ? `"${riga.nome}" dal carrello` : "questa riga dal carrello")) return;
     setCarrello((prev) => prev.filter((r) => r.prodottoId !== prodottoId));
     setBozzaPrezzo((prev) => { const d = { ...prev }; delete d[prodottoId]; return d; });
   }
@@ -72610,7 +72638,17 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       ? { ...r, prezzo: r.prezzoListino, prezzoListino: undefined }
       : r)));
   }
-  function svuotaCarrello() { setCarrello([]); }
+  // SVUOTARE SI CHIEDE, ma solo se dentro c'e' qualcosa: la domanda su
+  // un carrello vuoto e' una domanda a cui si risponde sempre si', e una
+  // conferma che si impara a premere a occhi chiusi non protegge piu'
+  // niente. Si chiede anche la fotografia: `nuovaVendita` lo svuota dopo
+  // una vendita registrata, e li' non c'e' niente da chiedere.
+  function svuotaCarrello({ chiedi = false } = {}) {
+    if (chiedi && carrello.length > 0 && !confermaCancellazione(
+      `${carrello.length === 1 ? "la riga" : `tutte e ${carrello.length} le righe`} del carrello`,
+    )) return;
+    setCarrello([]);
+  }
   // la fotografia del carrello da mettere in sospeso: righe, note, metodo,
   // corso, sconti e i dati di spedizione e fattura gia' scritti
   function fotografaCarrello() {
@@ -75998,7 +76036,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     <button onClick={() => { setMostraResiCambio(true); setMostraMenu(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}` }}>Resi / Cambio</button>
                   )}
                   {carrello.length > 0 && (
-                    <button onClick={() => { svuotaCarrello(); setMostraMenu(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B", borderTop: `1px solid ${CREAM_BORDER}` }}>Svuota carrello</button>
+                    <button onClick={() => { svuotaCarrello({ chiedi: true }); setMostraMenu(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B", borderTop: `1px solid ${CREAM_BORDER}` }}>Svuota carrello</button>
                   )}
                 </div>
               </>
@@ -76169,7 +76207,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                   </div>
                   {carrello.length > 0 && (
                     <button
-                      onClick={() => { if (window.confirm("Vuoi svuotare il carrello?")) svuotaCarrello(); }}
+                      onClick={() => svuotaCarrello({ chiedi: true })}
                       aria-label="Svuota il carrello"
                       style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${NOTTE.bordo}`, background: "transparent", color: NOTTE.testo, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}
                     >
@@ -76369,7 +76407,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
               </div>
               {carrello.length > 0 && (
                 <button
-                  onClick={() => { if (window.confirm("Vuoi svuotare il carrello?")) svuotaCarrello(); }}
+                  onClick={() => svuotaCarrello({ chiedi: true })}
                   title="Svuota il carrello"
                   aria-label="Svuota il carrello"
                   style={{ width: 36, height: 36, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}
@@ -77869,6 +77907,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
 
   function rimuoviImmagineProdotto(chiave) {
+    if (!confermaCancellazione("questa foto dal prodotto")) return;
     setProdottoForm((f) => ({ ...f, immagini: f.immagini.filter((im) => im.chiave !== chiave) }));
   }
   async function sostituisciImmagineProdotto(chiave, file) {
@@ -78499,7 +78538,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (ricarica) ricarica(["prodotti_shop"]);
   }
   function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
-  function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
+  function rimuoviComponente(i) {
+    const nome = (prodottiShop || []).find((pp) => pp.id === componenti[i]?.prodotto_id)?.nome;
+    if (!confermaCancellazione(nome ? `"${nome}" dalla distinta` : "questo pezzo dalla distinta")) return;
+    setComponenti((prev) => prev.filter((_, idx) => idx !== i));
+  }
   function cambiaComponente(i, campo, valore) { setComponenti((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valore } : c))); }
   // true da quando qualcuno scrive nella scheda: serve a non riscrivergli
   // sotto le mani quello che ha appena digitato
@@ -80794,6 +80837,8 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     setRicercaExtra(""); setPickerExtraAperto(false);
   }
   function rimuoviProdottoExtra(prodottoId) {
+    const nome = (prodottiShop || []).find((pp) => pp.id === prodottoId)?.nome;
+    if (!confermaCancellazione(nome ? `"${nome}" dagli extra della classe` : "questo prodotto dagli extra della classe")) return;
     const nuovo = { ...accessoriQuantita };
     delete nuovo[`extra::${prodottoId}`];
     const senzaFlag = { ...extraDaVendita };
@@ -82318,6 +82363,7 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
 // non selezionabile
 function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio }) {
   async function elimina() {
+    if (!confermaCancellazione(kit.nome ? `il divisore "${kit.nome}"` : "questo divisore")) return;
     const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["kit_definizioni"]);
@@ -82451,7 +82497,8 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   }
   // rimuove un singolo prodotto dal contenuto del pacchetto (a differenza
   // di "elimina", che rimuove l'intero pacchetto)
-  async function rimuovi(rigaId) {
+  async function rimuovi(rigaId, nome) {
+    if (!confermaCancellazione(nome ? `"${nome}" da questo elenco` : "questo prodotto da questo elenco")) return;
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_kit_prodotti"]);
@@ -82825,7 +82872,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
                 <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
                 <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
                 <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 62, padding: "5px 7px", fontSize: 15, fontWeight: 700, textAlign: "center" }} />
-                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5 }}>✕</button>
+                <button onClick={() => rimuovi(r.id, p?.nome)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5 }}>✕</button>
               </div>
             );
           })}
@@ -82864,7 +82911,8 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
     setAvvisoDuplicati("");
     ricarica(["corsi_kit_prodotti"]);
   }
-  async function rimuovi(rigaId) {
+  async function rimuovi(rigaId, nome) {
+    if (!confermaCancellazione(nome ? `"${nome}" da questo elenco` : "questo prodotto da questo elenco")) return;
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
     ricarica(["corsi_kit_prodotti"]);
@@ -82951,7 +82999,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
               <div key={r.id} data-riga-accessorio="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
                 <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
                 <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
-                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5 }}>✕</button>
+                <button onClick={() => rimuovi(r.id, p?.nome)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5 }}>✕</button>
               </div>
             );
           })}
@@ -84579,7 +84627,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
     setNuovaSoglia({ tipo_indicatore: "incidenza_categoria", categoria_id: "", soglia: "", operatore: ">" });
     ricarica(["costi_soglie_allerta"]);
   }
-  async function eliminaSoglia(id) { await supabase.from("costi_soglie_allerta").delete().eq("id", id); ricarica(["costi_soglie_allerta"]); }
+  async function eliminaSoglia(id) { if (!confermaCancellazione("questa soglia di allerta")) return; await supabase.from("costi_soglie_allerta").delete().eq("id", id); ricarica(["costi_soglie_allerta"]); }
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
@@ -85841,7 +85889,7 @@ function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricar
     if (error) { setMsg("Errore: " + testoErrore(error)); return; }
     setImporto(""); setMsg(""); ricarica(["costi_budget"]);
   }
-  async function eliminaBudget(id) { await supabase.from("costi_budget").delete().eq("id", id); ricarica(["costi_budget"]); }
+  async function eliminaBudget(id) { if (!confermaCancellazione("questo budget")) return; await supabase.from("costi_budget").delete().eq("id", id); ricarica(["costi_budget"]); }
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>

@@ -1591,6 +1591,86 @@ non si misura — si controlla che a 390 px non esistano piu' ne'
 e che a 1400 px la griglia e le intestazioni siano ancora al loro posto.
 Il **pollice su un telefono vero** resta l'unica prova del resto.
 
+### Cancellare si chiede (11/11/2026)
+
+Il titolare: «ogni cancellazione nell'app che sia di prodotto o di
+iscritto o eliminazione da una lista di iscritti o di prodotti deve
+essere preceduta dall'avviso di "sei sicuro di voler cancellare?"». E,
+davanti alla sezione della fiera: «le iscritte della fiera non puoi
+poterne cancellare così cliccando "non iscritta" e sparisce».
+
+**Misurato prima di toccare niente**: dei 124 gesti che togliavano
+qualcosa, **62 non chiedevano nulla**. Il patto esisteva — 157
+`window.confirm` scritti a mano — ma valeva dove qualcuno si era
+ricordato di scriverlo, e un patto che vale a memoria non è un patto.
+
+**La domanda sta in un posto solo**, `src/ui/conferma.js`:
+`confermaCancellazione(cosa, conseguenza)` e `confermaRimozione(...)`.
+Sessantadue frasi scritte a mano sarebbero sessantadue promesse che un
+giorno si scostano — una dice «Sei sicuro?», un'altra «Confermi?», e la
+terza non dice niente perché chi l'ha aggiunta non sapeva che le altre
+esistessero.
+
+**E chi chiama deve dire COSA.** Non «Sei sicuro?» da solo: davanti a un
+elenco di venti righe quella frase non dice **quale** riga si è premuta,
+e la conferma diventa un tasto da premere a occhi chiusi, cioè una
+conferma che non protegge niente. Per questo `rimuovi(rigaId)` nei
+pacchetti ha preso un secondo parametro, il nome del prodotto, invece di
+chiedere «questo prodotto».
+
+**Togliere e cancellare sono due parole diverse**, e sbagliarla è peggio
+che non dirla. L'iscritta della fiera non si cancella: l'iscrizione
+resta dov'è, si stacca un'attribuzione. Chiamarla «cancellare» fa
+credere a chi legge di distruggere una scheda, e quella persona non
+preme più. Quindi `confermaRimozione` dice «togliere», e nel caso della
+fiera aggiunge *dove va a finire* («torna fra le iscrizioni di questi
+giorni da segnare»).
+
+**Segnare non si chiede.** Nella stessa sezione, «È della fiera»
+aggiunge, e un gesto che aggiunge si disfa col tasto di fianco: una
+domanda a cui si risponde sempre sì insegna a premere a occhi chiusi, e
+allora anche quella del togliere smette di proteggere. Vale anche per
+`svuotaCarrello`, che chiede quando lo preme una persona
+(`chiedi: true`) e tace dopo una vendita registrata, dove non c'è niente
+da chiedere.
+
+**Dove la domanda NON è stata messa, ed è una scelta.** Un avviso su
+tutto è un avviso che nessuno legge. Restano muti i gesti che non fanno
+sparire niente da rimpiangere: svuotare la riga di ricerca, azzerare un
+modulo in composizione, togliere la spunta da una selezione, pulire la
+lavagna della firma — che esiste per essere rifatta —, togliere una
+pastiglia di categoria che si riprende dalla tendina, lo sfondo e la
+tinta di un tasto. E restano muti i due casi in cui **il gesto è il
+pannello**: il progetto e la vendita hanno una finestra che elenca cosa
+sparisce, e la funzione che cancella è il tasto *dentro* quella
+finestra.
+
+**La domanda vive dove c'è una persona, non nel magazzino dei dati.**
+`eventi/dati.js`, `stampe/dati.js`, `progetti/AllegatiProgetto.jsx` e
+`consensi/dati.ts` scrivono e basta: la conferma sta sulla pagina che li
+chiama, e tutte le strade sono state verificate una per una. Dove invece
+la funzione sta **dentro** il componente, la domanda è in cima a lei e
+non sul tasto: così vale per ogni strada che ci arriva, anche quelle di
+domani.
+
+**La guardia è la parte che dura**, in `prove/cancellare-si-chiede.test.jsx`
+(13). Rilegge tutte le funzioni il cui nome dice che togliono qualcosa e
+pretende che ognuna chieda, **oppure** che stia nell'elenco delle
+eccezioni **con scritto il perché**; e controlla che nessuna eccezione
+sia scaduta — se un gesto scusato impara a chiedere, la sua riga lì deve
+sparire, altrimenti il giorno che quel nome torna su un gesto nuovo
+nasce già scusato. Il primo giro ha trovato una mia imprecisione:
+contava come «chiede» anche `set…DaEliminare(`, per riconoscere i
+pannelli — ma `eliminaVendita` chiama quel `set…(null)` in fondo, **per
+chiudere il pannello dopo aver cancellato**, quindi passava senza aver
+chiesto niente. Adesso conta solo una domanda vera.
+
+**Quello che la guardia non può fare**: riconosce i gesti dai verbi con
+cui questo progetto chiama i suoi tasti (elimina, rimuovi, togli,
+cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
+altro modo le sfugge — non sostituisce la lettura del codice, la rende
+ripetibile.
+
 ### Un impegno è legato alla sua riga, e la segue da sé (10/11/2026)
 
 Il titolare: «devi vincolare sempre gli impegni di spesa
