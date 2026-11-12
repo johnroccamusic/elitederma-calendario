@@ -1844,7 +1844,7 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
-### Il deposito della master è la busta della classe (12/11/2026)
+### Il tasto della master è un promemoria, non una scrittura contabile (12/11/2026)
 
 Il titolare: «sulla scheda di ciascun corso, nella dashboard della master,
 nel caso in cui questa master abbia incassato dei pagamenti in contanti, ci
@@ -1856,67 +1856,105 @@ Chiara, con scritto "ricevuto deposito master euro", e la master a sua
 volta nella dashboard il tasto deposita si trasforma in "conferma di
 ricevuta" con vicino la data.»
 
-**Chiesto al titolare prima di scrivere una riga, perché la risposta
-cambiava il modello dei dati: sono gli stessi soldi della busta di quella
-classe, o una cosa a parte?** Risposta: **è la busta della classe.** Quindi
-la dashboard della master è **l'altro capo della stessa stretta di mano**,
-non un secondo giro:
+**La prima versione, della mattina, faceva troppo** — e il titolare l'ha
+corretta lo stesso giorno: «il tasto della master non fa operazioni
+contabili, è solo una funzione di promemoria con cui la master segnala di
+aver lasciato i soldi e l'amministrazione conferma di averli ricevuti», e
+«i soldi non vanno a sommare in cassa, funge da deposito».
+
+Quel tasto chiamava `chiudiContabilitaClasse`: scriveva
+`busta_spedita_il`, **congelava** `busta_importo`, marcava col numero 1
+tutte le vendite della classe e scriveva chi aveva chiuso. Cioè: dalla
+dashboard di una master, dal telefono, si chiudeva la contabilità di una
+classe — e da quel momento ogni vendita del giorno dopo apriva una
+contabilità aggiuntiva. Nessuno l'aveva chiesto: la richiesta diceva
+«segnala», e io avevo letto «chiudi».
+
+**Adesso sono DUE DATE e nient'altro.** `deposito_master_il` (con
+`deposito_master_da_id` e `deposito_master_importo`, quello che lei ha
+dichiarato di aver lasciato) e `deposito_master_ricevuto_il`. Non chiudono
+niente, non marcano nessuna vendita, non mettono niente in cassa:
 
 | Chi | Dove | Gesto | Cosa scrive |
 |---|---|---|---|
-| la master | dashboard, scheda del corso | «Depositato» | `busta_spedita_il`, l'importo congelato, il numero 1 su tutte le vendite, `busta_spedita_da_master_id` |
-| l'amministrazione | Riepilogo amministrativo | «Ricevuto deposito master € X» | `busta_rientrata_il` |
-| l'amministrazione | Riepilogo amministrativo | «Deposita in cassa» | `busta_depositata_il` |
+| la master | dashboard, scheda del corso | «Depositato» | `deposito_master_il`, chi e quanto — **un promemoria** |
+| l'amministrazione | Riepilogo, riga sua | «Ricevuto deposito master € X» | `deposito_master_ricevuto_il` |
 | la master | dashboard | legge «Conferma di ricevuta» con la data | niente |
+| **l'amministrazione** | Riepilogo, i due tasti della busta | «Spedisci busta» / «Deposita in cassa» | **tutto il resto: è lei che chiude la contabilità e mette il contante in cassa** |
 
-**Un importo solo, e lo calcola una funzione sola.**
-`contanteDaDepositare` chiama `contiRiepilogoClasse` — la stessa del
-Riepilogo amministrativo — e restituisce esattamente il «Cash pulito in
-busta»: il contante incassato al corso meno quello che da quella busta è
-già uscito. A busta chiusa comanda l'importo congelato. Due conti sugli
-stessi soldi avrebbero prodotto due cifre, e quella sbagliata sarebbe
-sempre stata quella che si guarda.
+Cinque decisioni, e ognuna per un motivo:
 
-**E una chiusura sola**, `chiudiContabilitaClasse`: la premono due persone
-da due pagine diverse e scrive sempre le stesse tre cose. Due copie
-vorrebbero dire che un giorno una delle due si dimentica di marcare le
-vendite — ed è esattamente il guasto appena corretto qui sopra.
+- **Due colonne nuove, non quelle della busta.** Le date della busta hanno
+  degli effetti: `busta_spedita_il` chiude la contabilità e fa nascere la
+  busta 2, `busta_depositata_il` fa entrare il contante nella cassa
+  contanti. Appoggiare un promemoria su una di loro vuol dire che un
+  promemoria muove una cassa — che è esattamente il guasto da cui questa
+  correzione viene.
+- **I due tasti della busta non si travestono più.** Nella prima versione
+  il tasto arancione, su una busta chiusa da una master, cambiava nome in
+  «Ricevuto deposito master € X». Un tasto che a volte dichiara l'arrivo
+  di una busta e a volte conferma la ricevuta di un promemoria sono due
+  gesti travestiti da uno, e chi preme non può sapere quale sta facendo.
+  Adesso il promemoria ha **una riga sua**, sopra i due tasti, perché è
+  quello che si legge prima di decidere.
+- **L'importo è uno, e lo calcola `contanteDaDepositare`** — la stessa
+  funzione del Riepilogo amministrativo, cioè il «Cash pulito in busta».
+  Sono gli stessi soldi, e due conti li farebbero diventare due cifre.
+  Alla dichiarazione si **congela in `deposito_master_importo`**: è quello
+  che lei ha detto di aver lasciato, e se i conti della classe si muovono
+  domani il suo promemoria non deve cambiare da solo.
+- **La riga c'è solo se c'è davvero del contante**, e nel Riepilogo solo
+  se qualcuno ha dichiarato qualcosa. Una riga che dice «nessun deposito
+  segnalato» su ogni classe si impara a saltare, e si porterebbe dietro
+  anche quelle che contano.
+- **Due passi indietro, uno per parte.** La master può togliere la sua
+  segnalazione finché nessuno l'ha confermata; l'amministrazione può
+  togliere la **sola** conferma, e la dichiarazione della master resta —
+  è una cosa che ha detto lei, e chi si è sbagliato a confermare non
+  cancella quello che ha dichiarato un'altra. Lo dice anche il database
+  (`corsi_date_deposito_master_confermato_dopo`): una conferma non esiste
+  senza la sua dichiarazione.
 
-Quattro decisioni:
+**E la colonna di stamattina è stata tolta.** `busta_spedita_da_master_id`
+esisteva solo per dire «questa busta l'ha chiusa una master»: da adesso
+nessuna master chiude nessuna busta. Misurato prima di toglierla: **zero
+righe su 116** la avevano valorizzata. Una colonna che sembra viva e non
+lo è è peggio di una che manca, perché chi apre la tabella ci ragiona
+sopra.
 
-- **Il riquadro c'è solo se del contante c'è davvero.** Su un corso senza
-  incassi in contanti sarebbe una riga che si impara a saltare, e si
-  porterebbe dietro anche quelle che contano.
-- **Il tasto lo preme la master sulla PROPRIA dashboard.** Chi sfoglia
-  quella di un'altra legge l'importo e lo stato, ma non preme: quel
-  contante non lo ha in mano lui. Una busta chiusa dall'amministrazione la
-  master la legge e basta.
-- **Le spese arrivano con una query mirata**, `spese` filtrate sulle sue
-  classi, invece di caricare la tabella delle spese dentro la pagina di una
-  master. Servono a una cosa sola: sapere quanto di quel contante è già
-  uscito dalla busta.
-- **La master vede un importo in euro**, e qui è un'eccezione voluta: nel
-  resto della dashboard gli euro dei carrelli non si mostrano
-  (`vedeIncassiDashboardMaster`). Questi sono soldi che ha in mano lei, e
-  senza la cifra il riquadro non direbbe niente.
+**Quello che resta da sapere, ed è una conseguenza voluta:** il promemoria
+e la contabilità possono dire due cose diverse. La master segnala di aver
+lasciato 350 €, e la busta di quella classe può restare aperta per
+giorni; oppure l'amministrazione chiude la busta a 300 € dopo aver
+disposto dei pagamenti in contanti. **Non si allineano da soli**, e non
+devono: uno è un messaggio fra due persone, l'altra è la cassa. Lo
+scostamento fra l'importo dichiarato e quello della busta lo legge una
+persona, che è la stessa regola del riquadro dello scostamento.
 
-**Quello che NON è stato fatto, e va saputo.** Il tasto della master
-**non** ha la guardia dei pagamenti in contanti ancora da disporre, che
-invece ferma «Spedisci busta» nel Riepilogo: per sapere quanto una classe
-deve ancora pagare in contanti serve `calcolaRigheSpeseCorso`, che vuole i
-compensi di tutti i master e i listini — roba che non va nel browser di una
-master. Se l'amministrazione dispone dei pagamenti **dopo** che la master
-ha depositato, se ne accorge il riquadro dello scostamento, che già esiste
-per questo («nella busta sono stati chiusi X, i conti di oggi dicono Y»)
-e lo decide una persona. Va ridetto, non indovinato.
+**E una cosa che NON è stata fatta:** non si registra **chi**, in
+amministrazione, ha confermato di aver ricevuto il contante — solo la
+data. Scriverlo vuol dire far arrivare l'operatore collegato fino a quel
+pannello attraverso due pagine che oggi non lo conoscono. Su una stretta
+di mano che riguarda del contante è un'informazione che vale: va chiesta,
+non indovinata.
 
-Migrazione `20261112170000_contabilita_aggiuntiva_e_deposito_master.sql`
-(le due colonne, rollback dentro). Prove in
-`prove/deposito-master.test.jsx` (10): il numero che coincide con quello
-del Riepilogo, i tre stati della scheda, chi può premere, il nome della
-master sul tasto arancione, e la dashboard montata per davvero — premere
-«Depositato» congela 350 €, scrive chi ha chiuso, la marcatura e il numero
-1 sulle vendite.
+Migrazione `20261112200000_il_deposito_della_master_e_un_promemoria.sql`
+(le quattro colonne, il vincolo, la colonna tolta, rollback dentro).
+Prove in `prove/deposito-master.test.jsx` (19): il numero che coincide con
+quello del Riepilogo, il promemoria che **non** si legge dalle date della
+busta, i tre stati della scheda, i due passi indietro, la riga
+dell'amministrazione separata dal tasto arancione — che su una busta in
+viaggio continua a chiamarsi «Busta in viaggio» — e la dashboard montata
+per davvero: premere «Depositato» scrive **le tre chiavi del promemoria e
+nessun'altra**, e non marca nessuna vendita.
+
+**Una prova rossa trovata strada facendo, e vale la lezione.** Togliendo
+il travestimento ho tolto anche il parametro `etichetta` di `TastoBusta`,
+convinto che fosse morto perché nessuno lo passava più nella prima busta.
+Lo passano le **appendici**: «Spedisci busta 2», «Contabilità 3 chiusa».
+Due prove rosse in un secondo. Prima di cancellare un parametro «che non
+usa nessuno» si guarda chi lo passa, non chi lo passava nel punto che si
+sta guardando.
 
 ### «Ricevuta» e «in cassa» sono due cose (12/11/2026)
 

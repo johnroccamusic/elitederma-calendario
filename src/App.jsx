@@ -13985,11 +13985,18 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           questa master ha incassato dei pagamenti in contanti, ci dovrà
           essere un riepilogo con scritto "devi depositare euro"».
 
-          Sono gli stessi soldi della busta della classe, non un secondo
-          giro: «Depositato» chiude la contabilità di questa classe — da
-          lì le vendite che arrivano dopo ne aprono una aggiuntiva — e
-          l'amministrazione conferma di averla ricevuta. Quella conferma e'
-          la data che compare qui.
+          È UN PROMEMORIA, non una scrittura contabile (correzione del
+          titolare, 12/11/2026): «il tasto della master non fa operazioni
+          contabili, è solo una funzione di promemoria con cui la master
+          segnala di aver lasciato i soldi e l'amministrazione conferma di
+          averli ricevuti». Premerlo non chiude la contabilità di questa
+          classe e non mette niente in cassa — quello resta
+          dell'amministrazione, dal Riepilogo. Qui si dice una cosa sola:
+          quei soldi non li ha più lei.
+
+          La cifra è lo stesso numero che il Riepilogo amministrativo
+          chiama «Cash pulito in busta»: sono gli stessi soldi, e due
+          conti li farebbero diventare due cifre.
 
           Il riquadro c'e' solo se del contante c'e' davvero: su un corso
           senza incassi in contanti sarebbe una riga che si impara a
@@ -14009,13 +14016,22 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
                 {deposito.stato === "confermato"
                   ? `L'amministrazione ha confermato di averli ricevuti il ${fmtData(deposito.dataConferma)}.`
                   : deposito.stato === "dichiarato"
-                    ? `Depositato il ${fmtData(deposito.dataDichiarato)}. L'amministrazione deve ancora confermare di averli ricevuti.`
+                    ? `Hai segnalato il deposito il ${fmtData(deposito.dataDichiarato)}. L'amministrazione deve ancora confermare di averli ricevuti.`
                     : deposito.premibile
-                      ? "Quando li hai consegnati, premi «Depositato»: da quel momento la contabilità di questo corso si chiude e quello che incassi dopo entra in una contabilità aggiuntiva."
-                      : "Lo dichiara la master dalla sua dashboard, oppure l'amministrazione dal Riepilogo della classe."}
+                      ? "Quando li hai lasciati all'amministrazione premi «Depositato»: è un promemoria, non chiude niente e non mette niente in cassa."
+                      : "Lo segnala la master dalla sua dashboard, quando lascia il contante all'amministrazione."}
               </div>
               {deposito.messaggio && (
                 <div style={{ ...fontBody, fontSize: 11.5, color: NAVY, marginTop: 6 }}>{deposito.messaggio}</div>
+              )}
+              {deposito.annullabile && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); deposito.onAnnulla(); }}
+                  disabled={deposito.salvando}
+                  style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "4px 0 0", textDecoration: "underline" }}
+                >
+                  Non li ho ancora lasciati
+                </button>
               )}
             </div>
             {deposito.stato === "confermato" ? (
@@ -14027,15 +14043,16 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#E08A1E", border: "1px solid #C77A18", borderRadius: 999, padding: "11px 18px", flexShrink: 0, textAlign: "center" }}>
                 Depositato<br />
                 <span style={{ fontWeight: 400, fontSize: 11.5 }}>{fmtData(deposito.dataDichiarato)}</span>
+                <br /><span style={{ fontWeight: 400, fontSize: 10.5, opacity: 0.9 }}>da confermare</span>
               </div>
             ) : deposito.premibile ? (
               <button
                 onClick={(e) => { e.stopPropagation(); deposito.onDeposita(); }}
                 disabled={deposito.salvando}
-                title="Dichiara di aver consegnato questo contante all'amministrazione"
+                title="Segnala che hai lasciato questo contante all'amministrazione. È un promemoria: non chiude la contabilità e non mette niente in cassa"
                 style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, background: "#F3C53F", color: "#2A2F4A", border: "1px solid #D9A91F", borderRadius: 999, padding: "11px 22px", minHeight: 44, cursor: deposito.salvando ? "default" : "pointer", opacity: deposito.salvando ? 0.6 : 1, flexShrink: 0 }}
               >
-                {deposito.salvando ? "Registro…" : "Depositato"}
+                {deposito.salvando ? "Segnalo…" : "Depositato"}
               </button>
             ) : null}
           </div>
@@ -15261,42 +15278,72 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // quella di un'altra legge e basta, perche' quel contante non lo ha in
   // mano lui.
   const suaDashboard = !!masterLoggataId && masterSelId === masterLoggataId;
+  // DICHIARARE, e niente altro. Questo tasto non fa operazioni contabili:
+  // scrive due righe di promemoria («ho lasciato i soldi», e dall'altra
+  // parte «li ho ricevuti»). La contabilita' della classe la chiude
+  // l'amministrazione dal Riepilogo, e il contante entra nella cassa
+  // contanti solo quando qualcuno la' premera' «Deposita in cassa».
   async function dichiaraDeposito(cd, importo) {
     if (!suaDashboard || !masterLoggataId) return;
-    if (!window.confirm(`Hai depositato ${fmtEuroErp2(importo)} di questo corso?\n\nDa qui la contabilità di questa classe si chiude: le vendite in contanti o con POS che arrivano dopo aprono una contabilità aggiuntiva, con un suo giro.\n\nL'amministrazione confermerà di aver ricevuto il deposito, e qui comparirà la data.`)) return;
+    if (!window.confirm(`Segnalare che hai lasciato ${fmtEuroErp2(importo)} all'amministrazione?\n\nÈ un promemoria: non chiude la contabilità di questo corso e non mette niente in cassa. Serve a dire che quei soldi non li hai più tu.\n\nL'amministrazione confermerà di averli ricevuti, e qui comparirà la data.`)) return;
     setDepositando(cd.id);
     setMsgDeposito("");
-    const esito = await chiudiContabilitaClasse({ corsoDataId: cd.id, importo, modo: "spedisci", masterId: masterLoggataId });
+    const esito = await dichiaraDepositoMaster({ corsoDataId: cd.id, masterId: masterLoggataId, importo });
     setDepositando(null);
     if (esito.errore) { setMsgDeposito("Non salvato: " + esito.errore); return; }
-    if (esito.venditeNonMarcate) { setMsgDeposito("Deposito registrato, ma le vendite di questo corso non sono state marcate: riprova, o i prossimi incassi finiranno in questa contabilità."); }
-    else setMsgDeposito(`Deposito di ${fmtEuroErp2(importo)} registrato: l'amministrazione lo confermerà.`);
-    ricarica(["corsi_date", "vendite_shop"]);
+    setMsgDeposito(`Segnalato: ${fmtEuroErp2(importo)} lasciati all'amministrazione. Appena li confermano, qui compare la data.`);
+    ricarica(["corsi_date"]);
+  }
+  // E il passo indietro, perche' si preme per sbaglio. Finche'
+  // l'amministrazione non ha confermato lo puo' togliere lei; dopo la
+  // conferma no — di la' qualcuno ha dichiarato di avere quei soldi in
+  // mano, e disfare quella dichiarazione da qui non si puo'.
+  async function annullaMioDeposito(cd) {
+    if (!suaDashboard || !masterLoggataId) return;
+    if (!window.confirm("Togliere la segnalazione del deposito?\n\nNon cambia nessun conto: resta solo che non hai ancora detto di aver lasciato i soldi.")) return;
+    setDepositando(cd.id);
+    setMsgDeposito("");
+    const esito = await annullaDepositoMaster(cd.id);
+    setDepositando(null);
+    if (esito.errore) { setMsgDeposito("Non salvato: " + esito.errore); return; }
+    setMsgDeposito("Segnalazione togliata.");
+    ricarica(["corsi_date"]);
   }
 
   // Tutto quello che la card deve sapere del deposito di quella classe:
-  // quanto, com'e' adesso, e cosa si puo' premere. Lo stato e' quello
-  // della busta — sono gli stessi soldi, non un secondo giro: «Depositato»
-  // chiude la busta, l'amministrazione conferma di averla ricevuta
-  // (busta_rientrata_il) e quella data e' la «conferma di ricevuta» che la
-  // master legge qui.
+  // quanto, com'e' adesso, e cosa si puo' premere.
+  //
+  // Lo stato NON e' quello della busta: sono le due date del promemoria,
+  // che vivono per conto loro. L'importo invece e' lo stesso numero del
+  // Riepilogo amministrativo finche' nessuno ha dichiarato niente; da
+  // quel momento comanda quello che la master ha dichiarato, perche' e'
+  // quello che ha detto di aver lasciato — se i conti della classe si
+  // muovono dopo, il promemoria non deve cambiare da solo.
   function depositoDellaClasse(cd) {
-    const importo = contanteDaDepositare({ cd, iscritti, venditeShop, spese: speseSueClassi });
-    const chiusa = bustaChiusa(cd);
-    // niente contante, niente riquadro: non c'e' nessun deposito da fare
-    if (importo <= 0 && !chiusa) return null;
-    if (chiusa && importo <= 0 && !cd.busta_spedita_da_master_id) return null;
+    const promemoria = depositoMasterDi(cd);
+    const importo = promemoria.dichiarato
+      ? promemoria.importo
+      : contanteDaDepositare({ cd, iscritti, venditeShop, spese: speseSueClassi });
+    // niente contante, niente riquadro: non c'e' nessun deposito da fare,
+    // e una riga che dice zero si impara a saltare
+    if (!promemoria.dichiarato && importo <= 0) return null;
+    // e se l'amministrazione ha gia' messo quel contante in cassa senza
+    // che nessuno abbia segnalato niente, non c'e' piu' niente da
+    // segnalare: i soldi sono nel cassetto
+    if (!promemoria.dichiarato && bustaDepositata(cd)) return null;
     return {
       importo,
-      stato: cd.busta_rientrata_il || cd.busta_depositata_il ? "confermato" : chiusa ? "dichiarato" : "da_depositare",
-      dataDichiarato: cd.busta_spedita_il || cd.busta_depositata_il || null,
-      dataConferma: cd.busta_rientrata_il || cd.busta_depositata_il || null,
-      daLei: !!cd.busta_spedita_da_master_id && cd.busta_spedita_da_master_id === masterLoggataId,
-      // una busta chiusa dall'amministrazione la master la legge e basta
-      premibile: suaDashboard && !chiusa,
+      stato: promemoria.confermato ? "confermato" : promemoria.dichiarato ? "dichiarato" : "da_depositare",
+      dataDichiarato: promemoria.dataDichiarato,
+      dataConferma: promemoria.dataConferma,
+      daLei: !!promemoria.masterId && promemoria.masterId === masterLoggataId,
+      premibile: suaDashboard && !promemoria.dichiarato,
+      // si disfa solo finche' nessuno ha confermato, e solo da lei
+      annullabile: suaDashboard && promemoria.dichiarato && !promemoria.confermato,
       salvando: depositando === cd.id,
       messaggio: depositando === cd.id ? "" : msgDeposito,
       onDeposita: () => dichiaraDeposito(cd, importo),
+      onAnnulla: () => annullaMioDeposito(cd),
     };
   }
   // Le tre sezioni della dashboard, come nella dashboard venditori: una
@@ -31313,17 +31360,49 @@ function PannelloRiepilogoAmministrativo({
   // si preme solo quello di destra.
   const statoViaggio = statoViaggioBusta(corsoData);
   const inCassaBusta = bustaDepositata(corsoData);
-  // IL DEPOSITO DELLA MASTER (12/11/2026). Se la busta l'ha chiusa una
-  // master dalla sua dashboard, qui non si legge «busta in viaggio» ma
-  // «ricevuto deposito master X»: e' lo stesso gesto — qualcuno dichiara
-  // di aver consegnato del contante e qualcun altro conferma di averlo
-  // ricevuto — ma chi guarda questo pannello deve sapere di chi sono quei
-  // soldi e chi li ha in mano.
-  const masterDelDeposito = corsoData.busta_spedita_da_master_id
-    ? (master || []).find((m) => m.id === corsoData.busta_spedita_da_master_id) || null
+  // IL PROMEMORIA DEL DEPOSITO DELLA MASTER (12/11/2026, correzione del
+  // titolare). Vive accanto alla busta e NON ne fa parte: e' una riga sua
+  // con un tasto suo. «Il tasto della master non fa operazioni contabili,
+  // e' solo una funzione di promemoria con cui la master segnala di aver
+  // lasciato i soldi e l'amministrazione conferma di averli ricevuti.»
+  //
+  // Per questo non cambia piu' l'etichetta dei due tasti della busta: un
+  // tasto che a volte chiude una contabilita' e a volte conferma la
+  // ricevuta di un promemoria sono due gesti travestiti da uno, e chi
+  // preme non puo' sapere quale dei due sta facendo.
+  const promemoriaDeposito = depositoMasterDi(corsoData);
+  const masterDelDeposito = promemoriaDeposito.masterId
+    ? (master || []).find((m) => m.id === promemoriaDeposito.masterId) || null
     : null;
-  const nomeDeposito = masterDelDeposito?.nome ? String(masterDelDeposito.nome).toUpperCase() : "";
+  const nomeDeposito = masterDelDeposito?.nome ? String(masterDelDeposito.nome).toUpperCase() : "la master";
   const [salvandoBusta, setSalvandoBusta] = useState(false);
+  const [salvandoDeposito, setSalvandoDeposito] = useState(false);
+
+  // CONFERMARE di aver ricevuto quel contante. Scrive una data e
+  // nient'altro: non chiude nessuna contabilita' e non mette niente in
+  // cassa — per quello ci sono i due tasti della busta qui sotto.
+  async function confermaDeposito() {
+    if (!promemoriaDeposito.dichiarato || promemoriaDeposito.confermato) return;
+    if (!window.confirm(`Confermare di aver ricevuto ${fmtEuroErp2(promemoriaDeposito.importo)} da ${nomeDeposito}?\n\nÈ la risposta al suo promemoria: lei vedrà «conferma di ricevuta» con la data di oggi. Non chiude la contabilità della classe e non mette niente in cassa contanti.`)) return;
+    setSalvandoDeposito(true);
+    const esito = await confermaDepositoMaster(corsoData.id);
+    setSalvandoDeposito(false);
+    if (esito.errore) { setMsg("Errore: " + esito.errore); return; }
+    setMsg(`Confermato: ${nomeDeposito} vede la conferma di ricevuta con la data di oggi.`);
+    ricarica(["corsi_date"]);
+  }
+  // e il passo indietro, che toglie la sola conferma: la dichiarazione
+  // della master resta, perche' e' una cosa che ha detto lei
+  async function annullaConfermaDeposito() {
+    if (!promemoriaDeposito.confermato) return;
+    if (!window.confirm("Togliere la conferma di ricevuta?\n\nNon cambia nessun conto. Il promemoria di " + nomeDeposito + " resta, e torna da confermare.")) return;
+    setSalvandoDeposito(true);
+    const esito = await annullaDepositoMaster(corsoData.id, { soloConferma: true });
+    setSalvandoDeposito(false);
+    if (esito.errore) { setMsg("Errore: " + esito.errore); return; }
+    setMsg("Conferma togliata: il deposito torna da confermare.");
+    ricarica(["corsi_date"]);
+  }
 
   // CHIUDERE la contabilita' della classe. Due strade, una scrittura sola:
   // «Spedisci busta» la manda via, «Deposita in cassa» salta il viaggio.
@@ -32449,6 +32528,61 @@ function PannelloRiepilogoAmministrativo({
                     </div>
                   )}
 
+                  {/* IL PROMEMORIA DELLA MASTER, e sta SOPRA i due tasti
+                      della busta perche' e' quello che si legge prima di
+                      decidere: «Chiara dice di aver lasciato 350 €».
+
+                      Compare solo se qualcuno ha dichiarato qualcosa. Una
+                      riga che dice «nessun deposito segnalato» su ogni
+                      classe e' una riga che si impara a saltare, e si
+                      porterebbe dietro anche quelle che contano.
+
+                      Il tasto scrive UNA DATA. Non chiude la
+                      contabilita', non muove la cassa contanti e non
+                      tocca l'importo della busta: quelli sono i due tasti
+                      qui sotto, ed e' voluto che siano separati — i soldi
+                      che una master consegna e i soldi che entrano nel
+                      cassetto sono gli stessi, ma «li ho in mano» e «sono
+                      in cassa» sono due momenti e due gesti. */}
+                  {promemoriaDeposito.dichiarato && (
+                    <div style={{ marginTop: 14, background: promemoriaDeposito.confermato ? "#F3FAF4" : "#FDF8EC", border: `1px solid ${promemoriaDeposito.confermato ? "#BFE0C2" : "#EBD9AE"}`, borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+                        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: promemoriaDeposito.confermato ? "#2E7D32" : "#8A6D1D" }}>
+                          {promemoriaDeposito.confermato
+                            ? `Deposito di ${nomeDeposito}: ricevuto`
+                            : `Deposito di ${nomeDeposito}: da ricevere`}
+                        </div>
+                        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
+                          {promemoriaDeposito.confermato
+                            ? `${nomeDeposito} ha segnalato il ${fmtData(promemoriaDeposito.dataDichiarato)} di aver lasciato ${euroRiepilogo(promemoriaDeposito.importo)}, e il ${fmtData(promemoriaDeposito.dataConferma)} è stato confermato. È un promemoria fra voi: la contabilità di questa classe la chiudi coi tasti qui sotto.`
+                            : `${nomeDeposito} ha segnalato il ${fmtData(promemoriaDeposito.dataDichiarato)} di aver lasciato ${euroRiepilogo(promemoriaDeposito.importo)} incassati in contanti a questo corso. Confermando, lei vede «conferma di ricevuta» con la data. Non chiude niente e non mette niente in cassa.`}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                        {promemoriaDeposito.confermato ? (
+                          <>
+                            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#2E7D32", borderRadius: 999, padding: "10px 18px", textAlign: "center" }}>
+                              Deposito ricevuto<br />
+                              <span style={{ fontWeight: 400, fontSize: 11.5 }}>{fmtData(promemoriaDeposito.dataConferma)}</span>
+                            </div>
+                            <button onClick={annullaConfermaDeposito} disabled={salvandoDeposito} style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "2px 0 0", textDecoration: "underline" }}>
+                              Non li abbiamo ricevuti
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={confermaDeposito}
+                            disabled={salvandoDeposito}
+                            title="Conferma di aver ricevuto questo contante. Scrive solo la data: non chiude la contabilità e non mette niente in cassa contanti"
+                            style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, background: "#E08A1E", color: "#fff", border: "1px solid #C77A18", borderRadius: 999, padding: "11px 20px", minHeight: 44, cursor: salvandoDeposito ? "default" : "pointer", opacity: salvandoDeposito ? 0.6 : 1 }}
+                          >
+                            {salvandoDeposito ? "Confermo…" : `Ricevuto deposito master ${euroRiepilogo(promemoriaDeposito.importo)}`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* I DUE TASTI. A sinistra il viaggio: giallo la busta
                       e' ancora qui e premerlo la chiude e la manda via,
                       arancione e' per strada e premerlo dichiara che e'
@@ -32475,8 +32609,7 @@ function PannelloRiepilogoAmministrativo({
                         {inCassaBusta
                           ? (statoViaggio === BUSTA_APERTA ? "Contante in cassa, senza spedizione" : "Busta ricevuta e depositata in cassa")
                           : statoViaggio === BUSTA_RICEVUTA ? "Busta ricevuta: da depositare in cassa"
-                            : statoViaggio === BUSTA_IN_VIAGGIO
-                              ? (nomeDeposito ? `Deposito di ${nomeDeposito}: da ricevere` : "Busta in viaggio")
+                            : statoViaggio === BUSTA_IN_VIAGGIO ? "Busta in viaggio"
                               : "La busta è ancora qui"}
                       </div>
                       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
@@ -32487,9 +32620,7 @@ function PannelloRiepilogoAmministrativo({
                           : statoViaggio === BUSTA_RICEVUTA
                             ? `Arrivata il ${fmtData(corsoData.busta_rientrata_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. In cassa contanti ci vanno quando premi «Deposita in cassa».`
                             : statoViaggio === BUSTA_IN_VIAGGIO
-                              ? (nomeDeposito
-                                ? `${nomeDeposito} ha dichiarato il deposito il ${fmtData(corsoData.busta_spedita_il)}: ${euroRiepilogo(corsoData.busta_importo || 0)} incassati in contanti al corso. Premendo qui a fianco confermi di averli ricevuti, poi «Deposita in cassa» li mette nel cassetto.`
-                                : `Partita il ${fmtData(corsoData.busta_spedita_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. Quando arriva premi il tasto arancione, poi «Deposita in cassa».`)
+                              ? `Partita il ${fmtData(corsoData.busta_spedita_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. Quando arriva premi il tasto arancione, poi «Deposita in cassa».`
                               : "Spedendola chiudi questa contabilità: non ci si aggiunge più niente, e le vendite in contanti che arrivano dopo aprono una busta loro. Se non deve viaggiare, «Deposita in cassa» la chiude e mette il contante nel cassetto adesso."}
                       </div>
                     </div>
@@ -32499,9 +32630,6 @@ function PannelloRiepilogoAmministrativo({
                           stato={statoViaggio}
                           disabilitato={salvandoBusta || (statoViaggio === BUSTA_APERTA && inCassaBusta)}
                           onPremi={statoViaggio === BUSTA_APERTA ? () => chiudiPrimaBusta("spedisci") : segnaBustaRicevuta}
-                          etichetta={statoViaggio === BUSTA_IN_VIAGGIO && nomeDeposito
-                            ? `Ricevuto deposito master ${euroRiepilogo(corsoData.busta_importo || 0)}`
-                            : undefined}
                           titolo={statoViaggio === BUSTA_APERTA
                             ? (inCassaBusta
                               ? "Questa busta non parte più: il suo contante è già stato depositato in cassa"
@@ -49748,14 +49876,17 @@ function contanteDaDepositare({ cd, iscritti, venditeShop, spese }) {
 
 // CHIUDERE LA CONTABILITA' DI UNA CLASSE, in un posto solo (12/11/2026).
 //
-// La chiusura la premono DUE persone da DUE pagine: l'amministrazione dal
-// Riepilogo amministrativo («Spedisci busta», oppure «Deposita in cassa»
-// quando la busta non deve viaggiare) e la master dalla sua dashboard
-// («Depositato», quando consegna il contante che ha incassato al corso).
-// Scrive sempre le stesse tre cose, e per questo e' una funzione sola:
-// due copie vorrebbero dire che un giorno una delle due si dimentica di
-// marcare le vendite, e le vendite del giorno dopo si sommerebbero a una
-// busta che non c'e' piu'.
+// La chiude SOLO l'amministrazione, dal Riepilogo amministrativo, con i
+// suoi due tasti: «Spedisci busta», oppure «Deposita in cassa» quando la
+// busta non deve viaggiare. Il tasto «Depositato» della dashboard master
+// NON passa da qui ed e' un promemoria — vedi `dichiaraDepositoMaster`
+// piu' sotto: la master segnala di aver lasciato i soldi, non chiude la
+// contabilita' di una classe dal telefono.
+//
+// Resta una funzione sola perche' sono due tasti, e due copie vorrebbero
+// dire che un giorno una delle due si dimentica di marcare le vendite, e
+// le vendite del giorno dopo si sommerebbero a una busta che non c'e'
+// piu'.
 //
 //   - la data: `busta_spedita_il` se parte, `busta_depositata_il` se il
 //     contante va dritto in cassa;
@@ -49770,13 +49901,10 @@ function contanteDaDepositare({ cd, iscritti, venditeShop, spese }) {
 // successo niente — oppure `{ venditeNonMarcate }` se la contabilita' e'
 // chiusa ma le vendite sono rimaste senza numero, che e' un conto che non
 // torna e va detto a chi ha premuto.
-async function chiudiContabilitaClasse({ corsoDataId, importo, modo = "spedisci", masterId = null }) {
+async function chiudiContabilitaClasse({ corsoDataId, importo, modo = "spedisci" }) {
   const campi = { busta_importo: importo, busta_vendite_marcate: true };
   if (modo === "deposita") campi.busta_depositata_il = dataOggiStr();
   else campi.busta_spedita_il = dataOggiStr();
-  // chi ha chiuso: serve solo a scrivere il nome giusto sui due tasti
-  // («Ricevuto deposito master Chiara» invece di «Busta in viaggio»)
-  if (masterId) campi.busta_spedita_da_master_id = masterId;
   const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoDataId);
   if (error) return { errore: testoErrore(error) };
   // TUTTE, non solo quelle in contanti: e' la marcatura che rende
@@ -49793,13 +49921,87 @@ async function chiudiContabilitaClasse({ corsoDataId, importo, modo = "spedisci"
 async function riapriContabilitaClasse(corsoDataId) {
   const { error } = await supabase.from("corsi_date").update({
     busta_spedita_il: null, busta_rientrata_il: null, busta_depositata_il: null,
-    busta_importo: null, busta_vendite_marcate: false, busta_spedita_da_master_id: null,
+    busta_importo: null, busta_vendite_marcate: false,
   }).eq("id", corsoDataId);
   if (error) return { errore: testoErrore(error) };
   const { error: erroreVendite } = await supabase.from("vendite_shop")
     .update({ busta_numero: null }).eq("corso_data_id", corsoDataId).eq("busta_numero", 1);
   if (erroreVendite) return { venditeNonMarcate: testoErrore(erroreVendite) };
   return {};
+}
+
+// LA STRETTA DI MANO DEL DEPOSITO (12/11/2026, correzione del titolare).
+//
+// «Il tasto della master non fa operazioni contabili, e' solo una
+// funzione di promemoria con cui la master segnala di aver lasciato i
+// soldi e l'amministrazione conferma di averli ricevuti.» E: «i soldi non
+// vanno a sommare in cassa, funge da deposito.»
+//
+// Quindi qui dentro si scrivono DUE DATE e nient'altro. Nessun importo
+// congelato, nessuna vendita marcata, nessuna cassa toccata: la
+// contabilita' della classe la chiude l'amministrazione coi suoi due
+// tasti, e il contante entra nella cassa contanti solo con
+// `busta_depositata_il`. Un promemoria che muovesse una cassa non
+// sarebbe un promemoria.
+//
+// L'importo si scrive perche' e' QUELLO CHE LA MASTER HA DICHIARATO di
+// aver lasciato, congelato alla dichiarazione: serve a chi conferma, e
+// serve se domani i conti della classe si muovono. Non e' l'importo
+// della busta — quello resta `busta_importo`, e lo scrive chi la chiude.
+//
+// Tutte e tre contano le righe cambiate: un update che non tocca niente
+// in PostgREST risponde «va bene», e un promemoria che dice di essere
+// partito e non c'e' e' peggio di nessun promemoria.
+const NESSUNA_RIGA_DEPOSITO = "il database non ha cambiato nessuna riga: ricarica la pagina e riprova.";
+async function dichiaraDepositoMaster({ corsoDataId, masterId, importo }) {
+  const { data, error } = await supabase.from("corsi_date").update({
+    deposito_master_il: dataOggiStr(),
+    deposito_master_da_id: masterId || null,
+    deposito_master_importo: round2(Number(importo) || 0),
+  }).eq("id", corsoDataId).select("id");
+  if (error) return { errore: testoErrore(error) };
+  if (!data || data.length === 0) return { errore: NESSUNA_RIGA_DEPOSITO };
+  return {};
+}
+// l'amministrazione conferma di aver ricevuto quel contante. E' la data
+// che la master legge come «conferma di ricevuta».
+async function confermaDepositoMaster(corsoDataId) {
+  const { data, error } = await supabase.from("corsi_date")
+    .update({ deposito_master_ricevuto_il: dataOggiStr() })
+    .eq("id", corsoDataId).select("id");
+  if (error) return { errore: testoErrore(error) };
+  if (!data || data.length === 0) return { errore: NESSUNA_RIGA_DEPOSITO };
+  return {};
+}
+// E i due passi indietro, perche' sono due dichiarazioni di persone e una
+// persona si sbaglia. `soloConferma` toglie la conferma e lascia in piedi
+// la dichiarazione della master: sono due gesti di due persone diverse, e
+// chi si e' sbagliato a confermare non deve cancellare quello che ha
+// dichiarato un'altra. Il vincolo del database dice la stessa cosa — una
+// conferma non esiste senza la sua dichiarazione — quindi togliendo la
+// dichiarazione si toglie anche la conferma.
+async function annullaDepositoMaster(corsoDataId, { soloConferma = false } = {}) {
+  const campi = soloConferma
+    ? { deposito_master_ricevuto_il: null }
+    : { deposito_master_il: null, deposito_master_da_id: null, deposito_master_importo: null, deposito_master_ricevuto_il: null };
+  const { data, error } = await supabase.from("corsi_date").update(campi).eq("id", corsoDataId).select("id");
+  if (error) return { errore: testoErrore(error) };
+  if (!data || data.length === 0) return { errore: NESSUNA_RIGA_DEPOSITO };
+  return {};
+}
+// Tutto quello che c'e' da sapere della stretta di mano di una classe,
+// letto in un posto solo: lo leggono la dashboard della master e il
+// Riepilogo amministrativo, che sono i due capi della stessa stretta.
+function depositoMasterDi(cd) {
+  const dichiarato = !!cd?.deposito_master_il;
+  return {
+    dichiarato,
+    confermato: !!cd?.deposito_master_ricevuto_il,
+    dataDichiarato: cd?.deposito_master_il || null,
+    dataConferma: cd?.deposito_master_ricevuto_il || null,
+    masterId: cd?.deposito_master_da_id || null,
+    importo: dichiarato ? round2(Number(cd.deposito_master_importo) || 0) : 0,
+  };
 }
 
 // le vendite che il Riepilogo della classe conta nella prima busta: tutte
@@ -49910,6 +50112,10 @@ function TastoBusta({ stato, onPremi, disabilitato, titolo, etichetta }) {
         flexShrink: 0,
       }}
     >
+      {/* `etichetta` la passano le APPENDICI, che non si chiamano «Spedisci
+          busta» ma «Spedisci busta 2». Non e' un parametro morto, ed e'
+          costato due prove rosse: la prima busta non la passa, le
+          appendici si'. */}
       {etichetta || a.etichetta}
     </button>
   );
@@ -91174,4 +91380,5 @@ export {
   PaginaContenutoKit, repartoPerProdotto, raggruppaPerReparto, SENZA_REPARTO,
   AssegnazioneMaster, PannelloRiepilogoAmministrativo,
   contanteDaDepositare, chiudiContabilitaClasse, PaginaDashboardMaster, CardDataMaster,
+  depositoMasterDi, dichiaraDepositoMaster, confermaDepositoMaster, annullaDepositoMaster,
 };
