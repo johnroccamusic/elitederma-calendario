@@ -13557,7 +13557,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita, comeAssistente = false }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita, comeAssistente = false, deposito = null }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -13980,6 +13980,67 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       </div>
       );
       })()}
+
+      {/* IL DEPOSITO DEL CONTANTE (12/11/2026). Chiesto dal titolare: «se
+          questa master ha incassato dei pagamenti in contanti, ci dovrà
+          essere un riepilogo con scritto "devi depositare euro"».
+
+          Sono gli stessi soldi della busta della classe, non un secondo
+          giro: «Depositato» chiude la contabilità di questa classe — da
+          lì le vendite che arrivano dopo ne aprono una aggiuntiva — e
+          l'amministrazione conferma di averla ricevuta. Quella conferma e'
+          la data che compare qui.
+
+          Il riquadro c'e' solo se del contante c'e' davvero: su un corso
+          senza incassi in contanti sarebbe una riga che si impara a
+          saltare. */}
+      {deposito && (
+        <>
+          <div style={filo} />
+          <div style={{ padding: spaziatura, background: deposito.stato === "confermato" ? "#F3FAF4" : deposito.stato === "dichiarato" ? "#FDF8EC" : "#FFF9F2", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 10 : 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                Contanti incassati a questo corso
+              </div>
+              <div style={{ ...fontDisplay, fontSize: isMobile ? 19 : 22, fontWeight: 700, color: deposito.stato === "confermato" ? "#2E7D32" : NAVY }}>
+                {deposito.stato === "confermato" ? "Deposito ricevuto" : "Devi depositare"} {fmtEuroErp2(deposito.importo)}
+              </div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, color: MUTED, lineHeight: 1.45, marginTop: 2 }}>
+                {deposito.stato === "confermato"
+                  ? `L'amministrazione ha confermato di averli ricevuti il ${fmtData(deposito.dataConferma)}.`
+                  : deposito.stato === "dichiarato"
+                    ? `Depositato il ${fmtData(deposito.dataDichiarato)}. L'amministrazione deve ancora confermare di averli ricevuti.`
+                    : deposito.premibile
+                      ? "Quando li hai consegnati, premi «Depositato»: da quel momento la contabilità di questo corso si chiude e quello che incassi dopo entra in una contabilità aggiuntiva."
+                      : "Lo dichiara la master dalla sua dashboard, oppure l'amministrazione dal Riepilogo della classe."}
+              </div>
+              {deposito.messaggio && (
+                <div style={{ ...fontBody, fontSize: 11.5, color: NAVY, marginTop: 6 }}>{deposito.messaggio}</div>
+              )}
+            </div>
+            {deposito.stato === "confermato" ? (
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#2E7D32", borderRadius: 999, padding: "11px 18px", flexShrink: 0, textAlign: "center" }}>
+                Conferma di ricevuta<br />
+                <span style={{ fontWeight: 400, fontSize: 11.5 }}>{fmtData(deposito.dataConferma)}</span>
+              </div>
+            ) : deposito.stato === "dichiarato" ? (
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: "#E08A1E", border: "1px solid #C77A18", borderRadius: 999, padding: "11px 18px", flexShrink: 0, textAlign: "center" }}>
+                Depositato<br />
+                <span style={{ fontWeight: 400, fontSize: 11.5 }}>{fmtData(deposito.dataDichiarato)}</span>
+              </div>
+            ) : deposito.premibile ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); deposito.onDeposita(); }}
+                disabled={deposito.salvando}
+                title="Dichiara di aver consegnato questo contante all'amministrazione"
+                style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, background: "#F3C53F", color: "#2A2F4A", border: "1px solid #D9A91F", borderRadius: 999, padding: "11px 22px", minHeight: 44, cursor: deposito.salvando ? "default" : "pointer", opacity: deposito.salvando ? 0.6 : 1, flexShrink: 0 }}
+              >
+                {deposito.salvando ? "Registro…" : "Depositato"}
+              </button>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -15009,7 +15070,7 @@ function PaginaDashboardAssistente({
   );
 }
 
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, assistenti = [], corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, ricarica = () => {}, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, assistenti = [], corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
@@ -15169,6 +15230,75 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // cancello — passa da master_vista, che conosce solo la classe di quel
   // token e restituisce i soli campi che la pagina disegna
   const [contabilitaClasse, setContabilitaClasse] = useState(null);
+
+  // IL DEPOSITO DEL CONTANTE (12/11/2026). Il titolare: «sulla scheda di
+  // ciascun corso, nella dashboard della master, se questa master ha
+  // incassato dei pagamenti in contanti, ci dovrà essere un riepilogo con
+  // scritto "devi depositare euro"».
+  //
+  // Le spese delle SUE classi, e solo quelle: servono a sapere quanto di
+  // quel contante e' gia' uscito dalla busta, cioe' a dire lo stesso
+  // numero che il Riepilogo amministrativo chiama «Cash pulito in busta».
+  // Si chiedono qui con una query mirata invece di caricare la tabella
+  // delle spese nella pagina di una master.
+  const [speseSueClassi, setSpeseSueClassi] = useState([]);
+  const idSueClassi = useMemo(() => sueInTutto.map((cd) => cd.id).sort().join(","), [sueInTutto]);
+  useEffect(() => {
+    const ids = idSueClassi ? idSueClassi.split(",") : [];
+    if (ids.length === 0) { setSpeseSueClassi([]); return undefined; }
+    let vivo = true;
+    (async () => {
+      const { data } = await supabase.from("spese")
+        .select("classe_id, totale, importo_pagato_cash, metodo_pagamento, origine, origine_scadenziario_chiave, busta_numero, stato, data_pagamento")
+        .in("classe_id", ids);
+      if (vivo) setSpeseSueClassi(data || []);
+    })();
+    return () => { vivo = false; };
+  }, [idSueClassi]);
+  const [depositando, setDepositando] = useState(null);
+  const [msgDeposito, setMsgDeposito] = useState("");
+  // Il tasto lo preme la master sulla PROPRIA dashboard: chi sfoglia
+  // quella di un'altra legge e basta, perche' quel contante non lo ha in
+  // mano lui.
+  const suaDashboard = !!masterLoggataId && masterSelId === masterLoggataId;
+  async function dichiaraDeposito(cd, importo) {
+    if (!suaDashboard || !masterLoggataId) return;
+    if (!window.confirm(`Hai depositato ${fmtEuroErp2(importo)} di questo corso?\n\nDa qui la contabilità di questa classe si chiude: le vendite in contanti o con POS che arrivano dopo aprono una contabilità aggiuntiva, con un suo giro.\n\nL'amministrazione confermerà di aver ricevuto il deposito, e qui comparirà la data.`)) return;
+    setDepositando(cd.id);
+    setMsgDeposito("");
+    const esito = await chiudiContabilitaClasse({ corsoDataId: cd.id, importo, modo: "spedisci", masterId: masterLoggataId });
+    setDepositando(null);
+    if (esito.errore) { setMsgDeposito("Non salvato: " + esito.errore); return; }
+    if (esito.venditeNonMarcate) { setMsgDeposito("Deposito registrato, ma le vendite di questo corso non sono state marcate: riprova, o i prossimi incassi finiranno in questa contabilità."); }
+    else setMsgDeposito(`Deposito di ${fmtEuroErp2(importo)} registrato: l'amministrazione lo confermerà.`);
+    ricarica(["corsi_date", "vendite_shop"]);
+  }
+
+  // Tutto quello che la card deve sapere del deposito di quella classe:
+  // quanto, com'e' adesso, e cosa si puo' premere. Lo stato e' quello
+  // della busta — sono gli stessi soldi, non un secondo giro: «Depositato»
+  // chiude la busta, l'amministrazione conferma di averla ricevuta
+  // (busta_rientrata_il) e quella data e' la «conferma di ricevuta» che la
+  // master legge qui.
+  function depositoDellaClasse(cd) {
+    const importo = contanteDaDepositare({ cd, iscritti, venditeShop, spese: speseSueClassi });
+    const chiusa = bustaChiusa(cd);
+    // niente contante, niente riquadro: non c'e' nessun deposito da fare
+    if (importo <= 0 && !chiusa) return null;
+    if (chiusa && importo <= 0 && !cd.busta_spedita_da_master_id) return null;
+    return {
+      importo,
+      stato: cd.busta_rientrata_il || cd.busta_depositata_il ? "confermato" : chiusa ? "dichiarato" : "da_depositare",
+      dataDichiarato: cd.busta_spedita_il || cd.busta_depositata_il || null,
+      dataConferma: cd.busta_rientrata_il || cd.busta_depositata_il || null,
+      daLei: !!cd.busta_spedita_da_master_id && cd.busta_spedita_da_master_id === masterLoggataId,
+      // una busta chiusa dall'amministrazione la master la legge e basta
+      premibile: suaDashboard && !chiusa,
+      salvando: depositando === cd.id,
+      messaggio: depositando === cd.id ? "" : msgDeposito,
+      onDeposita: () => dichiaraDeposito(cd, importo),
+    };
+  }
   // Le tre sezioni della dashboard, come nella dashboard venditori: una
   // fila di tessere in cima e sotto quella aperta. "corsi" e' la prima e
   // si apre da sola — e' quello che una master viene a cercare.
@@ -15622,6 +15752,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 inFinestraInventario={oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 7)}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
                 onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
+                deposito={depositoDellaClasse(cd)}
               />
             ))}
           </>
@@ -31182,6 +31313,16 @@ function PannelloRiepilogoAmministrativo({
   // si preme solo quello di destra.
   const statoViaggio = statoViaggioBusta(corsoData);
   const inCassaBusta = bustaDepositata(corsoData);
+  // IL DEPOSITO DELLA MASTER (12/11/2026). Se la busta l'ha chiusa una
+  // master dalla sua dashboard, qui non si legge «busta in viaggio» ma
+  // «ricevuto deposito master X»: e' lo stesso gesto — qualcuno dichiara
+  // di aver consegnato del contante e qualcun altro conferma di averlo
+  // ricevuto — ma chi guarda questo pannello deve sapere di chi sono quei
+  // soldi e chi li ha in mano.
+  const masterDelDeposito = corsoData.busta_spedita_da_master_id
+    ? (master || []).find((m) => m.id === corsoData.busta_spedita_da_master_id) || null
+    : null;
+  const nomeDeposito = masterDelDeposito?.nome ? String(masterDelDeposito.nome).toUpperCase() : "";
   const [salvandoBusta, setSalvandoBusta] = useState(false);
 
   // CHIUDERE la contabilita' della classe. Due strade, una scrittura sola:
@@ -31210,19 +31351,18 @@ function PannelloRiepilogoAmministrativo({
       : `Mettere ${fmtEuroErp2(cassaContantiClasse)} nella cassa contanti, senza spedire niente?\n\n${chiusura}\n\nQuesto contante entra in cassa adesso, con la data di oggi: usalo quando la busta non deve viaggiare perché è già qui.`;
     if (!window.confirm(domanda)) return;
     setSalvandoBusta(true);
-    const campi = { busta_importo: cassaContantiClasse };
-    if (modo === "spedisci") campi.busta_spedita_il = dataOggiStr();
-    else campi.busta_depositata_il = dataOggiStr();
-    const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoData.id);
-    if (error) { setSalvandoBusta(false); setMsg("Errore: " + testoErrore(error)); return; }
-    // Se questa seconda scrittura non riesce, la busta risulta chiusa ma
-    // le sue vendite restano senza numero: una vendita in contanti di
-    // domani finirebbe dentro questa busta invece di aprire l'appendice.
-    // E' un conto che non torna, quindi si dice.
-    const { error: erroreVendite } = await supabase.from("vendite_shop").update({ busta_numero: 1 }).eq("corso_data_id", corsoData.id).in("metodo_pagamento", ["contanti", "misto"]).is("busta_numero", null);
+    // la scrittura sta in `chiudiContabilitaClasse`, condivisa con la
+    // dashboard della master: la data, l'importo congelato e il numero 1
+    // su tutte le vendite
+    const esito = await chiudiContabilitaClasse({ corsoDataId: corsoData.id, importo: cassaContantiClasse, modo });
     setSalvandoBusta(false);
-    if (erroreVendite) {
-      setMsg(`Busta chiusa, ma le vendite in contanti non sono state marcate: ${testoErrore(erroreVendite)}. Riprova, o i prossimi incassi finiranno nella busta sbagliata.`);
+    if (esito.errore) { setMsg("Errore: " + esito.errore); return; }
+    // Se la seconda scrittura non riesce, la busta risulta chiusa ma le
+    // sue vendite restano senza numero: una vendita di domani finirebbe
+    // dentro questa busta invece di aprire la contabilita' aggiuntiva.
+    // E' un conto che non torna, quindi si dice.
+    if (esito.venditeNonMarcate) {
+      setMsg(`Busta chiusa, ma le vendite non sono state marcate: ${esito.venditeNonMarcate}. Riprova, o i prossimi incassi finiranno nella busta sbagliata.`);
       ricarica(["corsi_date", "vendite_shop"]);
       return;
     }
@@ -31279,12 +31419,11 @@ function PannelloRiepilogoAmministrativo({
     }
     if (!window.confirm(domanda)) return;
     setSalvandoBusta(true);
-    const { error } = await supabase.from("corsi_date").update({ busta_spedita_il: null, busta_rientrata_il: null, busta_depositata_il: null, busta_importo: null }).eq("id", corsoData.id);
-    if (error) { setSalvandoBusta(false); setMsg("Errore: " + testoErrore(error)); return; }
-    const { error: erroreVendite } = await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", corsoData.id).eq("busta_numero", 1);
+    const esito = await riapriContabilitaClasse(corsoData.id);
     setSalvandoBusta(false);
-    if (erroreVendite) {
-      setMsg(`Busta riaperta, ma le sue vendite hanno ancora il numero 1: ${testoErrore(erroreVendite)}. Finché resta così quegli incassi non tornano in questa contabilità.`);
+    if (esito.errore) { setMsg("Errore: " + esito.errore); return; }
+    if (esito.venditeNonMarcate) {
+      setMsg(`Busta riaperta, ma le sue vendite hanno ancora il numero 1: ${esito.venditeNonMarcate}. Finché resta così quegli incassi non tornano in questa contabilità.`);
       ricarica(["corsi_date", "vendite_shop"]);
       return;
     }
@@ -31422,7 +31561,14 @@ function PannelloRiepilogoAmministrativo({
     const a = appendici.aperta;
     if (!a || a.vuota) return;
     if (a.cashDaDisporre > 0) { setMsg("Prima disponi i pagamenti, poi chiudi la busta."); return; }
-    const domanda = modo === "spedisci"
+    // Una contabilita' aggiuntiva fatta di sole vendite con carta non ha
+    // niente da trasportare e niente da versare: il gesto non e'
+    // «spedisci» ne' «deposita», e' «chiudi». La riga nasce comunque, con
+    // importo zero, perche' e' lei a chiudere questa e a far nascere la
+    // successiva.
+    const domanda = a.contanti === 0
+      ? `Chiudere la contabilità ${a.numero} (${fmtEuroErp2(a.pulito)} di contante)?\n\nQui dentro non c'è contante da consegnare: ci sono ${a.vendite.length} vendit${a.vendite.length === 1 ? "a" : "e"} incassate con carta. Chiudendola, le vendite che arrivano dopo apriranno la busta ${a.numero + 1}.`
+      : modo === "spedisci"
       ? `Spedire la busta ${a.numero} con ${fmtEuroErp2(a.pulito)}?\n\nSi chiude: le vendite in contanti che arrivano dopo apriranno la busta ${a.numero + 1}. L'importo si congela ed entra in cassa quando qualcuno, al suo arrivo, premerà «Deposita in cassa».`
       : `Mettere ${fmtEuroErp2(a.pulito)} della busta ${a.numero} nella cassa contanti, senza spedire niente?\n\nSi chiude: le vendite in contanti che arrivano dopo apriranno la busta ${a.numero + 1}. Questo contante entra in cassa adesso, con la data di oggi.`;
     if (!window.confirm(domanda)) return;
@@ -32329,7 +32475,8 @@ function PannelloRiepilogoAmministrativo({
                         {inCassaBusta
                           ? (statoViaggio === BUSTA_APERTA ? "Contante in cassa, senza spedizione" : "Busta ricevuta e depositata in cassa")
                           : statoViaggio === BUSTA_RICEVUTA ? "Busta ricevuta: da depositare in cassa"
-                            : statoViaggio === BUSTA_IN_VIAGGIO ? "Busta in viaggio"
+                            : statoViaggio === BUSTA_IN_VIAGGIO
+                              ? (nomeDeposito ? `Deposito di ${nomeDeposito}: da ricevere` : "Busta in viaggio")
                               : "La busta è ancora qui"}
                       </div>
                       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
@@ -32340,7 +32487,9 @@ function PannelloRiepilogoAmministrativo({
                           : statoViaggio === BUSTA_RICEVUTA
                             ? `Arrivata il ${fmtData(corsoData.busta_rientrata_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. In cassa contanti ci vanno quando premi «Deposita in cassa».`
                             : statoViaggio === BUSTA_IN_VIAGGIO
-                              ? `Partita il ${fmtData(corsoData.busta_spedita_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. Quando arriva premi il tasto arancione, poi «Deposita in cassa».`
+                              ? (nomeDeposito
+                                ? `${nomeDeposito} ha dichiarato il deposito il ${fmtData(corsoData.busta_spedita_il)}: ${euroRiepilogo(corsoData.busta_importo || 0)} incassati in contanti al corso. Premendo qui a fianco confermi di averli ricevuti, poi «Deposita in cassa» li mette nel cassetto.`
+                                : `Partita il ${fmtData(corsoData.busta_spedita_il)} con ${euroRiepilogo(corsoData.busta_importo || 0)}. Quando arriva premi il tasto arancione, poi «Deposita in cassa».`)
                               : "Spedendola chiudi questa contabilità: non ci si aggiunge più niente, e le vendite in contanti che arrivano dopo aprono una busta loro. Se non deve viaggiare, «Deposita in cassa» la chiude e mette il contante nel cassetto adesso."}
                       </div>
                     </div>
@@ -32350,6 +32499,9 @@ function PannelloRiepilogoAmministrativo({
                           stato={statoViaggio}
                           disabilitato={salvandoBusta || (statoViaggio === BUSTA_APERTA && inCassaBusta)}
                           onPremi={statoViaggio === BUSTA_APERTA ? () => chiudiPrimaBusta("spedisci") : segnaBustaRicevuta}
+                          etichetta={statoViaggio === BUSTA_IN_VIAGGIO && nomeDeposito
+                            ? `Ricevuto deposito master ${euroRiepilogo(corsoData.busta_importo || 0)}`
+                            : undefined}
                           titolo={statoViaggio === BUSTA_APERTA
                             ? (inCassaBusta
                               ? "Questa busta non parte più: il suo contante è già stato depositato in cassa"
@@ -32419,7 +32571,9 @@ function PannelloRiepilogoAmministrativo({
                       {appendici.chiuse.map((b, idx) => (
                         <details key={b.id} style={{ marginBottom: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px" }}>
                           <summary style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: appendiceDepositata(b) ? "#2E7D32" : "#C77A18", cursor: "pointer" }}>
-                            {appendiceDepositata(b)
+                            {round2(b.importo || 0) === 0 && appendiceDepositata(b)
+                              ? `Contabilità ${b.numero} chiusa il ${fmtData(b.depositata_il)} — nessun contante`
+                              : appendiceDepositata(b)
                               ? `Busta ${b.numero} in cassa — ${fmtData(b.depositata_il)} — ${euroRiepilogo(b.importo || 0)}${b.spedita_il ? "" : " — non è mai partita"}`
                               : b.rientrata_il
                                 ? `Busta ${b.numero} ricevuta, da depositare — ${euroRiepilogo(b.importo || 0)}`
@@ -32445,8 +32599,14 @@ function PannelloRiepilogoAmministrativo({
                                 </button>
                               ) : <span />}
                               {/* gli stessi due tasti della prima busta: il
-                                  viaggio e la cassa */}
+                                  viaggio e la cassa. Su una contabilita'
+                                  senza contante non c'e' ne' viaggio ne'
+                                  cassa: un verde solo, che dice che e'
+                                  chiusa. */}
                               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                {round2(b.importo || 0) === 0 && appendiceDepositata(b) ? (
+                                  <TastoBusta stato={BUSTA_IN_CASSA} etichetta={`Contabilità ${b.numero} chiusa`} titolo="Niente contante: non c'era nulla da consegnare né da versare" />
+                                ) : <>
                                 <TastoBusta
                                   stato={statoViaggioAppendice(b)}
                                   disabilitato={salvandoAppendice || (statoViaggioAppendice(b) === BUSTA_APERTA && appendiceDepositata(b))}
@@ -32468,6 +32628,7 @@ function PannelloRiepilogoAmministrativo({
                                       ? "Si accende quando la busta è arrivata: prima premi il tasto arancione"
                                       : "Il contante entra nella cassa contanti, con la data di oggi"}
                                 />
+                                </>}
                               </div>
                             </div>
                           </div>
@@ -32524,22 +32685,36 @@ function PannelloRiepilogoAmministrativo({
                             </div>
                             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", lineHeight: 1.45 }}>
-                                Chiudendola le vendite in contanti che arrivano dopo apriranno la busta {a.numero + 1}. Spedendola, in cassa contanti ci va quando qualcuno la riceve e la deposita; se non deve viaggiare, «Deposita in cassa» la chiude e mette il contante nel cassetto adesso.
+                                {a.contanti === 0
+                                  ? `Qui dentro non c'è contante: niente da spedire e niente da versare in cassa. Chiudendola, le vendite che arrivano dopo apriranno la busta ${a.numero + 1}.`
+                                  : <>Chiudendola le vendite che arrivano dopo apriranno la busta {a.numero + 1}. Spedendola, in cassa contanti ci va quando qualcuno la riceve e la deposita; se non deve viaggiare, «Deposita in cassa» la chiude e mette il contante nel cassetto adesso.</>}
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <TastoBusta
-                                  stato={BUSTA_APERTA}
-                                  disabilitato={salvandoAppendice}
-                                  onPremi={() => chiudiAppendice("spedisci")}
-                                  etichetta={`Spedisci busta ${a.numero}`}
-                                  titolo="Chiude questa busta e la manda via: da qui non ci si aggiunge più niente"
-                                />
-                                <TastoBusta
-                                  stato={BUSTA_DA_DEPOSITARE}
-                                  disabilitato={salvandoAppendice}
-                                  onPremi={() => chiudiAppendice("deposita")}
-                                  titolo="La busta non deve viaggiare: chiude questa contabilità e mette il contante in cassa adesso"
-                                />
+                                {a.contanti === 0 ? (
+                                  <TastoBusta
+                                    stato={BUSTA_APERTA}
+                                    disabilitato={salvandoAppendice}
+                                    onPremi={() => chiudiAppendice("deposita")}
+                                    etichetta={`Chiudi contabilità ${a.numero}`}
+                                    titolo="Niente contante da consegnare: chiude questa contabilità e fa nascere la successiva"
+                                  />
+                                ) : (
+                                  <>
+                                    <TastoBusta
+                                      stato={BUSTA_APERTA}
+                                      disabilitato={salvandoAppendice}
+                                      onPremi={() => chiudiAppendice("spedisci")}
+                                      etichetta={`Spedisci busta ${a.numero}`}
+                                      titolo="Chiude questa busta e la manda via: da qui non ci si aggiunge più niente"
+                                    />
+                                    <TastoBusta
+                                      stato={BUSTA_DA_DEPOSITARE}
+                                      disabilitato={salvandoAppendice}
+                                      onPremi={() => chiudiAppendice("deposita")}
+                                      titolo="La busta non deve viaggiare: chiude questa contabilità e mette il contante in cassa adesso"
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -49410,7 +49585,14 @@ function provenienzaClasse(cd, corsi, location) {
 const FUORI_BUSTA = 0;
 function datiEreditatiDallaVendita(originale, totaleRiga = null) {
   if (!originale) return {};
-  const inBustaChiusa = incassaContanti(originale.metodo_pagamento) && !!originale.corso_data_id && originale.busta_numero != null;
+  // (12/11/2026) non piu' solo per i contanti: da quando la chiusura marca
+  // ogni vendita, una vendita con carta che porta un numero di busta sta in
+  // una contabilita' chiusa esattamente come una in contanti, e la sua
+  // riga negativa non deve entrare in quella aperta. Sulle vendite con
+  // carta di prima del 12/11 il numero non c'e', quindi li' non cambia
+  // niente. Nella cassa contanti una riga FUORI_BUSTA con carta non entra
+  // comunque: quel filtro guarda il metodo.
+  const inBustaChiusa = !!originale.corso_data_id && originale.busta_numero != null;
   return {
     corso_data_id: originale.corso_data_id || null,
     evento_id: originale.evento_id || null,
@@ -49517,13 +49699,109 @@ const ASPETTO_BUSTA = {
   [BUSTA_IN_CASSA]: { etichetta: "In cassa", sfondo: "#2E7D32", bordo: "#2E7D32", testo: "#fff", premibile: false },
 };
 
-// una vendita in contanti che non sta nella prima busta, quando la prima
-// busta e' gia' chiusa: e' materia di un'appendice. La soglia e' la
-// CHIUSURA — spedizione o deposito diretto — e non l'arrivo, ed e' tutto
-// il punto di questa storia
+// Una vendita della classe che non sta nella prima busta, quando la prima
+// busta e' gia' chiusa: e' materia della contabilita' aggiuntiva. La
+// soglia e' la CHIUSURA — spedizione o deposito diretto — e non l'arrivo,
+// ed e' tutto il punto di questa storia.
+//
+// VALE PER OGNI METODO, NON SOLO PER I CONTANTI (12/11/2026). Il titolare:
+// «se la busta è stata spedita, nel caso in cui la master riceve un
+// pagamento al corso in contanti O CON POS, si apre una contabilità
+// aggiuntiva e non viene intaccata quella che già è stata spedita.» Una
+// vendita con carta non entra in nessuna busta — non ci sono banconote da
+// portare — ma appartiene a una contabilita', e se quella e' chiusa
+// appartiene alla successiva.
+//
+// `busta_vendite_marcate` e' la condizione, e non e' un dettaglio: dice che
+// quella chiusura ha marcato con il numero 1 TUTTE le vendite della
+// classe. Dove e' false — le 41 buste chiuse prima del 12/11/2026 — erano
+// marcate solo quelle in contanti, quindi una vendita con carta senza
+// numero vuol dire «non marcata» e non «arrivata dopo»: leggerla come
+// «dopo» sposterebbe 3.561 € di vendite di settembre e ottobre fuori dalla
+// prima contabilita' di 15 classi chiuse. La regola vale da adesso in
+// avanti, ed e' una scelta del titolare.
 function venditaInAppendice(v, cd) {
-  return bustaChiusa(cd) && incassaContanti(v.metodo_pagamento) && v.busta_numero !== 1;
+  if (!bustaChiusa(cd) || v.busta_numero === 1) return false;
+  return incassaContanti(v.metodo_pagamento) || !!cd?.busta_vendite_marcate;
 }
+// QUANTO CONTANTE HA IN MANO LA MASTER per una classe (12/11/2026).
+//
+// E' lo STESSO numero del «Cash pulito in busta» del Riepilogo
+// amministrativo, e lo e' perche' lo calcola la stessa funzione: i soldi
+// che la master consegna e i soldi che la busta porta sono gli stessi, e
+// due conti li farebbero diventare due cifre — quella sbagliata sarebbe
+// sempre quella che si guarda.
+//
+// Il contante incassato al corso meno quello che da quella busta e' gia'
+// uscito (le spese pagate in contanti e registrate). A busta chiusa
+// comanda l'importo congelato: e' quello che qualcuno ha contato.
+function contanteDaDepositare({ cd, iscritti, venditeShop, spese }) {
+  if (bustaChiusa(cd)) return round2(Number(cd.busta_importo) || 0);
+  const conti = contiRiepilogoClasse({
+    incassiExtra: Array.isArray(cd.incassi_extra) ? cd.incassi_extra : [],
+    listaIscritti: (iscritti || []).filter((i) => i.corso_data_id === cd.id),
+    venditeAlCorso: venditeDellaPrimaBusta(venditeShop, cd),
+    speseClasse: speseDellaPrimaBusta(spese, cd.id),
+  });
+  return conti.cassaContanti;
+}
+
+// CHIUDERE LA CONTABILITA' DI UNA CLASSE, in un posto solo (12/11/2026).
+//
+// La chiusura la premono DUE persone da DUE pagine: l'amministrazione dal
+// Riepilogo amministrativo («Spedisci busta», oppure «Deposita in cassa»
+// quando la busta non deve viaggiare) e la master dalla sua dashboard
+// («Depositato», quando consegna il contante che ha incassato al corso).
+// Scrive sempre le stesse tre cose, e per questo e' una funzione sola:
+// due copie vorrebbero dire che un giorno una delle due si dimentica di
+// marcare le vendite, e le vendite del giorno dopo si sommerebbero a una
+// busta che non c'e' piu'.
+//
+//   - la data: `busta_spedita_il` se parte, `busta_depositata_il` se il
+//     contante va dritto in cassa;
+//   - l'importo CONGELATO, perche' e' il momento in cui qualcuno ha
+//     contato delle banconote;
+//   - il numero 1 su TUTTE le vendite della classe che non ne hanno uno,
+//     con qualunque metodo di pagamento, e `busta_vendite_marcate` che lo
+//     dichiara: da li' in poi una vendita senza numero e' per definizione
+//     arrivata dopo, ed e' della contabilita' aggiuntiva.
+//
+// Torna `{ errore }` se la data non si e' scritta — e allora non e'
+// successo niente — oppure `{ venditeNonMarcate }` se la contabilita' e'
+// chiusa ma le vendite sono rimaste senza numero, che e' un conto che non
+// torna e va detto a chi ha premuto.
+async function chiudiContabilitaClasse({ corsoDataId, importo, modo = "spedisci", masterId = null }) {
+  const campi = { busta_importo: importo, busta_vendite_marcate: true };
+  if (modo === "deposita") campi.busta_depositata_il = dataOggiStr();
+  else campi.busta_spedita_il = dataOggiStr();
+  // chi ha chiuso: serve solo a scrivere il nome giusto sui due tasti
+  // («Ricevuto deposito master Chiara» invece di «Busta in viaggio»)
+  if (masterId) campi.busta_spedita_da_master_id = masterId;
+  const { error } = await supabase.from("corsi_date").update(campi).eq("id", corsoDataId);
+  if (error) return { errore: testoErrore(error) };
+  // TUTTE, non solo quelle in contanti: e' la marcatura che rende
+  // conoscibile il «dopo» anche per il POS. Nessuna eccezione per gli
+  // omaggi o per le righe negative — appartengono a questa contabilita'
+  // esattamente come le altre, e chi non le conta le salta per conto suo.
+  const { error: erroreVendite } = await supabase.from("vendite_shop")
+    .update({ busta_numero: 1 }).eq("corso_data_id", corsoDataId).is("busta_numero", null);
+  if (erroreVendite) return { venditeNonMarcate: testoErrore(erroreVendite) };
+  return {};
+}
+// E RIAPRIRLA: la busta torna sul tavolo, le sue vendite perdono il numero
+// e la marcatura se ne va con loro.
+async function riapriContabilitaClasse(corsoDataId) {
+  const { error } = await supabase.from("corsi_date").update({
+    busta_spedita_il: null, busta_rientrata_il: null, busta_depositata_il: null,
+    busta_importo: null, busta_vendite_marcate: false, busta_spedita_da_master_id: null,
+  }).eq("id", corsoDataId);
+  if (error) return { errore: testoErrore(error) };
+  const { error: erroreVendite } = await supabase.from("vendite_shop")
+    .update({ busta_numero: null }).eq("corso_data_id", corsoDataId).eq("busta_numero", 1);
+  if (erroreVendite) return { venditeNonMarcate: testoErrore(erroreVendite) };
+  return {};
+}
+
 // le vendite che il Riepilogo della classe conta nella prima busta: tutte
 // finche' la busta e' aperta, poi solo quelle contate quel giorno
 function venditeDellaPrimaBusta(venditeShop, cd) {
@@ -49556,7 +49834,12 @@ function righeProdottiVendite(vendite) {
 // non con quelli soltanto scritti.
 function contiAppendici({ cd, venditeShop, spese, buste }) {
   if (!bustaChiusa(cd)) return { chiuse: [], aperta: null };
-  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && incassaContanti(v.metodo_pagamento));
+  // ci entrano le vendite che venditaInAppendice riconosce come «di dopo»:
+  // in contanti sempre, con la carta dove la chiusura ha marcato tutto.
+  // Una domanda sola, in un posto solo — prima questo filtro chiedeva
+  // `incassaContanti` per conto suo, e una vendita con carta non compariva
+  // in nessuna delle due contabilita' ma veniva contata nella prima.
+  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === cd.id && v.tipo_movimento !== "omaggio" && (incassaContanti(v.metodo_pagamento) || !!cd?.busta_vendite_marcate));
   const speseCorso = (spese || []).filter((x) => x.classe_id === cd.id && x.busta_numero > 1);
   const chiuse = (buste || []).filter((b) => b.corso_data_id === cd.id).sort((a, b) => a.numero - b.numero).map((b) => {
     const vendite = venditeCorso.filter((v) => v.busta_numero === b.numero);
@@ -58542,8 +58825,12 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
           // qui si puo' solo abbassare l'importo congelato
           const nuovo = Math.max(0, round2((Number(cd.busta_importo) || 0) - incassoContantiDi(v)));
           const { error: e2 } = await supabase.from("corsi_date").update({ busta_importo: nuovo }).eq("id", cd.id);
-          // e la vendita non e' piu' "della prima busta"
-          await supabase.from("vendite_shop").update({ busta_numero: null }).eq("id", v.id);
+          // (12/11/2026) la vendita RESTA nella prima contabilita' — il
+          // numero 1 non si toglie — perche' da quando il numero vale per
+          // ogni metodo, «senza numero» vuol dire «arrivata dopo la
+          // chiusura»: azzerarlo la sposterebbe nella contabilita'
+          // aggiuntiva, dove non e' mai stata. Quello che cambia e' il
+          // contante dentro la busta, e scende qui sopra.
           if (!e2) bustaRiaperta = `. La busta del corso ha già delle appendici e non si riapre: il suo importo scende a ${fmtEuroErp2(nuovo)}`;
         } else {
           await supabase.from("vendite_shop").update({ busta_numero: null }).eq("corso_data_id", v.corso_data_id).eq("busta_numero", 1);
@@ -90190,7 +90477,7 @@ function Gestionale() {
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
-          masterLoggataId={utenteLoggato?.masterId || null}
+          masterLoggataId={utenteLoggato?.masterId || null} ricarica={fetchDati}
           sceltaLibera={!!utenteLoggato?.masterId && (utenteLoggato.permessi || []).includes("impostazioni")}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterImpostazioni={puntiMasterImpostazioni} regoleReferralAutomatico={regoleReferralAutomatico}
@@ -90886,4 +91173,5 @@ export {
   BUSTA_APERTA, BUSTA_IN_VIAGGIO, BUSTA_RICEVUTA, BUSTA_DA_DEPOSITARE, BUSTA_IN_CASSA,
   PaginaContenutoKit, repartoPerProdotto, raggruppaPerReparto, SENZA_REPARTO,
   AssegnazioneMaster, PannelloRiepilogoAmministrativo,
+  contanteDaDepositare, chiudiContabilitaClasse, PaginaDashboardMaster, CardDataMaster,
 };

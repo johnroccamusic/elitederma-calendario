@@ -1778,6 +1778,146 @@ cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
 altro modo le sfugge — non sostituisce la lettura del codice, la rende
 ripetibile.
 
+### La contabilità aggiuntiva vale anche per il POS (12/11/2026)
+
+Il titolare: «verifica che se la busta è stata spedita, nel caso in cui la
+master riceve un pagamento al corso in contanti **o con POS**, si apre una
+contabilità aggiuntiva e non viene intaccata quella che già è stata
+spedita. La nuova contabilità aggiuntiva avrà un suo percorso e dovrà
+essere chiusa a parte.»
+
+**Verificato, e la risposta era «no» per metà.** Per i contanti funzionava
+(è il lavoro dell'11/11). Per il POS no: una vendita con carta fatta dopo
+la chiusura **finiva dentro la prima contabilità**, quella già chiusa e
+portata via. Misurato con la busta spedita e tre vendite — una dentro, una
+in contanti dopo, una POS dopo: `venditeDellaPrimaBusta` tornava
+`[v1, v3]`, e l'appendice raccoglieva solo `v2`.
+
+**La causa non era la regola, era la marcatura.** `venditaInAppendice`
+chiedeva `incassaContanti`, ma sotto c'era di peggio: alla chiusura si
+scriveva `busta_numero = 1` **solo sulle vendite in contanti**. Per il POS
+non esisteva nessuna marcatura, quindi una vendita con carta fatta prima e
+una fatta dopo erano **indistinguibili in archivio**: il «dopo» non era
+conoscibile, e la regola non si poteva nemmeno scrivere.
+
+**Adesso la chiusura marca TUTTE le vendite della classe**, con qualunque
+metodo, omaggi e righe negative compresi: `busta_numero` non vuol più dire
+«in quale busta stanno questi contanti» ma **«a quale contabilità della
+classe appartiene questa riga»**. Se sta nell'envelope lo dice il metodo di
+pagamento, non il numero.
+
+**Ma il passato non si riscrive, ed è una scelta del titolare**
+(«allinea solo le classi aperte non ancora in cassa, la regola vale da
+adesso in avanti»). Le 41 buste chiuse prima di oggi hanno solo i contanti
+marcati: là una vendita con carta senza numero vuol dire «non marcata», non
+«arrivata dopo». Leggerla come «dopo» avrebbe spostato **3.561 € di 33
+vendite** fuori dalla prima contabilità di **15 classi** di settembre e
+ottobre, riaprendo conti a posto. Per questo esiste
+`corsi_date.busta_vendite_marcate`: dice se quella chiusura ha marcato
+tutto, e **solo dove è true** la regola vale anche per il POS. Misurato
+prima di toccare: le classi con la busta chiusa e non ancora in cassa sono
+**zero**, quindi l'allineamento autorizzato tocca zero righe e l'archivio
+non è stato modificato.
+
+Tre conseguenze, tutte volute:
+
+- **Una contabilità aggiuntiva può non avere contante.** Fatta di sole
+  vendite con carta esiste, ha il suo elenco e va chiusa, ma non c'è niente
+  da spedire né da versare: al posto dei due tasti ce n'è **uno**, «Chiudi
+  contabilità N», che scrive la riga con importo zero ed è lei a far
+  nascere la successiva. In «In arrivo» **non compare**, perché quel
+  riquadro parla di contante che sta per arrivare; il semaforo della classe
+  invece resta arancione, perché c'è una contabilità da chiudere.
+- **Una vendita che esce dalla busta non cambia contabilità.** In
+  `sganciaDallaBusta`, quando la busta ha già delle appendici e non si può
+  riaprire, il numero 1 **non si toglie più**: azzerarlo adesso vorrebbe
+  dire spostare quella vendita nella contabilità aggiuntiva, dove non è mai
+  stata. Quello che scende è il contante dentro la busta.
+- **La correzione di una contabilità chiusa non entra in quella aperta.**
+  `datiEreditatiDallaVendita` non chiede più `incassaContanti`: una vendita
+  con carta che porta un numero sta in una contabilità chiusa esattamente
+  come una in contanti, quindi la sua riga negativa porta `FUORI_BUSTA`.
+  Sulle vendite con carta di prima del 12/11 il numero non c'è, quindi là
+  non cambia niente.
+
+Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
+inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
+marcato tutto, e **non** vale dove non ha marcato.
+
+### Il deposito della master è la busta della classe (12/11/2026)
+
+Il titolare: «sulla scheda di ciascun corso, nella dashboard della master,
+nel caso in cui questa master abbia incassato dei pagamenti in contanti, ci
+dovrà essere un riepilogo con scritto "devi depositare euro". Dopodiché,
+una volta che la master ha depositato, ci deve essere a fianco un tasto con
+scritto "depositato", e quando la master schiaccia il tasto depositato si
+accende un tasto sul riepilogo amministrativo di Stefano, Elena, John,
+Chiara, con scritto "ricevuto deposito master euro", e la master a sua
+volta nella dashboard il tasto deposita si trasforma in "conferma di
+ricevuta" con vicino la data.»
+
+**Chiesto al titolare prima di scrivere una riga, perché la risposta
+cambiava il modello dei dati: sono gli stessi soldi della busta di quella
+classe, o una cosa a parte?** Risposta: **è la busta della classe.** Quindi
+la dashboard della master è **l'altro capo della stessa stretta di mano**,
+non un secondo giro:
+
+| Chi | Dove | Gesto | Cosa scrive |
+|---|---|---|---|
+| la master | dashboard, scheda del corso | «Depositato» | `busta_spedita_il`, l'importo congelato, il numero 1 su tutte le vendite, `busta_spedita_da_master_id` |
+| l'amministrazione | Riepilogo amministrativo | «Ricevuto deposito master € X» | `busta_rientrata_il` |
+| l'amministrazione | Riepilogo amministrativo | «Deposita in cassa» | `busta_depositata_il` |
+| la master | dashboard | legge «Conferma di ricevuta» con la data | niente |
+
+**Un importo solo, e lo calcola una funzione sola.**
+`contanteDaDepositare` chiama `contiRiepilogoClasse` — la stessa del
+Riepilogo amministrativo — e restituisce esattamente il «Cash pulito in
+busta»: il contante incassato al corso meno quello che da quella busta è
+già uscito. A busta chiusa comanda l'importo congelato. Due conti sugli
+stessi soldi avrebbero prodotto due cifre, e quella sbagliata sarebbe
+sempre stata quella che si guarda.
+
+**E una chiusura sola**, `chiudiContabilitaClasse`: la premono due persone
+da due pagine diverse e scrive sempre le stesse tre cose. Due copie
+vorrebbero dire che un giorno una delle due si dimentica di marcare le
+vendite — ed è esattamente il guasto appena corretto qui sopra.
+
+Quattro decisioni:
+
+- **Il riquadro c'è solo se del contante c'è davvero.** Su un corso senza
+  incassi in contanti sarebbe una riga che si impara a saltare, e si
+  porterebbe dietro anche quelle che contano.
+- **Il tasto lo preme la master sulla PROPRIA dashboard.** Chi sfoglia
+  quella di un'altra legge l'importo e lo stato, ma non preme: quel
+  contante non lo ha in mano lui. Una busta chiusa dall'amministrazione la
+  master la legge e basta.
+- **Le spese arrivano con una query mirata**, `spese` filtrate sulle sue
+  classi, invece di caricare la tabella delle spese dentro la pagina di una
+  master. Servono a una cosa sola: sapere quanto di quel contante è già
+  uscito dalla busta.
+- **La master vede un importo in euro**, e qui è un'eccezione voluta: nel
+  resto della dashboard gli euro dei carrelli non si mostrano
+  (`vedeIncassiDashboardMaster`). Questi sono soldi che ha in mano lei, e
+  senza la cifra il riquadro non direbbe niente.
+
+**Quello che NON è stato fatto, e va saputo.** Il tasto della master
+**non** ha la guardia dei pagamenti in contanti ancora da disporre, che
+invece ferma «Spedisci busta» nel Riepilogo: per sapere quanto una classe
+deve ancora pagare in contanti serve `calcolaRigheSpeseCorso`, che vuole i
+compensi di tutti i master e i listini — roba che non va nel browser di una
+master. Se l'amministrazione dispone dei pagamenti **dopo** che la master
+ha depositato, se ne accorge il riquadro dello scostamento, che già esiste
+per questo («nella busta sono stati chiusi X, i conti di oggi dicono Y»)
+e lo decide una persona. Va ridetto, non indovinato.
+
+Migrazione `20261112170000_contabilita_aggiuntiva_e_deposito_master.sql`
+(le due colonne, rollback dentro). Prove in
+`prove/deposito-master.test.jsx` (10): il numero che coincide con quello
+del Riepilogo, i tre stati della scheda, chi può premere, il nome della
+master sul tasto arancione, e la dashboard montata per davvero — premere
+«Depositato» congela 350 €, scrive chi ha chiuso, la marcatura e il numero
+1 sulle vendite.
+
 ### «Ricevuta» e «in cassa» sono due cose (12/11/2026)
 
 Il titolare: «il tasto "ricevuta e in cassa" diventa solo "ricevuta", e

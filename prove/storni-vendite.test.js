@@ -25,9 +25,18 @@ describe("datiEreditatiDallaVendita", () => {
     expect(datiEreditatiDallaVendita({ ...VENDITA, busta_numero: 1 }).busta_numero).toBe(FUORI_BUSTA);
     expect(datiEreditatiDallaVendita({ ...VENDITA, busta_numero: 2 }).busta_numero).toBe(FUORI_BUSTA);
   });
-  it("una vendita al banco senza corso o con carta non e' mai 'in busta'", () => {
+  it("una vendita al banco senza corso non e' mai 'in busta'", () => {
     expect(datiEreditatiDallaVendita({ ...VENDITA, corso_data_id: null, busta_numero: 1 }).busta_numero).toBeNull();
-    expect(datiEreditatiDallaVendita({ ...VENDITA, metodo_pagamento: "pos", busta_numero: 1 }).busta_numero).toBeNull();
+  });
+  it("e dal 12/11/2026 anche una vendita CON CARTA che porta un numero sta in una contabilita' chiusa", () => {
+    // da quando la chiusura marca ogni vendita, un numero su una vendita
+    // con carta vuol dire «appartiene a quella contabilita'», e la sua
+    // riga negativa non deve entrare in quella aperta. Nella cassa
+    // contanti non entra comunque: quel filtro guarda il metodo.
+    expect(datiEreditatiDallaVendita({ ...VENDITA, metodo_pagamento: "pos", busta_numero: 1 }).busta_numero).toBe(0);
+    // una vendita con carta SENZA numero — tutte quelle di prima del
+    // 12/11 — resta com'era: la sua riga negativa non va fuori busta
+    expect(datiEreditatiDallaVendita({ ...VENDITA, metodo_pagamento: "pos", busta_numero: null }).busta_numero).toBeNull();
   });
 });
 
