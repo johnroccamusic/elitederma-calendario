@@ -22,7 +22,9 @@ describe("Cassa contanti per mese", () => {
         { id: "m2", data: "2026-09-15", tipo: "prelievo", motivo: "Prelevati", importo: 200 },
       ],
       "corsi_date_buste": [],
-      "corsi_date": [{ id: "cd1", busta_rientrata_il: "2026-09-20", busta_importo: 500 }],
+      // in cassa ci entra con la data del DEPOSITO, non con quella in cui
+      // la busta e' arrivata in amministrazione
+      "corsi_date": [{ id: "cd1", busta_rientrata_il: "2026-09-20", busta_depositata_il: "2026-09-20", busta_importo: 500 }],
       "vendite_shop": [{ totale: 50, evento_id: null, data_ordine: "2026-10-10T10:00:00" }],
       "spese": [{ id: "s1", descrizione: "Cancelleria", totale: 30, metodo_pagamento: "Cassa contanti", stato: "pagata", data_pagamento: "2026-10-12", classe_id: null, evento_id: null, origine: "manuale", origine_scadenziario_chiave: null }],
       "cassa_spese_ricorrenti": [],

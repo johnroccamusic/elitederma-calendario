@@ -1778,6 +1778,100 @@ cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
 altro modo le sfugge — non sostituisce la lettura del codice, la rende
 ripetibile.
 
+### «Ricevuta» e «in cassa» sono due cose (12/11/2026)
+
+Il titolare: «il tasto "ricevuta e in cassa" diventa solo "ricevuta", e
+sblocca un nuovo tasto che si chiama "Deposita in cassa" che si trova
+sulla destra. Quindi, quando si preme "spedisci busta", "deposita in
+cassa" si disattiva fintanto che non è su "ricevuta". Mentre se Stefano è
+già a Roma e non ha bisogno di spedire la busta, preme direttamente
+"Deposita in cassa", che disattiva il tasto "spedisci busta".»
+
+**Ieri le tappe erano tre e il giorno dopo erano quattro**, per lo stesso
+motivo per cui ieri da due erano diventate tre: due momenti che sembravano
+uno. La busta arriva in amministrazione, e il contante entra nel cassetto
+quando qualcuno lo mette nel cassetto — e in mezzo passano delle ore o un
+giorno, in cui quei soldi sono su una scrivania e non in cassa.
+
+**Sono DUE tasti**, perché sono due storie della stessa busta: a sinistra
+il **viaggio** (dov'è l'oggetto), a destra la **cassa** (dove sono i
+soldi).
+
+| | Tasto | Cosa scrive | Cosa vuol dire |
+|---|---|---|---|
+| giallo | «Spedisci busta» | `busta_spedita_il`, `busta_importo` congelato, `busta_numero = 1` sulle vendite | la contabilità si chiude: non ci si aggiunge più niente |
+| arancione | «Busta in viaggio» | `busta_rientrata_il` | è arrivata in amministrazione. I soldi **non** sono ancora in cassa |
+| verde chiaro | «Ricevuta» | niente, non si preme | |
+| navy | «Deposita in cassa» | `busta_depositata_il` | **adesso** quel contante è nella cassa contanti |
+| verde pieno | «In cassa» | niente, non si preme | |
+
+**Il verde pieno sta su una cosa sola: i soldi nel cassetto.** Se lo
+portassero tutti e due i tasti, due verdi affiancati direbbero «fatto»
+mentre il contante è ancora in una borsa — che è esattamente il guasto da
+cui vengono queste due giornate.
+
+**E c'è la busta che non viaggia.** Se chi incassa e chi tiene la cassa
+sono nello stesso posto non c'è niente da spedire: «Deposita in cassa» si
+preme da subito, chiude la contabilità e **spegne il tasto giallo**.
+Quella busta resta scritta come **non partita e non ricevuta**, perché è
+quello che è successo: in archivio si riconosce per `busta_depositata_il`
+piena con le altre due vuote, e il pannello lo dice («non è mai partita»).
+
+Quattro decisioni, e ognuna per un motivo:
+
+- **La soglia che chiude la contabilità non è più «è partita», è «è
+  chiusa»** (`bustaChiusa`, che ha sostituito `bustaSpedita` in tutte le
+  letture). Ci portano tre strade — spedita, ricevuta, depositata senza
+  mai partire — e si guardano tutte e tre: una lettura che si fidasse di
+  una colonna sola riaprirebbe la contabilità di una classe chiusa se
+  quella colonna mancasse. **Il deposito diretto chiude la contabilità
+  come la spedizione**, ed è la cosa che conta per le vendite che arrivano
+  dopo: la master che resta in aula apre comunque la busta 2.
+- **Una chiusura, non due.** `chiudiPrimaBusta(modo)` è una funzione sola
+  per i due tasti che chiudono: congela l'importo, marca le vendite col
+  numero 1 e scrive la data giusta. Due funzioni avrebbero voluto dire due
+  idee di cosa chiude una contabilità, e un giorno una delle due si
+  sarebbe dimenticata di marcare le vendite. Per lo stesso motivo il
+  rifiuto coi **pagamenti in contanti ancora da disporre** vale per tutti
+  e due: depositare dei soldi già promessi a qualcuno è lo stesso errore
+  che spedirli.
+- **La cassa contanti legge `busta_depositata_il`**, e le appendici
+  `depositata_il`. È l'unica riga di contabilità che è cambiata, ed è
+  quella che conta: una busta arrivata e appoggiata sulla scrivania non è
+  in cassa, e dirlo sarebbe un saldo che non si trova. La migrazione ha
+  riempito la data del deposito con quella del rientro su **tutte e 41**
+  le buste storiche e sull'unica appendice: senza quel backfill il saldo
+  della cassa avrebbe perso 41 buste in un colpo.
+- **Un passo indietro per tasto, e la cassa viene prima.** Dal viaggio:
+  «non è ancora arrivata» (ricevuta → in viaggio), «non è partita» (in
+  viaggio → aperta). Dalla cassa: «rimettila fuori dalla cassa». Con il
+  contante **già in cassa il viaggio non si corregge** — prima si tira
+  fuori dal cassetto — e il passo indietro sul viaggio non compare
+  nemmeno. E se la busta non era mai partita, rimetterla fuori dalla cassa
+  **riapre tutta la contabilità**: quel deposito era l'unica cosa che la
+  teneva chiusa.
+
+**Il semaforo e «In arrivo» hanno cambiato soglia.** Verde adesso vuol
+dire *tutto depositato*: una busta ricevuta e non depositata è arancione
+quanto una per strada. E in «In arrivo» le due attese si leggono
+separate — «In viaggio: da ricevere» e «Ricevuta: da depositare in cassa»
+— perché sono due attese diverse: una la sblocca il corriere, l'altra un
+gesto in ufficio.
+
+**Le appendici hanno gli stessi due tasti**, deposito diretto compreso.
+Quindi `corsi_date_buste.spedita_il` **non è più obbligatoria** (la riga
+può nascere dal deposito), e al suo posto c'è il vincolo
+`corsi_date_buste_partita_o_depositata`: una riga né partita né
+depositata non vuol dire niente.
+
+Migrazione `20261112120000_la_busta_si_deposita.sql`, con il rollback
+scritto dentro — e il rollback **rimette «ricevuta»** dove c'era solo il
+deposito, o la versione precedente perderebbe quelle buste dalla cassa.
+Prove in `prove/busta-si-spedisce.test.jsx` (15, la regola) e
+`prove/busta-si-spedisce-il-gesto.test.jsx` (18, il pannello montato: i
+cinque stati dei due tasti, cosa scrive ognuno, il deposito diretto che
+spegne il giallo, i passi indietro e i due rifiuti).
+
 ### La busta si spedisce, poi arriva (11/11/2026)
 
 Il titolare: «ci deve essere un tasto giallo che si chiama "spedisci

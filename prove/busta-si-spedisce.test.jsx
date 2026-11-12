@@ -15,35 +15,35 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import "./preparazione.js";
 import {
-  bustaSpedita, statoPrimaBusta, statoAppendice, venditaInAppendice,
+  bustaChiusa, statoViaggioBusta, statoViaggioAppendice, venditaInAppendice,
   venditeDellaPrimaBusta, contiAppendici, semaforoContabilita, contabilitaDaApprovare,
-  BUSTA_APERTA, BUSTA_IN_VIAGGIO, BUSTA_IN_CASSA,
+  BUSTA_APERTA, BUSTA_IN_VIAGGIO, BUSTA_RICEVUTA,
 } from "../src/App.jsx";
 
 const APERTA = { id: "cd1" };
 const IN_VIAGGIO = { id: "cd1", busta_spedita_il: "2026-11-09", busta_importo: 300 };
-const IN_CASSA = { id: "cd1", busta_spedita_il: "2026-11-09", busta_rientrata_il: "2026-11-11", busta_importo: 300 };
+const IN_CASSA = { id: "cd1", busta_spedita_il: "2026-11-09", busta_rientrata_il: "2026-11-11", busta_depositata_il: "2026-11-11", busta_importo: 300 };
 // com'e' scritta in archivio una delle 41 buste di prima della migrazione,
 // se per qualunque ragione la data di spedizione mancasse
-const VECCHIA = { id: "cd1", busta_rientrata_il: "2026-10-20", busta_importo: 300 };
+const VECCHIA = { id: "cd1", busta_rientrata_il: "2026-10-20", busta_depositata_il: "2026-10-20", busta_importo: 300 };
 const vendita = (id, extra = {}) => ({ id, corso_data_id: "cd1", tipo_movimento: "vendita", metodo_pagamento: "contanti", totale: 100, busta_numero: null, prodotti: [], ...extra });
 
-describe("le tre tappe", () => {
-  it("aperta, in viaggio, in cassa", () => {
-    expect(statoPrimaBusta(APERTA)).toBe(BUSTA_APERTA);
-    expect(statoPrimaBusta(IN_VIAGGIO)).toBe(BUSTA_IN_VIAGGIO);
-    expect(statoPrimaBusta(IN_CASSA)).toBe(BUSTA_IN_CASSA);
+describe("le tappe del viaggio", () => {
+  it("aperta, in viaggio, ricevuta", () => {
+    expect(statoViaggioBusta(APERTA)).toBe(BUSTA_APERTA);
+    expect(statoViaggioBusta(IN_VIAGGIO)).toBe(BUSTA_IN_VIAGGIO);
+    expect(statoViaggioBusta(IN_CASSA)).toBe(BUSTA_RICEVUTA);
   });
-  it("una busta arrivata è per forza partita, anche se la data di spedizione manca", () => {
-    // le letture si appoggiano a bustaSpedita: fidarsi della sola colonna
-    // nuova riaprirebbe la contabilità di una classe chiusa mesi fa
-    expect(bustaSpedita(VECCHIA)).toBe(true);
-    expect(statoPrimaBusta(VECCHIA)).toBe(BUSTA_IN_CASSA);
-    expect(bustaSpedita(APERTA)).toBe(false);
+  it("una busta arrivata chiude la contabilità, anche se la data di spedizione manca", () => {
+    // le letture si appoggiano a bustaChiusa: fidarsi di una colonna sola
+    // riaprirebbe la contabilità di una classe chiusa mesi fa
+    expect(bustaChiusa(VECCHIA)).toBe(true);
+    expect(statoViaggioBusta(VECCHIA)).toBe(BUSTA_RICEVUTA);
+    expect(bustaChiusa(APERTA)).toBe(false);
   });
-  it("un'appendice esiste solo da quando è partita", () => {
-    expect(statoAppendice({ numero: 2, spedita_il: "2026-11-10" })).toBe(BUSTA_IN_VIAGGIO);
-    expect(statoAppendice({ numero: 2, spedita_il: "2026-11-10", rientrata_il: "2026-11-12" })).toBe(BUSTA_IN_CASSA);
+  it("un'appendice partita è in viaggio, e arrivata è ricevuta", () => {
+    expect(statoViaggioAppendice({ numero: 2, spedita_il: "2026-11-10" })).toBe(BUSTA_IN_VIAGGIO);
+    expect(statoViaggioAppendice({ numero: 2, spedita_il: "2026-11-10", rientrata_il: "2026-11-12" })).toBe(BUSTA_RICEVUTA);
   });
 });
 
@@ -88,12 +88,12 @@ describe("il semaforo", () => {
   it("arancione mentre è per strada: quel contante non è in nessun cassetto", () => {
     expect(sem(IN_VIAGGIO)).toBe("arancione");
   });
-  it("arancione anche con un'appendice partita e non arrivata", () => {
+  it("arancione anche con un'appendice partita e non depositata", () => {
     expect(sem(IN_CASSA, [{ id: "b2", corso_data_id: "cd1", numero: 2, spedita_il: "2026-11-10", rientrata_il: null, importo: 50 }])).toBe("arancione");
   });
-  it("verde solo quando è tutto arrivato", () => {
+  it("verde solo quando è tutto in cassa", () => {
     expect(sem(IN_CASSA)).toBe("verde");
-    expect(sem(IN_CASSA, [{ id: "b2", corso_data_id: "cd1", numero: 2, spedita_il: "2026-11-10", rientrata_il: "2026-11-12", importo: 50 }])).toBe("verde");
+    expect(sem(IN_CASSA, [{ id: "b2", corso_data_id: "cd1", numero: 2, spedita_il: "2026-11-10", rientrata_il: "2026-11-12", depositata_il: "2026-11-12", importo: 50 }])).toBe("verde");
   });
 });
 
@@ -103,9 +103,9 @@ describe("«In arrivo»: una busta per strada è proprio quello che sta per arri
     const r = contabilitaDaApprovare({ ...base, corsiDate: [IN_VIAGGIO] });
     expect(r.quante).toBe(1);
     expect(r.totale).toBe(300);
-    expect(r.righe[0].inViaggio).toBe(true);
+    expect(r.righe[0].attesa).toBe("in_viaggio");
   });
-  it("una busta arrivata e senza appendici non è più in arrivo", () => {
+  it("una busta depositata e senza appendici non è più in arrivo", () => {
     expect(contabilitaDaApprovare({ ...base, corsiDate: [IN_CASSA] }).quante).toBe(0);
   });
   it("e un'appendice in viaggio ci entra come la prima busta", () => {
@@ -113,6 +113,6 @@ describe("«In arrivo»: una busta per strada è proprio quello che sta per arri
     expect(r.quante).toBe(1);
     expect(r.totale).toBe(50);
     expect(r.righe[0].appendice.numero).toBe(2);
-    expect(r.righe[0].inViaggio).toBe(true);
+    expect(r.righe[0].attesa).toBe("in_viaggio");
   });
 });

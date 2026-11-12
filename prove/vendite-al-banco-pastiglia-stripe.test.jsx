@@ -61,7 +61,7 @@ describe("cambiare il metodo sistema anche la busta", () => {
       "rest/v1/corsi_date_buste": [],
       "rest/v1/corsi_date": (corpo, url) => { if (corpo) scritture.push(["corsi_date", corpo, url]); return []; },
     });
-    const cd = { id: "cd1", busta_rientrata_il: "2026-10-20", busta_importo: 20 };
+    const cd = { id: "cd1", busta_spedita_il: "2026-10-19", busta_rientrata_il: "2026-10-20", busta_depositata_il: "2026-10-20", busta_importo: 20 };
     const vendite = [{ ...base, id: "v-cash", numero_ordine: "POS-3", totale: 20, metodo_pagamento: "contanti", corso_data_id: "cd1", busta_numero: 1 }];
     const p = await monta(<PaginaVenditeShop venditeShop={vendite} corsiDate={[cd]} origine="pos" ricarica={async () => {}} onBack={() => {}} ruoloUtente="amministratore" />);
     await attendi(150);
@@ -73,8 +73,9 @@ describe("cambiare il metodo sistema anche la busta", () => {
     await clicca(p.tasto("Conferma")); await attendi(200);
     expect(scritture.find((x) => x[0] === "vendite_shop" && x[1].metodo_pagamento === "pos")).toBeTruthy();
     // la busta torna APERTA, non solo fuori dalla cassa: si azzerano tutte
-    // e due le date, o resterebbe «in viaggio» una busta che e' sul tavolo
-    expect(scritture.find((x) => x[0] === "corsi_date" && x[1].busta_rientrata_il === null && x[1].busta_spedita_il === null)).toBeTruthy();
+    // e tre le date, o resterebbe «in viaggio» o «ricevuta» una busta che
+    // e' sul tavolo
+    expect(scritture.find((x) => x[0] === "corsi_date" && x[1].busta_rientrata_il === null && x[1].busta_spedita_il === null && x[1].busta_depositata_il === null)).toBeTruthy();
     expect(p.testo()).toContain("Incasso cambiato da Contanti a POS");
     expect(p.testo()).toContain("busta del corso torna aperta sul tavolo");
     await p.smonta();
