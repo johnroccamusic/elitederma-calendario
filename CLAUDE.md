@@ -1844,6 +1844,88 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
+### Più di una slide per corso (14/11/2026)
+
+Il titolare: «in associa slide al corso avrei bisogno, una volta
+inserita la prima slide del corso, di un segno + che permetta di
+caricare una seconda slide per lo stesso corso».
+
+**Il «+» è la punta; sotto c'era che le slide erano una sola e scritte
+in due posti.** Il PDF in tre colonne di `corsi`
+(`slide_pdf_path/_nome/_caricato_il`), il link in una riga di
+`impostazioni_layout_tabelle` (chiave `slide_link_corsi`, una mappa
+corso → indirizzo). Da lì veniva la regola «o il PDF o il link, mai
+tutti e due», scritta nel browser: non era una scelta, era il fatto che
+il posto fosse **uno solo per tipo**.
+
+Adesso le slide sono **righe** di `corsi_slide` (migrazione
+`20261114110000`): `tipo` pdf|link, `titolo`, `percorso`+`nome` oppure
+`url`, `ordine`. Quante ne servono, dei due tipi insieme, in fila. Un
+vincolo nel database (`corsi_slide_pdf_o_link`) impedisce la riga a
+metà, che esisterebbe senza vedersi da nessuna parte — il modo in cui
+una slide sparisce senza errori.
+
+**I due posti di prima sono stati chiusi nello stesso giro**: le tre
+colonne di `corsi` sono state eliminate e la riga delle impostazioni
+cancellata, dopo aver travasato **4 PDF e 14 link su 18 corsi** — lo
+stesso 18 che la pagina scriveva prima della migrazione. Una colonna che
+sembra viva e non lo è è peggio di una che manca; il rollback, che
+ricostruisce tutti e due i posti dalla prima slide di ogni corso, è
+scritto dentro il file — e dice che tornando indietro **si perdono le
+slide oltre la prima**.
+
+Quattro decisioni:
+
+- **PDF e link stanno nella stessa fila.** Per la master sono la stessa
+  cosa — quello che proietta in aula — e due liste separate vorrebbero
+  dire due ordini che non si parlano. Le slide nuove si **accodano**:
+  l'ordine lo decide chi carica, caricando.
+- **Il titolo è facoltativo, ed è il prezzo di ammissione della
+  richiesta.** Con due link accanto, due tasti «Apri link» identici
+  sulla scheda della master non dicono quale sia quale — e un link, a
+  differenza di un file, un nome suo non ce l'ha. `nomeSlide` sceglie:
+  il titolo, poi il nome del file, poi «Slide 1», «Slide 2». Con **una**
+  sola slide senza titolo si legge quello che si è sempre letto —
+  «Apri link», «Scarica le slide» — perché dare un nome a una cosa sola
+  è un'informazione che non serve.
+- **Un riquadro oro solo, con dentro una riga per link**, e non un
+  riquadro per link: «SLIDE CORSO» scritto tre volte di fila su una
+  scheda che ha già sei tasti è rumore.
+- **Le due finestre non cambiano**: i PDF compaiono una settimana prima
+  dell'inizio e spariscono con l'ultimo giorno; i link ci sono sempre.
+  La regola vive in `SlideDelCorsoMaster`, in un posto solo, perché la
+  scheda la disegnano **due** pagine (dashboard master e dashboard
+  assistente) e due copie vorrebbero dire sette giorni di qua e nessuna
+  di là.
+
+Nella pagina di Setting ogni corso ha le sue slide numerate, con la
+casella del nome che si salva uscendo (come il nome di un pacchetto: non
+c'è niente da confermare, e un tasto «Salva» per una parola facoltativa
+è un tasto che non si preme), e i due tasti in alto a destra che da
+«Carica PDF»/«Carica link» diventano **«+ PDF»/«+ Link»** appena una
+slide c'è. Togliere **chiede**, e la domanda nomina quale: davanti a tre
+righe «sei sicuro» non dice niente. Il file si cancella dal secchio solo
+**dopo** che la riga è sparita davvero, e un upload la cui riga non si
+scrive viene tolto dal secchio: al contrario resterebbe un file che
+nessuno può più collegare a niente.
+
+**`corsi_slide` va chiesta** nella mappa delle viste di `App.jsx` per
+`slidecorsi`, `dashboardmaster` e `dashboardassistente` — la regola di
+sempre: elenco vuoto = tabella non chiesta.
+
+Prove in `prove/piu-slide-per-corso.test.jsx` (16): l'ordine e i nomi, la
+pagina montata (il «+» che compare solo dove una slide c'è già, il
+secondo link che scrive una riga nuova con `ordine` in fondo, il nome
+che si salva, il togliere che chiede e col «no» non scrive), e la scheda
+della master — un link solo che resta «Apri link», due che si
+distinguono per nome, un tasto per PDF, e i PDF che fuori dalla finestra
+spariscono mentre i link restano.
+
+**Una cosa imparata dal banco:** una prova che fa uscire il fuoco da una
+casella deve mandare **`focusout`**, non `blur`. React ascolta alla
+radice e `blur` non bolle: la scrittura non parte mai e la prova sembra
+accusare il codice.
+
 ### Un kit si spegne, e resta (14/11/2026)
 
 Il titolare: «metti sulla barra di ogni kit un selettore che spegne il

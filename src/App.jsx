@@ -13059,17 +13059,48 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
 // firma solo chi e' dentro la finestra.
 const BUCKET_SLIDE = "slide-corsi";
 const GIORNI_ANTICIPO_SLIDE = 7;
-// Oltre al PDF, un corso puo' avere un LINK (una presentazione online, un
-// video, una pagina): sta fra le impostazioni condivise, una mappa
-// corso -> indirizzo, cosi' non serve una colonna nuova. Si apre dentro
+// PIU' DI UNA SLIDE PER CORSO (14/11/2026). Prima ne esisteva UNA, e
+// per giunta scritta in due posti secondo il tipo: il PDF in tre colonne
+// di `corsi`, il link in una riga delle impostazioni condivise. Da li'
+// veniva la regola «o il PDF o il link, mai tutti e due», che non era
+// una scelta ma il fatto che il posto fosse uno solo per tipo.
+//
+// Adesso le slide sono RIGHE di `corsi_slide`: quante ne servono, dei
+// due tipi insieme, in ordine. Oltre al PDF un corso puo' avere un LINK
+// (una presentazione online, un video, una pagina), che si apre dentro
 // l'app a tutto schermo.
-const CHIAVE_LINK_SLIDE_CORSI = "slide_link_corsi";
 function normalizzaLinkSlide(testo) {
   const t = String(testo || "").trim();
   if (!t) return null;
   const conSchema = /^https?:\/\//i.test(t) ? t : `https://${t}`;
   try { return new URL(conSchema).href; } catch { return null; }
 }
+
+// Le slide di un corso, nel loro ordine. PDF e link stanno nella STESSA
+// fila: per la master sono la stessa cosa — quello che proietta in aula —
+// e due liste separate vorrebbero dire due ordini che non si parlano.
+function slideDelCorso(corsiSlide, corsoId) {
+  return (corsiSlide || [])
+    .filter((s) => s.corso_id === corsoId)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0)
+      || String(a.caricato_il || "").localeCompare(String(b.caricato_il || "")));
+}
+
+// Come si chiama una slide: il titolo scritto da chi l'ha caricata; se
+// non c'e', il nome del file per un PDF; se non c'e' nemmeno quello, il
+// suo posto nella fila. E' il prezzo di ammissione del «piu' di una»:
+// due tasti «Apri link» identici accanto non dicono quale sia quale, e
+// un link, a differenza di un file, un nome suo non ce l'ha.
+function nomeSlide(s, indice = 0) {
+  const titolo = String(s?.titolo || "").trim();
+  if (titolo) return titolo;
+  if (s?.tipo === "pdf" && String(s?.nome || "").trim()) return String(s.nome).trim();
+  return `Slide ${indice + 1}`;
+}
+
+// «Il database non ha cambiato nessuna riga»: un update o un delete senza
+// `.select` risponde «va bene» anche a zero righe toccate.
+const NESSUNA_RIGA_SLIDE = "il database non ha cambiato nessuna riga: ricarica la pagina e riprova.";
 
 // L'indirizzo da mettere nella cornice. Canva, Google Presentazioni e
 // YouTube rifiutano la pagina normale dentro un altro sito, ma hanno
@@ -13148,43 +13179,45 @@ function VisoreLinkSchermoIntero({ url, titolo, onChiudi }) {
   );
 }
 
-// Il tasto "Apri link" sulla scheda del corso della master: c'e' sempre,
-// se il corso ha un link. Lo schermo intero si chiede nel clic stesso,
-// perche' il browser lo concede solo dentro un gesto dell'utente
-function TastoApriLinkSlide({ corso }) {
+// I link delle slide sulla scheda del corso della master: ci sono
+// sempre, se il corso ne ha. Lo schermo intero si chiede dentro il clic,
+// perche' il browser lo concede solo dentro un gesto dell'utente.
+//
+// Da quando le slide sono piu' di una, questo e' UN riquadro con dentro
+// una riga per link, e non un riquadro per link: «Slide corso» scritto
+// tre volte di fila su una scheda che ha gia' sei tasti e' rumore.
+function TastoApriLinkSlide({ link = [], nomeCorso = "" }) {
   const isMobile = useIsMobile();
-  const [linkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
-  const [aperto, setAperto] = useState(false);
+  // la slide aperta a tutto schermo, e quella appena copiata: si tiene
+  // l'id e non un booleano, perche' adesso i link possono essere piu' di
+  // uno e «aperto» da solo non dice quale
+  const [aperto, setAperto] = useState(null);
   // "Copia link": se il visore resta bianco perche' il sito rifiuta di
   // stare dentro un'altra pagina, la master lo incolla in un browser a
   // parte.
-  //
-  // Sta QUI, prima del return, e non piu' in mezzo al componente. Il link
-  // delle slide arriva dalle impostazioni condivise, cioe' un attimo dopo
-  // il primo disegno: al primo giro `url` e' vuoto, si usciva subito e i
-  // hook erano cinque; appena il link arrivava si andava avanti e
-  // diventavano sei. React conta gli hook, e quando il numero cambia
-  // spegne tutto — "Rendered more hooks than during the previous render",
-  // la dashboard di Martina Mei che si apriva su una pagina di errore.
-  // Succedeva solo alle master che hanno un corso con le slide.
-  const [copiato, setCopiato] = useState(false);
-  const url = corso ? (linkSlide || {})[corso.id] : null;
-  if (!url) return null;
-  function apri(e) {
+  const [copiato, setCopiato] = useState(null);
+  // TUTTI gli hook stanno PRIMA di qualunque uscita, e non e' pignoleria:
+  // quando i link arrivavano dalle impostazioni condivise, al primo
+  // disegno la lista era vuota, si usciva subito e gli hook erano cinque;
+  // appena arrivavano diventavano sei. React li conta, e quando il numero
+  // cambia spegne tutto — «Rendered more hooks than during the previous
+  // render», la dashboard di Martina Mei che si apriva su un errore.
+  if (!link.length) return null;
+  function apri(e, s) {
     e.stopPropagation();
     // un sito che non si puo' incorniciare (Firefox lo dice a chiare
     // lettere) si apre in una finestra nuova, e lo schermo intero lo fa
     // il sito stesso, come la modalita' "Presenta" di Canva
-    if (!urlIncorniciabile(url)) { window.open(url, "_blank", "noopener"); return; }
+    if (!urlIncorniciabile(s.url)) { window.open(s.url, "_blank", "noopener"); return; }
     const el = document.documentElement;
     const richiesta = el.requestFullscreen || el.webkitRequestFullscreen;
     if (richiesta) { try { const r = richiesta.call(el); if (r && r.catch) r.catch(() => {}); } catch { /* si resta nella finestra */ } }
-    setAperto(true);
+    setAperto(s);
   }
-  async function copia(e) {
+  async function copia(e, s) {
     e.stopPropagation();
-    try { await navigator.clipboard.writeText(url); setCopiato(true); setTimeout(() => setCopiato(false), 1800); }
-    catch { window.prompt("Copia il link:", url); }
+    try { await navigator.clipboard.writeText(s.url); setCopiato(s.id); setTimeout(() => setCopiato(null), 1800); }
+    catch { window.prompt("Copia il link:", s.url); }
   }
   // Un terzo in meno di tutto: testi, spaziature, raggi e icone. Le
   // misure restano scritte com'erano e passano di qui, cosi' la
@@ -13197,22 +13230,29 @@ function TastoApriLinkSlide({ corso }) {
     border: `1px solid ${pieno ? NAVY : CREAM_BORDER}`, borderRadius: q(12), padding: isMobile ? `${q(6)}px ${q(9)}px` : `${q(7)}px ${q(12)}px`, cursor: "pointer",
     display: "inline-flex", alignItems: "center", gap: q(5), whiteSpace: "nowrap",
   });
+  // con un link solo e senza nome si legge «Apri link», come e' sempre
+  // stato: dare un nome a una cosa sola e' un'informazione che non serve
+  const unoSolo = link.length === 1 && !String(link[0].titolo || "").trim();
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: q(8), flexWrap: "wrap", background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: q(14), padding: isMobile ? `${q(5)}px ${q(8)}px` : `${q(6)}px ${q(10)}px` }}>
       <span style={{ ...fontBody, fontSize: isMobile ? q(9.5) : q(10.5), fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.1, textAlign: "center" }}>Slide<br />corso</span>
-      <button onClick={apri} style={stileTasto(true)}>
-        <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
-        Apri link
-      </button>
-      <button onClick={copia} style={stileTasto(false)} title="Copia l'indirizzo, per incollarlo in un browser a parte">
-        {copiato ? (
-          <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-        ) : (
-          <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>
-        )}
-        {copiato ? "Copiato" : "Copia link"}
-      </button>
-      {aperto && <VisoreLinkSchermoIntero url={url} titolo={corso.nome} onChiudi={() => setAperto(false)} />}
+      {link.map((s, i) => (
+        <span key={s.id} data-slide-link="" style={{ display: "inline-flex", alignItems: "center", gap: q(5) }}>
+          <button onClick={(e) => apri(e, s)} style={stileTasto(true)}>
+            <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14 21 3M15 3h6v6M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
+            {unoSolo ? "Apri link" : nomeSlide(s, i)}
+          </button>
+          <button onClick={(e) => copia(e, s)} style={stileTasto(false)} title="Copia l'indirizzo, per incollarlo in un browser a parte">
+            {copiato === s.id ? (
+              <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+            ) : (
+              <svg width={q(13)} height={q(13)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>
+            )}
+            {copiato === s.id ? "Copiato" : "Copia link"}
+          </button>
+        </span>
+      ))}
+      {aperto && <VisoreLinkSchermoIntero url={aperto.url} titolo={nomeCorso} onChiudi={() => setAperto(null)} />}
     </div>
   );
 }
@@ -13224,10 +13264,11 @@ function slideDisponibiliPer(corsoData, oggiStr = dataOggiStr()) {
   return oggiStr >= addGiorni(corsoData.data_inizio, -GIORNI_ANTICIPO_SLIDE) && oggiStr <= corsoData.data_fine;
 }
 
-// Il tasto che la master vede sulla scheda del corso. Il collegamento non
-// e' scritto nell'HTML: si chiede al momento del clic e vale cinque
-// minuti. Un link che vive nella pagina e' un link che si copia.
-function TastoScaricaSlide({ corso }) {
+// Il tasto che la master vede sulla scheda del corso, uno per PDF. Il
+// collegamento non e' scritto nell'HTML: si chiede al momento del clic e
+// vale cinque minuti. Un link che vive nella pagina e' un link che si
+// copia.
+function TastoScaricaSlide({ slide, etichetta = "Scarica le slide" }) {
   const isMobile = useIsMobile();
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState("");
@@ -13236,7 +13277,7 @@ function TastoScaricaSlide({ corso }) {
     e.stopPropagation();
     if (inCorso) return;
     setInCorso(true); setErrore("");
-    const { data, error } = await supabase.storage.from(BUCKET_SLIDE).createSignedUrl(corso.slide_pdf_path, 300);
+    const { data, error } = await supabase.storage.from(BUCKET_SLIDE).createSignedUrl(slide.percorso, 300);
     setInCorso(false);
     if (error || !data?.signedUrl) { setErrore("Slide non disponibili, avvisa la sede."); return; }
     window.open(data.signedUrl, "_blank", "noopener");
@@ -13246,53 +13287,122 @@ function TastoScaricaSlide({ corso }) {
     <div onClick={(e) => e.stopPropagation()}>
       <button
         onClick={scarica}
+        data-slide-pdf=""
         style={{ ...fontBody, fontSize: isMobile ? 11 : 13, fontWeight: 700, color: NAVY, background: "#F1EDE4", border: `1px solid ${GOLD}`, borderRadius: 14, padding: isMobile ? "7px 10px" : "9px 14px", cursor: inCorso ? "default" : "pointer", lineHeight: 1.2, display: "inline-flex", alignItems: "center", gap: isMobile ? 5 : 7 }}
       >
         <IconaDiplomaRiga size={15} color={GOLD} />
-        {inCorso ? "Preparo…" : "Scarica le slide"}
+        {inCorso ? "Preparo…" : etichetta}
       </button>
       {errore && <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: 4 }}>{errore}</div>}
     </div>
   );
 }
 
-function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
-  const isMobile = useIsMobile();
+// Tutte le slide di un corso sulla scheda della master, e le due regole
+// che le governano: i PDF solo dentro la finestra in cui servono, i link
+// sempre. Sta in un posto solo perche' la scheda e' disegnata da due
+// pagine (dashboard master e dashboard assistente) e due copie vorrebbero
+// dire una finestra di sette giorni di qua e nessuna di la'.
+function SlideDelCorsoMaster({ slide = [], corsoData, nomeCorso = "", oggiStr = dataOggiStr() }) {
+  const pdf = (slide || []).filter((s) => s.tipo === "pdf");
+  const link = (slide || []).filter((s) => s.tipo === "link");
+  const nellaFinestra = slideDisponibiliPer(corsoData, oggiStr);
+  return (
+    <>
+      {nellaFinestra && pdf.map((s, i) => (
+        <TastoScaricaSlide
+          key={s.id} slide={s}
+          etichetta={pdf.length === 1 && !String(s.titolo || "").trim() ? "Scarica le slide" : `Scarica ${nomeSlide(s, i)}`}
+        />
+      ))}
+      <TastoApriLinkSlide link={link} nomeCorso={nomeCorso} />
+    </>
+  );
+}
+
+// UNA slide nell'elenco di un corso. Sta a livello di modulo e non
+// dentro RigaSlideCorso: un componente dichiarato dentro un altro nasce
+// nuovo a ogni disegno, e la casella del nome perderebbe il fuoco a ogni
+// lettera battuta.
+function RigaSlideSingola({ slide, indice, preparando, onApri, onScarica, onRinomina, onRimuovi }) {
+  const [titolo, setTitolo] = useState(slide.titolo || "");
+  // il nome si salva uscendo dalla casella, come il nome di un pacchetto:
+  // qui non c'e' niente da confermare, e un tasto «Salva» per una parola
+  // facoltativa e' un tasto che non si preme
+  return (
+    <div data-slide="" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0" }}>
+      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, flexShrink: 0, width: 16 }}>{indice + 1}.</span>
+      <input
+        value={titolo}
+        onChange={(e) => setTitolo(e.target.value)}
+        onBlur={() => onRinomina(slide, titolo)}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        placeholder="Nome, facoltativo: «Giorno 1»"
+        data-campo="nome-slide"
+        style={{ ...inputStyle, flex: "0 1 190px", minWidth: 120, fontSize: 12.5, padding: "6px 9px" }}
+      />
+      <span style={{ ...fontBody, fontSize: 11.5, color: slide.tipo === "pdf" ? "#2E7D32" : NAVY, flex: "1 1 180px", minWidth: 0, overflowWrap: "anywhere" }}>
+        {slide.tipo === "pdf"
+          ? `${slide.nome || "slide.pdf"}${slide.caricato_il ? ` · caricate il ${fmtData(String(slide.caricato_il).slice(0, 10))}` : ""}`
+          : slide.url}
+      </span>
+      <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+        {slide.tipo === "link" ? (
+          <button onClick={() => window.open(slide.url, "_blank", "noopener")} title="Apri il link in una scheda nuova"
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "1px solid #2E7D32", borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+            Apri link
+          </button>
+        ) : (
+          <>
+            <button onClick={() => onApri(slide)} disabled={!!preparando} title="Guarda il PDF in una scheda nuova"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: `1px solid ${NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {preparando === `${slide.id}:apri` ? "Apro…" : "Apri"}
+            </button>
+            <button onClick={() => onScarica(slide)} disabled={!!preparando} title="Salva il PDF sul dispositivo"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {preparando === `${slide.id}:scarica` ? "Preparo…" : "Scarica"}
+            </button>
+          </>
+        )}
+        <button onClick={() => onRimuovi(slide, indice)} data-campo="rimuovi-slide"
+          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+          Rimuovi
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Un corso nella pagina «Associa slide del corso»: le sue slide in fila,
+// e i due tasti per aggiungerne un'altra. Il «+» chiesto il 14/11/2026
+// e' quello: il corso che ha gia' una slide non mostra «Carica PDF» ma
+// «+ PDF», perche' quello che si sta per fare non e' sostituire.
+function RigaSlideCorso({ corso, slide = [], ricarica, onMessaggio }) {
   const [caricando, setCaricando] = useState(false);
-  const haSlide = !!corso.slide_pdf_path;
-  // il link del corso, accanto al PDF: si incolla, si cambia, si toglie
-  const [linkSlide, salvaLinkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
-  const link = (linkSlide || {})[corso.id] || null;
   const [modificaLink, setModificaLink] = useState(false);
   const [bozzaLink, setBozzaLink] = useState("");
-  function confermaLink() {
-    const url = normalizzaLinkSlide(bozzaLink);
-    if (!url) { onMessaggio?.("Il link non è un indirizzo valido: deve cominciare con http:// o https://."); return; }
-    salvaLinkSlide({ ...(linkSlide || {}), [corso.id]: url });
-    setModificaLink(false); setBozzaLink("");
-    onMessaggio?.(`Link salvato per ${corso.nome}: la master lo apre dalla sua dashboard con "Apri link".`);
-  }
-  function rimuoviLink() {
-    if (!window.confirm(`Sei sicuro di voler togliere il link di "${corso.nome}"?`)) return;
-    const nuovo = { ...(linkSlide || {}) }; delete nuovo[corso.id];
-    salvaLinkSlide(nuovo);
-  }
+  // "apri" o "scarica" DI QUALE slide: con piu' PDF nello stesso corso un
+  // booleano direbbe «Preparo…» su tutti e tre i tasti
+  const [preparando, setPreparando] = useState(null);
+  // in fondo alla fila: le slide nuove si accodano, non si infilano in
+  // mezzo. L'ordine lo decide chi carica, caricando.
+  const prossimoOrdine = slide.reduce((m, s) => Math.max(m, s.ordine || 0), -1) + 1;
+
   // "Apri" mostra il PDF in una scheda nuova, "Scarica" lo salva col suo
   // nome: entrambi con un collegamento firmato che vale cinque minuti,
   // come per la master. Il file non ha un indirizzo pubblico.
-  const [preparando, setPreparando] = useState(null); // "apri" | "scarica" | null
-  async function apriOScarica(modo) {
+  async function apriOScarica(sl, modo) {
     if (preparando) return;
-    setPreparando(modo);
-    const opzioni = modo === "scarica" ? { download: corso.slide_pdf_nome || "slide.pdf" } : undefined;
-    const { data, error } = await supabase.storage.from(BUCKET_SLIDE).createSignedUrl(corso.slide_pdf_path, 300, opzioni);
+    setPreparando(`${sl.id}:${modo}`);
+    const opzioni = modo === "scarica" ? { download: sl.nome || "slide.pdf" } : undefined;
+    const { data, error } = await supabase.storage.from(BUCKET_SLIDE).createSignedUrl(sl.percorso, 300, opzioni);
     setPreparando(null);
     if (error || !data?.signedUrl) { onMessaggio?.("Non riesco ad aprire il file: " + (error?.message || "collegamento non disponibile")); return; }
-    if (modo === "scarica") { const a = document.createElement("a"); a.href = data.signedUrl; a.download = corso.slide_pdf_nome || "slide.pdf"; document.body.appendChild(a); a.click(); a.remove(); }
+    if (modo === "scarica") { const a = document.createElement("a"); a.href = data.signedUrl; a.download = sl.nome || "slide.pdf"; document.body.appendChild(a); a.click(); a.remove(); }
     else window.open(data.signedUrl, "_blank", "noopener");
   }
 
-  async function carica(e) {
+  async function aggiungiPdf(e) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -13305,108 +13415,117 @@ function RigaSlideCorso({ corso, ricarica, onMessaggio }) {
     const { error } = await supabase.storage.from(BUCKET_SLIDE).upload(percorso, file, { contentType: "application/pdf", upsert: true });
     if (error) { setCaricando(false); onMessaggio("Caricamento non riuscito: " + error.message); return; }
 
-    // il vecchio si cancella solo DOPO che il nuovo e' salito: se qualcosa
-    // va storto meglio due file che nessuno
-    const vecchio = corso.slide_pdf_path;
-    const { error: erroreDb } = await supabase.from("corsi")
-      .update({ slide_pdf_path: percorso, slide_pdf_nome: file.name, slide_caricato_il: new Date().toISOString() })
-      .eq("id", corso.id);
+    const { error: erroreDb } = await supabase.from("corsi_slide")
+      .insert({ corso_id: corso.id, tipo: "pdf", percorso, nome: file.name, ordine: prossimoOrdine });
     setCaricando(false);
-    if (erroreDb) { onMessaggio("Salvato il file ma non la scheda: " + testoErrore(erroreDb)); return; }
-    if (vecchio && vecchio !== percorso) await supabase.storage.from(BUCKET_SLIDE).remove([vecchio]);
-    onMessaggio(`Slide caricate per ${corso.nome}.`);
-    ricarica(["corsi"]);
+    if (erroreDb) {
+      // la riga non c'e': senza, il file resterebbe nel secchio senza che
+      // nessuno possa piu' collegarlo a niente
+      await supabase.storage.from(BUCKET_SLIDE).remove([percorso]);
+      onMessaggio("Caricato il file ma non la riga: " + testoErrore(erroreDb));
+      return;
+    }
+    onMessaggio(`Slide aggiunte a ${corso.nome}.`);
+    ricarica(["corsi_slide"]);
   }
 
-  async function rimuovi() {
-    if (!window.confirm(`Tolgo le slide di ${corso.nome}? Le master non potranno più scaricarle.`)) return;
-    const percorso = corso.slide_pdf_path;
-    const { error } = await supabase.from("corsi")
-      .update({ slide_pdf_path: null, slide_pdf_nome: null, slide_caricato_il: null })
-      .eq("id", corso.id);
-    if (error) { onMessaggio("Non rimosse: " + testoErrore(error)); return; }
-    if (percorso) await supabase.storage.from(BUCKET_SLIDE).remove([percorso]);
-    onMessaggio(`Slide rimosse da ${corso.nome}.`);
-    ricarica(["corsi"]);
+  async function aggiungiLink() {
+    const url = normalizzaLinkSlide(bozzaLink);
+    if (!url) { onMessaggio?.("Il link non è un indirizzo valido: deve cominciare con http:// o https://."); return; }
+    const { error } = await supabase.from("corsi_slide")
+      .insert({ corso_id: corso.id, tipo: "link", url, ordine: prossimoOrdine });
+    if (error) { onMessaggio("Link non salvato: " + testoErrore(error)); return; }
+    setModificaLink(false); setBozzaLink("");
+    onMessaggio(`Link salvato per ${corso.nome}: la master lo apre dalla sua dashboard con "Apri link".`);
+    ricarica(["corsi_slide"]);
   }
 
+  async function rinomina(sl, nuovoTitolo) {
+    const pulito = String(nuovoTitolo || "").trim();
+    if (pulito === String(sl.titolo || "").trim()) return;
+    const { data, error } = await supabase.from("corsi_slide").update({ titolo: pulito || null }).eq("id", sl.id).select("id");
+    if (error) { onMessaggio("Nome non salvato: " + testoErrore(error)); return; }
+    if (!(data || []).length) { onMessaggio(NESSUNA_RIGA_SLIDE); return; }
+    ricarica(["corsi_slide"]);
+  }
+
+  async function rimuovi(sl, indice) {
+    if (!confermaCancellazione(
+      `${nomeSlide(sl, indice)} da ${corso.nome}`,
+      sl.tipo === "pdf" ? "Il file non sarà più scaricabile dalla dashboard della master." : "La master non lo troverà più sulla scheda del corso.",
+    )) return;
+    const { data, error } = await supabase.from("corsi_slide").delete().eq("id", sl.id).select("id");
+    if (error) { onMessaggio("Non rimossa: " + testoErrore(error)); return; }
+    if (!(data || []).length) { onMessaggio(NESSUNA_RIGA_SLIDE); return; }
+    // il file si cancella solo DOPO che la riga e' sparita davvero: al
+    // contrario resterebbe una riga che punta a un file che non c'e' piu'
+    if (sl.tipo === "pdf" && sl.percorso) await supabase.storage.from(BUCKET_SLIDE).remove([sl.percorso]);
+    onMessaggio(`${nomeSlide(sl, indice)} rimossa da ${corso.nome}.`);
+    ricarica(["corsi_slide"]);
+  }
+
+  const haSlide = slide.length > 0;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
-      <span style={{ width: 10, height: 10, borderRadius: "50%", background: corso.colore || NAVY, flexShrink: 0 }} />
-      <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso.nome}</div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: haSlide ? "#2E7D32" : MUTED, marginTop: 1, overflowWrap: "anywhere" }}>
-          {haSlide
-            ? `${corso.slide_pdf_nome || "slide.pdf"}${corso.slide_caricato_il ? ` · caricate il ${fmtData(String(corso.slide_caricato_il).slice(0, 10))}` : ""}`
-            : "Nessuna slide caricata"}
-        </div>
-        {link && !modificaLink && (
-          <div style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", marginTop: 2, overflowWrap: "anywhere" }}>Link: {link}</div>
-        )}
-        {modificaLink && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
-            <input
-              autoFocus value={bozzaLink} onChange={(e) => setBozzaLink(e.target.value)} placeholder="https://…"
-              onKeyDown={(e) => { if (e.key === "Enter") confermaLink(); if (e.key === "Escape") { setModificaLink(false); setBozzaLink(""); } }}
-              style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0, fontSize: 12.5 }}
-            />
-            <Button onClick={confermaLink}>Salva link</Button>
-            <Button variant="ghost" onClick={() => { setModificaLink(false); setBozzaLink(""); }}>Annulla</Button>
+    <div style={{ padding: "13px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: corso.colore || NAVY, flexShrink: 0 }} />
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso.nome}</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: haSlide ? "#2E7D32" : MUTED, marginTop: 1 }}>
+            {haSlide ? `${slide.length} slide` : "Nessuna slide caricata"}
           </div>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-        {link && !modificaLink && (
-          <button onClick={() => window.open(link, "_blank", "noopener")} title="Apri il link in una scheda nuova"
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "1px solid #2E7D32", borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-            Apri link
-          </button>
-        )}
-        {!modificaLink && !haSlide && (
-          <button onClick={() => { setBozzaLink(link || ""); setModificaLink(true); }} title={link ? "Cambia il link" : "Incolla un link: presentazione online, video, pagina"}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-            {link ? "Modifica link" : "Carica link"}
-          </button>
-        )}
-        {link && !modificaLink && (
-          <button onClick={rimuoviLink} title="Togli il link"
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C9C2`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-            Rimuovi link
-          </button>
-        )}
-        {haSlide && (
-          <>
-            <button onClick={() => apriOScarica("apri")} disabled={!!preparando} title="Guarda il PDF in una scheda nuova"
-              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: `1px solid ${NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-              {preparando === "apri" ? "Apro…" : "Apri"}
-            </button>
-            <button onClick={() => apriOScarica("scarica")} disabled={!!preparando} title="Salva il PDF sul dispositivo"
+        </div>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+          {!modificaLink && (
+            <button onClick={() => { setBozzaLink(""); setModificaLink(true); }} data-campo="aggiungi-link"
+              title={haSlide ? "Aggiungi un altro link a questo corso" : "Incolla un link: presentazione online, video, pagina"}
               style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-              {preparando === "scarica" ? "Preparo…" : "Scarica"}
+              {haSlide ? "+ Link" : "Carica link"}
             </button>
-          </>
-        )}
-        {/* un corso ha o il PDF o il link, mai tutti e due: con un link
-            salvato "Carica PDF" non compare, e viceversa */}
-        {!link && !modificaLink && <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: haSlide ? NAVY : "#fff", background: haSlide ? "#fff" : NAVY, border: `1px solid ${haSlide ? CREAM_BORDER : NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: caricando ? "default" : "pointer", whiteSpace: "nowrap" }}>
-          {caricando ? "Carico…" : haSlide ? "Sostituisci" : "Carica PDF"}
-          <input type="file" accept="application/pdf" onChange={carica} disabled={caricando} style={{ display: "none" }} />
-        </label>}
-        {haSlide && (
-          <button onClick={rimuovi} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C9C2`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}>
-            Rimuovi
-          </button>
-        )}
+          )}
+          <label data-campo="aggiungi-pdf" title={haSlide ? "Aggiungi un altro PDF a questo corso" : "Carica le slide in PDF"}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: haSlide ? NAVY : "#fff", background: haSlide ? "#fff" : NAVY, border: `1px solid ${haSlide ? CREAM_BORDER : NAVY}`, borderRadius: 16, padding: "8px 14px", cursor: caricando ? "default" : "pointer", whiteSpace: "nowrap" }}>
+            {caricando ? "Carico…" : haSlide ? "+ PDF" : "Carica PDF"}
+            <input type="file" accept="application/pdf" onChange={aggiungiPdf} disabled={caricando} style={{ display: "none" }} />
+          </label>
+        </div>
       </div>
+
+      {modificaLink && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8, paddingLeft: 22 }}>
+          <input
+            autoFocus value={bozzaLink} onChange={(e) => setBozzaLink(e.target.value)} placeholder="https://…"
+            data-campo="link-nuovo"
+            onKeyDown={(e) => { if (e.key === "Enter") aggiungiLink(); if (e.key === "Escape") { setModificaLink(false); setBozzaLink(""); } }}
+            style={{ ...inputStyle, flex: "1 1 260px", minWidth: 0, fontSize: 12.5 }}
+          />
+          <Button onClick={aggiungiLink}>Salva link</Button>
+          <Button variant="ghost" onClick={() => { setModificaLink(false); setBozzaLink(""); }}>Annulla</Button>
+        </div>
+      )}
+
+      {haSlide && (
+        <div style={{ marginTop: 6, paddingLeft: 22 }}>
+          {slide.map((sl, i) => (
+            <RigaSlideSingola
+              key={sl.id} slide={sl} indice={i} preparando={preparando}
+              onApri={(x) => apriOScarica(x, "apri")}
+              onScarica={(x) => apriOScarica(x, "scarica")}
+              onRinomina={rinomina}
+              onRimuovi={rimuovi}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del corso" }) {
+function PaginaSlideCorsi({ corsi, corsiSlide = [], ricarica, onBack, titolo = "Associa slide del corso" }) {
   const [msg, setMsg] = useState("");
   const elenco = [...(corsi || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
-  const [linkSlide] = useImpostazioneCondivisa(CHIAVE_LINK_SLIDE_CORSI, {});
-  const conSlide = elenco.filter((c) => c.slide_pdf_path || (linkSlide || {})[c.id]).length;
+  const slidePerCorso = elenco.map((c) => slideDelCorso(corsiSlide, c.id));
+  const conSlide = slidePerCorso.filter((lista) => lista.length > 0).length;
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
@@ -13414,7 +13533,7 @@ function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del
 
       <div style={{ ...cardStyle }}>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.55, marginBottom: 16 }}>
-          Un PDF per corso, oppure un link: sono le slide che la master proietta in aula. Il PDF lo trova nella sua dashboard, sulla scheda del corso,
+          Le slide che la master proietta in aula: PDF, link, quante ne servono per lo stesso corso. Il PDF lo trova nella sua dashboard, sulla scheda del corso,
           <b> da una settimana prima dell'inizio fino all'ultimo giorno</b>; prima non compare, dopo il tasto sparisce e il file non si scarica più.
           Il link invece c'è sempre, con il tasto "Apri link", e si apre dentro l'app a tutto schermo.
         </div>
@@ -13423,8 +13542,8 @@ function PaginaSlideCorsi({ corsi, ricarica, onBack, titolo = "Associa slide del
         </div>
         {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.includes("non") || msg.includes("Non") ? "#C0392B" : "#2E7D32", margin: "10px 0" }}>{msg}</div>}
         {elenco.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun corso definito.</div>}
-        {elenco.map((c) => (
-          <RigaSlideCorso key={c.id} corso={c} ricarica={ricarica} onMessaggio={setMsg} />
+        {elenco.map((c, i) => (
+          <RigaSlideCorso key={c.id} corso={c} slide={slidePerCorso[i]} ricarica={ricarica} onMessaggio={setMsg} />
         ))}
       </div>
     </div>
@@ -13557,7 +13676,7 @@ function TitoloColonnaMaster({ Icona, testo, children }) {
   );
 }
 
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita, comeAssistente = false, deposito = null }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario, inFinestraInventario = false, conScorte = false, codiceReferral, onApriContabilita, comeAssistente = false, deposito = null, slide = [] }) {
   const isMobile = useIsMobile();
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
@@ -13740,14 +13859,11 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               </span>
             </>
           )}
-          {/* le slide compaiono una settimana prima e spariscono con
+          {/* i PDF compaiono una settimana prima e spariscono con
               l'ultimo giorno del corso: e' il tempo in cui servono per
-              prepararsi e per proiettarle, non uno di piu' */}
-          {corso?.slide_pdf_path && slideDisponibiliPer(corsoData, oggiStr) && (
-            <TastoScaricaSlide corso={corso} />
-          )}
-          {/* il link del corso non ha finestra: se c'e', c'e' sempre */}
-          <TastoApriLinkSlide corso={corso} />
+              prepararsi e per proiettarli, non uno di piu'. I link non
+              hanno finestra: se ci sono, ci sono sempre. */}
+          <SlideDelCorsoMaster slide={slide} corsoData={corsoData} nomeCorso={corso?.nome || ""} oggiStr={oggiStr} />
           {contabilitaVisibile && (
             <button
               onClick={(e) => { e.stopPropagation(); onApriContabilita(corsoData); }}
@@ -15019,7 +15135,7 @@ function DettaglioCarrelliMaster({ masterId, isMobile }) {
 // qui si passa il gestore solo se il permesso c'e', e CardDataMaster
 // disegna il tasto solo se il gestore gli arriva.
 function PaginaDashboardAssistente({
-  assistenteId, assistenti, corsi, location, corsiDate, corsiDateDocenti, hotel, iscritti,
+  assistenteId, assistenti, corsi, location, corsiDate, corsiDateDocenti, hotel, iscritti, corsiSlide = [],
   permessi = [], onApriClasse, onApriModelle, onApriConsensi, onApriCambi, onApriInventario,
   onBack, titolo = "Dashboard assistente",
 }) {
@@ -15080,6 +15196,7 @@ function PaginaDashboardAssistente({
             inFinestraInventario={puo("sch_inventario") && oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 7)}
             codiceReferral={null}
             onApriContabilita={null}
+            slide={slideDelCorso(corsiSlide, cd.corso_id)}
           />
         ))}
       </div>
@@ -15087,7 +15204,7 @@ function PaginaDashboardAssistente({
   );
 }
 
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, ricarica = () => {}, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, assistenti = [], corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, corsiSlide = [], masterLoggataId, ricarica = () => {}, sceltaLibera = false, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterImpostazioni, regoleReferralAutomatico, loghiCategorie = [], loghiImpostazioni = null, ruoloUtente, utenteLoggato, venditoreLoggato, onApriInventarioSede, onApriCambi, onApriInventarioFineCorso, onApriClasse, onApriModelle, onApriConsensi, assistenteId = null, assistenti = [], corsiDateDocenti = [], onBack, titolo = "Dashboard master" }) {
   // il totale in euro dei carrelli lo vedono solo programmatore e Chiara
   // Colonnelli; le master vedono vendite e punti, mai l'importo
   const mostraEuroCarrelli = vedeIncassiDashboardMaster(ruoloUtente, utenteLoggato, venditoreLoggato);
@@ -15800,6 +15917,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
                 onApriContabilita={(riga) => { window.scrollTo(0, 0); setContabilitaClasse({ token: riga.token_master, nome: corsoById[riga.corso_id]?.nome || "" }); }}
                 deposito={depositoDellaClasse(cd)}
+                slide={slideDelCorso(corsiSlide, cd.corso_id)}
               />
             ))}
           </>
@@ -87727,6 +87845,7 @@ function Gestionale() {
   const [targetVenditeProdotti, setTargetVenditeProdotti] = useState([]);
   // template dei giorni di ogni corso-tipo (Modella del Master/Allievi per giorno)
   const [corsiGiorni, setCorsiGiorni] = useState([]);
+  const [corsiSlide, setCorsiSlide] = useState([]);
   // catalogo generale dei tipi di modella + quali sono selezionabili per ciascun corso
   const [tipiModella, setTipiModella] = useState([]);
   const [corsiTipiModella, setCorsiTipiModella] = useState([]);
@@ -88035,6 +88154,7 @@ function Gestionale() {
     prodotti_categorie: async () => setProdottiCategorie((await leggiTutte(() => supabase.from("prodotti_categorie").select("*").order("prodotto_id").order("ordine"))) || []),
     prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
     corsi_giorni: async () => setCorsiGiorni((await supabase.from("corsi_giorni").select("*").order("numero_giorno")).data || []),
+    corsi_slide: async () => setCorsiSlide((await supabase.from("corsi_slide").select("*").order("corso_id").order("ordine")).data || []),
     tipi_modella: async () => setTipiModella((await supabase.from("tipi_modella").select("*").order("nome")).data || []),
     corsi_tipi_modella: async () => setCorsiTipiModella((await supabase.from("corsi_tipi_modella").select("*")).data || []),
     // niente "telefono" qui: è una colonna a sé (Setting > Gestione
@@ -88304,7 +88424,7 @@ function Gestionale() {
     // sola. La voce c'e' lo stesso, perche' una vista che manca da questa
     // mappa sembra una dimenticanza e non una scelta.
     moduloiscrizione: [],
-    slidecorsi: ["corsi"],
+    slidecorsi: ["corsi", "corsi_slide"],
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "eventi"],
@@ -88312,8 +88432,8 @@ function Gestionale() {
     // ospita anche le assistenti: senza, l'elenco arriva vuoto e la
     // seconda tendina non compare proprio — che e' esattamente quello che
     // si vedeva. Non e' un errore: nessuno aveva chiesto quelle tabelle.
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico", "loghi_categorie", "loghi_impostazioni", "assistente", "corsi_date_docenti"],
-    dashboardassistente: ["assistente", "corsi_date_docenti", "corsi", "location", "corsi_date", "hotel", "iscritti"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_impostazioni", "regole_referral_automatico", "loghi_categorie", "loghi_impostazioni", "assistente", "corsi_date_docenti", "corsi_slide"],
+    dashboardassistente: ["assistente", "corsi_date_docenti", "corsi", "location", "corsi_date", "hotel", "iscritti", "corsi_slide"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni", "spese", "eventi"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
@@ -90193,7 +90313,7 @@ function Gestionale() {
       )}
 
       {view === "slidecorsi" && (
-        <PaginaSlideCorsi corsi={corsi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <PaginaSlideCorsi corsi={corsi} corsiSlide={corsiSlide} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {/* era un modale, ed era sbagliato: il modulo e' lungo quasi due
@@ -90728,7 +90848,7 @@ function Gestionale() {
           assistenteId={utenteLoggato?.assistenteId || null}
           assistenti={assistente} corsi={corsi} location={location}
           corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti}
-          hotel={hotel} iscritti={iscritti}
+          hotel={hotel} iscritti={iscritti} corsiSlide={corsiSlide}
           permessi={utenteLoggato?.permessi || []}
           onApriClasse={apriClasseMaster}
           onApriModelle={apriModelleMaster}
@@ -90742,7 +90862,7 @@ function Gestionale() {
 
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
-          master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
+          master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti} corsiSlide={corsiSlide}
           masterLoggataId={utenteLoggato?.masterId || null} ricarica={fetchDati}
           sceltaLibera={!!utenteLoggato?.masterId && (utenteLoggato.permessi || []).includes("impostazioni")}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
@@ -91442,4 +91562,5 @@ export {
   contanteDaDepositare, chiudiContabilitaClasse, PaginaDashboardMaster, CardDataMaster,
   depositoMasterDi, dichiaraDepositoMaster, confermaDepositoMaster, annullaDepositoMaster,
   CampoPacchettoKit,
+  PaginaSlideCorsi, slideDelCorso, nomeSlide,
 };
