@@ -1844,6 +1844,68 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
+### Un kit si spegne, e resta (14/11/2026)
+
+Il titolare: «metti sulla barra di ogni kit un selettore che spegne il
+kit e non lo renda più selezionabile quando iscrivi gli allievi. Il kit
+continua ad esistere per la logistica e gli allievi già iscritti mentre
+non si vedrà più per gli allievi futuri dal momento che il selettore
+sarà spento.»
+
+**C'era un modo solo di togliere un pacchetto dal listino, e faceva
+troppo.** Il cestino: cancella la riga, e sulle iscrizioni che lo
+avevano scelto resta il solo nome, marcato «non più in elenco» — da lì
+quegli allievi **non portano più nessun prodotto in preparazione**. Un
+pacchetto che si smette di vendere non è un pacchetto che non esiste: le
+classi di dicembre lo preparano ancora, e chi l'ha comprato a ottobre
+l'ha comprato.
+
+**Adesso è una levetta** (`kit_definizioni.attivo`, migrazione
+`20261114100000`), per prima sulla barra del pacchetto perché comanda su
+tutto quello che segue. Spento, il nome si barra e accanto compare «NON
+SI VENDE PIÙ». Cambia **una cosa sola**: non si può più scegliere.
+
+| Cosa | Kit spento | Kit cancellato |
+|---|---|---|
+| la distinta | c'è | non c'è più |
+| la logistica lo prepara | sì | no |
+| il costo della classe lo conta | sì | no |
+| chi l'ha già comprato | ce l'ha, valido | ce l'ha come testo, senza prodotti |
+| chi iscrive lo può scegliere | no | no |
+
+Tre decisioni, e ognuna per un motivo:
+
+- **Si filtra solo dove qualcuno STA SCEGLIENDO**, e sono due posti: la
+  tendina «Pacchetto/Kit» della scheda di iscrizione e il «Kit da
+  assegnare» dell'Advisor. Ogni altra lettura di `kit_definizioni` —
+  fabbisogno, diplomi, costo del kit, messaggi, Assegnazione kit — legge
+  per id o per nome quello che è **già stato scelto**, e filtrare lì
+  vorrebbe dire far sparire del materiale dalla scatola di un'allieva
+  perché qualcuno ha spento una levetta.
+- **Il pacchetto già scritto su una scheda resta nella tendina**, con
+  «— non più in vendita» accanto. Toglierlo vorrebbe dire che aprendo la
+  scheda di un'allieva per tutt'altro il suo kit si svuota, e il primo
+  salvataggio se lo porta via. E non è «non più in elenco»: quella frase
+  dice «non porta nessun prodotto in preparazione», e qui sarebbe falsa
+  — li porta tutti. Sotto la tendina c'è scritto.
+- **Non si chiede conferma**, ed è la regola dell'11/11: spegnere non fa
+  sparire niente e si disfa con lo stesso dito. Una domanda a cui si
+  risponde sempre sì insegna a premere a occhi chiusi, e allora anche
+  quella del cestino smette di proteggere.
+
+**Una colonna mancante vale ACCESA** (`attivo === false`, non
+`!attivo`): le 60 righe in archivio sono nate senza, e se `undefined`
+contasse come spento nessun kit si potrebbe più scegliere. I divisori
+non hanno la levetta: non sono pacchetti, sono righe di separazione, e
+non si sceglie nessuno di loro.
+
+Prove in `prove/kit-si-spegne.test.jsx` (9), con la pagina montata: la
+levetta c'è su ogni pacchetto e non sui divisori, premuta scrive **solo**
+`attivo` e solo su quel pacchetto (nessun prodotto, nessuna iscrizione),
+a zero righe cambiate lo dice invece di far finta, e le due facce della
+tendina — lo spento che sparisce, e quello già scelto che resta senza il
+cartello sbagliato.
+
 ### Il tasto della master è un promemoria, non una scrittura contabile (12/11/2026)
 
 Il titolare: «sulla scheda di ciascun corso, nella dashboard della master,

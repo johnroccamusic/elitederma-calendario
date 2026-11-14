@@ -29591,12 +29591,27 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
 // pacchetto — testo scritto a mano prima che esistesse questa tendina —
 // resta in modalità libera così com'è, senza toccarlo, finché qualcuno
 // non lo sostituisce scegliendo un pacchetto dalla lista
+// Un pacchetto SPENTO non si sceglie piu' iscrivendo un'allieva, e basta.
+// Non e' cancellato: la sua distinta vale come prima, la logistica lo
+// prepara come prima, chi l'ha gia' comprato se lo tiene. La differenza
+// fra le due cose e' tutta qui, e va tenuta in mente ogni volta che si
+// legge `kit_definizioni`: si filtra solo dove qualcuno STA SCEGLIENDO.
+export function kitSpento(k) { return k?.attivo === false; }
+
 function CampoPacchettoKit({ value, onChange, opzioni }) {
   // stesso ordine (trascinabile) della pagina "Tipologie di kit": un
   // eventuale divisore compare qui nella stessa posizione relativa, come
   // separatore non selezionabile, non come pacchetto scegliibile
-  const opzioniOrdinate = [...opzioni].sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
+  const tuttiOrdinati = [...opzioni].sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
+  // i pacchetti spenti escono dalla tendina, TRANNE quello gia' scritto su
+  // questa scheda: toglierlo vorrebbe dire cambiare il kit di un'allieva
+  // mentre si apre la sua scheda per tutt'altro, e il primo salvataggio lo
+  // porterebbe via per sempre. Resta scelto, resta valido, non si ripropone.
+  const opzioniOrdinate = tuttiOrdinati.filter((o) => !kitSpento(o) || o.nome === value);
   const nomiOpzioni = opzioniOrdinate.filter((o) => o.tipo !== "divisore").map((o) => o.nome);
+  // e non e' un kit «non piu' in elenco»: quello e' un kit CANCELLATO, che
+  // non porta nessun prodotto in preparazione. Questo li porta tutti.
+  const kitSceltoSpento = !!value && tuttiOrdinati.some((o) => o.nome === value && kitSpento(o));
   // il kit scritto sull'iscrizione è una COPIA del nome, non un
   // riferimento: rinominando il kit la copia viene aggiornata, ma
   // eliminandolo resta scritta com'era — ed è giusto così, dice cosa era
@@ -29638,9 +29653,14 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
         {opzioniOrdinate.map((o) => (
           o.tipo === "divisore"
             ? <option key={o.id} value="" disabled>──────────</option>
-            : <option key={o.id} value={o.nome}>{o.nome}</option>
+            : <option key={o.id} value={o.nome}>{o.nome}{kitSpento(o) ? " — non più in vendita" : ""}</option>
         ))}
       </select>
+      {kitSceltoSpento && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.35 }}>
+          Questo pacchetto non si vende più e non compare per le iscrizioni nuove. Su questa scheda resta: porta i suoi prodotti in preparazione esattamente come prima.
+        </div>
+      )}
       {kitNonPiuInElenco && (
         <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 4, lineHeight: 1.35 }}>
           Questo pacchetto non è più fra quelli definiti per il corso: resta scritto qui, ma non porta nessun prodotto in preparazione. Scegline uno dall'elenco.
@@ -66465,8 +66485,10 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
           {gruppiDaAssegnare.map((g) => {
             // stesso ordine (e stessi divisori) della pagina "Gestisci kit":
             // chi sceglie qui ha in testa quell'elenco, non l'alfabeto
+            // i pacchetti spenti restano fuori: qui si sta SCEGLIENDO il
+            // kit di qualcuno, e uno spento non si vende piu'
             const kitDelCorso = (kitDefinizioni || [])
-              .filter((k) => k.corso_id === g.corsoId)
+              .filter((k) => k.corso_id === g.corsoId && !kitSpento(k))
               .sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || (a.nome || "").localeCompare(b.nome || "", "it"));
             return (
               <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
@@ -83621,6 +83643,22 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
   const idsUsati = new Set(prodottiKit.map((r) => r.prodotto_id));
 
+  // Acceso = questo pacchetto si puo' ancora scegliere iscrivendo
+  // un'allieva. Spento sparisce da quella tendina e da nient'altro: la
+  // distinta resta, la logistica prepara come prima, chi l'ha gia'
+  // comprato se lo tiene. Non si chiede conferma perche' non sparisce
+  // niente e si disfa con lo stesso dito — una domanda a cui si risponde
+  // sempre di si' insegna a premere a occhi chiusi.
+  const spento = kitSpento(kit);
+  async function cambiaAttivo(acceso) {
+    // `.select` perche' un update senza dice «va bene» anche quando non ha
+    // cambiato nessuna riga: la levetta tornerebbe indietro al primo
+    // ricarico senza che nessuno sappia perche'
+    const { data, error } = await supabase.from("kit_definizioni").update({ attivo: acceso }).eq("id", kit.id).select("id");
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) { window.alert("Il database non ha cambiato nessuna riga: ricarica la pagina e riprova."); return; }
+    ricarica(["kit_definizioni"]);
+  }
   async function cambiaDermografoAParte(valore) {
     const { error } = await supabase.from("kit_definizioni").update({ dermografo_a_parte: valore }).eq("id", kit.id);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
@@ -83910,10 +83948,32 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         >
           ⠿
         </span>
+        {/* La levetta sta per PRIMA sulla barra perche' comanda su tutto
+            quello che segue: spenta, il pacchetto c'e' ancora ma non si
+            puo' piu' vendere. I divisori non ce l'hanno — non sono
+            pacchetti, sono righe di separazione, e non si sceglie nessuno
+            di loro. */}
+        {kit.tipo !== "divisore" && (
+          <InterruttorePos
+            acceso={!spento}
+            piccolo
+            id={`kit-attivo-${kit.id}`}
+            onCambia={cambiaAttivo}
+          />
+        )}
         <input
           value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaNome}
-          style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120 }}
+          title={kit.tipo === "divisore" ? undefined : spento ? "Spento: non si può più scegliere iscrivendo un'allieva" : "Acceso: si può scegliere iscrivendo un'allieva"}
+          style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: spento ? MUTED : NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120, textDecoration: spento ? "line-through" : "none" }}
         />
+        {spento && kit.tipo !== "divisore" && (
+          <span
+            title="Resta per la logistica, per il costo della classe e per gli allievi che l'hanno già: cambia solo che non si può più scegliere"
+            style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", background: "#FCEFEC", border: "1px solid #F0C9C2", borderRadius: 999, padding: "3px 9px", textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0, whiteSpace: "nowrap" }}
+          >
+            Non si vende più
+          </span>
+        )}
         <button
           onClick={() => onImpostaAperto(aperto ? null : kit.id)}
           style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "4px 2px", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
@@ -91381,4 +91441,5 @@ export {
   AssegnazioneMaster, PannelloRiepilogoAmministrativo,
   contanteDaDepositare, chiudiContabilitaClasse, PaginaDashboardMaster, CardDataMaster,
   depositoMasterDi, dichiaraDepositoMaster, confermaDepositoMaster, annullaDepositoMaster,
+  CampoPacchettoKit,
 };
