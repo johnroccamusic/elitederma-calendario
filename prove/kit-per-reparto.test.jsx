@@ -298,3 +298,103 @@ describe("quanto si legge", () => {
     await p.smonta();
   });
 });
+
+// IL CESTINO, E LA DOMANDA PRIMA DI CANCELLARE (15/11/2026, chiesto dal
+// titolare: «qui sulle liste sostituisci la X rossa con l'iconcina del
+// cestino e prima di eliminare il prodotto chiedi conferma»).
+//
+// La domanda c'era già — `confermaCancellazione`, dall'11/11 — e queste
+// prove la inchiodano: finché nessuna prova preme quel tasto, «chiede»
+// resta una cosa che si crede, non una che si sa.
+describe("togliere un prodotto da una lista", () => {
+  const tastoCestino = (riga) => [...riga.querySelectorAll("button")]
+    .find((b) => (b.getAttribute("title") || "").toLowerCase().includes("elimina"));
+
+  it("il tasto è un cestino, non una crocetta", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(p.tasto("prodotti"));
+    const riga = p.nodo.querySelector("[data-riga-kit]");
+    const tasto = tastoCestino(riga);
+    expect(tasto, "il tasto per eliminare").toBeTruthy();
+    expect(tasto.textContent).not.toContain("✕");
+    expect(tasto.querySelector("svg"), "l'icona del cestino").toBeTruthy();
+    await p.smonta();
+  });
+
+  it("chiede prima di eliminare, e con «no» non cancella niente", async () => {
+    const chiamato = rispondiCon({});
+    const domande = [];
+    window.confirm = (t) => { domande.push(t); return false; };
+    const p = await pagina();
+    await clicca(p.tasto("prodotti"));
+    await clicca(tastoCestino(p.nodo.querySelector("[data-riga-kit]")));
+    expect(domande.length).toBe(1);
+    expect(domande[0]).toMatch(/cancellare/i);
+    expect(chiamato.mock.calls.some(([, o]) => o?.method === "DELETE")).toBe(false);
+    window.confirm = () => true;
+    await p.smonta();
+  });
+
+  it("vale anche per la lista degli accessori didattica", async () => {
+    const chiamato = rispondiCon({});
+    const domande = [];
+    window.confirm = (t) => { domande.push(t); return false; };
+    const p = await pagina();
+    await clicca(p.tasto("Accessori didattica"));
+    const riga = p.nodo.querySelector("[data-riga-accessorio]");
+    const tasto = tastoCestino(riga);
+    expect(tasto.querySelector("svg")).toBeTruthy();
+    await clicca(tasto);
+    // la domanda nomina il prodotto: davanti a quindici righe «sei
+    // sicuro» da solo non dice quale si è premuta
+    expect(domande[0]).toContain("Taglia M");
+    expect(chiamato.mock.calls.some(([, o]) => o?.method === "DELETE")).toBe(false);
+    window.confirm = () => true;
+    await p.smonta();
+  });
+
+  it("con «sì» il prodotto se ne va davvero", async () => {
+    const chiamato = rispondiCon({});
+    window.confirm = () => true;
+    const p = await pagina();
+    await clicca(p.tasto("Accessori didattica"));
+    await clicca(tastoCestino(p.nodo.querySelector("[data-riga-accessorio]")));
+    expect(chiamato.mock.calls.some(([, o]) => o?.method === "DELETE")).toBe(true);
+    await p.smonta();
+  });
+});
+
+// «AGGIUNGI ACCESSORIO» (15/11/2026, chiesto dal titolare: «qui, in
+// accessori didattica, crea il tasto "Aggiungi accessorio"»). La casella
+// per cercare un prodotto stava sempre aperta in cima alla scheda: chi
+// arrivava per guardare l'elenco si trovava davanti una ricerca, e chi
+// voleva aggiungere non aveva un gesto da cercare.
+describe("aggiungere un accessorio", () => {
+  const cercaCasella = (p) => [...p.nodo.querySelectorAll("input")]
+    .find((i) => (i.placeholder || "").includes("Cerca accessorio"));
+
+  it("la ricerca non è più sempre in vista: c'è un tasto che la apre", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(p.tasto("Accessori didattica"));
+    expect(cercaCasella(p)).toBeFalsy();
+    const tasto = p.nodo.querySelector('[data-campo="aggiungi-accessorio"]');
+    expect(tasto).toBeTruthy();
+    expect(tasto.textContent).toContain("Aggiungi accessorio");
+    await clicca(tasto);
+    expect(cercaCasella(p)).toBeTruthy();
+    await p.smonta();
+  });
+
+  it("premendolo di nuovo si richiude, e l'elenco resta dov'era", async () => {
+    rispondiCon({});
+    const p = await pagina();
+    await clicca(p.tasto("Accessori didattica"));
+    await clicca(p.nodo.querySelector('[data-campo="aggiungi-accessorio"]'));
+    await clicca(p.nodo.querySelector('[data-campo="aggiungi-accessorio"]'));
+    expect(cercaCasella(p)).toBeFalsy();
+    expect(p.nodo.querySelectorAll("[data-banda-reparto]").length).toBe(2);
+    await p.smonta();
+  });
+});

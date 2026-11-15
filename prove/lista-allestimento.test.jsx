@@ -265,3 +265,42 @@ describe("gli accessori in ordine alfabetico", () => {
     await p.smonta();
   });
 });
+
+// TOGLIERE UNA CONSULENZA CHIEDEVA NIENTE (15/11/2026, trovato di
+// fianco al cestino di «Tipologie di kit»). Il guardiano delle
+// cancellazioni dell'11/11 riconosce i gesti dal nome della funzione, e
+// questa si chiama «imposta la quantità»: un nome che non dice che a
+// zero la riga sparisce.
+describe("togliere una consulenza", () => {
+  const conConsulenza = {
+    corso_data_id: "cd1", riserva_per_kit: {}, accessori_quantita: {},
+    consulenze_edizione: [{ id: "c-1", prodotto_id: "p1", livello: 5 }],
+  };
+
+  it("chiede, e con «no» non toglie niente", async () => {
+    const salvataggi = [];
+    const domande = [];
+    window.confirm = (t) => { domande.push(t); return false; };
+    const p = await pannello({ statoEdizione: conConsulenza, onSalvaCampi: (c) => salvataggi.push(c) });
+    const riga = p.nodo.querySelector('[data-riga-corredo="Pelle sintetica Premium"]');
+    const cestino = [...riga.querySelectorAll("button")].find((b) => (b.getAttribute("title") || "").includes("Togli"));
+    expect(cestino.querySelector("svg"), "l'icona del cestino").toBeTruthy();
+    await clicca(cestino);
+    expect(domande.length).toBe(1);
+    expect(domande[0]).toContain("Pelle sintetica Premium");
+    expect(salvataggi).toEqual([]);
+    window.confirm = () => true;
+    await p.smonta();
+  });
+
+  it("con «sì» la consulenza se ne va", async () => {
+    const salvataggi = [];
+    window.confirm = () => true;
+    const p = await pannello({ statoEdizione: conConsulenza, onSalvaCampi: (c) => salvataggi.push(c) });
+    const riga = p.nodo.querySelector('[data-riga-corredo="Pelle sintetica Premium"]');
+    const cestino = [...riga.querySelectorAll("button")].find((b) => (b.getAttribute("title") || "").includes("Togli"));
+    await clicca(cestino);
+    expect(salvataggi).toEqual([{ consulenze_edizione: [] }]);
+    await p.smonta();
+  });
+});

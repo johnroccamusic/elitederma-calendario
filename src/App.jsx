@@ -83154,7 +83154,18 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
                   titolo="Quanti pezzi di questa consulenza partono"
                   onCambia={(n) => impostaQuantitaConsulenza(g.prodottoId, n)}
                 />
-                <button onClick={() => impostaQuantitaConsulenza(g.prodottoId, 0)} title="Togli questa consulenza" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+                {/* chiede, come ogni gesto che fa sparire una riga
+                    (11/11/2026). Non lo chiedeva: il guardiano delle
+                    cancellazioni riconosce i gesti dal nome della
+                    funzione, e questa si chiama «imposta la quantita'» —
+                    un nome che non dice che a zero la riga sparisce. */}
+                <button
+                  onClick={() => { if (confermaRimozione(`${nomeProdotto(g.prodottoId)} dalle consulenze di questa classe`)) impostaQuantitaConsulenza(g.prodottoId, 0); }}
+                  title="Togli questa consulenza"
+                  style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 4, display: "inline-flex", alignItems: "center" }}
+                >
+                  <IconaCestino size={16} color="#C0392B" />
+                </button>
               </>
             )}
           />
@@ -84889,7 +84900,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
                 <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
                 <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
                 <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 62, padding: "5px 7px", fontSize: 15, fontWeight: 700, textAlign: "center" }} />
-                <button onClick={() => rimuovi(r.id, p?.nome)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5 }}>✕</button>
+                <button onClick={() => rimuovi(r.id, p?.nome)} title="Elimina questo prodotto dall'elenco" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 5, display: "inline-flex", alignItems: "center", flexShrink: 0 }}><IconaCestino size={17} color="#C0392B" /></button>
               </div>
             );
           })}
@@ -84952,6 +84963,15 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
   // toccato niente»: resta aperta la prima, cosi' la pagina mostra di che
   // cosa sono fatte le bande invece di presentarsi tutta chiusa.
   const [repartiAperti, setRepartiAperti] = useState(null);
+  // IL TASTO «AGGIUNGI ACCESSORIO» (15/11/2026, chiesto dal titolare).
+  // La casella per cercare un prodotto stava sempre aperta in cima alla
+  // scheda: chi arrivava qui per guardare l'elenco si trovava davanti
+  // una ricerca, e chi voleva aggiungere non aveva un gesto da cercare —
+  // doveva capire che quella casella serviva a quello. Adesso c'e' un
+  // tasto che lo dice, e sotto, quando si preme, le due strade per
+  // aggiungere: un prodotto per volta dal magazzino, o la lista intera
+  // di un altro corso.
+  const [mostraAggiungi, setMostraAggiungi] = useState(false);
   const [corsoOrigineId, setCorsoOrigineId] = useState("");
   const [copiando, setCopiando] = useState(false);
   const [avvisoDuplicati, setAvvisoDuplicati] = useState("");
@@ -85028,13 +85048,22 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Accessori didattica</div>
         {aperto && (
-          <button onClick={onChiudi} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-            Esci ✕
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+            <button
+              onClick={() => { setMostraAggiungi((v) => !v); setRicerca(""); setAvvisoDuplicati(""); }}
+              data-campo="aggiungi-accessorio"
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: mostraAggiungi ? NAVY : "#fff", background: mostraAggiungi ? "#fff" : NAVY, border: mostraAggiungi ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              {mostraAggiungi ? "Chiudi" : "+ Aggiungi accessorio"}
+            </button>
+            <button onClick={onChiudi} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+              Esci ✕
+            </button>
+          </div>
         )}
       </div>
 
-      {aperto && (
+      {aperto && mostraAggiungi && (
         <div style={{ marginBottom: 10 }}>
           <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
           {risultati.map((p) => (
@@ -85049,7 +85078,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
         </div>
       )}
 
-      {aperto && corsiConLista.length > 0 && (
+      {aperto && mostraAggiungi && corsiConLista.length > 0 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <select value={corsoOrigineId} onChange={(e) => setCorsoOrigineId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
             <option value="">— carica lista da un corso —</option>
@@ -85116,7 +85145,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
                       titolo="Quanti pezzi di questo accessorio partono di solito per un corso"
                       onCambia={(n) => cambiaQuantita(r.id, n)}
                     />
-                    <button onClick={() => rimuovi(r.id, p?.nome)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5, flexShrink: 0 }}>✕</button>
+                    <button onClick={() => rimuovi(r.id, p?.nome)} title="Elimina questo prodotto dall'elenco" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 5, display: "inline-flex", alignItems: "center", flexShrink: 0 }}><IconaCestino size={17} color="#C0392B" /></button>
                   </div>
                 );
               })}

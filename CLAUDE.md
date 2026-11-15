@@ -1878,9 +1878,32 @@ grafica.
   **cestino al posto della crocetta**: una ✕ accanto a quattro pastiglie
   si legge come «chiudi», e quel tasto cancella un pacchetto.
 
-Prove in `prove/kit-per-reparto.test.jsx` (17): le bande ci sono tutte,
+**Il cestino al posto della crocetta, in tutte e due le liste**
+(15/11/2026: «qui sulle liste sostituisci la X rossa con l'iconcina del
+cestino e prima di eliminare il prodotto chiedi conferma»). La domanda
+**c'era già** — `confermaCancellazione`, dall'11/11 — e adesso ci sono
+anche le prove che la premono: finché nessuno preme quel tasto in una
+prova, «chiede» resta una cosa che si crede, non una che si sa.
+
+**E di fianco è saltato fuori un gesto che non chiedeva niente**: la
+crocetta che toglie una consulenza dall'allestimento (Logistica). Il
+guardiano delle cancellazioni dell'11/11 riconosce i gesti dal **nome**
+della funzione, e questa si chiama `impostaQuantitaConsulenza` — un nome
+che non dice che a zero la riga sparisce. Adesso chiede, nominando la
+consulenza, e ha il cestino come le altre.
+
+**«+ Aggiungi accessorio»** (15/11/2026, chiesto subito dopo). La
+casella per cercare un prodotto stava sempre aperta in cima alla scheda:
+chi arrivava per guardare l'elenco si trovava davanti una ricerca, e chi
+voleva aggiungere non aveva un gesto da cercare — doveva **capire** che
+quella casella serviva a quello. Ora c'è un tasto che lo dice, e sotto,
+quando si preme, le due strade per aggiungere: un prodotto per volta dal
+magazzino, o la lista intera di un altro corso.
+
+Prove in `prove/kit-per-reparto.test.jsx` (23): le bande ci sono tutte,
 la prima aperta, la pastiglia conta anche da chiusa, premere la seconda
-mostra le sue righe, e la quantità scrive davvero.
+mostra le sue righe, la quantità scrive davvero, il cestino chiede e col
+«no» non cancella niente, e la ricerca compare solo dal tasto.
 
 ### La lista di allestimento, ridisegnata sul mockup (15/11/2026)
 
