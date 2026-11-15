@@ -2046,6 +2046,17 @@ più dove finisce la scheda. Il bordo lo dice senza aggiungere una
 parola, e il pixel in più per lato lo recupera il padding: la misura
 dell'aggancio viene dal DOM, quindi segue da sé.
 
+**E la giunzione è una forma sola** (corretto dal titolare: «la
+giunzione tra le due nuvole è brutta»). Al primo giro erano due
+riquadri arrotondati col bordo oro e in mezzo un rettangolo piatto:
+tre forme invece di una. Adesso la scheda scelta **perde il fianco
+destro e gli angoli di quel lato** — di là non finisce, continua — la
+striscia **porta avanti il filo oro sopra e sotto**, ed è larga due
+pixel più del vuoto fra le colonne per infilarsi sotto il bordo
+sinistro del pannello e nasconderlo proprio dove la scheda si attacca;
+il pannello prende lo stesso bordo oro e **l'angolo in alto a sinistra
+squadrato**, perché lì non comincia niente.
+
 **La misura si prende dal DOM, non si calcola**: l'altezza di una
 scheda dipende da quante fasi ha, se la lista mancanti è aperta, se c'è
 la gestione rientro — un conto a mano sbaglierebbe al primo corso

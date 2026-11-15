@@ -81741,7 +81741,7 @@ function LineaFasi({ tappe, indietro = null }) {
 }
 
 
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario, mancanti = [] }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, agganciato = false, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario, mancanti = [] }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   // FINCHE' MANCA QUALCOSA IL PACCO NON SI DICHIARA PREPARATO
   // (15/11/2026). Vale solo sul primo gesto — quello che dice «dentro
@@ -81787,6 +81787,16 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
         border: selezionato ? `2px solid ${GOLD}` : `1px solid ${CREAM_BORDER}`,
         borderRadius: 16, padding: selezionato ? 15 : 16, marginBottom: 14, cursor: "pointer",
         background: selezionato ? FONDO_ALLESTIMENTO : "#fff", boxShadow: "var(--ombra-aree, none)",
+        // AGGANCIATA ALLA SUA LISTA (15/11/2026, corretto dal titolare:
+        // «la giunzione tra le due nuvole e' brutta»). Due riquadri
+        // arrotondati con in mezzo una striscia piatta restano due
+        // riquadri: la scheda scelta perde il fianco destro e gli angoli
+        // di quel lato, perche' di la' non finisce — continua nella
+        // striscia e poi nel pannello.
+        ...(agganciato ? {
+          borderRightColor: "transparent",
+          borderTopRightRadius: 0, borderBottomRightRadius: 0,
+        } : null),
       }}
     >
       {/* LA TESTATA (15/11/2026, dal mockup): data, filo oro, nome in
@@ -84232,10 +84242,14 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           </button>
         )}
         <div ref={grigliaRef} style={{ position: "relative", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
-          {/* la striscia che tiene insieme la scheda scelta e la sua
-              lista: sta nel vuoto fra le due colonne, alta quanto la
-              scheda, dello stesso crema. Senza, sono due riquadri dello
-              stesso colore che si guardano da lontano. */}
+          {/* LA STRISCIA CHE UNISCE la scheda scelta alla sua lista: sta
+              nel vuoto fra le due colonne, alta quanto la scheda, dello
+              stesso crema — e PORTA AVANTI I BORDI, il filo oro sopra e
+              sotto. Senza, erano due riquadri arrotondati con in mezzo
+              un rettangolo piatto: tre forme invece di una.
+              Due pixel in piu' della distanza fra le colonne, per
+              entrare sotto il bordo sinistro del pannello e nasconderlo
+              proprio dove la scheda si attacca. */}
           {aggancio && (
             <div
               aria-hidden
@@ -84243,7 +84257,9 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               style={{
                 position: "absolute", left: aggancio.larghezza, width: 18,
                 top: aggancio.top, height: aggancio.altezza,
-                background: FONDO_ALLESTIMENTO, pointerEvents: "none",
+                boxSizing: "border-box",
+                borderTop: `2px solid ${GOLD}`, borderBottom: `2px solid ${GOLD}`,
+                background: FONDO_ALLESTIMENTO, pointerEvents: "none", zIndex: 1,
               }}
             />
           )}
@@ -84272,6 +84288,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 faseCorrente={statoDi(cd.id).fase}
                 puoForzare={puoForzare}
                 selezionato={edizioneSel?.id === cd.id}
+                agganciato={!!aggancio && edizioneSel?.id === cd.id}
                 onSeleziona={() => { setEdizioneSelId(cd.id); if (isMobile) setVistaMobile("dettaglio"); }}
                 onCambiaFase={(fase) => { setEdizioneSelId(cd.id); cambiaFaseLogistica(cd, fase); }}
                 onTornaIndietroFase={(fase) => { setEdizioneSelId(cd.id); tornaIndietroFaseLogistica(cd, fase); }}
@@ -84316,7 +84333,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
             // sotto le bande, che sono dello stesso colore. Da qui in
             // giu' le sezioni restano riquadri bianchi: il bianco e'
             // quello su cui si lavora.
-            style={{ ...cardStyle, marginBottom: 0, borderRadius: 16, background: FONDO_ALLESTIMENTO }}
+            style={{
+              ...cardStyle, marginBottom: 0, borderRadius: 16, background: FONDO_ALLESTIMENTO,
+              // agganciato alla sua scheda: stesso bordo oro, e l'angolo
+              // in alto a sinistra squadrato perche' li' non comincia
+              // niente — e' la scheda di sinistra che continua
+              ...(aggancio ? { border: `2px solid ${GOLD}`, borderTopLeftRadius: 0 } : null),
+            }}
           >
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
