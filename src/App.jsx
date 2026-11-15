@@ -82397,7 +82397,7 @@ function RigaAllestimento({ icona, nome, nota = "", onNome = null, titoloNome = 
   return (
     <div
       data-riga-allestimento={nome}
-      style={{ display: "grid", gridTemplateColumns: grigliaAllestimento(mobile), alignItems: "center", gap: 8, padding: "9px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}`, minWidth: 0 }}
+      style={{ display: "grid", gridTemplateColumns: grigliaAllestimento(mobile), alignItems: "center", gap: 8, padding: "5px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}`, minWidth: 0 }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
         <span style={{ flexShrink: 0, display: "inline-flex" }}>{icona}</span>
@@ -82425,11 +82425,15 @@ function RigaAllestimento({ icona, nome, nota = "", onNome = null, titoloNome = 
 // che quella riga sa fare). Stessa altezza e stessa misura di testo
 // delle righe dei kit: sono liste diverse ma si leggono di fila, e tre
 // scale diverse nella stessa pagina si notano.
+// COMPATTA (15/11/2026, chiesto dal titolare: «c'e' troppo spazio bianco
+// sopra e sotto a ogni prodotto, gli elenchi diventano troppo lunghi»).
+// L'altezza la decide il contatore, che e' il pezzo da premere col dito:
+// la foto a 42 lo scavalcava e si portava dietro tutta la riga.
 function RigaCorredo({ foto, nome, nota = "", destra, ultima = false }) {
   return (
     <div
       data-riga-corredo={nome}
-      style={{ display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap", padding: "9px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}`, minWidth: 0 }}
+      style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "4px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}`, minWidth: 0 }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 11, flex: "1 1 190px", minWidth: 0 }}>
         {foto}
@@ -83094,12 +83098,12 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <RigaCorredo
             key={r.chiave}
             ultima={idx === tuttiAccessori.length - 1 && consulenzeEdizione.length === 0 && prodottiExtraIds.length === 0}
-            foto={<FotoProdotto prodottoId={r.prodotto_id} lato={42} />}
+            foto={<FotoProdotto prodottoId={r.prodotto_id} lato={32} />}
             nome={nomeProdotto(r.prodotto_id)}
             nota={giaInSede(r.prodotto_id) ? `già in sede: ${giaInSede(r.prodotto_id).quantita}` : ""}
             destra={(
               <ContatoreQuantita
-                frecce
+                frecce compatto
                 valore={statoEdizione.accessori_quantita?.[r.chiave] ?? (Number(r.quantita) || 0)}
                 titolo="Quanti pezzi partono per il corso"
                 onCambia={(n) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: n } })}
@@ -83122,7 +83126,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <RigaCorredo
             key={g.prodottoId}
             ultima={idx === tutte.length - 1 && prodottiExtraIds.length === 0}
-            foto={<FotoProdotto prodottoId={g.prodottoId} lato={42} />}
+            foto={<FotoProdotto prodottoId={g.prodottoId} lato={32} />}
             nome={nomeProdotto(g.prodottoId)}
             nota={`disponibili a magazzino: ${prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}`}
             destra={(
@@ -83135,7 +83139,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
                   Da vendere
                 </label>
                 <ContatoreQuantita
-                  frecce max={99}
+                  frecce compatto max={99}
                   valore={g.pezzi.length}
                   titolo="Quanti pezzi di questa consulenza partono"
                   onCambia={(n) => impostaQuantitaConsulenza(g.prodottoId, n)}
@@ -83164,7 +83168,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <RigaCorredo
             key={prodottoId}
             ultima={idx === prodottiExtraIds.length - 1}
-            foto={<FotoProdotto prodottoId={prodottoId} lato={42} />}
+            foto={<FotoProdotto prodottoId={prodottoId} lato={32} />}
             nome={nomeProdotto(prodottoId)}
             destra={(
               <>
@@ -83180,7 +83184,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
                   </span>
                 )}
                 <ContatoreQuantita
-                  frecce
+                  frecce compatto
                   valore={accessoriQuantita[`extra::${prodottoId}`] ?? 0}
                   titolo="Quanti pezzi partono per il corso"
                   onCambia={(n) => onSalvaCampi({ accessori_quantita: { ...accessoriQuantita, [`extra::${prodottoId}`]: n } })}

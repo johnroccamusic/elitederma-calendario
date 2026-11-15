@@ -1998,6 +1998,15 @@ quando non resta più niente da prendere**. Non si spegne mai, però: un
 prodotto in attesa di ricezione non deve impedire di riempire le buste
 che si possono già riempire.
 
+**E le righe sono compatte** (15/11/2026: «c'e' troppo spazio bianco
+sopra e sotto a ogni prodotto, gli elenchi diventano troppo lunghi»).
+Una riga alta 60 px per quindici accessori sono tre schermate per una
+lista che si legge in una. L'altezza la decideva **la foto**, 42 px,
+non quello che su quella riga si fa: adesso la foto e' 32, il contatore
+e' il modello compatto (30) come nella sezione dei kit, e sopra e sotto
+restano 4 px. La riga la decide il contatore, perche' e' il pezzo che
+si preme col dito e sotto i 30 px non deve scendere.
+
 **E le tre liste della sezione 04 sono in ordine alfabetico**
 (15/11/2026: «questi accessori vanno in ordine alfabetico»).
 Arrivavano nell'ordine in cui le righe erano state scritte sulla scheda
