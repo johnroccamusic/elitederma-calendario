@@ -91,16 +91,33 @@ describe("la linea delle fasi di una spedizione", () => {
     await p.smonta();
   });
 
-  // ogni tappa e' una pastiglia con la sua icona e il nome a fianco, e
-  // le due righe — pallini e pastiglie — stanno sulla stessa griglia:
+  // 15/11/2026, corretto dal titolare: «elimina le icone e le celle
+  // verdi intorno al testo, scrivi solo il testo sotto l'icona di
+  // spunta verde; lascia la nuvola rossa solo per le fasi da
+  // completare». Una fase fatta e' gia' detta dal pallino: ripeterla in
+  // un riquadro verde con dentro un'icona verde e' la stessa cosa detta
+  // tre volte, e quattro riquadri di fila pesano quanto il rosso che
+  // dovrebbe saltare all'occhio.
+  it("la fase fatta è solo testo; la pastiglia e l'icona sono della rossa", async () => {
+    const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="ritirato_corriere" />);
+    const tappe = [...p.nodo.querySelectorAll("[data-tappa-fase]")];
+    const fatta = tappe[0];
+    expect(fatta.querySelector("svg")).toBeFalsy();
+    expect(fatta.style.background).toBe("none");
+    const futura = tappe[3];
+    expect(futura.querySelector("svg")).toBeFalsy();
+    expect(futura.style.background).toBe("none");
+    const daFare = tappe[2];
+    expect(daFare.querySelector("svg")).toBeTruthy();
+    expect(daFare.style.background).not.toBe("none");
+    await p.smonta();
+  });
+
+  // le due righe — pallini e tappe — stanno sulla stessa griglia:
   // scritte con due misure diverse, il pallino si scollerebbe dalla sua
   // etichetta al primo nome lungo.
-  it("ogni tappa ha la sua icona, e le due righe hanno le stesse colonne", async () => {
+  it("le due righe hanno le stesse colonne", async () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="completato" />);
-    const pastiglia = [...p.nodo.querySelectorAll("[data-tappa-fase]")]
-      .find((x) => (x.textContent || "").includes("Pacco ritirato dal corriere"));
-    expect(pastiglia.querySelector("svg")).toBeTruthy();
-    expect(pastiglia.querySelector("span:last-child").style.fontSize).toBe("13px");
     const pallini = p.nodo.querySelector("[data-riga-pallini]");
     const tappe = p.nodo.querySelector("[data-riga-tappe]");
     expect(pallini.style.gridTemplateColumns).toBe(tappe.style.gridTemplateColumns);

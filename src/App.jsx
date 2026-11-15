@@ -81597,11 +81597,19 @@ function PallinoFase({ stato, filoSinistro, filoDestro }) {
 
 function PastigliaFase({ stato, etichetta, Icona = null, onClick = null, bloccata = false, titolo = "" }) {
   const cliccabile = !!onClick && !bloccata;
-  const vestito = {
-    fatto: { background: "#E7F3EA", colore: NAVY, iconaColore: VERDE_FASE },
-    corrente: { background: "#FBE6E1", colore: "#B5322A", iconaColore: ROSSO_FASE },
-    futuro: { background: "#F5F3ED", colore: MUTED, iconaColore: "#BDB7A8" },
-  }[stato];
+  // LA PASTIGLIA E' SOLO DELLA FASE DA FARE (15/11/2026, corretto dal
+  // titolare: «elimina le icone e le celle verdi intorno al testo,
+  // scrivi solo il testo sotto l'icona di spunta verde; lascia la
+  // nuvola rossa solo per le fasi da completare»).
+  //
+  // Una fase fatta e' gia' detta dal pallino verde: ripeterla dentro un
+  // riquadro verde con dentro anche un'icona verde e' la stessa cosa
+  // detta tre volte, e quattro riquadri di fila pesano quanto il
+  // rosso che dovrebbe saltare all'occhio. Sotto il pallino resta il
+  // nome e basta — e cosi' ha tutta la colonna per andare a capo dove
+  // si deve, invece di spezzare le parole dentro una pastiglia stretta.
+  const daFare = stato === "corrente";
+  const colore = stato === "fatto" ? NAVY : daFare ? "#B5322A" : MUTED;
   return (
     <button
       type="button"
@@ -81610,14 +81618,16 @@ function PastigliaFase({ stato, etichetta, Icona = null, onClick = null, bloccat
       data-tappa-fase={stato}
       data-fase-bloccata={bloccata ? "si" : undefined}
       style={{
-        display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 9,
-        width: "100%", minWidth: 0, textAlign: "left",
-        background: vestito.background, border: "none", borderRadius: 14, padding: "10px 12px",
+        display: "flex", alignItems: "center", gap: daFare ? 9 : 0,
+        justifyContent: daFare ? "flex-start" : "center",
+        width: "100%", minWidth: 0, textAlign: daFare ? "left" : "center",
+        background: daFare ? "#FBE6E1" : "none", border: "none", borderRadius: 14,
+        padding: daFare ? "10px 12px" : "4px 2px",
         cursor: cliccabile ? "pointer" : "default", opacity: bloccata ? 0.55 : 1,
       }}
     >
-      {Icona && <span style={{ flexShrink: 0, display: "inline-flex" }}><Icona size={20} color={vestito.iconaColore} /></span>}
-      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.25, color: vestito.colore, minWidth: 0, overflowWrap: "break-word" }}>{etichetta}</span>
+      {daFare && Icona && <span style={{ flexShrink: 0, display: "inline-flex" }}><Icona size={20} color={ROSSO_FASE} /></span>}
+      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.3, color: colore, minWidth: 0 }}>{etichetta}</span>
     </button>
   );
 }

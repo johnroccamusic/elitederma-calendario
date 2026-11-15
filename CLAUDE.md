@@ -2067,11 +2067,20 @@ lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
   troppo piccole.
 - **E dal secondo mockup («rispettando al pixel ogni dettaglio») la
   linea è fatta di DUE RIGHE incolonnate**: sopra i pallini uniti dal
-  filo, sotto la pastiglia di ogni tappa con la sua icona (scatola,
-  bolla spuntata, camion, segnaposto) e il nome a fianco. Le due righe
-  usano la **stessa griglia** (`repeat(n, 1fr)`): scritte con due misure
-  diverse, il pallino si scollerebbe dalla sua etichetta al primo nome
-  lungo.
+  filo, sotto il nome di ogni tappa. Le due righe usano la **stessa
+  griglia** (`repeat(n, 1fr)`): scritte con due misure diverse, il
+  pallino si scollerebbe dalla sua etichetta al primo nome lungo.
+- **La pastiglia e l'icona sono SOLO della fase da fare** (corretto dal
+  titolare lo stesso giorno: «elimina le icone e le celle verdi intorno
+  al testo, scrivi solo il testo sotto l'icona di spunta verde»). Una
+  fase fatta è già detta dal pallino verde: ripeterla dentro un riquadro
+  verde con dentro un'icona verde è la stessa cosa detta tre volte, e
+  quattro riquadri di fila pesano quanto il rosso che dovrebbe saltare
+  all'occhio. Sotto il pallino resta il nome e basta — e così ha tutta
+  la colonna per andare a capo dove si deve, invece di spezzare le
+  parole dentro una pastiglia stretta («Pacco preparat / o»). Le icone
+  (`ICONA_FASE`: scatola, bolla spuntata, camion, segnaposto) restano
+  per la rossa.
 - **Tutte le date sono blu** (deciso dal titolare: «tutte le date dei
   corsi avranno lo stesso colore blu»). Era `corso.colore`: sei corsi in
   colonna erano sei tessere di sei colori, e il colore — che serve a
@@ -2094,7 +2103,7 @@ lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
   scarico lavora (`BandaMagazzinoInMovimento`, scritta una volta per
   tutte e due le strade).
 
-Prove in `prove/fasi-a-linea.test.jsx` (13): chi è verde, chi è rosso e
+Prove in `prove/fasi-a-linea.test.jsx` (14): chi è verde, chi è rosso e
 chi è grigio nei tre momenti di un corso, la rossa che si preme e la
 futura che non fa niente, «Indietro» che torna di una fase e che su un
 corso appena nato non c'è, la freccia che apre e non disfa, le tre
