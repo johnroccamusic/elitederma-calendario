@@ -83099,11 +83099,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           stessa forma, e i due tasti che aggiungono in fondo, dove si
           arriva dopo aver guardato cosa c'e' gia'. */}
       <SezioneAllestimento numero={numeroSezione.accessori} titolo="Accessori per il corso">
-        {tuttiAccessori.length > 0 && (
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "6px 0 2px", lineHeight: 1.45 }}>
-            Gia' in elenco, con la quantita' scritta nella scheda dell'accessorio: si cambia solo il numero di pezzi da spedire. La master ritrovera' la stessa lista nell'inventario di fine corso, per dire quanti ne rimanda indietro.
-          </div>
-        )}
         {tuttiAccessori.map((r, idx) => (
           <RigaCorredo
             key={r.chiave}
