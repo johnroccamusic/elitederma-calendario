@@ -81554,6 +81554,30 @@ function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riserva
 }
 // una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
 // attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
+// LA TESSERA DELLA DATA. Una sola, per la cella dell'elenco e per il
+// pannello aperto accanto (15/11/2026, chiesto dal titolare: «il numero
+// della data della cella di destra deve avere lo stesso stile di quello
+// della cella di sinistra»). Due tessere disegnate in due punti si
+// scostano al primo ritocco, e sono una accanto all'altra sulla stessa
+// schermata.
+//
+// Il blu e' sempre lo stesso: era il colore del corso, e sei corsi in
+// colonna erano sei tessere di sei colori — il colore, che serve a
+// riconoscere un corso nel calendario, qui diventava la cosa piu' grossa
+// della pagina senza dire niente che il nome, due centimetri a destra,
+// non dicesse gia'.
+function TesseraData({ giorno, mese }) {
+  return (
+    <div style={{
+      background: NAVY, borderRadius: 14, border: `3px solid ${GOLD}`, padding: "8px 12px",
+      textAlign: "center", flexShrink: 0, minWidth: 64,
+    }}>
+      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: "#fff", lineHeight: 1.05 }}>{giorno}</div>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6 }}>{mese}</div>
+    </div>
+  );
+}
+
 // LA LINEA DELLE FASI (15/11/2026, dal mockup del titolare: «i
 // pulsanti rossi esistono solo per le fasi ancora da fare, poi
 // diventano cerchietti verdi», poi «modifica la grafica delle celle in
@@ -81751,7 +81775,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
       // che serve a riconoscere il corso — finiva per essere la cosa piu'
       // grossa della pagina. Resta dov'e' utile e basta: sulla tessera
       // della data. Alla scheda bastano l'ombra e il bordo di sempre.
-      style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff", boxShadow: "var(--ombra-aree, none)" }}
+      style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? FONDO_ALLESTIMENTO : "#fff", boxShadow: "var(--ombra-aree, none)" }}
     >
       {/* LA TESTATA (15/11/2026, dal mockup): data, filo oro, nome in
           maiuscolo, citta' col segnaposto, la pastiglia dei kit e la
@@ -81761,21 +81785,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           leggere e una da saltare. Resta come suggerimento sulla
           freccia, per chi ci passa sopra. */}
       <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
-        {/* LA DATA E' SEMPRE BLU (15/11/2026, deciso dal titolare:
-            «tutte le date dei corsi avranno lo stesso colore blu»). Era
-            il colore del corso: sei corsi in colonna erano sei tessere
-            di sei colori, e il colore — che serve a riconoscere un corso
-            nel calendario — qui diventava la cosa piu' grossa della
-            pagina senza dire niente di nuovo, perche' il nome e' scritto
-            due centimetri a destra. Il colore del corso resta dov'e'
-            utile: nel calendario. */}
-        <div style={{
-          background: NAVY, borderRadius: 14, border: `3px solid ${GOLD}`, padding: "8px 12px",
-          textAlign: "center", flexShrink: 0, minWidth: 64,
-        }}>
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: "#fff", lineHeight: 1.05 }}>{gg}</div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6 }}>{MESI_ABBR[Number(mm) - 1]}</div>
-        </div>
+        <TesseraData giorno={gg} mese={MESI_ABBR[Number(mm) - 1]} />
         {/* il filo oro: separa la data dal nome senza una cornice
             attorno a niente */}
         <span aria-hidden style={{ width: 3, alignSelf: "stretch", minHeight: 46, background: GOLD, borderRadius: 2, flexShrink: 0 }} />
@@ -82518,13 +82528,22 @@ const ALLESTIMENTO = {
   icona: 24,
 };
 const BANDA_SEZIONE = "#F7EFE1";
-// lo stesso crema delle bande, schiarito di circa il 40% verso il
-// bianco: il fondo della scheda che tiene tutta la lista. Sta accanto a
-// BANDA_SEZIONE perche' e' lei che lo decide — schiarito a mano in un
-// altro punto, il giorno che la banda cambia tinta i due si staccano.
+// il fondo della scheda che tiene tutta la lista, ED E' LO STESSO DELLA
+// SCHEDA SCELTA A SINISTRA (15/11/2026, chiesto dal titolare: «il colore
+// della cella di destra deve essere uguale a quello della cella di
+// sinistra»). Le due meta' della pagina parlano dello stesso corso: due
+// crema vicini ma diversi si leggono come due cose diverse, e nessuno
+// sa quale delle due sia sbagliata. Per questo il valore e' uno solo e
+// lo legge anche RigaCorsoLogistica — scritto due volte, il giorno che
+// uno cambia l'altro resta indietro.
 // Il primo giro era #FDFAF5, due punti dal bianco: sullo schermo non si
 // vedeva, e schiarire «un po'» un crema vuol dire cancellarlo.
-const FONDO_ALLESTIMENTO = "#FAF4EB";
+const FONDO_ALLESTIMENTO = "#FBF3E4";
+// il titolo sopra la colonna di sinistra. Sta qui perche' lo legge
+// anche la colonna di destra, che ne tiene uno invisibile per partire
+// dalla stessa riga: una misura scritta a mano resterebbe indietro il
+// giorno che questo titolo cambia corpo.
+const STILE_TITOLO_COLONNA = { ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 };
 const PILLOLA_TOTALE = "#FBECD2";
 
 // il numeretto della sezione: «01» in una pastiglia oro chiara. E' un
@@ -82567,9 +82586,16 @@ function SezioneAllestimento({ numero, titolo, colonne = null, children }) {
   const mobile = useIsMobile();
   return (
     <section data-sezione-allestimento={titolo} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 16, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, background: BANDA_SEZIONE, padding: "10px 14px" }}>
+      {/* LA BANDA E' BLU SCURA (15/11/2026, chiesto dal titolare: «il
+          fondo deve essere blu scuro e il testo bianco, a parte l'icona
+          del numero che resta uguale»). Il crema era lo stesso della
+          scheda che le contiene tutte: quattro bande di un colore che
+          c'e' gia' sotto non dividevano niente, e la pagina si leggeva
+          come un elenco solo. Il numero resta nella sua pastiglia oro —
+          e' l'indice, e sul blu si vede meglio di prima. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: NAVY, padding: "10px 14px" }}>
         <BadgeSezione numero={numero} />
-        <h3 style={{ margin: 0, ...fontDisplay, fontSize: ALLESTIMENTO.titoloSezione, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+        <h3 style={{ margin: 0, ...fontDisplay, fontSize: ALLESTIMENTO.titoloSezione, fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>
           {titolo}
         </h3>
       </div>
@@ -82673,10 +82699,10 @@ function IconaMagliettaContorno({ size = 24, color = NAVY }) {
 
 function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], categorieProdotti = [], prodottiCategorie = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   const oggiStr = dataOggiStr();
-  // stessa intestazione (data/corso/città nel colore del corso) della
-  // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
+  // stessa intestazione della cella a cui questo pannello si riferisce,
+  // vedi RigaCorsoLogistica: la tessera della data e' la stessa
+  // (TesseraData), e il blu e' uguale per tutti i corsi
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
-  const coloreCorso = corso?.colore || NAVY;
   const nomeProdotto = (id) => prodottiShop.find((p) => p.id === id)?.nome || "—";
   // quanto la master ha dichiarato già presente in questa sede l'ultima
   // volta che c'è stata (Dashboard master > Inventario corso corrente):
@@ -82995,10 +83021,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
       )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 14, minWidth: 0 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, flex: "1 1 220px" }}>
-          <div style={{ background: coloreCorso, borderRadius: 14, padding: "10px 12px", textAlign: "center", flexShrink: 0, minWidth: 62 }}>
-            <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{gg}</div>
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 2 }}>{MESI_ABBR[Number(mm) - 1]}</div>
-          </div>
+          <TesseraData giorno={gg} mese={MESI_ABBR[Number(mm) - 1]} />
           {/* il filo oro separa il QUANDO dal COSA: due cose diverse
               appoggiate l'una all'altra senza niente in mezzo si leggono
               come una riga sola */}
@@ -84163,7 +84186,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
             // Restano il titolo e lo spazio.
             style={{ ...cardStyle, background: "transparent", border: "none", boxShadow: "none", padding: 0, marginBottom: 0 }}
           >
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
+            <div style={STILE_TITOLO_COLONNA}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
             {vistaStorico && (
               <CampoRicerca value={ricercaStorico} onChange={(e) => setRicercaStorico(e.target.value)} placeholder="Cerca corso o città…" style={{ marginBottom: 10 }} />
             )}
@@ -84209,6 +84232,17 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           )}
 
           {(!isMobile || vistaMobile === "dettaglio") && (
+          <div style={{ minWidth: 0 }}>
+          {/* LE DUE COLONNE PARTONO DALLA STESSA RIGA (15/11/2026,
+              chiesto dal titolare: «le due celle devono partire dalla
+              stessa linea in alto»). A sinistra sopra le schede c'e'
+              «Corsi in arrivo», e quel titolo le spingeva giu' di una
+              trentina di pixel: il pannello sembrava sfalsato. Invece
+              di una misura scritta a mano — che il giorno che il titolo
+              cambia corpo resta indietro — qui c'e' LO STESSO titolo,
+              invisibile: si sposta da se'. Su telefono non c'e', perche'
+              le due colonne non sono affiancate. */}
+          {!isMobile && <div aria-hidden style={{ ...STILE_TITOLO_COLONNA, visibility: "hidden" }}>&nbsp;</div>}
           <div
             // niente filo colorato nemmeno qui: quale corso si sta
             // guardando lo dicono la tessera della data e il nome
@@ -84274,6 +84308,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 onCambiaTagliaIscritto={cambiaTagliaIscritto}
               />
             )}
+          </div>
           </div>
           )}
         </div>

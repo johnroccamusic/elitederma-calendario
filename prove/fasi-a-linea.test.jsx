@@ -152,6 +152,19 @@ describe("la testata della cella", () => {
     await p.smonta();
   });
 
+  // 15/11/2026: «il numero della data della cella di destra deve avere
+  // lo stesso stile di quello della cella di sinistra». Due tessere
+  // disegnate in due punti si scostano al primo ritocco, e sono una
+  // accanto all'altra sulla stessa schermata: adesso e' una sola
+  // (TesseraData).
+  it("la tessera della data è la stessa della cella e del pannello", async () => {
+    const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="da_preparare" />);
+    const tessera = [...p.nodo.querySelectorAll("div")].find((d) => (d.textContent || "") === "10GEN");
+    expect(tessera.style.border).toContain("3px solid");
+    expect(tessera.querySelector("div").style.fontSize).toBe("24px");
+    await p.smonta();
+  });
+
   it("il nome è in maiuscolo e i kit stanno nella loro pastiglia", async () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="da_preparare" />);
     const titolo = [...p.nodo.querySelectorAll("div")].find((d) => d.textContent === "PMU BASE" && d.style.textTransform === "uppercase");

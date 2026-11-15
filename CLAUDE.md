@@ -2011,13 +2011,36 @@ quando non resta più niente da prendere**. Non si spegne mai, però: un
 prodotto in attesa di ricezione non deve impedire di riempire le buste
 che si possono già riempire.
 
-**E il pannello ha un fondo suo** (15/11/2026): il crema delle bande
-delle sezioni, schiarito (`FONDO_ALLESTIMENTO` = `#FAF4EB`, scritto accanto a
-`BANDA_SEZIONE` perche' e' lei a deciderlo). Su una scheda bianca come
+**E il pannello ha un fondo suo** (15/11/2026): lo stesso crema della
+scheda scelta a sinistra (`FONDO_ALLESTIMENTO` = `#FBF3E4`, letto anche da
+`RigaCorsoLogistica`). Le due metà della pagina parlano dello stesso
+corso: due crema vicini ma diversi si leggono come due cose diverse, e
+nessuno sa quale delle due sia sbagliata. Su una scheda bianca come
 tutto il resto le sezioni bianche non si staccavano da niente; adesso
-il bianco e' quello su cui si lavora, e il fondo e' solo il foglio
-sotto. La fascia dei due conti resta grigio-crema, o su quel fondo
-sparirebbe.
+il bianco è quello su cui si lavora, e il fondo è solo il foglio sotto.
+La fascia dei due conti resta grigio-crema, o su quel fondo sparirebbe.
+
+**Le bande delle sezioni sono blu scure con il testo bianco**
+(15/11/2026: «il fondo deve essere blu scuro e il testo bianco, a parte
+l'icona del numero che resta uguale»). Erano crema come la scheda che
+le contiene tutte: quattro bande di un colore che c'è già sotto non
+dividevano niente, e la pagina si leggeva come un elenco solo. Il
+numero resta nella sua pastiglia oro — è l'indice, e sul blu si vede
+meglio di prima.
+
+**Le due colonne partono dalla stessa riga** («le due celle devono
+partire dalla stessa linea in alto»). A sinistra, sopra le schede, c'è
+«Corsi in arrivo», e quel titolo le spingeva giù di una trentina di
+pixel. Invece di una misura scritta a mano — che il giorno che il
+titolo cambia corpo resta indietro — la colonna di destra tiene **lo
+stesso titolo, invisibile** (`STILE_TITOLO_COLONNA`): si sposta da sé.
+Su telefono non c'è, perché le due colonne non sono affiancate.
+
+**E la tessera della data è una sola** (`TesseraData`, «il numero della
+data della cella di destra deve avere lo stesso stile di quello della
+cella di sinistra»): la usano la cella dell'elenco e il pannello
+accanto. Due tessere disegnate in due punti si scostano al primo
+ritocco, e stanno una accanto all'altra sulla stessa schermata.
 
 **E le righe sono compatte** (15/11/2026: «c'e' troppo spazio bianco
 sopra e sotto a ogni prodotto, gli elenchi diventano troppo lunghi»).
