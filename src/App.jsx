@@ -81776,7 +81776,18 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
       // che serve a riconoscere il corso — finiva per essere la cosa piu'
       // grossa della pagina. Resta dov'e' utile e basta: sulla tessera
       // della data. Alla scheda bastano l'ombra e il bordo di sempre.
-      style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? FONDO_ALLESTIMENTO : "#fff", boxShadow: "var(--ombra-aree, none)" }}
+      // LA SCHEDA SCELTA HA IL BORDO ORO (15/11/2026, chiesto dal
+      // titolare). Il solo fondo crema non bastava: lo stesso crema sta
+      // anche nel pannello accanto e nella striscia che li unisce,
+      // quindi a colpo d'occhio non si vedeva piu' DOVE finisce la
+      // scheda. Il bordo lo dice senza aggiungere una parola.
+      // Il bordo cresce di un pixel per lato: la misura dell'aggancio si
+      // prende dal DOM, quindi segue da se'.
+      style={{
+        border: selezionato ? `2px solid ${GOLD}` : `1px solid ${CREAM_BORDER}`,
+        borderRadius: 16, padding: selezionato ? 15 : 16, marginBottom: 14, cursor: "pointer",
+        background: selezionato ? FONDO_ALLESTIMENTO : "#fff", boxShadow: "var(--ombra-aree, none)",
+      }}
     >
       {/* LA TESTATA (15/11/2026, dal mockup): data, filo oro, nome in
           maiuscolo, citta' col segnaposto, la pastiglia dei kit e la

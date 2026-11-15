@@ -165,6 +165,21 @@ describe("la testata della cella", () => {
     await p.smonta();
   });
 
+  // 15/11/2026: il solo fondo crema non bastava a dire quale scheda è
+  // scelta, perché lo stesso crema sta anche nel pannello accanto e
+  // nella striscia che li unisce. Il bordo oro lo dice.
+  it("la scheda scelta ha il bordo oro, le altre no", async () => {
+    const scelta = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="da_preparare" selezionato />);
+    const riga = scelta.nodo.querySelector("[data-riga-corso]");
+    expect(riga.style.border).toContain("2px solid");
+    expect(riga.style.background).not.toBe("rgb(255, 255, 255)");
+    await scelta.smonta();
+
+    const altra = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="da_preparare" />);
+    expect(altra.nodo.querySelector("[data-riga-corso]").style.border).toContain("1px solid");
+    await altra.smonta();
+  });
+
   it("il nome è in maiuscolo e i kit stanno nella loro pastiglia", async () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="da_preparare" />);
     const titolo = [...p.nodo.querySelectorAll("div")].find((d) => d.textContent === "PMU BASE" && d.style.textTransform === "uppercase");

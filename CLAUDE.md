@@ -2039,6 +2039,13 @@ scende fino alla riga della sua scheda, e nel vuoto fra le due colonne
 c'è una **striscia dello stesso crema** (`data-ponte-corso`) alta
 quanto la scheda, che le tiene insieme.
 
+**E la scheda scelta ha il bordo oro** (15/11/2026): il solo fondo
+crema non bastava più, perché lo stesso crema sta anche nel pannello
+accanto e nella striscia che li unisce — a colpo d'occhio non si vedeva
+più dove finisce la scheda. Il bordo lo dice senza aggiungere una
+parola, e il pixel in più per lato lo recupera il padding: la misura
+dell'aggancio viene dal DOM, quindi segue da sé.
+
 **La misura si prende dal DOM, non si calcola**: l'altezza di una
 scheda dipende da quante fasi ha, se la lista mancanti è aperta, se c'è
 la gestione rientro — un conto a mano sbaglierebbe al primo corso
