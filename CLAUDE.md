@@ -1998,6 +1998,14 @@ quando non resta più niente da prendere**. Non si spegne mai, però: un
 prodotto in attesa di ricezione non deve impedire di riempire le buste
 che si possono già riempire.
 
+**E il pannello ha un fondo suo** (15/11/2026): il crema delle bande
+delle sezioni, schiarito (`FONDO_ALLESTIMENTO`, scritto accanto a
+`BANDA_SEZIONE` perche' e' lei a deciderlo). Su una scheda bianca come
+tutto il resto le sezioni bianche non si staccavano da niente; adesso
+il bianco e' quello su cui si lavora, e il fondo e' solo il foglio
+sotto. La fascia dei due conti resta grigio-crema, o su quel fondo
+sparirebbe.
+
 **E le righe sono compatte** (15/11/2026: «c'e' troppo spazio bianco
 sopra e sotto a ogni prodotto, gli elenchi diventano troppo lunghi»).
 Una riga alta 60 px per quindici accessori sono tre schermate per una

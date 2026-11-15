@@ -82330,6 +82330,11 @@ const ALLESTIMENTO = {
   icona: 24,
 };
 const BANDA_SEZIONE = "#F7EFE1";
+// lo stesso crema delle bande, schiarito: il fondo della scheda che
+// tiene tutta la lista. Sta accanto a BANDA_SEZIONE perche' e' lei che
+// lo decide — schiarito a mano in un altro punto, il giorno che la
+// banda cambia tinta i due si staccano.
+const FONDO_ALLESTIMENTO = "#FDFAF5";
 const PILLOLA_TOTALE = "#FBECD2";
 
 // il numeretto della sezione: «01» in una pastiglia oro chiara. E' un
@@ -84018,8 +84023,16 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
             // niente filo colorato nemmeno qui: quale corso si sta
             // guardando lo dicono la tessera della data e il nome
             // scritto grande in cima, non una cornice alta quanto la
-            // pagina
-            style={{ ...cardStyle, marginBottom: 0, borderRadius: 16 }}
+            // pagina.
+            // Il fondo e' il crema delle bande delle sezioni
+            // (BANDA_SEZIONE), schiarito (15/11/2026, chiesto dal
+            // titolare): su una scheda bianca come il resto della
+            // pagina questo pannello non si staccava da niente, e col
+            // crema pieno della scheda scelta a sinistra pesava troppo
+            // sotto le bande, che sono dello stesso colore. Da qui in
+            // giu' le sezioni restano riquadri bianchi: il bianco e'
+            // quello su cui si lavora.
+            style={{ ...cardStyle, marginBottom: 0, borderRadius: 16, background: FONDO_ALLESTIMENTO }}
           >
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
