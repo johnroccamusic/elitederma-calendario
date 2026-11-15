@@ -81,23 +81,30 @@ describe("la linea delle fasi di una spedizione", () => {
   // indietro sotto la linea dello stato mentre prima doveva stare alla
   // destra dei cerchietti». Sotto, in mezzo alle etichette, sembrava
   // l'etichetta di una quinta tappa.
-  it("«Indietro» sta nella riga dei cerchietti, non sotto", async () => {
+  it("«Indietro» sta in alto a destra, fuori dalla fila delle pastiglie", async () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="bolla_stampata" />);
-    const riga = p.nodo.querySelector("[data-tappa-fase]").parentElement;
-    expect(p.nodo.querySelector("[data-indietro-fase]").parentElement).toBe(riga);
+    const indietro = p.nodo.querySelector("[data-indietro-fase]");
+    // sta accanto alla linea, non dentro la fila delle tappe: li' in
+    // mezzo sembrerebbe l'etichetta di una tappa in piu'
+    expect(p.nodo.querySelector("[data-riga-tappe]").contains(indietro)).toBe(false);
+    expect(indietro.parentElement).toBe(p.nodo.querySelector("[data-linea-fasi]"));
     await p.smonta();
   });
 
-  // «ci sono testi ora troppo piccoli e vanno aumentati di 2 punti e le
-  // righe di testo troppo lunghe messe a capo su due righe»: il tetto
-  // di larghezza e' quello che manda a capo, e senza di lui una tappa
-  // dal nome lungo si allarga e storce la linea.
-  it("l'etichetta è 13 e non si allarga oltre il suo spazio", async () => {
+  // ogni tappa e' una pastiglia con la sua icona e il nome a fianco, e
+  // le due righe — pallini e pastiglie — stanno sulla stessa griglia:
+  // scritte con due misure diverse, il pallino si scollerebbe dalla sua
+  // etichetta al primo nome lungo.
+  it("ogni tappa ha la sua icona, e le due righe hanno le stesse colonne", async () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="completato" />);
-    const etichetta = [...p.nodo.querySelectorAll("[data-tappa-fase] span")]
+    const pastiglia = [...p.nodo.querySelectorAll("[data-tappa-fase]")]
       .find((x) => (x.textContent || "").includes("Pacco ritirato dal corriere"));
-    expect(etichetta.style.fontSize).toBe("13px");
-    expect(etichetta.style.maxWidth).toBe("112px");
+    expect(pastiglia.querySelector("svg")).toBeTruthy();
+    expect(pastiglia.querySelector("span:last-child").style.fontSize).toBe("13px");
+    const pallini = p.nodo.querySelector("[data-riga-pallini]");
+    const tappe = p.nodo.querySelector("[data-riga-tappe]");
+    expect(pallini.style.gridTemplateColumns).toBe(tappe.style.gridTemplateColumns);
+    expect(p.nodo.querySelectorAll("[data-pallino-fase]").length).toBe(4);
     await p.smonta();
   });
 
@@ -111,6 +118,28 @@ describe("la linea delle fasi di una spedizione", () => {
     await clicca(p.nodo.querySelector("[data-apri-corso]"));
     expect(aperto).toBe(1);
     expect(indietro).toEqual([]);
+    await p.smonta();
+  });
+});
+
+// 15/11/2026, dal mockup: «tutte le date dei corsi avranno lo stesso
+// colore blu». Era il colore del corso, e sei corsi in colonna erano
+// sei tessere di sei colori: il colore diventava la cosa piu' grossa
+// della pagina senza dire niente che il nome, due centimetri a destra,
+// non dicesse gia'.
+describe("la testata della cella", () => {
+  it("la data è blu anche su un corso che ha un colore suo", async () => {
+    const p = await monta(<RigaCorsoLogistica {...comuni} corso={{ ...CORSO, colore: "#FF00AA" }} loc={MILANO} faseCorrente="da_preparare" />);
+    expect(p.nodo.innerHTML).not.toContain("#FF00AA");
+    expect(p.nodo.textContent).toContain("GEN");
+    await p.smonta();
+  });
+
+  it("il nome è in maiuscolo e i kit stanno nella loro pastiglia", async () => {
+    const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="da_preparare" />);
+    const titolo = [...p.nodo.querySelectorAll("div")].find((d) => d.textContent === "PMU BASE" && d.style.textTransform === "uppercase");
+    expect(titolo).toBeTruthy();
+    expect(p.nodo.textContent).toContain("2 KIT");
     await p.smonta();
   });
 });

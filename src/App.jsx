@@ -3443,6 +3443,15 @@ function IconaScatolaErp({ size = 20, color = "currentColor" }) {
     </svg>
   );
 }
+// la bolla con la spunta: il documento gia' applicato sul pacco
+function IconaSpuntaQuadrata({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+      <path d="M8 12.2l2.6 2.6L16.2 9" />
+    </svg>
+  );
+}
 function IconaClipboardErp({ size = 20, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -81536,63 +81545,63 @@ function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riserva
 }
 // una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
 // attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
-// la pillola della fase corrente è cliccabile, mai una a caso: l'ordine
-// va sempre rispettato, un passo alla volta (vedi TappaFase)
-// un tasto dei corsi in sede: rosso finché la cosa è da fare, verde quando
-// è fatta — la stessa lettura a colpo d'occhio delle pillole di spedizione,
-// senza la sequenza che per un corso in sede non esiste
-// mentre il magazzino si muove la linea delle fasi lascia il posto al
-// conto dei prodotti: si vede che sta lavorando e non si preme due
-// volte. Scritta una volta sola perche' le due strade — spedizione e
-// sede centrale — muovono lo stesso magazzino.
-function BandaMagazzinoInMovimento({ avanzamento = null }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "11px 10px", borderRadius: 12, background: "#FBEAE4", border: "1px solid #C0392B", ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>
-      <span style={{ width: 14, height: 14, border: "2px solid #C0392B", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "giraLogistica 0.9s linear infinite" }} />
-      <style>{`@keyframes giraLogistica { to { transform: rotate(360deg); } }`}</style>
-      Magazzino in movimento{avanzamento?.totale ? `: ${avanzamento.fatti} di ${avanzamento.totale} prodotti` : "…"} — non premere di nuovo
-    </div>
-  );
-}
-
-// il passo indietro. Non e' la freccia della testata — quella apre il
-// corso — ed e' scritto: una freccia nuda, in una fila di cerchietti,
-// non dice da sola che cosa disfa.
-function TastoIndietroFase({ onClick, titolo }) {
-  return (
-    <button
-      type="button"
-      data-indietro-fase
-      onClick={onClick}
-      title={titolo}
-      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 22, flexShrink: 0, background: "none", border: "none", padding: "0 2px 0 8px", cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}
-    >
-      <IconaFrecciaSinistra size={13} /> Indietro
-    </button>
-  );
-}
-
-// UNA TAPPA DELLA LINEA DELLE FASI (15/11/2026, dal mockup del
-// titolare: «i pulsanti rossi esistono solo per le fasi ancora da
-// fare, poi diventano cerchietti verdi»).
+// LA LINEA DELLE FASI (15/11/2026, dal mockup del titolare: «i
+// pulsanti rossi esistono solo per le fasi ancora da fare, poi
+// diventano cerchietti verdi», poi «modifica la grafica delle celle in
+// questo modo rispettando al pixel ogni dettaglio»).
 //
 // Prima erano quattro pastiglie affiancate, tutte della stessa misura e
 // tutte colorate: una fila di riquadri verdi con in mezzo uno rosso, e
 // per sapere a che punto era il corso bisognava leggerle tutte. Una
 // fase fatta non e' piu' una cosa da fare, quindi non merita un tasto:
-// merita un segno. Adesso e' un cerchietto verde con la sua etichetta
-// grigia sotto, e il rosso resta solo dove c'e' ancora da lavorare —
-// cosi' il rosso si vede da lontano, che e' tutto il suo mestiere.
+// merita un segno.
+//
+// Adesso sono DUE RIGHE incolonnate: sopra i pallini uniti dal filo —
+// che e' il colpo d'occhio, verde fin dove si e' arrivati — e sotto la
+// pastiglia di ogni tappa, con la sua icona e il nome su due righe. Le
+// due righe hanno la STESSA griglia: scritte con due misure diverse il
+// pallino si scollerebbe dalla sua etichetta al primo nome lungo.
 //
 // Una fase futura non e' rossa (deciso dal titolare): rosso vuol dire
 // «tocca a questa adesso». Su un corso appena nato tre pastiglie rosse
 // di fila direbbero tre urgenze dove ce n'e' una sola.
-function TappaFase({ stato, etichetta, onClick = null, bloccata = false, titolo = "", filoSinistro = null, filoDestro = null }) {
+const VERDE_FASE = "#1E9E4A";
+const ROSSO_FASE = "#D93A3A";
+const FILO_FATTO = "#2FA35B";
+const FILO_DA_FARE = "#E4DFD3";
+
+function PallinoFase({ stato, filoSinistro, filoDestro }) {
+  const colore = stato === "fatto" ? VERDE_FASE : stato === "corrente" ? ROSSO_FASE : "#fff";
+  const filo = (verde) => (verde === null ? "transparent" : verde ? FILO_FATTO : FILO_DA_FARE);
+  return (
+    // il filo e' fatto di due mezze linee ai lati del pallino: cosi' non
+    // esce dal primo cerchietto ne' oltre l'ultimo, e ogni tratto dice
+    // da solo se quel pezzo di strada e' stato fatto
+    <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: 30 }}>
+      <span aria-hidden style={{ position: "absolute", left: 0, right: "50%", height: 3, background: filo(filoSinistro) }} />
+      <span aria-hidden style={{ position: "absolute", left: "50%", right: 0, height: 3, background: filo(filoDestro) }} />
+      <span
+        data-pallino-fase={stato}
+        style={{
+          position: "relative", width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+          background: colore,
+          border: stato === "futuro" ? "2px solid #DCD6C8" : "3px solid #fff",
+          boxShadow: stato === "fatto" ? `0 0 0 3px #CFE9D7` : stato === "corrente" ? `0 0 0 3px #F6D8D2` : "none",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          ...fontBody, fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1,
+        }}
+      >{stato === "fatto" ? "\u2713" : stato === "corrente" ? "!" : ""}</span>
+    </span>
+  );
+}
+
+function PastigliaFase({ stato, etichetta, Icona = null, onClick = null, bloccata = false, titolo = "" }) {
   const cliccabile = !!onClick && !bloccata;
-  const VERDE = "#2E9E5B";
-  const ROSSO = "#D93A3A";
-  const colorePallino = stato === "fatto" ? VERDE : stato === "corrente" ? ROSSO : "#fff";
-  const filo = (verde) => (verde === null ? "transparent" : verde ? "#BFE3CB" : "#E6E1D6");
+  const vestito = {
+    fatto: { background: "#E7F3EA", colore: NAVY, iconaColore: VERDE_FASE },
+    corrente: { background: "#FBE6E1", colore: "#B5322A", iconaColore: ROSSO_FASE },
+    futuro: { background: "#F5F3ED", colore: MUTED, iconaColore: "#BDB7A8" },
+  }[stato];
   return (
     <button
       type="button"
@@ -81601,42 +81610,107 @@ function TappaFase({ stato, etichetta, onClick = null, bloccata = false, titolo 
       data-tappa-fase={stato}
       data-fase-bloccata={bloccata ? "si" : undefined}
       style={{
-        flex: 1, minWidth: 0, background: "none", border: "none", padding: 0,
+        display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 9,
+        width: "100%", minWidth: 0, textAlign: "left",
+        background: vestito.background, border: "none", borderRadius: 14, padding: "10px 12px",
         cursor: cliccabile ? "pointer" : "default", opacity: bloccata ? 0.55 : 1,
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
       }}
     >
-      {/* il filo e' fatto di due mezze linee ai lati del pallino: cosi'
-          non esce dal primo cerchietto ne' oltre l'ultimo, e ogni tratto
-          puo' dire da solo se quel pezzo di strada e' stato fatto */}
-      <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: 22 }}>
-        <span aria-hidden style={{ position: "absolute", left: 0, right: "50%", height: 2, background: filo(filoSinistro) }} />
-        <span aria-hidden style={{ position: "absolute", left: "50%", right: 0, height: 2, background: filo(filoDestro) }} />
-        <span style={{
-          position: "relative", width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-          background: colorePallino, border: stato === "futuro" ? `2px solid #DCD6C8` : "none",
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          ...fontBody, fontSize: 13, fontWeight: 800, color: "#fff", lineHeight: 1,
-        }}>{stato === "fatto" ? "\u2713" : stato === "corrente" ? "!" : ""}</span>
-      </span>
-      {/* l'etichetta: grigia quando la fase e' fatta o di la' da venire,
-          nella pastiglia rosa quando e' quella da fare adesso */}
-      <span style={{
-        ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.25, textAlign: "center", overflowWrap: "break-word",
-        // LARGA QUANTO BASTA (15/11/2026, chiesto dal titolare: «le
-        // righe di testo troppo lunghe messe a capo su due righe»).
-        // Senza questo tetto «Pacco ritirato dal corriere» resta su una
-        // riga sola e si porta dietro la sua colonna: le quattro tappe
-        // smettono di essere distanziate uguali, e la linea si storce.
-        maxWidth: 112, boxSizing: "border-box",
-        color: stato === "corrente" ? "#C0392B" : MUTED,
-        ...(stato === "corrente"
-          ? { background: "#FBEAE4", borderRadius: 9, padding: "5px 8px", display: "block" }
-          : { padding: "5px 2px", display: "block" }),
-      }}>{etichetta}</span>
+      {Icona && <span style={{ flexShrink: 0, display: "inline-flex" }}><Icona size={20} color={vestito.iconaColore} /></span>}
+      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.25, color: vestito.colore, minWidth: 0, overflowWrap: "break-word" }}>{etichetta}</span>
     </button>
   );
 }
+
+// il passo indietro. Non e' la freccia della testata — quella apre il
+// corso — ed e' scritto: una freccia nuda, accanto a una fila di
+// cerchietti, non dice da sola che cosa disfa. Sta in alto a destra,
+// all'altezza dei pallini: sotto, in mezzo alle pastiglie, sembrerebbe
+// l'etichetta di una tappa in piu'.
+function TastoIndietroFase({ onClick, titolo }) {
+  return (
+    <button
+      type="button"
+      data-indietro-fase
+      onClick={onClick}
+      title={titolo}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, flexShrink: 0,
+        height: 36, padding: "0 14px", borderRadius: 18,
+        background: "#fff", border: `1px solid ${CREAM_BORDER}`, cursor: "pointer",
+        ...fontBody, fontSize: 13, fontWeight: 700, color: GRAFITE, whiteSpace: "nowrap",
+      }}
+    >
+      <IconaFrecciaSinistra size={14} /> Indietro
+    </button>
+  );
+}
+
+// mentre il magazzino si muove la linea lascia il posto al conto dei
+// prodotti: si vede che sta lavorando e non si preme due volte. Scritta
+// una volta sola perche' le due strade — spedizione e sede centrale —
+// muovono lo stesso magazzino.
+function BandaMagazzinoInMovimento({ avanzamento = null }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "11px 10px", borderRadius: 14, background: "#FBEAE4", border: "1px solid #C0392B", ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B" }}>
+      <span style={{ width: 14, height: 14, border: "2px solid #C0392B", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "giraLogistica 0.9s linear infinite" }} />
+      <style>{`@keyframes giraLogistica { to { transform: rotate(360deg); } }`}</style>
+      Magazzino in movimento{avanzamento?.totale ? `: ${avanzamento.fatti} di ${avanzamento.totale} prodotti` : "…"} — non premere di nuovo
+    </div>
+  );
+}
+
+// le due righe, incolonnate sulla stessa griglia, piu' il passo
+// indietro a destra. `tappe` e' una lista di
+// { chiave, stato, etichetta, Icona, onClick, bloccata, titolo }.
+function LineaFasi({ tappe, indietro = null }) {
+  const griglia = { display: "grid", gridTemplateColumns: `repeat(${tappe.length}, minmax(0, 1fr))`, gap: 8, minWidth: 0 };
+  return (
+    <div data-linea-fasi style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div data-riga-pallini style={{ ...griglia, alignItems: "center" }}>
+          {tappe.map((t, i) => (
+            <PallinoFase
+              key={t.chiave}
+              stato={t.stato}
+              filoSinistro={i === 0 ? null : tappe[i - 1].stato === "fatto"}
+              filoDestro={i === tappe.length - 1 ? null : t.stato === "fatto"}
+            />
+          ))}
+        </div>
+        <div data-riga-tappe style={{ ...griglia, alignItems: "stretch", marginTop: 8 }}>
+          {tappe.map((t) => (
+            <PastigliaFase
+              key={t.chiave}
+              stato={t.stato}
+              etichetta={t.etichetta}
+              Icona={t.Icona || null}
+              bloccata={!!t.bloccata}
+              titolo={t.titolo || ""}
+              onClick={t.onClick || null}
+            />
+          ))}
+        </div>
+      </div>
+      {indietro && <TastoIndietroFase onClick={indietro.onClick} titolo={indietro.titolo} />}
+    </div>
+  );
+}
+
+// l'icona di ogni fase: dice che cosa si sta guardando prima che si
+// legga il nome, ed e' la stessa all'andata e al ritorno dove la cosa
+// e' la stessa (il camion e' il camion)
+const ICONA_FASE = {
+  da_preparare: IconaScatolaErp,
+  bolla_stampata: IconaSpuntaQuadrata,
+  ritirato_corriere: IconaCamionConsegna,
+  consegna_verificata: IconaPin,
+  bolla_rientro_emessa: IconaSpuntaQuadrata,
+  pacco_ritirato: IconaCamionConsegna,
+  pacco_rientrato: IconaScatolaErp,
+  prodotti_ripristinati: IconaSpuntaCerchio,
+};
+
 function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario, mancanti = [] }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   // FINCHE' MANCA QUALCOSA IL PACCO NON SI DICHIARA PREPARATO
@@ -81663,9 +81737,6 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
   // solo il totale qui (il dettaglio per tipo di kit resta nel
   // pannello "Preparazione kit" a destra, nella sezione «Kit didattici»)
   const kitTotali = iscrittiEdizione.filter((i) => i.pacchetto_kit).length;
-  // riquadro data e contorno della card nel colore assegnato al corso
-  // (Gestione corsi), non un colore fisso uguale per tutti
-  const coloreCorso = corso?.colore || NAVY;
   return (
     <div
       onClick={onSeleziona}
@@ -81676,25 +81747,49 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
       // della data. Alla scheda bastano l'ombra e il bordo di sempre.
       style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff", boxShadow: "var(--ombra-aree, none)" }}
     >
-      {/* LA TESTATA (15/11/2026, dal mockup): data, nome, citta' col
-          segnaposto, i kit e la freccia che apre il corso a destra. La
-          scritta rossa o verde che diceva a che punto e' il corso non
-          c'e' piu': lo dice la linea delle fasi qui sotto, e scritta due
-          volte era una da leggere e una da saltare. Resta come
-          suggerimento sulla freccia, per chi ci passa sopra. */}
-      <div style={{ display: "flex", gap: 13, alignItems: "center" }}>
-        <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#fff" }}>{gg}</div>
-          <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
+      {/* LA TESTATA (15/11/2026, dal mockup): data, filo oro, nome in
+          maiuscolo, citta' col segnaposto, la pastiglia dei kit e la
+          freccia che apre il corso a destra. La scritta rossa o verde
+          che diceva a che punto e' il corso non c'e' piu': lo dice la
+          linea delle fasi qui sotto, e scritta due volte era una da
+          leggere e una da saltare. Resta come suggerimento sulla
+          freccia, per chi ci passa sopra. */}
+      <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
+        {/* LA DATA E' SEMPRE BLU (15/11/2026, deciso dal titolare:
+            «tutte le date dei corsi avranno lo stesso colore blu»). Era
+            il colore del corso: sei corsi in colonna erano sei tessere
+            di sei colori, e il colore — che serve a riconoscere un corso
+            nel calendario — qui diventava la cosa piu' grossa della
+            pagina senza dire niente di nuovo, perche' il nome e' scritto
+            due centimetri a destra. Il colore del corso resta dov'e'
+            utile: nel calendario. */}
+        <div style={{
+          background: NAVY, borderRadius: 14, border: `3px solid ${GOLD}`, padding: "8px 12px",
+          textAlign: "center", flexShrink: 0, minWidth: 64,
+        }}>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: "#fff", lineHeight: 1.05 }}>{gg}</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6 }}>{MESI_ABBR[Number(mm) - 1]}</div>
         </div>
+        {/* il filo oro: separa la data dal nome senza una cornice
+            attorno a niente */}
+        <span aria-hidden style={{ width: 3, alignSelf: "stretch", minHeight: 46, background: GOLD, borderRadius: 2, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>{corso?.nome || "—"}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, minWidth: 0 }}>
-            <IconaPin size={14} color={MUTED} />
-            <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: GRAFITE, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</span>
+          <div style={{ ...fontDisplay, fontSize: 21, fontWeight: 800, color: NAVY, lineHeight: 1.1, textTransform: "uppercase", overflowWrap: "anywhere" }}>{corso?.nome || "—"}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, minWidth: 0 }}>
+            <IconaPin size={16} color={MUTED} />
+            <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: MUTED, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</span>
           </div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 800, color: NAVY, lineHeight: 1.2, flexShrink: 0, whiteSpace: "nowrap" }}>{kitTotali} KIT</div>
+        {/* i kit in una pastiglia oro: e' il numero che dice quanto pesa
+            questa spedizione, e nudo accanto a un titolo grande si
+            leggeva come una parte del titolo */}
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 9, flexShrink: 0,
+          background: "#FDF6E6", border: `2px solid ${GOLD}`, borderRadius: 22, padding: "7px 16px",
+        }}>
+          <IconaScatolaErp size={20} color={NAVY} />
+          <span style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: NAVY, lineHeight: 1.1, whiteSpace: "nowrap" }}>{kitTotali} KIT</span>
+        </div>
         {/* la freccia fa quello che fa premere la scheda: la scheda
             intera resta cliccabile, ma un bordo che si preme non lo
             vede nessuno — la freccia lo dice */}
@@ -81704,15 +81799,14 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           onClick={(e) => { e.stopPropagation(); onSeleziona(); }}
           title={etichettaFase ? `Apri la lista di allestimento · ${etichettaFase}` : "Apri la lista di allestimento"}
           style={{
-            width: 34, height: 34, borderRadius: "50%", flexShrink: 0, cursor: "pointer",
-            background: "#fff", border: `1px solid ${CREAM_BORDER}`,
+            width: 38, height: 38, borderRadius: "50%", flexShrink: 0, cursor: "pointer",
+            background: "#fff", border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 1px 3px rgba(26,35,50,0.10)",
             display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0,
           }}
         >
-          <IconaChevronDestra size={16} color={MUTED} />
+          <IconaChevronDestra size={17} color={GRAFITE} />
         </button>
       </div>
-
       {/* LA LINEA DELLE FASI: un pallino per tappa, distanziati uguali.
           Vedi TappaFase per il perche' del verde e del rosso. */}
       <div style={{ marginTop: 12 }}>
@@ -81728,71 +81822,68 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           <div>
             {inLavorazione ? (
               <BandaMagazzinoInMovimento avanzamento={avanzamento} />
-            ) : (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 4, minWidth: 0 }}>
-                {(() => {
-                  const tappe = [
-                    {
-                      fatto: !!preparatoTs,
-                      etichettaFatto: "Materiale preparato", etichettaDaFare: "Materiale da preparare",
-                      bloccata: bloccaPreparazione && !preparatoTs,
-                      titolo: bloccaPreparazione && !preparatoTs ? motivoBlocco : "",
-                      puoPremere: !allestitoTs || puoForzare,
-                      premi: () => onPrepara(!preparatoTs),
-                    },
-                    {
-                      // una volta consegnato non si torna indietro: quello
-                      // che e' andato in aula e' andato, e quello che
-                      // avanza rientra dall'inventario
-                      fatto: !!allestitoTs,
-                      etichettaFatto: "Materiale consegnato", etichettaDaFare: "Materiale da consegnare",
-                      puoPremere: !!preparatoTs || !!allestitoTs,
-                      premi: () => onAllestisci(!allestitoTs),
-                    },
-                    {
-                      fatto: !!inventarioTs,
-                      etichettaFatto: "Inventario eseguito", etichettaDaFare: "Inventario da fare",
-                      // l'inventario si fa dal pannello a destra: da qui
-                      // si puo' solo annullarlo
-                      puoPremere: !!allestitoTs && !!inventarioTs,
-                      premi: () => onAnnullaInventario(),
-                    },
-                  ];
-                  const primaDaFare = tappe.findIndex((t) => !t.fatto);
-                  return tappe.map((t, i) => {
-                    const stato = t.fatto ? "fatto" : i === primaDaFare ? "corrente" : "futuro";
-                    return (
-                      <TappaFase
-                        key={t.etichettaFatto}
-                        stato={stato}
-                        etichetta={t.fatto ? t.etichettaFatto : t.etichettaDaFare}
-                        bloccata={!!t.bloccata}
-                        titolo={t.titolo || ""}
-                        filoSinistro={i === 0 ? null : tappe[i - 1].fatto}
-                        filoDestro={i === tappe.length - 1 ? null : t.fatto}
-                        onClick={t.puoPremere ? (e) => { e.stopPropagation(); t.premi(); } : null}
-                      />
-                    );
-                  });
-                })()}
-                {/* indietro si torna finche' il materiale non e' sceso in
-                    aula: da "preparato" si rientra in magazzino, da
-                    "consegnato" no. Consegnato vuol dire che le scatole
-                    sono aperte sul tavolo e qualcuno ci ha gia' messo le
-                    mani. L'unico che passa comunque e' chi programma */}
-                {!inventarioTs && (allestitoTs ? puoForzare : !!preparatoTs) && (
-                  <TastoIndietroFase
-                    titolo={allestitoTs ? "Torna a «Materiale preparato»" : "Torna a «Materiale da preparare»: il materiale rientra in magazzino"}
-                    onClick={(e) => { e.stopPropagation(); if (allestitoTs) onAllestisci(false); else onPrepara(false); }}
-                  />
-                )}
-              </div>
-            )}
+            ) : (() => {
+              const passi = [
+                {
+                  chiave: "preparato", Icona: IconaScatolaErp,
+                  fatto: !!preparatoTs,
+                  etichettaFatto: "Materiale preparato", etichettaDaFare: "Materiale da preparare",
+                  bloccata: bloccaPreparazione && !preparatoTs,
+                  titolo: bloccaPreparazione && !preparatoTs ? motivoBlocco : "",
+                  puoPremere: !allestitoTs || puoForzare,
+                  premi: () => onPrepara(!preparatoTs),
+                },
+                {
+                  // una volta consegnato non si torna indietro: quello
+                  // che e' andato in aula e' andato, e quello che avanza
+                  // rientra dall'inventario
+                  chiave: "consegnato", Icona: IconaPin,
+                  fatto: !!allestitoTs,
+                  etichettaFatto: "Materiale consegnato", etichettaDaFare: "Materiale da consegnare",
+                  puoPremere: !!preparatoTs || !!allestitoTs,
+                  premi: () => onAllestisci(!allestitoTs),
+                },
+                {
+                  chiave: "inventario", Icona: IconaClipboardErp,
+                  fatto: !!inventarioTs,
+                  etichettaFatto: "Inventario eseguito", etichettaDaFare: "Inventario da fare",
+                  // l'inventario si fa dal pannello a destra: da qui si
+                  // puo' solo annullarlo
+                  puoPremere: !!allestitoTs && !!inventarioTs,
+                  premi: () => onAnnullaInventario(),
+                },
+              ];
+              const primaDaFare = passi.findIndex((t) => !t.fatto);
+              const tappe = passi.map((t, i) => ({
+                chiave: t.chiave,
+                stato: t.fatto ? "fatto" : i === primaDaFare ? "corrente" : "futuro",
+                etichetta: t.fatto ? t.etichettaFatto : t.etichettaDaFare,
+                Icona: t.Icona,
+                bloccata: !!t.bloccata,
+                titolo: t.titolo || "",
+                onClick: t.puoPremere ? (e) => { e.stopPropagation(); t.premi(); } : null,
+              }));
+              // indietro si torna finche' il materiale non e' sceso in
+              // aula: da "preparato" si rientra in magazzino, da
+              // "consegnato" no. Consegnato vuol dire che le scatole sono
+              // aperte sul tavolo e qualcuno ci ha gia' messo le mani.
+              // L'unico che passa comunque e' chi programma
+              const siTornaIndietro = !inventarioTs && (allestitoTs ? puoForzare : !!preparatoTs);
+              return (
+                <LineaFasi
+                  tappe={tappe}
+                  indietro={siTornaIndietro ? {
+                    titolo: allestitoTs ? "Torna a «Materiale preparato»" : "Torna a «Materiale da preparare»: il materiale rientra in magazzino",
+                    onClick: (e) => { e.stopPropagation(); if (allestitoTs) onAllestisci(false); else onPrepara(false); },
+                  } : null}
+                />
+              );
+            })()}
             {allestitoTs && !inventarioTs && !inLavorazione && (
               <button
                 onClick={(e) => { e.stopPropagation(); onApriInventarioSede(); }}
                 data-niente-ombra="1"
-                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "6px 2px 0", whiteSpace: "nowrap" }}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "8px 2px 0", whiteSpace: "nowrap" }}
               >
                 Cosa torna in magazzino →
               </button>
@@ -81800,48 +81891,41 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           </div>
         ) : (
         <div>
-          {/* mentre il magazzino si muove la linea lascia il posto al
-              conto dei prodotti: si vede che sta lavorando e non si
-              preme due volte */}
           {inLavorazione ? (
             <BandaMagazzinoInMovimento avanzamento={avanzamento} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 4, minWidth: 0 }}>
-              {FASI_LOGISTICA.map((f, i) => {
-                const idxCorrente = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
-                const stato = i < idxCorrente ? "fatto" : i === idxCorrente ? "corrente" : "futuro";
-                const bloccata = bloccaPreparazione && f.chiave === "da_preparare" && stato === "corrente";
-                return (
-                  <TappaFase
-                    key={f.chiave}
-                    stato={stato}
-                    etichetta={stato === "fatto" ? f.etichettaFatto : f.etichettaPending}
-                    bloccata={bloccata}
-                    titolo={bloccata ? motivoBlocco : stato === "futuro" ? "Rispetta l'ordine delle fasi" : ""}
-                    filoSinistro={i === 0 ? null : i - 1 < idxCorrente}
-                    filoDestro={i === FASI_LOGISTICA.length - 1 ? null : i < idxCorrente}
-                    onClick={stato === "corrente" ? (e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); } : null}
-                  />
-                );
-              })}
-              {/* indietro si torna fino al ritiro, non oltre. Finche' il
-                  pacco e' in casa si puo' riaprire, aggiungere, rifare la
-                  bolla; quando il corriere se l'e' portato via quella
-                  scatola e' fuori dalle nostre mani, e dire in app che non
-                  e' ancora partita vorrebbe dire raccontarsi una cosa che
-                  non e' vera */}
-              {(() => {
-                const idx = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
-                const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
-                return idx > 0 && (idx <= iRitiro || puoForzare);
-              })() && (
-                <TastoIndietroFase
-                  titolo="Torna alla fase precedente"
-                  onClick={(e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
-                />
-              )}
-            </div>
-          )}
+          ) : (() => {
+            const idxCorrente = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
+            const tappe = FASI_LOGISTICA.map((f, i) => {
+              const stato = i < idxCorrente ? "fatto" : i === idxCorrente ? "corrente" : "futuro";
+              const bloccata = bloccaPreparazione && f.chiave === "da_preparare" && stato === "corrente";
+              return {
+                chiave: f.chiave,
+                stato,
+                etichetta: stato === "fatto" ? f.etichettaFatto : f.etichettaPending,
+                Icona: ICONA_FASE[f.chiave] || null,
+                bloccata,
+                titolo: bloccata ? motivoBlocco : stato === "futuro" ? "Rispetta l'ordine delle fasi" : "",
+                onClick: stato === "corrente" ? (e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); } : null,
+              };
+            });
+            // indietro si torna fino al ritiro, non oltre. Finche' il
+            // pacco e' in casa si puo' riaprire, aggiungere, rifare la
+            // bolla; quando il corriere se l'e' portato via quella
+            // scatola e' fuori dalle nostre mani, e dire in app che non
+            // e' ancora partita vorrebbe dire raccontarsi una cosa che
+            // non e' vera
+            const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
+            const siTornaIndietro = idxCorrente > 0 && (idxCorrente <= iRitiro || puoForzare);
+            return (
+              <LineaFasi
+                tappe={tappe}
+                indietro={siTornaIndietro ? {
+                  titolo: "Torna alla fase precedente",
+                  onClick: (e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); },
+                } : null}
+              />
+            );
+          })()}
         </div>
         )}
       </div>
@@ -81879,34 +81963,34 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
             <input type="checkbox" checked={!!gestioneRientroAttiva} onChange={(e) => onToggleGestioneRientro(e.target.checked)} style={{ width: 15, height: 15 }} />
             <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Gestione rientro</span>
           </label>
+          {/* il viaggio di ritorno e' una linea come quella di andata:
+              due disegni per la stessa cosa si leggono come due cose
+              diverse */}
           {gestioneRientroAttiva && (
-            <div style={{ marginTop: 8 }}>
-              {/* il viaggio di ritorno e' una linea come quella di
-                  andata: due disegni per la stessa cosa si leggono come
-                  due cose diverse */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 4, minWidth: 0 }}>
-                {FASI_RIENTRO.map((f, i) => {
-                  const idxCorrente = indiceFaseLogistica(FASI_RIENTRO, faseRientroCorrente);
+            <div style={{ marginTop: 10 }}>
+              {(() => {
+                const idxCorrente = indiceFaseLogistica(FASI_RIENTRO, faseRientroCorrente);
+                const tappe = FASI_RIENTRO.map((f, i) => {
                   const stato = i < idxCorrente ? "fatto" : i === idxCorrente ? "corrente" : "futuro";
-                  return (
-                    <TappaFase
-                      key={f.chiave}
-                      stato={stato}
-                      etichetta={stato === "fatto" ? f.etichettaFatto : f.etichettaPending}
-                      titolo={stato === "futuro" ? "Rispetta l'ordine delle fasi" : ""}
-                      filoSinistro={i === 0 ? null : i - 1 < idxCorrente}
-                      filoDestro={i === FASI_RIENTRO.length - 1 ? null : i < idxCorrente}
-                      onClick={stato === "corrente" ? (e) => { e.stopPropagation(); onCambiaFaseRientro(prossimaFaseLogistica(FASI_RIENTRO, faseRientroCorrente)); } : null}
-                    />
-                  );
-                })}
-                {indiceFaseLogistica(FASI_RIENTRO, faseRientroCorrente) > 0 && (
-                  <TastoIndietroFase
-                    titolo="Torna alla fase precedente"
-                    onClick={(e) => { e.stopPropagation(); onTornaIndietroFaseRientro(faseIndietroLogistica(FASI_RIENTRO, faseRientroCorrente)); }}
+                  return {
+                    chiave: f.chiave,
+                    stato,
+                    etichetta: stato === "fatto" ? f.etichettaFatto : f.etichettaPending,
+                    Icona: ICONA_FASE[f.chiave] || null,
+                    titolo: stato === "futuro" ? "Rispetta l'ordine delle fasi" : "",
+                    onClick: stato === "corrente" ? (e) => { e.stopPropagation(); onCambiaFaseRientro(prossimaFaseLogistica(FASI_RIENTRO, faseRientroCorrente)); } : null,
+                  };
+                });
+                return (
+                  <LineaFasi
+                    tappe={tappe}
+                    indietro={idxCorrente > 0 ? {
+                      titolo: "Torna alla fase precedente",
+                      onClick: (e) => { e.stopPropagation(); onTornaIndietroFaseRientro(faseIndietroLogistica(FASI_RIENTRO, faseRientroCorrente)); },
+                    } : null}
                   />
-                )}
-              </div>
+                );
+              })()}
             </div>
           )}
         </>
