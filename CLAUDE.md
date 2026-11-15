@@ -1878,6 +1878,19 @@ grafica.
   **cestino al posto della crocetta**: una ✕ accanto a quattro pastiglie
   si legge come «chiudi», e quel tasto cancella un pacchetto.
 
+**E dentro ogni reparto i prodotti sono in ordine alfabetico**
+(15/11/2026: «tutti i prodotti nelle varie categorie del materiale
+presente dei kit deve essere in ordine alfabetico sotto ad ogni
+categoria»). Arrivavano nell'ordine in cui le righe erano state
+scritte, cioè in nessun ordine: dentro LAMINAZIONE, con tredici
+boccette che si somigliano, trovare quella che si ha in mano voleva
+dire leggerle tutte. Si ordina dentro `raggruppaPerReparto`, in un
+posto solo, perché le liste sono tre — il contenuto di un kit, gli
+accessori didattica e la raccolta in logistica — e una ordinata accanto
+a due a caso sembra un difetto. Con `numeric: true`, o «N2» verrebbe
+dopo «N10». Il parametro `nomeDi` è facoltativo: chi non lo passa tiene
+l'ordine che gli arriva.
+
 **Il cestino al posto della crocetta, in tutte e due le liste**
 (15/11/2026: «qui sulle liste sostituisci la X rossa con l'iconcina del
 cestino e prima di eliminare il prodotto chiedi conferma»). La domanda
@@ -2070,17 +2083,18 @@ lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
   filo, sotto il nome di ogni tappa. Le due righe usano la **stessa
   griglia** (`repeat(n, 1fr)`): scritte con due misure diverse, il
   pallino si scollerebbe dalla sua etichetta al primo nome lungo.
-- **La pastiglia e l'icona sono SOLO della fase da fare** (corretto dal
-  titolare lo stesso giorno: «elimina le icone e le celle verdi intorno
-  al testo, scrivi solo il testo sotto l'icona di spunta verde»). Una
-  fase fatta è già detta dal pallino verde: ripeterla dentro un riquadro
-  verde con dentro un'icona verde è la stessa cosa detta tre volte, e
-  quattro riquadri di fila pesano quanto il rosso che dovrebbe saltare
-  all'occhio. Sotto il pallino resta il nome e basta — e così ha tutta
-  la colonna per andare a capo dove si deve, invece di spezzare le
-  parole dentro una pastiglia stretta («Pacco preparat / o»). Le icone
-  (`ICONA_FASE`: scatola, bolla spuntata, camion, segnaposto) restano
-  per la rossa.
+- **La nuvola è SOLO della fase da fare, e nessuna tappa ha un'icona**
+  (corretto due volte dal titolare lo stesso giorno: «elimina le icone e
+  le celle verdi intorno al testo, scrivi solo il testo sotto l'icona di
+  spunta verde», poi «anche in queste nuvole rosse devi togliere l'icona
+  e il testo non deve uscire dalla nuvola»). Una fase fatta è già detta
+  dal pallino verde e una da fare dal pallino rosso: l'icona accanto al
+  nome è la terza volta che si dice la stessa cosa, e in una colonna
+  stretta si prendeva metà riga — il nome restava con due parole per
+  riga e usciva dal riquadro. Sotto il pallino c'è il nome e basta,
+  centrato, con `box-sizing: border-box` e `overflow-wrap: anywhere` che
+  lo tengono dentro la nuvola anche quando è una parola sola più lunga
+  della colonna. `ICONA_FASE` è stata cancellata.
 - **Tutte le date sono blu** (deciso dal titolare: «tutte le date dei
   corsi avranno lo stesso colore blu»). Era `corso.colore`: sei corsi in
   colonna erano sei tessere di sei colori, e il colore — che serve a

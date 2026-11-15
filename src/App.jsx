@@ -1049,7 +1049,18 @@ const SENZA_REPARTO = "Senza categoria";
 // perché è il mucchio di quello che non ha un posto suo e non deve stare
 // davanti a quello che ce l'ha. Dentro ogni reparto l'ordine di partenza
 // non si tocca.
-function raggruppaPerReparto(righe, repartoDi, prodottoDi = (r) => r.prodottoId) {
+// DENTRO OGNI REPARTO, L'ORDINE ALFABETICO (15/11/2026, chiesto dal
+// titolare: «tutti i prodotti nelle varie categorie del materiale
+// presente dei kit deve essere in ordine alfabetico sotto ad ogni
+// categoria»). Arrivavano nell'ordine in cui le righe erano state
+// scritte, cioe' in nessun ordine: dentro LAMINAZIONE, con tredici
+// boccette che si somigliano, trovare quella che si ha in mano voleva
+// dire leggerle tutte. Si ordina qui dentro, in un posto solo, perche'
+// le liste sono tre — il contenuto di un kit, gli accessori didattica e
+// la raccolta in logistica — e una ordinata accanto a due a caso sembra
+// un difetto. `nomeDi` e' facoltativo: chi non lo passa tiene l'ordine
+// che gli arriva.
+function raggruppaPerReparto(righe, repartoDi, prodottoDi = (r) => r.prodottoId, nomeDi = null) {
   const gruppi = new Map();
   (righe || []).forEach((r) => {
     const nome = repartoDi?.get?.(prodottoDi(r))?.nome || SENZA_REPARTO;
@@ -1057,7 +1068,14 @@ function raggruppaPerReparto(righe, repartoDi, prodottoDi = (r) => r.prodottoId)
     gruppi.get(nome).push(r);
   });
   return [...gruppi.entries()]
-    .map(([nome, dentro]) => ({ nome, righe: dentro }))
+    .map(([nome, dentro]) => ({
+      nome,
+      righe: nomeDi
+        // `numeric` perche' «N1», «N2», «N3» in ordine di testo
+        // diventerebbero N1, N10, N2
+        ? [...dentro].sort((a, b) => String(nomeDi(a) || "").localeCompare(String(nomeDi(b) || ""), "it", { numeric: true, sensitivity: "base" }))
+        : dentro,
+    }))
     .sort((a, b) =>
       (a.nome === SENZA_REPARTO ? 1 : 0) - (b.nome === SENZA_REPARTO ? 1 : 0)
       || a.nome.localeCompare(b.nome, "it"));
@@ -3440,15 +3458,6 @@ function IconaScatolaErp({ size = 20, color = "currentColor" }) {
       <path d="M3 8l9-4.5L21 8v8l-9 4.5L3 16V8Z" />
       <path d="M3 8l9 4.5L21 8" />
       <path d="M12 12.5V21" />
-    </svg>
-  );
-}
-// la bolla con la spunta: il documento gia' applicato sul pacco
-function IconaSpuntaQuadrata({ size = 20, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
-      <path d="M8 12.2l2.6 2.6L16.2 9" />
     </svg>
   );
 }
@@ -81595,19 +81604,18 @@ function PallinoFase({ stato, filoSinistro, filoDestro }) {
   );
 }
 
-function PastigliaFase({ stato, etichetta, Icona = null, onClick = null, bloccata = false, titolo = "" }) {
+function PastigliaFase({ stato, etichetta, onClick = null, bloccata = false, titolo = "" }) {
   const cliccabile = !!onClick && !bloccata;
-  // LA PASTIGLIA E' SOLO DELLA FASE DA FARE (15/11/2026, corretto dal
-  // titolare: «elimina le icone e le celle verdi intorno al testo,
-  // scrivi solo il testo sotto l'icona di spunta verde; lascia la
-  // nuvola rossa solo per le fasi da completare»).
+  // SOLO IL TESTO, ANCHE NELLA NUVOLA ROSSA (15/11/2026, corretto due
+  // volte dal titolare: «elimina le icone e le celle verdi intorno al
+  // testo», poi «anche in queste nuvole rosse devi togliere l'icona e
+  // il testo non deve uscire dalla nuvola»).
   //
-  // Una fase fatta e' gia' detta dal pallino verde: ripeterla dentro un
-  // riquadro verde con dentro anche un'icona verde e' la stessa cosa
-  // detta tre volte, e quattro riquadri di fila pesano quanto il
-  // rosso che dovrebbe saltare all'occhio. Sotto il pallino resta il
-  // nome e basta — e cosi' ha tutta la colonna per andare a capo dove
-  // si deve, invece di spezzare le parole dentro una pastiglia stretta.
+  // Una fase fatta e' gia' detta dal pallino verde, e una da fare dal
+  // pallino rosso: l'icona accanto al nome e' la terza volta che si
+  // dice la stessa cosa, e in una colonna stretta si prendeva meta'
+  // riga — il nome restava con due parole per riga e usciva dal
+  // riquadro.
   const daFare = stato === "corrente";
   const colore = stato === "fatto" ? NAVY : daFare ? "#B5322A" : MUTED;
   return (
@@ -81618,16 +81626,18 @@ function PastigliaFase({ stato, etichetta, Icona = null, onClick = null, bloccat
       data-tappa-fase={stato}
       data-fase-bloccata={bloccata ? "si" : undefined}
       style={{
-        display: "flex", alignItems: "center", gap: daFare ? 9 : 0,
-        justifyContent: daFare ? "flex-start" : "center",
-        width: "100%", minWidth: 0, textAlign: daFare ? "left" : "center",
+        display: "block", width: "100%", minWidth: 0, boxSizing: "border-box", textAlign: "center",
         background: daFare ? "#FBE6E1" : "none", border: "none", borderRadius: 14,
-        padding: daFare ? "10px 12px" : "4px 2px",
+        padding: daFare ? "9px 10px" : "4px 2px",
         cursor: cliccabile ? "pointer" : "default", opacity: bloccata ? 0.55 : 1,
       }}
     >
-      {daFare && Icona && <span style={{ flexShrink: 0, display: "inline-flex" }}><Icona size={20} color={ROSSO_FASE} /></span>}
-      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.3, color: colore, minWidth: 0 }}>{etichetta}</span>
+      <span style={{
+        display: "block", ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.3, color: colore,
+        // il nome sta dentro la nuvola anche quando e' una parola sola
+        // piu' lunga della colonna
+        minWidth: 0, overflowWrap: "anywhere",
+      }}>{etichetta}</span>
     </button>
   );
 }
@@ -81672,7 +81682,7 @@ function BandaMagazzinoInMovimento({ avanzamento = null }) {
 
 // le due righe, incolonnate sulla stessa griglia, piu' il passo
 // indietro a destra. `tappe` e' una lista di
-// { chiave, stato, etichetta, Icona, onClick, bloccata, titolo }.
+// { chiave, stato, etichetta, onClick, bloccata, titolo }.
 function LineaFasi({ tappe, indietro = null }) {
   const griglia = { display: "grid", gridTemplateColumns: `repeat(${tappe.length}, minmax(0, 1fr))`, gap: 8, minWidth: 0 };
   return (
@@ -81694,7 +81704,6 @@ function LineaFasi({ tappe, indietro = null }) {
               key={t.chiave}
               stato={t.stato}
               etichetta={t.etichetta}
-              Icona={t.Icona || null}
               bloccata={!!t.bloccata}
               titolo={t.titolo || ""}
               onClick={t.onClick || null}
@@ -81707,19 +81716,6 @@ function LineaFasi({ tappe, indietro = null }) {
   );
 }
 
-// l'icona di ogni fase: dice che cosa si sta guardando prima che si
-// legga il nome, ed e' la stessa all'andata e al ritorno dove la cosa
-// e' la stessa (il camion e' il camion)
-const ICONA_FASE = {
-  da_preparare: IconaScatolaErp,
-  bolla_stampata: IconaSpuntaQuadrata,
-  ritirato_corriere: IconaCamionConsegna,
-  consegna_verificata: IconaPin,
-  bolla_rientro_emessa: IconaSpuntaQuadrata,
-  pacco_ritirato: IconaCamionConsegna,
-  pacco_rientrato: IconaScatolaErp,
-  prodotti_ripristinati: IconaSpuntaCerchio,
-};
 
 function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario, mancanti = [] }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -81835,7 +81831,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
             ) : (() => {
               const passi = [
                 {
-                  chiave: "preparato", Icona: IconaScatolaErp,
+                  chiave: "preparato",
                   fatto: !!preparatoTs,
                   etichettaFatto: "Materiale preparato", etichettaDaFare: "Materiale da preparare",
                   bloccata: bloccaPreparazione && !preparatoTs,
@@ -81847,14 +81843,14 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                   // una volta consegnato non si torna indietro: quello
                   // che e' andato in aula e' andato, e quello che avanza
                   // rientra dall'inventario
-                  chiave: "consegnato", Icona: IconaPin,
+                  chiave: "consegnato",
                   fatto: !!allestitoTs,
                   etichettaFatto: "Materiale consegnato", etichettaDaFare: "Materiale da consegnare",
                   puoPremere: !!preparatoTs || !!allestitoTs,
                   premi: () => onAllestisci(!allestitoTs),
                 },
                 {
-                  chiave: "inventario", Icona: IconaClipboardErp,
+                  chiave: "inventario",
                   fatto: !!inventarioTs,
                   etichettaFatto: "Inventario eseguito", etichettaDaFare: "Inventario da fare",
                   // l'inventario si fa dal pannello a destra: da qui si
@@ -81868,7 +81864,6 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                 chiave: t.chiave,
                 stato: t.fatto ? "fatto" : i === primaDaFare ? "corrente" : "futuro",
                 etichetta: t.fatto ? t.etichettaFatto : t.etichettaDaFare,
-                Icona: t.Icona,
                 bloccata: !!t.bloccata,
                 titolo: t.titolo || "",
                 onClick: t.puoPremere ? (e) => { e.stopPropagation(); t.premi(); } : null,
@@ -81912,7 +81907,6 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                 chiave: f.chiave,
                 stato,
                 etichetta: stato === "fatto" ? f.etichettaFatto : f.etichettaPending,
-                Icona: ICONA_FASE[f.chiave] || null,
                 bloccata,
                 titolo: bloccata ? motivoBlocco : stato === "futuro" ? "Rispetta l'ordine delle fasi" : "",
                 onClick: stato === "corrente" ? (e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); } : null,
@@ -81986,8 +81980,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                     chiave: f.chiave,
                     stato,
                     etichetta: stato === "fatto" ? f.etichettaFatto : f.etichettaPending,
-                    Icona: ICONA_FASE[f.chiave] || null,
-                    titolo: stato === "futuro" ? "Rispetta l'ordine delle fasi" : "",
+                        titolo: stato === "futuro" ? "Rispetta l'ordine delle fasi" : "",
                     onClick: stato === "corrente" ? (e) => { e.stopPropagation(); onCambiaFaseRientro(prossimaFaseLogistica(FASI_RIENTRO, faseRientroCorrente)); } : null,
                   };
                 });
@@ -82267,7 +82260,7 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
       </div>
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "12px 16px 90px" }}>
         {righe.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Non c'è ancora niente da raccogliere: nessun iscritto ha scelto un kit e non ci sono accessori.</div>}
-        {raggruppaPerReparto(righe, repartoDi).map((g) => (
+        {raggruppaPerReparto(righe, repartoDi, (r) => r.prodottoId, (r) => r.nome).map((g) => (
         <div key={g.nome}>
         {/* quante ne restano in QUESTO scaffale: è il numero che dice se
             si può passare al prossimo, e sta accanto al suo nome invece
@@ -85090,7 +85083,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           lo prepara non trova niente. Il nome adesso VA A CAPO invece di
           essere tagliato: quello che non ci stava era la fine del nome,
           che su questi prodotti è il formato («Box 10 pz»). */}
-      {aperto && raggruppaPerReparto(prodottiKit, repartoDi, (r) => r.prodotto_id).map((g) => (
+      {aperto && raggruppaPerReparto(prodottiKit, repartoDi, (r) => r.prodotto_id, (r) => prodottiShop.find((pp) => pp.id === r.prodotto_id)?.nome || "").map((g) => (
         <div key={g.nome}>
           <IntestazioneReparto nome={g.nome} nota={`${g.righe.length} ${g.righe.length === 1 ? "riga" : "righe"}`} />
           {g.righe.map((r) => {
@@ -85298,7 +85291,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 
       {righe.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio ancora.</div>
-      ) : raggruppaPerReparto(righe, repartoDi, (r) => r.prodotto_id).map((g, idx, gruppi) => {
+      ) : raggruppaPerReparto(righe, repartoDi, (r) => r.prodotto_id, (r) => prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "").map((g, idx, gruppi) => {
         const apertaBanda = repartiAperti ? repartiAperti.has(g.nome) : idx === 0;
         return (
         <div key={g.nome} data-banda-reparto={g.nome} style={{ marginBottom: 10 }}>

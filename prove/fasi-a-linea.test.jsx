@@ -98,18 +98,18 @@ describe("la linea delle fasi di una spedizione", () => {
   // un riquadro verde con dentro un'icona verde e' la stessa cosa detta
   // tre volte, e quattro riquadri di fila pesano quanto il rosso che
   // dovrebbe saltare all'occhio.
-  it("la fase fatta è solo testo; la pastiglia e l'icona sono della rossa", async () => {
+  it("nessuna tappa ha un'icona; la nuvola è solo della rossa", async () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="ritirato_corriere" />);
     const tappe = [...p.nodo.querySelectorAll("[data-tappa-fase]")];
-    const fatta = tappe[0];
-    expect(fatta.querySelector("svg")).toBeFalsy();
-    expect(fatta.style.background).toBe("none");
-    const futura = tappe[3];
-    expect(futura.querySelector("svg")).toBeFalsy();
-    expect(futura.style.background).toBe("none");
-    const daFare = tappe[2];
-    expect(daFare.querySelector("svg")).toBeTruthy();
-    expect(daFare.style.background).not.toBe("none");
+    // 15/11/2026, corretto due volte: niente icone, né accanto al verde
+    // né dentro la nuvola rossa — il pallino lo dice già
+    tappe.forEach((t) => expect(t.querySelector("svg")).toBeFalsy());
+    expect(tappe[0].style.background).toBe("none");
+    expect(tappe[3].style.background).toBe("none");
+    expect(tappe[2].style.background).not.toBe("none");
+    // e il nome non esce dalla nuvola nemmeno se è una parola sola
+    expect(tappe[2].querySelector("span").style.overflowWrap).toBe("anywhere");
+    expect(tappe[2].style.boxSizing).toBe("border-box");
     await p.smonta();
   });
 

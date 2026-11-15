@@ -67,6 +67,48 @@ describe("il reparto di un prodotto", () => {
     expect(gruppi.map((g) => g.nome)).toEqual(["TUTTI I PIGMENTI", SENZA_REPARTO]);
   });
 
+  // 15/11/2026, chiesto dal titolare: «tutti i prodotti nelle varie
+  // categorie del materiale presente dei kit deve essere in ordine
+  // alfabetico sotto ad ogni categoria». Dentro LAMINAZIONE c'erano
+  // tredici boccette nell'ordine in cui le righe erano state scritte.
+  it("dentro un reparto i prodotti sono in ordine alfabetico", () => {
+    const m = repartoPerProdotto([
+      { prodotto_id: "p1", categoria_id: "cat-pig" },
+      { prodotto_id: "p2", categoria_id: "cat-pig" },
+      { prodotto_id: "p3", categoria_id: "cat-pig" },
+    ], CATEGORIE);
+    const nomi = { p1: "Tinta nera", p2: "Colla ciglia", p3: "N10 Fixa" };
+    const gruppi = raggruppaPerReparto(
+      [{ prodottoId: "p1" }, { prodottoId: "p2" }, { prodottoId: "p3" }],
+      m, (r) => r.prodottoId, (r) => nomi[r.prodottoId],
+    );
+    expect(gruppi[0].righe.map((r) => nomi[r.prodottoId])).toEqual(["Colla ciglia", "N10 Fixa", "Tinta nera"]);
+  });
+
+  it("«N2» viene prima di «N10», non dopo", () => {
+    const m = repartoPerProdotto([
+      { prodotto_id: "p1", categoria_id: "cat-pig" },
+      { prodotto_id: "p2", categoria_id: "cat-pig" },
+    ], CATEGORIE);
+    const nomi = { p1: "N10 Hydra", p2: "N2 Fixa" };
+    const gruppi = raggruppaPerReparto(
+      [{ prodottoId: "p1" }, { prodottoId: "p2" }],
+      m, (r) => r.prodottoId, (r) => nomi[r.prodottoId],
+    );
+    expect(gruppi[0].righe.map((r) => nomi[r.prodottoId])).toEqual(["N2 Fixa", "N10 Hydra"]);
+  });
+
+  // chi non passa i nomi tiene l'ordine che gli arriva: le tre liste lo
+  // passano, ma la funzione non deve pretenderlo per funzionare
+  it("senza i nomi l'ordine di arrivo non si tocca", () => {
+    const m = repartoPerProdotto([
+      { prodotto_id: "p1", categoria_id: "cat-pig" },
+      { prodotto_id: "p2", categoria_id: "cat-pig" },
+    ], CATEGORIE);
+    const gruppi = raggruppaPerReparto([{ prodottoId: "p2" }, { prodottoId: "p1" }], m);
+    expect(gruppi[0].righe.map((r) => r.prodottoId)).toEqual(["p2", "p1"]);
+  });
+
   it("i reparti sono in ordine alfabetico", () => {
     const m = repartoPerProdotto([
       { prodotto_id: "p1", categoria_id: "cat-pig" },
