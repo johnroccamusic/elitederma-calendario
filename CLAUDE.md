@@ -1844,6 +1844,88 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
+### Composizione kit, e il prodotto che non è ancora arrivato (15/11/2026)
+
+Il titolare: «aggiungi la pagina "Composizione kit", che si apre dopo la
+raccolta del materiale […] Ogni blocco ha come titolo la quantità e il
+nome del kit (es. "10 kit PMU Pro") e sotto la lista dei prodotti che Raf
+deve mettere in ciascuna busta». E, nella raccolta: «un nuovo pulsante, a
+destra del flag, "In attesa di ricezione", che colora la riga di
+arancione […] Finché la lista mancanti di un corso non è vuota, il
+pulsante "Pacco preparato" di quel corso resta disattivato».
+
+**Sono due domande diverse sullo stesso materiale.** La raccolta
+(30/10/2026) risponde a «quanti pezzi in tutto prendo dallo scaffale» —
+7 aghi, una riga per prodotto, le quantità già sommate su tutti i kit. La
+composizione risponde a «quanti ne metto in OGNI busta» — 2, il numero
+scritto nella distinta del pacchetto, quello che la mano ripete dieci
+volte. Un numero solo per tutte e due le domande vorrebbe dire sbagliarne
+una delle due.
+
+Le quantità dei kit arrivano da **`componiSpedizione`**, la stessa
+fotografia da cui nasce la raccolta: due conti separati vorrebbero dire
+una lista che manda a prendere sei pelli e un'altra che ne fa mettere
+sette nelle buste. Una prova confronta le due strade sugli stessi pezzi.
+
+**«In attesa di ricezione» è un TERZO stato, non il contrario di
+«preso».** Per questo ha una mappa sua (`logistica_kit_edizioni.in_attesa`,
+migrazione `20261115100000`) e non un valore dentro `checklist`, dove
+qualunque cosa scritta vuol dire «preso». La riga diventa arancione, e il
+flag verde resta dov'è: è con quello che si dice «è arrivato». I due
+gesti si escludono a vicenda, perché una riga verde e arancione insieme
+non vorrebbe dire niente.
+
+Quattro decisioni:
+
+- **Arancione non ferma il lavoro.** Si continua a raccogliere e a
+  comporre le buste: un pezzo in arrivo non blocca le mani, blocca una
+  cosa sola — **dichiarare preparato un pacco a cui manca un pezzo**. È
+  il primo gesto della fila, quello che scarica il magazzino e congela la
+  fotografia della spedizione: dirlo con un buco dentro vuol dire far
+  partire una scatola che qualcuno sapeva già incompleta.
+- **La lista mancanti sta sulla riga del corso**, non dentro il pannello:
+  è lì che si preme il tasto che blocca, e un avviso che vive in un'altra
+  pagina è un avviso che non si legge. Dice quale prodotto, **in quale
+  kit** e in che quantità («7 × Aghi 1RL — 6 per PMU Pro · 1 per PMU
+  Base»), perché la domanda di chi guarda è se aspettare o comporre le
+  buste a metà.
+- **Il divieto non vive solo nel tasto.** Lo ricontrollano
+  `cambiaFaseLogistica` e `preparaMateriale` (il gemello dei corsi in sede
+  centrale, dove «Materiale preparato» vuol dire la stessa cosa con
+  un'altra parola). Chi programma passa comunque, come su ogni altra
+  serratura di questa pagina: quando il dato e la realtà non coincidono
+  qualcuno deve poterli riallineare.
+- **Una chiave in attesa su un prodotto uscito dal pacco non blocca per
+  sempre.** `listaMancanti` guarda sempre la raccolta **di adesso**: se
+  un'iscritta cambia pacchetto e quel prodotto non serve più, la riga
+  sparisce da sola invece di tenere fermo un corso per un pezzo che
+  nessuno aspetta più.
+
+Due note di forma. La riga della raccolta **non è più un tasto**: è una
+riga con due tasti dentro (il flag, che resta largo quanto tutta la riga
+e si prende col pollice senza mirare, e «In attesa» a destra) — un tasto
+dentro un tasto il browser non lo accetta. E un **kit senza distinta
+resta in elenco** e lo dice: farlo sparire vorrebbe dire che chi prepara
+cerca un blocco che non c'è e non sa perché (la stessa regola del bundle
+aperto a vuoto del 6/11).
+
+«Terminato», in cima alla composizione, **chiude e basta**: non dichiara
+niente. Quello che è fatto lo dicono i tasti verdi dei blocchi, uno per
+kit (`kit_composti`), che si disfano con lo stesso dito.
+
+Prove in `prove/composizione-kit.test.jsx` (19): il conto e la sua
+coincidenza con la raccolta, le due pagine montate per davvero, e la
+riga del corso — la lista mancanti con i kit e le quantità, la pillola
+che bloccata non avanza, e che vuota la lista il pacco si dichiara
+preparato come sempre.
+
+**Una prova rossa trovata per strada, e non era questa.**
+`prove/classe-dal-venditore.test.jsx` fissava una classe al **14/11/2026**:
+«domani» il giorno in cui è nata, ieri il giorno dopo — e l'elenco dei
+corsi programmati restava vuoto. Una data scritta a calendario in una
+prova scade da sola; adesso è *fra un mese da oggi*, e la prova non ha
+più una data di scadenza.
+
 ### Più di una slide per corso (14/11/2026)
 
 Il titolare: «in associa slide al corso avrei bisogno, una volta

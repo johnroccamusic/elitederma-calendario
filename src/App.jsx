@@ -81354,7 +81354,7 @@ function TastoSvuotaCacheSito() {
 // raggiungere. Solo la pillola rossa (quella attuale) è cliccabile —
 // l'ordine va sempre rispettato, non si salta avanti né si torna
 // indietro: cliccarla fa avanzare alla fase successiva
-function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA }) {
+function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA, bloccata = false, motivoBlocco = "" }) {
   // da mobile le fasi stanno in fila e ognuna prende la stessa frazione di
   // riga: legandole a un quadrato restano tutte uguali qualunque sia la
   // lunghezza dell'etichetta, invece di allungarsi a seconda di quante
@@ -81363,7 +81363,9 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA
   const idx = fasi.findIndex((f) => f.chiave === fase.chiave);
   const idxCorrente = indiceFaseLogistica(fasi, faseCorrente);
   const stato = idx < idxCorrente ? "fatto" : idx === idxCorrente ? "corrente" : "futuro";
-  const cliccabile = stato === "corrente";
+  // una fase bloccata resta la fase corrente — il pacco e' ancora da
+  // preparare — ma non si puo' premere, e il perche' si legge sopra
+  const cliccabile = stato === "corrente" && !bloccata;
   const stile = {
     fatto: { background: "#E8F3EA", border: "1px solid #2E7D32", color: "#2E7D32" },
     corrente: { background: "#FBEAE4", border: "1px solid #C0392B", color: "#C0392B" },
@@ -81373,10 +81375,12 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA
   return (
     <button
       onClick={cliccabile ? onClick : undefined}
-      title={cliccabile ? undefined : "Rispetta l'ordine delle fasi"}
+      title={cliccabile ? undefined : bloccata ? motivoBlocco : "Rispetta l'ordine delle fasi"}
+      data-fase-bloccata={bloccata ? "si" : undefined}
       style={{
         ...fontBody, fontSize: isMobile ? 10 : 11, fontWeight: 700, borderRadius: 10, padding: isMobile ? "4px 3px" : "9px 6px",
         cursor: cliccabile ? "pointer" : "default", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.2,
+        opacity: bloccata ? 0.5 : 1,
         overflowWrap: "break-word",
         // da desktop lo spezzaparola serve (le colonne sono strette e
         // fisse); nel quadrato di mobile no, e senza le parole non si
@@ -81600,10 +81604,11 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true })
 // un tasto dei corsi in sede: rosso finché la cosa è da fare, verde quando
 // è fatta — la stessa lettura a colpo d'occhio delle pillole di spedizione,
 // senza la sequenza che per un corso in sede non esiste
-function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick }) {
+function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick, titolo = "" }) {
   return (
     <button
       onClick={spento ? (e) => e.stopPropagation() : onClick}
+      title={titolo || undefined}
       style={{
         ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 10, padding: "10px 12px", flex: "1 1 140px", minWidth: 120,
         cursor: spento ? "default" : "pointer", textAlign: "center", lineHeight: 1.2,
@@ -81618,8 +81623,19 @@ function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick
     </button>
   );
 }
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, puoForzare = false, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, preparatoTs, inLavorazione, avanzamento = null, onAllestisci, onPrepara, onApriInventarioSede, onAnnullaInventario, mancanti = [] }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
+  // FINCHE' MANCA QUALCOSA IL PACCO NON SI DICHIARA PREPARATO
+  // (15/11/2026). Vale solo sul primo gesto — quello che dice «dentro
+  // c'e' tutto» e che scarica il magazzino: raccogliere e comporre le
+  // buste si continua, perche' un pezzo in arrivo non ferma il lavoro,
+  // ferma la dichiarazione. Chi programma passa comunque, come su ogni
+  // altra serratura di questa pagina: quando il dato e la realta' non
+  // coincidono qualcuno deve poterli riallineare.
+  const bloccaPreparazione = mancanti.length > 0 && !puoForzare;
+  const motivoBlocco = mancanti.length > 0
+    ? `Mancano ancora ${mancanti.length} ${mancanti.length === 1 ? "prodotto" : "prodotti"}: segnali ricevuti nella raccolta e il pacco si sblocca.`
+    : "";
   const inSede = !!loc?.sede_centrale;
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
   const etichettaFase = inSede
@@ -81677,7 +81693,8 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                 pezzi lasciano davvero lo scaffale. */}
             <TastoFaseSede
               fatto={!!preparatoTs}
-              spento={inLavorazione || (!!allestitoTs && !puoForzare)}
+              spento={inLavorazione || (!!allestitoTs && !puoForzare) || (bloccaPreparazione && !preparatoTs)}
+              titolo={bloccaPreparazione && !preparatoTs ? motivoBlocco : ""}
               etichettaDaFare={inLavorazione ? "Scarico in corso…" : "Materiale da preparare"}
               etichettaFatto={inLavorazione ? "Rientro in corso…" : "Materiale preparato"}
               onClick={(e) => { e.stopPropagation(); if (!allestitoTs || puoForzare) onPrepara(!preparatoTs); }}
@@ -81734,7 +81751,12 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
               Magazzino in movimento{avanzamento?.totale ? `: ${avanzamento.fatti} di ${avanzamento.totale} prodotti` : "…"} — non premere di nuovo
             </div>
           ) : FASI_LOGISTICA.map((f) => (
-            <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
+            <PillaFaseLogistica
+              key={f.chiave} fase={f} faseCorrente={faseCorrente}
+              bloccata={bloccaPreparazione && f.chiave === "da_preparare"}
+              motivoBlocco={motivoBlocco}
+              onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }}
+            />
           ))}
           {/* indietro si torna fino al ritiro, non oltre. Finche' il
               pacco e' in casa si puo' riaprire, aggiungere, rifare la
@@ -81757,6 +81779,34 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
         </div>
         )}
       </div>
+      {/* LA LISTA MANCANTI (15/11/2026): quale prodotto manca, in quale
+          kit finisce e in che quantita'. Sta sulla riga del corso — non
+          dentro il pannello — perche' e' qui che si preme il tasto che
+          dichiara il pacco preparato, e un avviso che vive in un'altra
+          pagina e' un avviso che non si legge. */}
+      {mancanti.length > 0 && (
+        <div data-lista-mancanti onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, background: "#FDF0E2", border: "1px solid #E3A765", borderRadius: 12, padding: "10px 12px" }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#A05A14", textTransform: "uppercase", letterSpacing: 0.4 }}>
+            Lista mancanti · {mancanti.length} {mancanti.length === 1 ? "prodotto in attesa" : "prodotti in attesa"}
+          </div>
+          {mancanti.map((m) => (
+            <div key={m.chiave} data-riga-mancante style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 6, lineHeight: 1.4, overflowWrap: "anywhere" }}>
+              <b>{m.quantita} × {m.nome}</b>
+              <span style={{ color: "#A05A14" }}>
+                {" — "}
+                {m.nei.length > 0
+                  ? m.nei.map((n) => `${n.quantita} per ${n.kit}`).join(" · ")
+                  : (m.da || []).join(" · ") || "fuori dai kit"}
+              </span>
+            </div>
+          ))}
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#A05A14", marginTop: 8, lineHeight: 1.45 }}>
+            {bloccaPreparazione
+              ? "Finché manca qualcosa il pacco non si può dichiarare preparato. Appena arriva, dalla raccolta si spunta come ricevuto e qui sparisce."
+              : "Appena arriva, dalla raccolta si spunta come ricevuto e qui sparisce."}
+          </div>
+        </div>
+      )}
       {!inSede && speditoCompletamente && (
         <>
           <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
@@ -81904,6 +81954,75 @@ function listaRaccoltaMateriale({ iscrittiEdizione, statoEdizione, kitDefinizion
   return [...righe.values()].sort((a, b) => String(a.nome).localeCompare(String(b.nome), "it", { numeric: true }));
 }
 
+// LA COMPOSIZIONE DEI KIT (15/11/2026, chiesta dal titolare: «aggiungi
+// la pagina "Composizione kit", che si apre dopo la raccolta del
+// materiale»). Raccolto il materiale, chi prepara riempie le buste — e
+// la domanda cambia. La raccolta dice «quanti pezzi in tutto prendo
+// dallo scaffale»; qui serve «quanti ne metto in OGNI busta», che e' il
+// numero scritto nella distinta del pacchetto. Un blocco per tipo di
+// kit, col suo titolo («10 kit PMU Pro») e sotto la sua lista.
+//
+// I kit e le loro quantita' arrivano da componiSpedizione, la stessa
+// fotografia da cui nasce la raccolta: due conti diversi vorrebbero
+// dire una lista che manda a prendere sei pelli e un'altra che ne fa
+// mettere sette nelle buste.
+//
+// Un kit la cui distinta e' vuota resta in elenco e lo dice: farlo
+// sparire vorrebbe dire che chi prepara cerca un blocco che non c'e' e
+// non sa perche' — la stessa regola del bundle aperto a vuoto.
+function composizioneKit({ iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId, dataInizio = null }) {
+  const sped = componiSpedizione({ stato: statoEdizione || {}, iscrittiEdizione, kitDefinizioni, corsoId, corsiKitProdotti, dataInizio });
+  const nome = (id) => (prodottiShop || []).find((p) => p.id === id)?.nome || "—";
+  const ordineKit = (id) => (kitDefinizioni || []).find((k) => k.id === id)?.ordine ?? 0;
+  return Object.entries(sped.kit || {})
+    .map(([kitId, k]) => {
+      const perIscritti = Number(k.per_iscritti) || 0;
+      const riserva = Number(k.riserva) || 0;
+      const quante = perIscritti + riserva;
+      const righe = (corsiKitProdotti || [])
+        .filter((r) => r.kit_id === kitId && r.tipo === "kit" && (Number(r.quantita) || 0) > 0)
+        .map((r) => ({
+          chiave: `prodotto::${r.prodotto_id}`,
+          prodottoId: r.prodotto_id,
+          nome: nome(r.prodotto_id),
+          perBusta: Number(r.quantita) || 0,
+          totale: quante * (Number(r.quantita) || 0),
+        }))
+        .sort((a, b) => String(a.nome).localeCompare(String(b.nome), "it", { numeric: true }));
+      return { kitId, nome: k.nome || "Kit", quante, perIscritti, riserva, righe };
+    })
+    .filter((b) => b.quante > 0)
+    .sort((a, b) => (ordineKit(a.kitId) - ordineKit(b.kitId)) || String(a.nome).localeCompare(String(b.nome), "it"));
+}
+
+// LA LISTA MANCANTI (15/11/2026): quali prodotti sono stati dichiarati
+// «in attesa di ricezione» nella raccolta, in quale kit finiscono e in
+// che quantita'. Finche' non e' vuota il pacco di quel corso non si
+// dichiara preparato — altrimenti partirebbe una scatola che qualcuno
+// sa gia' essere incompleta.
+//
+// Si guarda sempre la raccolta DI ADESSO: una chiave rimasta in attesa
+// su un prodotto che dal pacco e' uscito — un'iscritta ha cambiato
+// pacchetto, l'accessorio e' stato tolto — non deve tenere bloccato un
+// corso per sempre per colpa di una riga che non esiste piu'.
+function listaMancanti({ righeRaccolta = [], blocchi = [], inAttesa = {} }) {
+  return (righeRaccolta || [])
+    .filter((r) => (inAttesa || {})[r.chiave])
+    .map((r) => ({
+      chiave: r.chiave,
+      prodottoId: r.prodottoId || null,
+      nome: r.nome,
+      quantita: r.quantita,
+      da: r.da || [],
+      // in quali kit sta, e quanti ne vuole ognuno: e' la domanda che si
+      // fa chi deve decidere se aspettare o comporre le buste a meta'
+      nei: (blocchi || [])
+        .map((b) => ({ kit: b.nome, riga: (b.righe || []).find((x) => x.chiave === r.chiave) }))
+        .filter((x) => x.riga)
+        .map((x) => ({ kit: x.kit, quantita: x.riga.totale, perBusta: x.riga.perBusta })),
+    }));
+}
+
 // La pagina intera della raccolta: una riga per prodotto, la quantita'
 // grande a sinistra, e un tocco — col dito o col mouse — che la fa
 // diventare verde. Le spunte si salvano sull'edizione
@@ -81911,8 +82030,15 @@ function listaRaccoltaMateriale({ iscrittiEdizione, statoEdizione, kitDefinizion
 // o si chiude la pagina a meta', si riprende da dove si era. L'ordine
 // delle righe non cambia mentre si spunta, o chi raccoglie perde il
 // segno fra uno scaffale e l'altro.
-function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {}, repartoDi = null }) {
+function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {}, repartoDi = null, attesa = {}, onAttesa = null, onComponi = null }) {
+  // tre stati, non due: preso, in attesa di ricezione, ancora da
+  // prendere. «In attesa» non e' il contrario di «preso» — e' un
+  // prodotto che non c'e' ancora e che qualcuno sta aspettando — e per
+  // questo ha una mappa sua e non un valore dentro le spunte, dove
+  // qualunque cosa scritta vuol dire «preso».
+  const statoRiga = (r) => (spunte?.[r.chiave] ? "presa" : attesa?.[r.chiave] ? "in-attesa" : "da-prendere");
   const prese = righe.filter((r) => spunte?.[r.chiave]).length;
+  const inAttesa = righe.filter((r) => statoRiga(r) === "in-attesa").length;
   const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
   const pezziPresi = righe.filter((r) => spunte?.[r.chiave]).reduce((s, r) => s + r.quantita, 0);
   const completa = righe.length > 0 && prese === righe.length;
@@ -81934,7 +82060,16 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
           <div style={{ textAlign: "right" }} data-avanzamento>
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: completa ? "#2E7D32" : NAVY, lineHeight: 1.1 }}>{prese} / {righe.length}</div>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{completa ? "tutto preso" : `prodotti presi · ${pezziPresi} di ${pezziTotali} pezzi`}</div>
+            {inAttesa > 0 && (
+              <div data-attesa-conto style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#A05A14" }}>{inAttesa} in attesa di ricezione</div>
+            )}
           </div>
+          {/* la composizione e' il gesto dopo, fatto dalla stessa persona
+              con le stesse mani occupate: ci si arriva da qui, senza
+              tornare indietro a cercare un tasto nella scheda */}
+          {onComponi && (
+            <button type="button" onClick={onComponi} data-vai-composizione style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1.5px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "9px 16px", cursor: "pointer" }}>Componi i kit →</button>
+          )}
           <button type="button" onClick={onChiudi} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer" }}>Chiudi</button>
         </div>
         <div style={{ maxWidth: 760, margin: "8px auto 0", height: 6, background: CREAM_BORDER, borderRadius: 999, overflow: "hidden" }}>
@@ -81956,28 +82091,55 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
           })()}
         />
         {g.righe.map((r) => {
-          const presa = !!spunte?.[r.chiave];
+          // Due tasti su una riga sola, e per questo la riga non e' piu'
+          // un tasto: il flag di sempre (tutta la riga, che si prende col
+          // pollice senza mirare) e, a destra, «In attesa di ricezione».
+          // Un tasto dentro un tasto il browser non lo accetta.
+          const stato = statoRiga(r);
+          const presa = stato === "presa";
+          const attende = stato === "in-attesa";
           const url = r.prodottoId ? immaginePerProdotto[r.prodottoId] : null;
+          const colore = presa ? "#2E7D32" : attende ? "#A05A14" : NAVY;
           return (
-            <button
-              key={r.chiave} type="button" onClick={() => onSpunta(r.chiave, !presa)} data-riga-raccolta={presa ? "presa" : "da-prendere"}
-              style={{
-                display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", minHeight: 60, padding: "10px 12px", marginBottom: 8,
-                background: presa ? "#EAF5EA" : "#fff", border: `1.5px solid ${presa ? "#8BC48B" : CREAM_BORDER}`, borderRadius: 14, cursor: "pointer",
-                boxShadow: presa ? "none" : "0 1px 2px rgba(14,27,51,0.05)",
-              }}
-            >
-              <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: presa ? "#2E7D32" : NAVY, minWidth: 48, textAlign: "center", flexShrink: 0 }}>{r.quantita}</span>
-              <RiquadroFotoProdotto url={url} />
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, fontWeight: 700, color: presa ? "#2E7D32" : NAVY, overflowWrap: "anywhere", textDecoration: presa ? "line-through" : "none", textDecorationColor: "#8BC48B" }}>{r.nome}</span>
-                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-                  {r.da.join(" · ")}
-                  {presa && spunte[r.chiave]?.da ? ` · preso da ${spunte[r.chiave].da}` : ""}
+            <div key={r.chiave} style={{ display: "flex", alignItems: "stretch", gap: 8, marginBottom: 8 }}>
+              <button
+                type="button" onClick={() => onSpunta(r.chiave, !presa)} data-riga-raccolta={stato}
+                title={attende ? "È arrivato: segnalo come ricevuto" : presa ? "Togli la spunta" : "Segnalo come preso"}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0, textAlign: "left", minHeight: 60, padding: "10px 12px",
+                  background: presa ? "#EAF5EA" : attende ? "#FDF0E2" : "#fff",
+                  border: `1.5px solid ${presa ? "#8BC48B" : attende ? "#E3A765" : CREAM_BORDER}`, borderRadius: 14, cursor: "pointer",
+                  boxShadow: presa || attende ? "none" : "0 1px 2px rgba(14,27,51,0.05)",
+                }}
+              >
+                <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: colore, minWidth: 48, textAlign: "center", flexShrink: 0 }}>{r.quantita}</span>
+                <RiquadroFotoProdotto url={url} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, fontWeight: 700, color: colore, overflowWrap: "anywhere", textDecoration: presa ? "line-through" : "none", textDecorationColor: "#8BC48B" }}>{r.nome}</span>
+                  <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: attende ? "#A05A14" : MUTED, marginTop: 2 }}>
+                    {attende ? "in attesa di ricezione · spuntalo quando arriva" : (r.da || []).join(" · ")}
+                    {presa && spunte[r.chiave]?.da ? ` · preso da ${spunte[r.chiave].da}` : ""}
+                  </span>
                 </span>
-              </span>
-              <span aria-hidden style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: presa ? "#2E7D32" : "#fff", border: `2px solid ${presa ? "#2E7D32" : CREAM_BORDER}`, color: "#fff", fontSize: 16, fontWeight: 800 }}>{presa ? "✓" : ""}</span>
-            </button>
+                <span aria-hidden style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: presa ? "#2E7D32" : "#fff", border: `2px solid ${presa ? "#2E7D32" : attende ? "#E3A765" : CREAM_BORDER}`, color: "#fff", fontSize: 16, fontWeight: 800 }}>{presa ? "✓" : ""}</span>
+              </button>
+              {/* arancione non ferma niente: si continua a raccogliere e a
+                  comporre le buste. Ferma una cosa sola, dichiarare
+                  preparato un pacco a cui manca un pezzo. */}
+              {onAttesa && (
+                <button
+                  type="button" onClick={() => onAttesa(r.chiave, !attende)} data-attesa-riga={attende ? "si" : "no"}
+                  title={attende ? "Non lo aspettiamo più: la riga torna da prendere" : "Il prodotto non c'è ancora: è in arrivo"}
+                  style={{
+                    ...fontBody, fontSize: 10.5, fontWeight: 700, lineHeight: 1.15, width: 92, flexShrink: 0, borderRadius: 14, padding: "6px 8px", cursor: "pointer",
+                    background: attende ? "#E3A765" : "#fff", color: attende ? "#fff" : "#A05A14",
+                    border: `1.5px solid ${attende ? "#E3A765" : "#EBD6BC"}`,
+                  }}
+                >
+                  In attesa di ricezione
+                </button>
+              )}
+            </div>
           );
         })}
         </div>
@@ -81988,6 +82150,112 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
             Azzera le spunte
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// LA PAGINA DELLA COMPOSIZIONE, a tutta pagina come la raccolta: stessa
+// barra che resta in cima, stesso fondo, stesse righe grandi — e' il
+// gesto dopo, fatto dalla stessa persona in piedi con lo scatolone
+// davanti, e due forme diverse per lo stesso lavoro si imparano due
+// volte.
+//
+// Un blocco per kit, uno sotto l'altro: titolo «10 kit PMU Pro», il
+// tasto verde che dichiara riempite tutte le buste di quel kit, e sotto
+// i prodotti da mettere in OGNI busta — il numero grande e' quello che
+// va dentro una busta, perche' e' quello che la mano ripete.
+//
+// I prodotti ancora in attesa di ricezione si leggono in arancione nei
+// kit che li contengono: e' li' che il buco si vede, con la busta in
+// mano, e non in fondo a una lista a parte.
+function ComposizioneKit({ titolo, sottotitolo, blocchi = [], composti = {}, attesa = {}, onComposto, onChiudi, immaginePerProdotto = {} }) {
+  const fatti = blocchi.filter((b) => composti?.[b.kitId]).length;
+  const completa = blocchi.length > 0 && fatti === blocchi.length;
+  useEffect(() => {
+    const esc = (e) => { if (e.key === "Escape") onChiudi(); };
+    document.addEventListener("keydown", esc);
+    const prima = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", esc); document.body.style.overflow = prima; };
+  }, [onChiudi]);
+  return (
+    <div data-composizione style={{ position: "fixed", inset: 0, zIndex: 9000, background: BG, overflowY: "auto", overscrollBehavior: "contain" }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 1, background: completa ? "#EAF5EA" : "#fff", borderBottom: `1px solid ${completa ? "#C7E3C7" : CREAM_BORDER}`, padding: "12px 16px" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, lineHeight: 1.2 }}>Composizione kit</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{titolo}{sottotitolo ? ` · ${sottotitolo}` : ""}</div>
+          </div>
+          <div style={{ textAlign: "right" }} data-avanzamento-kit>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: completa ? "#2E7D32" : NAVY, lineHeight: 1.1 }}>{fatti} / {blocchi.length}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{completa ? "tutte le buste riempite" : "tipi di kit composti"}</div>
+          </div>
+          {/* «Terminato» non dichiara niente: chiude la pagina e riporta
+              alla Logistica. Quello che e' fatto lo dicono i tasti verdi
+              dei blocchi, uno per kit. */}
+          <button type="button" onClick={onChiudi} data-terminato style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer" }}>Terminato</button>
+        </div>
+        <div style={{ maxWidth: 760, margin: "8px auto 0", height: 6, background: CREAM_BORDER, borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ width: `${blocchi.length ? Math.round((fatti / blocchi.length) * 100) : 0}%`, height: "100%", background: "#2E7D32", transition: "width .25s" }} />
+        </div>
+      </div>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "12px 16px 90px" }}>
+        {blocchi.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Non c'è nessun kit da comporre: nessun iscritto ha scelto un pacchetto e non ci sono kit di riserva.</div>
+        )}
+        {blocchi.map((b) => {
+          const fatto = !!composti?.[b.kitId];
+          return (
+            <div key={b.kitId} data-blocco-kit={fatto ? "composto" : "da-comporre"} style={{ marginBottom: 20, background: "#fff", border: `1.5px solid ${fatto ? "#8BC48B" : CREAM_BORDER}`, borderRadius: 16, padding: "12px 12px 6px", boxShadow: fatto ? "none" : "0 1px 2px rgba(14,27,51,0.05)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 800, color: fatto ? "#2E7D32" : NAVY, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+                    {b.quante} kit {b.nome}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                    {b.perIscritti} {b.perIscritti === 1 ? "iscritta" : "iscritte"}{b.riserva > 0 ? ` · ${b.riserva} di riserva` : ""}
+                    {b.righe.length > 0 ? ` · ${b.righe.length} ${b.righe.length === 1 ? "prodotto" : "prodotti"} per busta` : ""}
+                    {fatto && composti[b.kitId]?.da ? ` · composto da ${composti[b.kitId].da}` : ""}
+                  </div>
+                </div>
+                <button
+                  type="button" onClick={() => onComposto(b.kitId, !fatto)} data-kit-fatto={fatto ? "si" : "no"}
+                  title={fatto ? "Torna indietro: le buste di questo kit non sono finite" : "Tutte le buste di questo kit sono riempite"}
+                  style={{
+                    ...fontBody, fontSize: 13, fontWeight: 700, borderRadius: 999, padding: "10px 16px", cursor: "pointer", minHeight: 44, flexShrink: 0,
+                    background: fatto ? "#2E7D32" : "#EAF5EA", color: fatto ? "#fff" : "#2E7D32", border: `1.5px solid ${fatto ? "#2E7D32" : "#8BC48B"}`,
+                  }}
+                >
+                  {fatto ? "✓ Buste riempite" : "Buste riempite"}
+                </button>
+              </div>
+              {b.righe.length === 0 && (
+                <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", padding: "4px 2px 10px" }}>
+                  Questo pacchetto non ha nessun prodotto in distinta: nelle buste non va niente. Si scrive in Setting → Tipologie di kit.
+                </div>
+              )}
+              {b.righe.map((r) => {
+                const attende = !!attesa?.[r.chiave];
+                return (
+                  <div
+                    key={r.chiave} data-riga-composizione={attende ? "in-attesa" : "ok"}
+                    style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, padding: "8px 10px", marginBottom: 6, borderRadius: 12, background: attende ? "#FDF0E2" : BG, border: `1px solid ${attende ? "#E3A765" : "transparent"}` }}
+                  >
+                    <span style={{ ...fontDisplay, fontSize: 24, fontWeight: 800, color: attende ? "#A05A14" : NAVY, minWidth: 42, textAlign: "center", flexShrink: 0 }}>{r.perBusta}</span>
+                    <RiquadroFotoProdotto url={r.prodottoId ? immaginePerProdotto[r.prodottoId] : null} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, fontWeight: 700, color: attende ? "#A05A14" : NAVY, overflowWrap: "anywhere" }}>{r.nome}</span>
+                      <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: attende ? "#A05A14" : MUTED, marginTop: 2 }}>
+                        {attende ? `in attesa di ricezione · ne servono ${r.totale} per questi kit` : `per busta · ${r.totale} in tutto`}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -82133,6 +82401,34 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId: corso?.id || null, dataInizio: corsoData.data_inizio || null,
   }), [iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corso?.id, corsoData.data_inizio]);
   const spunteRaccolta = righeRaccolta.filter((r) => (statoEdizione.checklist || {})[r.chiave]).length;
+  // la composizione delle buste (vedi ComposizioneKit) e quello che si
+  // sta ancora aspettando: le due mappe stanno sulla riga dell'edizione
+  // accanto alle spunte, cosi' chi riprende il lavoro — anche da un
+  // altro turno — trova quello che ha lasciato
+  const [composizioneAperta, setComposizioneAperta] = useState(false);
+  const chiudiComposizione = useMemo(() => () => setComposizioneAperta(false), []);
+  const inAttesaEdizione = statoEdizione.in_attesa || {};
+  const kitComposti = statoEdizione.kit_composti || {};
+  const blocchiComposizione = useMemo(() => composizioneKit({
+    iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId: corso?.id || null, dataInizio: corsoData.data_inizio || null,
+  }), [iscrittiEdizione, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, corso?.id, corsoData.data_inizio]);
+  const kitFatti = blocchiComposizione.filter((b) => kitComposti[b.kitId]).length;
+  // segnare una riga «in attesa» toglie la spunta di «preso», e
+  // viceversa: sono tre stati di una cosa sola, e una riga verde e
+  // arancione insieme non vorrebbe dire niente
+  function segnaPresa(chiave, acceso) {
+    const spunte = { ...(statoEdizione.checklist || {}) };
+    const attesa = { ...inAttesaEdizione };
+    if (acceso) spunte[chiave] = { il: new Date().toISOString(), da: nomeUtente || null }; else delete spunte[chiave];
+    if (acceso) delete attesa[chiave];
+    onSalvaCampi({ checklist: spunte, in_attesa: attesa });
+  }
+  function segnaInAttesa(chiave, acceso) {
+    const spunte = { ...(statoEdizione.checklist || {}) };
+    const attesa = { ...inAttesaEdizione };
+    if (acceso) { attesa[chiave] = { il: new Date().toISOString(), da: nomeUtente || null }; delete spunte[chiave]; } else delete attesa[chiave];
+    onSalvaCampi({ checklist: spunte, in_attesa: attesa });
+  }
   // lo scaffale di ogni prodotto: la raccolta si legge reparto per
   // reparto, come si gira in magazzino
   const repartoDi = useMemo(() => repartoPerProdotto(prodottiCategorie, categorieProdotti), [prodottiCategorie, categorieProdotti]);
@@ -82270,6 +82566,13 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <Button onClick={() => setRaccoltaAperta(true)} disabled={righeRaccolta.length === 0} title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo">
             Prepara{spunteRaccolta > 0 ? ` · ${spunteRaccolta}/${righeRaccolta.length}` : ""}
           </Button>
+          {/* «Componi kit» (15/11/2026): il gesto dopo la raccolta —
+              riempire le buste, un blocco per tipo di kit. Sta accanto a
+              «Prepara» perche' sono i due gesti di chi prepara, in
+              ordine */}
+          <Button variant="ghost" onClick={() => setComposizioneAperta(true)} disabled={blocchiComposizione.length === 0} title="Un blocco per tipo di kit, con i prodotti da mettere in ogni busta">
+            Componi kit{kitFatti > 0 ? ` · ${kitFatti}/${blocchiComposizione.length}` : ""}
+          </Button>
           <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
         </div>
       </div>
@@ -82281,13 +82584,28 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           spunte={statoEdizione.checklist || {}}
           immaginePerProdotto={immaginePerProdotto}
           repartoDi={repartoDi}
-          onSpunta={(chiave, acceso) => {
-            const attuali = { ...(statoEdizione.checklist || {}) };
-            if (acceso) attuali[chiave] = { il: new Date().toISOString(), da: nomeUtente || null }; else delete attuali[chiave];
-            onSalvaCampi({ checklist: attuali });
-          }}
+          attesa={inAttesaEdizione}
+          onSpunta={segnaPresa}
+          onAttesa={segnaInAttesa}
+          onComponi={blocchiComposizione.length > 0 ? () => { setRaccoltaAperta(false); setComposizioneAperta(true); } : null}
           onAzzera={() => onSalvaCampi({ checklist: {} })}
           onChiudi={chiudiRaccolta}
+        />
+      )}
+      {composizioneAperta && (
+        <ComposizioneKit
+          titolo={`${corso?.nome || "—"} · ${toTitleCase(loc?.nome || "—")}`}
+          sottotitolo={corsoData.data_inizio ? fmtData(corsoData.data_inizio) : ""}
+          blocchi={blocchiComposizione}
+          composti={kitComposti}
+          attesa={inAttesaEdizione}
+          immaginePerProdotto={immaginePerProdotto}
+          onComposto={(kitId, fatto) => {
+            const attuali = { ...kitComposti };
+            if (fatto) attuali[kitId] = { il: new Date().toISOString(), da: nomeUtente || null }; else delete attuali[kitId];
+            onSalvaCampi({ kit_composti: attuali });
+          }}
+          onChiudi={chiudiComposizione}
         />
       )}
 
@@ -82688,6 +83006,27 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   }, [corsiDate, oggiStr, vistaStorico, ricercaStorico, corsoById, locById]);
   const [edizioneSelId, setEdizioneSelId] = useState(null);
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
+  // LA LISTA MANCANTI DI OGNI CORSO IN ELENCO, non solo di quello
+  // aperto: il tasto che dichiara il pacco preparato sta sulla riga, e
+  // la regola deve valere anche per una riga che nessuno ha ancora
+  // toccato. Un corso senza niente in attesa esce subito, senza
+  // ricomporre la sua spedizione: oggi sono tutti.
+  const mancantiPerEdizione = useMemo(() => {
+    const mappa = {};
+    edizioniInArrivo.forEach((cd) => {
+      const stato = logisticaKitEdizioni.find((e) => e.corso_data_id === cd.id) || {};
+      const inAttesa = stato.in_attesa || {};
+      if (!Object.keys(inAttesa).length) { mappa[cd.id] = []; return; }
+      const iscrittiEdizione = iscritti.filter((i) => i.corso_data_id === cd.id);
+      const comune = { iscrittiEdizione, statoEdizione: stato, kitDefinizioni, corsiKitProdotti, prodottiShop, corsoId: cd.corso_id, dataInizio: cd.data_inizio };
+      mappa[cd.id] = listaMancanti({
+        righeRaccolta: listaRaccoltaMateriale(comune),
+        blocchi: composizioneKit(comune),
+        inAttesa,
+      });
+    });
+    return mappa;
+  }, [edizioniInArrivo, logisticaKitEdizioni, iscritti, kitDefinizioni, corsiKitProdotti, prodottiShop]);
   // su desktop la preparazione materiali resta sempre affiancata a destra
   // (due colonne); su mobile non c'è spazio per stare affiancati, quindi
   // si passa da una vista all'altra: si apre toccando il corso (non le
@@ -83106,6 +83445,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       return;
     }
     if (preparare) {
+      // stessa serratura del pacco: in sede non c'e' una scatola, ma
+      // «preparato» vuol dire la stessa cosa — c'e' tutto
+      const mancanti = mancantiPerEdizione[corsoData.id] || [];
+      if (mancanti.length > 0 && !puoForzare) {
+        mostraAvviso(`Il materiale non e' completo: ${mancanti.map((m) => `${m.quantita} × ${m.nome}`).join(", ")} ${mancanti.length === 1 ? "e' ancora" : "sono ancora"} in attesa di ricezione.`);
+        return;
+      }
       if (!(await chiediConferma("Materiale preparato: scarico dal magazzino il materiale di questo corso?"))) return;
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
@@ -83179,6 +83525,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // fase d'arrivo, che "da_preparare" non e' mai, e lo scarico non
     // scattava (9-14 settembre 2026)
     if (statoDi(corsoData.id).fase === "da_preparare") {
+      // la stessa regola del tasto, qui dentro: un divieto che vive solo
+      // nel bottone e' un divieto che la prossima strada non conosce
+      const mancanti = mancantiPerEdizione[corsoData.id] || [];
+      if (mancanti.length > 0 && !puoForzare) {
+        mostraAvviso(`Il pacco non e' completo: ${mancanti.map((m) => `${m.quantita} × ${m.nome}`).join(", ")} ${mancanti.length === 1 ? "e' ancora" : "sono ancora"} in attesa di ricezione.`);
+        return;
+      }
       if (!(await chiediConferma("Pacco preparato: scarico dal magazzino i prodotti che ci vanno dentro?"))) return;
       // se lo scarico è bloccato (magazzino insufficiente) la fase NON
       // avanza: altrimenti il pacco risulterebbe preparato senza scarico
@@ -83365,6 +83718,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 onPrepara={(preparare) => { setEdizioneSelId(cd.id); preparaMateriale(cd, preparare); }}
                 onApriInventarioSede={() => { setEdizioneSelId(cd.id); setInventarioSedeCorsoId(cd.id); }}
                 onAnnullaInventario={() => annullaInventarioSede(cd)}
+                mancanti={mancantiPerEdizione[cd.id] || []}
                 onCambiaFaseRientro={(fase) => { setEdizioneSelId(cd.id); cambiaFaseRientro(cd, fase); }}
                 onTornaIndietroFaseRientro={(fase) => { setEdizioneSelId(cd.id); tornaIndietroFaseRientro(cd, fase); }}
               />
@@ -91552,6 +91906,7 @@ export {
   PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, ModaleGestisciSede, quotaCoordinatorePerMese,
   calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse, costoKitDellaClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
+  composizioneKit, listaMancanti, ComposizioneKit, RigaCorsoLogistica,
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
   bustaChiusa, statoViaggioBusta, bustaDepositata, statoViaggioAppendice, appendiceDepositata,
