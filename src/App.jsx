@@ -83001,8 +83001,8 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
       {/* 03 ABBIGLIAMENTO. Quante magliette partono e di che taglia: e'
           il totale che serve a chi va allo scaffale, e prima stava in
           fondo all'elenco degli iscritti — cioe' dietro un tasto da
-          aprire. La riga per persona resta, nella barra qui sotto, dove
-          serve a chi riempie una scatola per volta.
+          aprire. La riga per persona resta qui dentro, dietro
+          "Dettagli", dove serve a chi riempie una scatola per volta.
           "NO DIVISA" non e' una taglia: e' una persona che la maglietta
           non la riceve, e sommarla farebbe partire un pezzo di troppo. */}
       {iscrittiEdizione.length > 0 && (
@@ -83010,10 +83010,23 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 0 2px", minWidth: 0 }}>
             <IconaMagliettaContorno size={ALLESTIMENTO.icona} color={NAVY} />
             <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY }}>Magliette totali</span>
+            {/* "Dettagli" apre chi riceve che cosa: sta qui, accanto al
+                totale, perche' e' la stessa domanda vista da vicino. Una
+                parola e basta — un tasto disegnato accanto a quel numero
+                gli toglierebbe il posto. */}
+            <button
+              type="button"
+              data-dettagli-allievi
+              onClick={() => setSpecificheAperte((v) => !v)}
+              title="Chi riceve che cosa: il kit e la taglia di ogni allievo"
+              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: "4px 2px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+            >
+              Dettagli
+            </button>
             <span style={{ ...fontDisplay, fontSize: ALLESTIMENTO.numeroGrande, fontWeight: 800, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{riepilogoTaglie.totale}</span>
           </div>
           {riepilogoTaglie.righe.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingLeft: 33 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8, paddingLeft: 33 }}>
               {riepilogoTaglie.righe.map((r) => (
                 <span key={r.taglia} style={{ ...fontBody, fontSize: 13, color: NAVY, background: PILLOLA_TOTALE, borderRadius: 10, padding: "6px 12px", whiteSpace: "nowrap" }}>
                   Taglia {r.taglia}: <b style={{ ...fontDisplay, fontSize: 15, fontWeight: 800 }}>{r.quante}</b>
@@ -83028,67 +83041,45 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
               {riepilogoTaglie.senzaDivisa > 0 && `${riepilogoTaglie.senzaDivisa} senza divisa.`}
             </div>
           )}
+          {/* una riga per iscritto con quello che lo distingue dagli
+              altri mentre si prepara la sua scatola — il kit che ha
+              scelto e la taglia della divisa. Sta chiusa: con dodici
+              allievi sono dodici righe fra chi prepara e tutto il
+              resto, e si aprono al momento di mettere nella scatola la
+              maglietta giusta per la persona giusta. La taglia si
+              autocompila da quella scelta nel modulo di iscrizione
+              (iscritti.taglia_divisa): qui solo la possibilita' di
+              correggerla. */}
+          {specificheAperte && (
+            <div data-specifiche style={{ marginTop: 10 }}>
+              {iscrittiEdizione.map((i) => (
+                <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: i.pacchetto_kit ? GRAFITE : MUTED }}>
+                      {i.pacchetto_kit || "nessun kit"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Tg.</span>
+                    {/* stretta quanto basta a contenere "NO DIVISA", che e' la
+                        voce piu' lunga: una casella larga il doppio della parola
+                        faceva sembrare la taglia il dato principale della riga */}
+                    <select
+                      value={i.taglia_divisa || ""}
+                      onChange={(e) => onCambiaTagliaIscritto(i.id, e.target.value || null)}
+                      style={{ ...inputStyle, width: 84, padding: "5px 4px", fontSize: 12 }}
+                    >
+                      <option value="">—</option>
+                      {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </SezioneAllestimento>
       )}
-
-      {/* SPECIFICHE DEGLI ALLIEVI: una riga per iscritto con quello che
-          lo distingue dagli altri mentre si prepara la sua scatola — il
-          kit che ha scelto e la taglia della divisa. Sta chiusa, perche'
-          con dodici allievi sono dodici righe fra chi prepara e tutto il
-          resto: si apre al momento di mettere nella scatola la maglietta
-          giusta per la persona giusta.
-          La taglia si autocompila da quella scelta nel modulo di
-          iscrizione (iscritti.taglia_divisa): qui solo la possibilita' di
-          correggerla. */}
-      <div data-specifiche style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
-        <button
-          type="button"
-          onClick={() => { if (iscrittiEdizione.length > 0) setSpecificheAperte((v) => !v); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", background: "none", border: "none",
-            padding: "12px 14px", cursor: iscrittiEdizione.length > 0 ? "pointer" : "default", minHeight: 56,
-          }}
-        >
-          <span style={{ width: 40, height: 40, borderRadius: 11, background: "#FCFAF5", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <IconaClipboardErp size={21} color={NAVY} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY }}>Specifiche degli allievi</span>
-          <span style={{ ...fontBody, fontSize: 13, color: MUTED, flexShrink: 0 }}>
-            {iscrittiEdizione.length > 0 ? `${iscrittiEdizione.length} ${iscrittiEdizione.length === 1 ? "allievo" : "allievi"}` : "Nessun iscritto ancora"}
-          </span>
-          {iscrittiEdizione.length > 0 && (
-            <span aria-hidden style={{ ...fontBody, fontSize: 15, color: MUTED, flexShrink: 0, lineHeight: 1 }}>{specificheAperte ? "⌃" : "⌄"}</span>
-          )}
-        </button>
-        {specificheAperte && iscrittiEdizione.length > 0 && (
-          <div style={{ padding: "0 14px 10px" }}>
-            {iscrittiEdizione.map((i) => (
-              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
-                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: i.pacchetto_kit ? GRAFITE : MUTED }}>
-                    {i.pacchetto_kit || "nessun kit"}
-                  </span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Tg.</span>
-                  {/* stretta quanto basta a contenere "NO DIVISA", che e' la
-                      voce piu' lunga: una casella larga il doppio della parola
-                      faceva sembrare la taglia il dato principale della riga */}
-                  <select
-                    value={i.taglia_divisa || ""}
-                    onChange={(e) => onCambiaTagliaIscritto(i.id, e.target.value || null)}
-                    style={{ ...inputStyle, width: 84, padding: "5px 4px", fontSize: 12 }}
-                  >
-                    <option value="">—</option>
-                    {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* 04 ACCESSORI PER IL CORSO (15/11/2026, dal mockup del
           titolare). Erano tre blocchi di fila senza niente che li

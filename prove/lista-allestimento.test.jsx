@@ -145,14 +145,20 @@ describe("la pagina di allestimento segue il mockup", () => {
     await p.smonta();
   });
 
-  it("le specifiche degli allievi stanno in una barra chiusa, che si apre", async () => {
+  // 15/11/2026: la barra «Specifiche degli allievi» che stava sotto la
+  // scheda e' sparita, e al suo posto c'e' la parola «Dettagli» accanto
+  // a «Magliette totali». Le righe per persona si aprono li' dentro:
+  // una barra a se' stante, sotto una scheda che parla delle stesse
+  // magliette, era una seconda scheda per la stessa cosa.
+  it("«Dettagli» sta accanto a Magliette totali, e apre le righe per allievo", async () => {
     const p = await pannello();
-    const barra = p.nodo.querySelector("[data-specifiche]");
-    expect(barra.textContent).toContain("Specifiche degli allievi");
-    expect(barra.textContent).toContain("8 allievi");
-    // chiusa: nessun nome di allieva in vista
-    expect(barra.textContent).not.toContain("Allieva0");
-    await clicca(barra.querySelector("button"));
+    const sezione = p.nodo.querySelector('[data-sezione-allestimento="Abbigliamento"]');
+    const dettagli = sezione.querySelector("[data-dettagli-allievi]");
+    expect(dettagli.textContent.trim()).toBe("Dettagli");
+    // chiusa: nessun nome di allieva in vista, e nessuna barra separata
+    expect(sezione.textContent).not.toContain("Allieva0");
+    expect(p.nodo.textContent).not.toContain("Specifiche degli allievi");
+    await clicca(dettagli);
     expect(p.nodo.querySelector("[data-specifiche]").textContent).toContain("Allieva0");
     await p.smonta();
   });

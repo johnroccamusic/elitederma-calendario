@@ -1957,8 +1957,13 @@ Quattro decisioni:
   senza dermografi l'abbigliamento è 02.
 - **Le magliette sono uscite da dentro l'elenco degli iscritti.** Il
   totale per taglia serve a chi va allo scaffale, e stava in fondo a una
-  lista chiusa dietro un tasto. La riga per persona resta, nella barra,
-  dove serve a chi riempie una scatola per volta.
+  lista chiusa dietro un tasto. La riga per persona resta, dove serve a
+  chi riempie una scatola per volta — **dal 15/11/2026 dentro la stessa
+  scheda**, dietro la parola «Dettagli» accanto a «Magliette totali»:
+  la barra «Specifiche degli allievi» che stava sotto era una seconda
+  scheda per la stessa cosa, con la sua icona, il suo bordo e il suo
+  conto di allievi. Una parola e basta, perche' li' accanto c'e' il
+  numero grande, ed e' quello che si guarda.
 - **Il riepilogo «8 KIT KIT COLORI / 8 KIT TOTALI» è stato tolto**
   (`RiepilogoKitPacchetti`, che lo usava solo questa pagina): quelle
   stesse quantità adesso si leggono riga per riga nella sezione 01, con
