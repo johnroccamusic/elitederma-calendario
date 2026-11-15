@@ -2033,6 +2033,53 @@ le cose come stavano e non se ne accorge nessuno. Quello che le prove
 **non** vedono è l'impaginazione vera: jsdom non impagina, e il
 confronto col mockup si fa con gli occhi.
 
+### Le fasi di un corso sono una linea, non quattro tasti (15/11/2026)
+
+Il titolare, con un mockup: «in spedizioni corsi ridisegna le celle dei
+corsi con questa grafica e con questo criterio. Come vedi i pulsanti
+rossi esistono solo per le fasi ancora da fare, poi diventano cerchietti
+verdi».
+
+**Una fase fatta non è più una cosa da fare, quindi non merita un
+tasto.** Erano quattro pastiglie affiancate, tutte colorate e tutte
+della stessa misura: tre verdi e una rossa, e per sapere a che punto
+fosse un corso bisognava leggerle tutte. Adesso sono una **linea**: un
+cerchietto per tappa, verde con la spunta dove è fatto, l'etichetta
+grigia sotto; rosso con «!» e la pastiglia rosa dove c'è ancora da
+lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
+
+- **Rossa è una sola, ed è una decisione del titolare.** Le fasi più in
+  là restano cerchietti grigi: rosso vuol dire «tocca a questa adesso»,
+  e su un corso appena nato tre pastiglie rosse di fila direbbero tre
+  urgenze dove ce n'è una.
+- **Il filo è fatto di due mezze linee per tappa**, così non esce dal
+  primo cerchietto né oltre l'ultimo, e ogni tratto dice da solo se quel
+  pezzo di strada è stato fatto (verde) o no (grigio).
+- **La freccia «›» della testata apre il corso a destra**, cioè fa
+  quello che fa premere la scheda — che resta premibile, ma un bordo che
+  si preme non lo vede nessuno. **Non** è il passo indietro: quello è
+  scritto, «← Indietro», perché una freccia nuda in una fila di
+  cerchietti non dice che cosa disfa.
+- **La scritta rossa o verde sotto «N KIT» è sparita** («Verifica pacco
+  a destinazione»): la diceva la stessa cosa della linea, e scritta due
+  volte era una da leggere e una da saltare. Resta come suggerimento
+  sulla freccia.
+- **La stessa linea vale per i corsi in sede centrale** (tre tappe) e
+  per il **viaggio di ritorno** della «Gestione rientro»: due disegni
+  per la stessa cosa si leggono come due cose diverse. `PillaFaseLogistica`
+  e `TastoFaseSede` sono state cancellate, non lasciate lì.
+- Restano dov'erano la **lista mancanti**, la spunta «Gestione rientro»
+  e il link «Cosa torna in magazzino →», e resta la banda rossa
+  «Magazzino in movimento» che prende il posto della linea mentre lo
+  scarico lavora (`BandaMagazzinoInMovimento`, scritta una volta per
+  tutte e due le strade).
+
+Prove in `prove/fasi-a-linea.test.jsx` (9): chi è verde, chi è rosso e
+chi è grigio nei tre momenti di un corso, la rossa che si preme e la
+futura che non fa niente, «Indietro» che torna di una fase e che su un
+corso appena nato non c'è, la freccia che apre e non disfa, le tre
+tappe della sede e la banda del magazzino.
+
 ### Composizione kit, e il prodotto che non è ancora arrivato (15/11/2026)
 
 Il titolare: «aggiungi la pagina "Composizione kit", che si apre dopo la
