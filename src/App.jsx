@@ -81787,16 +81787,12 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
         border: selezionato ? `2px solid ${GOLD}` : `1px solid ${CREAM_BORDER}`,
         borderRadius: 16, padding: selezionato ? 15 : 16, marginBottom: 14, cursor: "pointer",
         background: selezionato ? FONDO_ALLESTIMENTO : "#fff", boxShadow: "var(--ombra-aree, none)",
-        // AGGANCIATA ALLA SUA LISTA (15/11/2026, corretto dal titolare:
-        // «la giunzione tra le due nuvole e' brutta»). Due riquadri
-        // arrotondati con in mezzo una striscia piatta restano due
-        // riquadri: la scheda scelta perde il fianco destro e gli angoli
-        // di quel lato, perche' di la' non finisce — continua nella
-        // striscia e poi nel pannello.
-        ...(agganciato ? {
-          borderRightColor: "transparent",
-          borderTopRightRadius: 0, borderBottomRightRadius: 0,
-        } : null),
+        // La scheda resta tonda da tutte e quattro le parti anche da
+        // agganciata (15/11/2026, scelto dal titolare fra tre disegni):
+        // e' la striscia a passarle DIETRO, come un nastro. Squadrandole
+        // il fianco si otteneva un vassoio a elle, e il titolare l'ha
+        // scartato: la scheda resta una scheda, e il legame si vede
+        // nello spazio fra le due.
       }}
     >
       {/* LA TESTATA (15/11/2026, dal mockup): data, filo oro, nome in
@@ -82719,7 +82715,7 @@ function IconaMagliettaContorno({ size = 24, color = NAVY }) {
   );
 }
 
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], categorieProdotti = [], prodottiCategorie = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
+function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], categorieProdotti = [], prodottiCategorie = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   const oggiStr = dataOggiStr();
   // stessa intestazione della cella a cui questo pannello si riferisce,
   // vedi RigaCorsoLogistica: la tessera della data e' la stessa
@@ -83041,8 +83037,18 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <Button variant="ghost" onClick={onAggiornaPacco} style={{ marginTop: 10 }}>Aggiorna il pacco</Button>
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 14, minWidth: 0 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, flex: "1 1 220px" }}>
+      {/* LA DATA E IL NOME NON SI SCRIVONO DUE VOLTE (15/11/2026,
+          corretto dal titolare: «avevo fatto delle modifiche al
+          contenuto delle schede eliminando la doppia data»). Da quando
+          il pannello e' attaccato alla scheda del suo corso, quella
+          scheda ha gia' la tessera della data, il nome e la citta' a
+          cinque centimetri di distanza: ripeterli e' una riga di
+          intestazione che non dice niente di nuovo e allontana la lista.
+          Restano dove il pannello sta da solo — sul telefono, e quando
+          nessuna scheda e' agganciata — perche' li' non lo dice
+          nessun altro. */}
+      {!agganciato && (
+        <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, marginBottom: 14 }}>
           <TesseraData giorno={gg} mese={MESI_ABBR[Number(mm) - 1]} />
           {/* il filo oro separa il QUANDO dal COSA: due cose diverse
               appoggiate l'una all'altra senza niente in mezzo si leggono
@@ -83053,33 +83059,47 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
             <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 500, color: NAVY, lineHeight: 1.3, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0, minWidth: 152 }}>
-          {/* «Prepara» (30/10/2026): la lista di raccolta a tutta pagina,
-              prodotto per prodotto, con le quantita' gia' sommate su tutti
-              i kit. Sta qui in alto a destra perche' e' il primo gesto di
-              chi prepara, prima ancora di guardare i singoli kit */}
-          <Button onClick={() => setRaccoltaAperta(true)} disabled={righeRaccolta.length === 0} style={{ width: "100%" }} title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo">
-            Prepara{spunteRaccolta > 0 ? ` · ${spunteRaccolta}/${righeRaccolta.length}` : ""}
-          </Button>
-          {/* QUI IL TASTO «COMPONI KIT» NON C'E' (15/11/2026, detto dal
-              titolare: «quel tasto si trova solo nella sezione prepara,
-              dopo che hai messo da parte tutti i materiali»). Comporre
-              le buste e' il gesto DOPO la raccolta, e un tasto che lo
-              offre prima invita a cominciare dalla fine. Sta dentro
-              «Prepara», in cima alla lista, dove arriva chi ha appena
-              finito di raccogliere. */}
-        </div>
-      </div>
+      )}
 
       {/* I DUE CONTI, GRANDI. Sono la risposta alla domanda per cui si
           apre questa pagina — quante persone, quanti kit — e prima
           stavano in una colonnina a destra, scritti alla stessa misura
           di tutto il resto. Il riepilogo per tipo di pacchetto non si
           perde: e' la sezione 01 qui sotto, riga per riga. */}
-      <div style={{ display: "flex", alignItems: "stretch", gap: 14, flexWrap: "wrap", background: "#F4F1E9", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "12px 14px", marginBottom: 18 }}>
-        <TesseraConto icona={<IconaTrePersoneAccento size={26} color={NAVY} />} etichetta="Allievi iscritti" numero={iscrittiEdizione.length} />
-        <div aria-hidden style={{ width: 2, alignSelf: "stretch", background: GOLD, opacity: 0.55, borderRadius: 2, flexShrink: 0 }} />
-        <TesseraConto icona={<IconaScatolaErp size={26} color={NAVY} />} etichetta="Kit da preparare" numero={kitDaPreparare} />
+      {/* I DUE CONTI E IL TASTO, sulla stessa riga: sono la risposta
+          alla domanda per cui si apre la pagina — quante persone, quanti
+          kit — e il gesto che ne consegue. «Prepara» stava in cima a
+          destra accanto al nome del corso; tolto il nome, resta qui,
+          dove si legge quanto c'e' da fare.
+          «Prepara» (30/10/2026) apre la lista di raccolta a tutta
+          pagina, prodotto per prodotto, con le quantita' gia' sommate su
+          tutti i kit: e' il primo gesto di chi prepara, prima ancora di
+          guardare i singoli kit. QUI IL TASTO «COMPONI KIT» NON C'E'
+          (15/11/2026, detto dal titolare: «quel tasto si trova solo
+          nella sezione prepara, dopo che hai messo da parte tutti i
+          materiali»): comporre le buste e' il gesto DOPO la raccolta, e
+          un tasto che lo offre prima invita a cominciare dalla fine. */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 14, flexWrap: "wrap", flex: "1 1 280px", minWidth: 0, background: "#F4F1E9", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "12px 14px" }}>
+          <TesseraConto icona={<IconaTrePersoneAccento size={26} color={NAVY} />} etichetta="Allievi iscritti" numero={iscrittiEdizione.length} />
+          <div aria-hidden style={{ width: 2, alignSelf: "stretch", background: GOLD, opacity: 0.55, borderRadius: 2, flexShrink: 0 }} />
+          <TesseraConto icona={<IconaScatolaErp size={26} color={NAVY} />} etichetta="Kit da preparare" numero={kitDaPreparare} />
+        </div>
+        <button
+          type="button"
+          onClick={() => setRaccoltaAperta(true)}
+          disabled={righeRaccolta.length === 0}
+          title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo"
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, flexShrink: 0,
+            background: NAVY, border: `2px solid ${GOLD}`, borderRadius: 16, padding: "0 22px", minHeight: 58,
+            cursor: righeRaccolta.length === 0 ? "default" : "pointer", opacity: righeRaccolta.length === 0 ? 0.5 : 1,
+            ...fontDisplay, fontSize: 17, fontWeight: 800, color: "#fff", letterSpacing: 0.4, whiteSpace: "nowrap",
+          }}
+        >
+          <IconaScatolaErp size={20} color="#fff" />
+          PREPARA{spunteRaccolta > 0 ? ` · ${spunteRaccolta}/${righeRaccolta.length}` : ""} →
+        </button>
       </div>
       {raccoltaAperta && (
         <RaccoltaMateriale
@@ -84242,35 +84262,32 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           </button>
         )}
         <div ref={grigliaRef} style={{ position: "relative", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
-          {/* LA STRISCIA CHE UNISCE la scheda scelta alla sua lista: sta
-              nel vuoto fra le due colonne, alta quanto la scheda, dello
-              stesso crema — e PORTA AVANTI I BORDI, il filo oro sopra e
-              sotto. Senza, erano due riquadri arrotondati con in mezzo
-              un rettangolo piatto: tre forme invece di una.
-              Due pixel in piu' della distanza fra le colonne, per
-              entrare sotto il bordo sinistro del pannello e nasconderlo
-              proprio dove la scheda si attacca. */}
+          {/* LA STRISCIA CHE UNISCE la scheda scelta alla sua lista.
+              Passa DIETRO tutte e due (zIndex 0, le colonne stanno a 1),
+              quindi si vede solo nel vuoto fra le colonne e le due
+              schede restano tonde: e' un nastro che le tiene insieme,
+              non un terzo riquadro appoggiato in mezzo. Sborda di
+              dodici pixel per lato cosi' nessuno dei due angoli tondi
+              lascia uno spiraglio. */}
           {aggancio && (
             <div
               aria-hidden
               data-ponte-corso
               style={{
-                position: "absolute", left: aggancio.larghezza, width: 18,
+                position: "absolute", left: aggancio.larghezza - 12, width: 16 + 24,
                 top: aggancio.top, height: aggancio.altezza,
-                boxSizing: "border-box",
-                borderTop: `2px solid ${GOLD}`, borderBottom: `2px solid ${GOLD}`,
-                background: FONDO_ALLESTIMENTO, pointerEvents: "none", zIndex: 1,
+                background: FONDO_ALLESTIMENTO, pointerEvents: "none", zIndex: 0,
               }}
             />
           )}
           {(!isMobile || vistaMobile === "lista") && (
-          <div
+          <div data-colonna-corsi
             // Nessun foglio bianco sotto: ogni corso e' gia' una scheda
             // con la sua ombra, e chiuderle tutte dentro un altro
             // riquadro bianco voleva dire bianco su bianco — il contorno
             // delle schede spariva e il gruppo sembrava un blocco solo.
             // Restano il titolo e lo spazio.
-            style={{ ...cardStyle, background: "transparent", border: "none", boxShadow: "none", padding: 0, marginBottom: 0 }}
+            style={{ ...cardStyle, background: "transparent", border: "none", boxShadow: "none", padding: 0, marginBottom: 0, position: "relative", zIndex: 1 }}
           >
             <div style={STILE_TITOLO_COLONNA}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
             {vistaStorico && (
@@ -84319,7 +84336,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           )}
 
           {(!isMobile || vistaMobile === "dettaglio") && (
-          <div style={{ minWidth: 0, marginTop: aggancio ? aggancio.top : 0 }}>
+          <div style={{ minWidth: 0, marginTop: aggancio ? aggancio.top : 0, position: "relative", zIndex: 1 }}>
           <div
             // niente filo colorato nemmeno qui: quale corso si sta
             // guardando lo dicono la tessera della data e il nome
@@ -84335,16 +84352,17 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
             // quello su cui si lavora.
             style={{
               ...cardStyle, marginBottom: 0, borderRadius: 16, background: FONDO_ALLESTIMENTO,
-              // agganciato alla sua scheda: stesso bordo oro, e l'angolo
-              // in alto a sinistra squadrato perche' li' non comincia
-              // niente — e' la scheda di sinistra che continua
-              ...(aggancio ? { border: `2px solid ${GOLD}`, borderTopLeftRadius: 0 } : null),
+              // agganciato alla sua scheda: stesso bordo oro, angoli
+              // tondi come lei — il legame lo fa la striscia che passa
+              // dietro, non un angolo squadrato
+              ...(aggancio ? { border: `2px solid ${GOLD}` } : null),
             }}
           >
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
             ) : (
               <PannelloPreparazioneKit
+                agganciato={!!aggancio}
                 categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
                 corsoData={edizioneSel}
                 corso={corsoById[edizioneSel.corso_id]}

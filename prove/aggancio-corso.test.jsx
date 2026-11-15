@@ -64,20 +64,42 @@ describe("la lista scende fino al corso scelto", () => {
   // 15/11/2026, corretto dal titolare: «la giunzione tra le due nuvole è
   // brutta». Erano due riquadri arrotondati con in mezzo un rettangolo
   // piatto: tre forme invece di una.
-  it("la scheda scelta perde il fianco destro, e la striscia porta avanti i bordi", async () => {
+  // 15/11/2026, scelto dal titolare fra tre disegni: la scheda resta
+  // tonda da tutte e quattro le parti, e la striscia le passa DIETRO
+  // come un nastro. Squadrarle il fianco faceva un vassoio a elle, e
+  // quello è stato scartato.
+  it("le schede restano tonde e la striscia passa dietro", async () => {
     const p = await monta(<PaginaLogisticaProdotti {...dati} />);
     await clicca(p.nodo.querySelector('[data-riga-corso="cd2"]'));
     await attendi();
     const scelta = p.nodo.querySelector('[data-riga-corso="cd2"]');
-    expect(scelta.style.borderRightColor).toBe("transparent");
-    expect(scelta.style.borderTopRightRadius).toBe("0px");
+    expect(scelta.style.borderRightColor).not.toBe("transparent");
+    expect(scelta.style.borderTopRightRadius).toBe("");
     const ponte = p.nodo.querySelector("[data-ponte-corso]");
-    expect(ponte.style.borderTop).toContain("2px solid");
-    expect(ponte.style.borderBottom).toContain("2px solid");
-    // e il pannello non ricomincia: l'angolo verso la scheda è squadrato
-    expect(colonnaDestra(p.nodo).firstElementChild.style.borderTopLeftRadius).toBe("0px");
-    // le altre schede restano riquadri interi
-    expect(p.nodo.querySelector('[data-riga-corso="cd1"]').style.borderRightColor).not.toBe("transparent");
+    expect(ponte.style.borderTop).toBe("");
+    expect(ponte.style.zIndex).toBe("0");
+    // le due colonne stanno davanti al nastro
+    expect(colonnaDestra(p.nodo).style.zIndex).toBe("1");
+    expect(colonnaDestra(p.nodo).firstElementChild.style.borderTopLeftRadius).toBe("");
+    await p.smonta();
+  });
+
+  // «avevo fatto delle modifiche al contenuto delle schede eliminando
+  // la doppia data»: da quando il pannello è attaccato alla scheda del
+  // suo corso, data, nome e città stanno a cinque centimetri di
+  // distanza. Ripeterli è un'intestazione che non dice niente di nuovo.
+  it("il pannello agganciato non ripete la data né il nome del corso", async () => {
+    const p = await monta(<PaginaLogisticaProdotti {...dati} />);
+    await clicca(p.nodo.querySelector('[data-riga-corso="cd2"]'));
+    await attendi();
+    const destra = colonnaDestra(p.nodo);
+    // la scheda di sinistra la dice una volta
+    expect(p.nodo.querySelector('[data-riga-corso="cd2"]').textContent).toContain("LAMINAZIONE");
+    // il pannello no, e nemmeno la data
+    expect(destra.textContent).not.toContain("LAMINAZIONE");
+    expect(destra.textContent).not.toContain("GEN");
+    // ma il tasto che apre la raccolta c'è ancora
+    expect(destra.textContent).toContain("PREPARA");
     await p.smonta();
   });
 

@@ -226,16 +226,16 @@ describe("04 Accessori per il corso", () => {
 // raccolta, e un tasto che lo offre prima invita a cominciare dalla
 // fine.
 describe("dove sta «Componi kit»", () => {
-  it("nella scheda del corso c'è solo «Prepara»", async () => {
+  it("nella scheda del corso c'è solo «PREPARA»", async () => {
     const p = await pannello();
-    expect(p.tasto("Prepara")).toBeTruthy();
+    expect(p.tasto("PREPARA")).toBeTruthy();
     expect(p.tasto("Componi kit")).toBeFalsy();
     await p.smonta();
   });
 
-  it("ci si arriva da dentro «Prepara», e dice a che punto sono i kit", async () => {
+  it("ci si arriva da dentro «PREPARA», e dice a che punto sono i kit", async () => {
     const p = await pannello();
-    await clicca(p.tasto("Prepara"));
+    await clicca(p.tasto("PREPARA"));
     const vai = p.nodo.querySelector("[data-vai-composizione]");
     expect(vai).toBeTruthy();
     expect(vai.textContent).toContain("Componi i kit");
@@ -251,7 +251,7 @@ describe("dove sta «Componi kit»", () => {
     const tutte = {};
     ["p1", "p2", "p3", "p4", "p5"].forEach((id) => { tutte[`prodotto::${id}`] = { il: "2026-11-15T10:00:00Z", da: "Raf" }; });
     const p = await pannello({ statoEdizione: { corso_data_id: "cd1", riserva_per_kit: {}, accessori_quantita: {}, checklist: tutte } });
-    await clicca(p.tasto("Prepara"));
+    await clicca(p.tasto("PREPARA"));
     expect(p.nodo.querySelector("[data-vai-composizione]").getAttribute("data-vai-composizione")).toBe("pronto");
     await p.smonta();
   });

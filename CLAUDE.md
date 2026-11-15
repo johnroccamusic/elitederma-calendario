@@ -2046,16 +2046,24 @@ più dove finisce la scheda. Il bordo lo dice senza aggiungere una
 parola, e il pixel in più per lato lo recupera il padding: la misura
 dell'aggancio viene dal DOM, quindi segue da sé.
 
-**E la giunzione è una forma sola** (corretto dal titolare: «la
-giunzione tra le due nuvole è brutta»). Al primo giro erano due
-riquadri arrotondati col bordo oro e in mezzo un rettangolo piatto:
-tre forme invece di una. Adesso la scheda scelta **perde il fianco
-destro e gli angoli di quel lato** — di là non finisce, continua — la
-striscia **porta avanti il filo oro sopra e sotto**, ed è larga due
-pixel più del vuoto fra le colonne per infilarsi sotto il bordo
-sinistro del pannello e nasconderlo proprio dove la scheda si attacca;
-il pannello prende lo stesso bordo oro e **l'angolo in alto a sinistra
-squadrato**, perché lì non comincia niente.
+**La striscia passa DIETRO, e le schede restano tonde.** La prima
+versione squadrava il fianco della scheda scelta per farne una forma
+sola col pannello — un vassoio a elle: il titolare l'ha scartata («gli
+angoli della scheda di sinistra non tornano arrotondati»). Adesso il
+nastro sta sotto (`zIndex: 0`, le due colonne a 1), sborda di dodici
+pixel per lato così nessuno dei due angoli tondi lascia uno spiraglio,
+e si vede solo nel vuoto fra le colonne. Il pannello prende lo stesso
+bordo oro della scheda, e tutti e due restano tondi da quattro parti.
+
+**E la data non si scrive due volte** («avevo fatto delle modifiche al
+contenuto delle schede eliminando la doppia data»). Da quando il
+pannello è attaccato alla scheda del suo corso, quella scheda ha già
+tessera della data, nome e città a cinque centimetri: ripeterli era
+un'intestazione che non diceva niente di nuovo e allontanava la lista.
+Via, e **«PREPARA» sale accanto ai due conti** — si legge quanto c'è da
+fare e lì si preme. L'intestazione resta dove il pannello sta da solo:
+sul telefono, e quando nessuna scheda è agganciata, perché lì non lo
+dice nessun altro.
 
 **La misura si prende dal DOM, non si calcola**: l'altezza di una
 scheda dipende da quante fasi ha, se la lista mancanti è aperta, se c'è
