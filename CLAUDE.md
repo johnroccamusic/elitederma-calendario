@@ -1904,7 +1904,24 @@ Quattro decisioni:
   il totale accanto. Una colonnina che ripete quello che c'è due
   centimetri sotto è rumore.
 
-Prove in `prove/lista-allestimento.test.jsx` (8), con il pannello
+**E la coda della pagina è la sezione 04** (15/11/2026, secondo
+mockup: «prosegui e rifai anche l'ultima parte della pagina»). Erano
+tre blocchi di fila senza niente che li tenesse insieme — accessori
+didattica, consulenze, prodotti extra — con due tasti tratteggiati
+sparsi in mezzo. Per chi prepara sono la stessa cosa: **quello che va
+nella scatola oltre ai kit**. Adesso sono una scheda sola, «04
+Accessori per il corso», con le righe tutte della stessa forma (foto
+incorniciata, nome in grassetto, contatore a freccette a destra) e i
+**due tasti che aggiungono affiancati in fondo**, dove si arriva dopo
+aver guardato cosa c'è già. Consulenze ed extra tengono la loro
+sottointestazione grigia e i loro comandi — «Da vendere», la crocetta —
+e la casella della quantità è diventata lo stesso contatore degli
+accessori: tre modi di scrivere un numero nella stessa scheda erano
+tre, non uno. Quando una delle due ricerche si apre prende il posto del
+suo tasto e basta: chi cerca una consulenza non ha smesso di poter
+aggiungere un extra.
+
+Prove in `prove/lista-allestimento.test.jsx` (12), con il pannello
 montato: i due conti, le tre sezioni col loro numero e le loro colonne,
 la numerazione che non salta, il totale che è iscritti + riserva, le
 taglie, la barra che si apre — e **due prove sulla gerarchia**: il

@@ -19,10 +19,17 @@ const SENZA_DERMOGRAFI = { ...CORSO, prevede_dermografi_sicurezza: false };
 const LOC = { id: "l1", nome: "MILANO" };
 const CORSO_DATA = { id: "cd1", corso_id: "c1", location_id: "l1", data_inizio: "2099-11-14", data_fine: "2099-11-15" };
 const KIT = { id: "k1", nome: "Kit Colori", corso_id: "c1", tipo: "kit", ordine: 1 };
-const PRODOTTI = [{ id: "p1", nome: "Pelle sintetica Premium" }, { id: "p2", nome: "Ruota colori" }];
+const PRODOTTI = [
+  { id: "p1", nome: "Pelle sintetica Premium" },
+  { id: "p2", nome: "Ruota colori" },
+  { id: "p3", nome: "Cuffie monouso TNT - 1pz" },
+];
 const DISTINTA = [
   { id: "r1", kit_id: "k1", corso_id: "c1", prodotto_id: "p1", quantita: 2, tipo: "kit" },
   { id: "r2", kit_id: "k1", corso_id: "c1", prodotto_id: "p2", quantita: 1, tipo: "kit" },
+  // un accessorio didattica del corso: non sta in nessun kit, parte con
+  // la quantità scritta nella sua scheda
+  { id: "r3", kit_id: null, corso_id: "c1", prodotto_id: "p3", quantita: 20, tipo: "accessorio" },
 ];
 // otto allievi, sei taglia M e due taglia L, come nel mockup
 const ISCRITTI = Array.from({ length: 8 }, (_, i) => ({
@@ -61,7 +68,7 @@ describe("la pagina di allestimento segue il mockup", () => {
     const p = await pannello();
     const sezioni = [...p.nodo.querySelectorAll("[data-sezione-allestimento]")];
     expect(sezioni.map((s) => s.getAttribute("data-sezione-allestimento")))
-      .toEqual(["Kit didattici", "Dermografi", "Abbigliamento"]);
+      .toEqual(["Kit didattici", "Dermografi", "Abbigliamento", "Accessori per il corso"]);
     expect(sezioni[0].textContent).toContain("01");
     expect(sezioni[1].textContent).toContain("02");
     expect(sezioni[2].textContent).toContain("03");
@@ -77,7 +84,8 @@ describe("la pagina di allestimento segue il mockup", () => {
     // saltare da 01 a 03 fa cercare una sezione che non esiste
     const p = await pannello({ corso: SENZA_DERMOGRAFI });
     const sezioni = [...p.nodo.querySelectorAll("[data-sezione-allestimento]")];
-    expect(sezioni.map((s) => s.getAttribute("data-sezione-allestimento"))).toEqual(["Kit didattici", "Abbigliamento"]);
+    expect(sezioni.map((s) => s.getAttribute("data-sezione-allestimento")))
+      .toEqual(["Kit didattici", "Abbigliamento", "Accessori per il corso"]);
     expect(sezioni[1].textContent).toContain("02");
     await p.smonta();
   });
@@ -142,6 +150,61 @@ describe("la pagina di allestimento segue il mockup", () => {
     expect(barra.textContent).not.toContain("Allieva0");
     await clicca(barra.querySelector("button"));
     expect(p.nodo.querySelector("[data-specifiche]").textContent).toContain("Allieva0");
+    await p.smonta();
+  });
+});
+
+// LA QUARTA SEZIONE (15/11/2026, secondo mockup): gli accessori
+// didattica, le consulenze e i prodotti extra erano tre blocchi di fila
+// senza niente che li tenesse insieme, con due tasti tratteggiati
+// sparsi in mezzo. Per chi prepara sono la stessa cosa: quello che va
+// nella scatola oltre ai kit.
+describe("04 Accessori per il corso", () => {
+  it("è una sezione sola, numerata dopo l'abbigliamento", async () => {
+    const p = await pannello();
+    const sezioni = [...p.nodo.querySelectorAll("[data-sezione-allestimento]")];
+    expect(sezioni.map((x) => x.getAttribute("data-sezione-allestimento")))
+      .toEqual(["Kit didattici", "Dermografi", "Abbigliamento", "Accessori per il corso"]);
+    expect(sezioni[3].textContent).toContain("04");
+    await p.smonta();
+    // senza dermografi scala di uno, come le altre
+    const p2 = await pannello({ corso: SENZA_DERMOGRAFI });
+    const quarta = [...p2.nodo.querySelectorAll("[data-sezione-allestimento]")].at(-1);
+    expect(quarta.getAttribute("data-sezione-allestimento")).toBe("Accessori per il corso");
+    expect(quarta.textContent).toContain("03");
+    await p2.smonta();
+  });
+
+  it("l'accessorio del corso è una riga con la sua foto e il suo contatore", async () => {
+    const p = await pannello();
+    const riga = p.nodo.querySelector('[data-riga-corredo="Cuffie monouso TNT - 1pz"]');
+    expect(riga).toBeTruthy();
+    // la quantità della scheda dell'accessorio, già scritta
+    expect(riga.querySelector("input").value).toBe("20");
+    // e sta dentro la sezione 04, non per conto suo in fondo alla pagina
+    const sezione = p.nodo.querySelector('[data-sezione-allestimento="Accessori per il corso"]');
+    expect(sezione.contains(riga)).toBe(true);
+    await p.smonta();
+  });
+
+  it("i due tasti che aggiungono stanno in fondo, affiancati", async () => {
+    const p = await pannello();
+    const sezione = p.nodo.querySelector('[data-sezione-allestimento="Accessori per il corso"]');
+    const consulenze = p.tasto("+ Aggiungi consulenze");
+    const extra = p.tasto("+ Aggiungi prodotti extra o da vendita");
+    expect(sezione.contains(consulenze)).toBe(true);
+    expect(sezione.contains(extra)).toBe(true);
+    // stanno nella stessa riga: due celle dello stesso contenitore
+    expect(consulenze.parentElement.parentElement).toBe(extra.parentElement.parentElement);
+    await p.smonta();
+  });
+
+  it("aprendo una ricerca l'altro tasto resta dov'è", async () => {
+    const p = await pannello();
+    await clicca(p.tasto("+ Aggiungi consulenze"));
+    expect([...p.nodo.querySelectorAll("input")].some((i) => i.placeholder === "Cerca consulenza…")).toBe(true);
+    // chi cerca una consulenza non ha smesso di poter aggiungere un extra
+    expect(p.tasto("+ Aggiungi prodotti extra o da vendita")).toBeTruthy();
     await p.smonta();
   });
 });

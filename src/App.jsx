@@ -82405,6 +82405,47 @@ function RigaAllestimento({ icona, nome, nota = "", onNome = null, titoloNome = 
   );
 }
 
+// una riga del corredo del corso: la foto del prodotto in una cornice,
+// il nome in grassetto e a destra il suo comando (il contatore, o quello
+// che quella riga sa fare). Stessa altezza e stessa misura di testo
+// delle righe dei kit: sono liste diverse ma si leggono di fila, e tre
+// scale diverse nella stessa pagina si notano.
+function RigaCorredo({ foto, nome, nota = "", destra, ultima = false }) {
+  return (
+    <div
+      data-riga-corredo={nome}
+      style={{ display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap", padding: "9px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}`, minWidth: 0 }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 11, flex: "1 1 190px", minWidth: 0 }}>
+        {foto}
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere" }}>{nome}</span>
+          {nota && <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{nota}</span>}
+        </span>
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>{destra}</span>
+    </div>
+  );
+}
+
+// i due tasti tratteggiati in fondo alla sezione: aggiungono, quindi
+// non hanno il peso di un tasto pieno — e stanno affiancati perche'
+// sono la stessa cosa fatta su due elenchi diversi
+function TastoAggiungi({ onClick, children }) {
+  return (
+    <button
+      type="button" onClick={onClick}
+      style={{
+        ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, background: "none",
+        border: `1.5px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: "14px 12px",
+        cursor: "pointer", flex: "1 1 200px", minWidth: 0, minHeight: 52,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // la maglietta del mockup e' di contorno come tutte le altre icone di
 // questa pagina: quella piena che esiste gia' (IconaMaglietta) pesa il
 // doppio accanto a una scatola disegnata a filo
@@ -82480,7 +82521,11 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // la numerazione si conta invece di essere scritta: saltare da 01 a 03
   // farebbe cercare una sezione che non esiste
   const mostraDermografi = !!corso?.prevede_dermografi_sicurezza;
-  const numeroSezione = { kit: "01", dermografi: "02", abbigliamento: mostraDermografi ? "03" : "02" };
+  const numeroSezione = {
+    kit: "01", dermografi: "02",
+    abbigliamento: mostraDermografi ? "03" : "02",
+    accessori: mostraDermografi ? "04" : "03",
+  };
   // il contenuto del kit non serve sempre in vista: si apre solo
   // cliccando sul nome, qui nella stessa riga del kit
   const [kitEspansi, setKitEspansi] = useState(() => new Set());
@@ -83019,157 +83064,167 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         )}
       </div>
 
-      {/* Nessun titolo sopra: il nome sta sul tasto, come nel blocco dei
-          prodotti extra kit qui sotto. Un'etichetta e un tasto che dicono
-          la stessa parola occupano due righe per dare un'informazione
-          sola. */}
-      <div style={{ marginBottom: 20 }}>
-        {/* Qui si spediscono pezzi interi: quanti barattoli partono, non
-            quanto sono pieni. Il livello di riempimento e' un'altra cosa e
-            un altro momento — lo dichiara la master all'inventario di fine
-            corso, sulle consulenze aperte — e messo qui chiedeva di
-            rispondere a una domanda che al momento della spedizione non si
-            pone. */}
-        {Object.values(consulenzeEdizione.reduce((gruppi, r) => {
-          if (!gruppi[r.prodotto_id]) gruppi[r.prodotto_id] = { prodottoId: r.prodotto_id, pezzi: [] };
-          gruppi[r.prodotto_id].pezzi.push(r);
-          return gruppi;
-        }, {})).map((g) => (
-          <div key={g.prodottoId} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-              <FotoProdotto prodottoId={g.prodottoId} />
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(g.prodottoId)}</span>
-            </span>
-            {/* "Da vendere" sta qui e non piu' sui prodotti extra kit:
-                una consulenza che parte per essere venduta e' un caso
-                che si pone davvero, un rotolo lettino no. */}
-            <label title="Parte per essere venduta al corso, non per essere usata in aula" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, color: extraDaVendita[g.prodottoId] ? NAVY : MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>
-              <input type="checkbox" checked={!!extraDaVendita[g.prodottoId]} onChange={(e) => cambiaExtraDaVendita(g.prodottoId, e.target.checked)} />
-              Da vendere
-            </label>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-              <input
-                type="number" min="0" max="99"
-                style={{ ...inputStyle, width: 78, padding: "6px 8px", textAlign: "center" }}
-                value={g.pezzi.length}
-                onChange={(e) => impostaQuantitaConsulenza(g.prodottoId, e.target.value)}
-              />
-              <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>pezz{g.pezzi.length === 1 ? "o" : "i"}</span>
-            </div>
-            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>disp. {prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}</span>
-            <button onClick={() => impostaQuantitaConsulenza(g.prodottoId, 0)} title="Togli questa consulenza" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4, flexShrink: 0 }}>✕</button>
-          </div>
-        ))}
-        {pickerConsulenzaAperto ? (
-          <div style={{ marginTop: 8 }}>
-            <input autoFocus style={inputStyle} placeholder="Cerca consulenza…" value={ricercaConsulenza} onChange={(e) => setRicercaConsulenza(e.target.value)} />
-            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
-              {risultatiConsulenza.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessuna consulenza trovata.</div>
-              ) : risultatiConsulenza.map((p) => (
-                <button key={p.id} onClick={() => aggiungiConsulenza(p.id)} style={{ display: "flex", justifyContent: "space-between", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-                  <span>{p.nome}</span><span style={{ color: MUTED, fontSize: 11.5 }}>disp. {p.quantita ?? 0}</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => { setPickerConsulenzaAperto(false); setRicercaConsulenza(""); }} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", marginTop: 6, padding: 0 }}>Annulla</button>
-          </div>
-        ) : (
-          <button onClick={() => setPickerConsulenzaAperto(true)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", marginTop: consulenzeEdizione.length ? 8 : 0, width: "100%" }}>
-            + Aggiungi consulenze
-          </button>
-        )}
-      </div>
-
-      <div style={{ marginTop: 12 }}>
-        {prodottiExtraIds.map((prodottoId) => (
-          <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 140px", minWidth: 0 }}>
-              <FotoProdotto prodottoId={prodottoId} />
-              <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(prodottoId)}</span>
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {/* Qui la spunta "Da vendere" non c'e' piu'. Questa lista e'
-                  quella dei consumabili del corso — olio, guanti, rotolo
-                  lettino, telini — e una casella "da vendere" accanto a
-                  ogni riga chiedeva a ogni pezzo una domanda che per
-                  quasi tutti non si pone. Chi manda merce da vendere la
-                  mette fra le consulenze, dove la spunta adesso c'e'.
-                  Le righe gia' segnate restano segnate e continuano a
-                  funzionare: e' sparito il modo di cambiarle da qui, non
-                  il dato. */}
-              {extraDaVendita[prodottoId] && (
-                <span title="Segnato da vendere prima che questa casella sparisse da qui: non scarica il magazzino alla spedizione" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "3px 8px", textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap" }}>
-                  da vendere
-                </span>
-              )}
-              <input
-                type="number" min="0" style={{ ...inputStyle, width: 70, padding: "6px 8px" }}
-                value={accessoriQuantita[`extra::${prodottoId}`] ?? ""} placeholder="0"
-                onChange={(e) => onSalvaCampi({ accessori_quantita: { ...accessoriQuantita, [`extra::${prodottoId}`]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
-              />
-              <button onClick={() => rimuoviProdottoExtra(prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
-            </div>
-          </div>
-        ))}
-        {pickerExtraAperto ? (
-          <div style={{ marginTop: 8 }}>
-            <input autoFocus style={inputStyle} placeholder="Cerca prodotto…" value={ricercaExtra} onChange={(e) => setRicercaExtra(e.target.value)} />
-            {ricercaExtra.trim() && (
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
-                {risultatiExtra.length === 0 ? (
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessun prodotto trovato.</div>
-                ) : risultatiExtra.map((p) => {
-                  const gia = giaNelPacco(p.id);
-                  return (
-                    <button key={p.id} data-extra-trovato={gia.totale > 0 ? "gia-nel-pacco" : "nuovo"} onClick={() => aggiungiProdottoExtra(p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-                      {p.nome}
-                      {gia.totale > 0 && (
-                        <span style={{ display: "block", ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#A05A14", marginTop: 2 }}>
-                          già nel pacco: {gia.totale} {gia.totale === 1 ? "pezzo" : "pezzi"}
-                          {gia.daiKit > 0 ? ` · ${gia.daiKit} dai kit` : ""}
-                          {gia.daAccessori > 0 ? ` · ${gia.daAccessori} dagli accessori` : ""}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <button onClick={() => { setPickerExtraAperto(false); setRicercaExtra(""); }} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", marginTop: 6, padding: 0 }}>Annulla</button>
-          </div>
-        ) : (
-          <button onClick={() => setPickerExtraAperto(true)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", marginTop: prodottiExtraIds.length ? 8 : 0, width: "100%" }}>
-            + Aggiungi prodotti extra o da vendita
-          </button>
-        )}
-      </div>
-
-
-      {tuttiAccessori.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={labelStyle}>Accessori didattica del corso</div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+      {/* 04 ACCESSORI PER IL CORSO (15/11/2026, dal mockup del
+          titolare). Erano tre blocchi di fila senza niente che li
+          tenesse insieme — gli accessori didattica, le consulenze, i
+          prodotti extra — e due tasti tratteggiati sparsi in mezzo.
+          Sono la stessa cosa per chi prepara: quello che va nella
+          scatola oltre ai kit. Una scheda sola, le righe tutte della
+          stessa forma, e i due tasti che aggiungono in fondo, dove si
+          arriva dopo aver guardato cosa c'e' gia'. */}
+      <SezioneAllestimento numero={numeroSezione.accessori} titolo="Accessori per il corso">
+        {tuttiAccessori.length > 0 && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "6px 0 2px", lineHeight: 1.45 }}>
             Gia' in elenco, con la quantita' scritta nella scheda dell'accessorio: si cambia solo il numero di pezzi da spedire. La master ritrovera' la stessa lista nell'inventario di fine corso, per dire quanti ne rimanda indietro.
           </div>
-          {tuttiAccessori.map((r) => (
-            <div key={r.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <FotoProdotto prodottoId={r.prodotto_id} />
-                <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
-                  {nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}
-                </span>
-              </span>
+        )}
+        {tuttiAccessori.map((r, idx) => (
+          <RigaCorredo
+            key={r.chiave}
+            ultima={idx === tuttiAccessori.length - 1 && consulenzeEdizione.length === 0 && prodottiExtraIds.length === 0}
+            foto={<FotoProdotto prodottoId={r.prodotto_id} lato={42} />}
+            nome={nomeProdotto(r.prodotto_id)}
+            nota={giaInSede(r.prodotto_id) ? `già in sede: ${giaInSede(r.prodotto_id).quantita}` : ""}
+            destra={(
               <ContatoreQuantita
                 frecce
                 valore={statoEdizione.accessori_quantita?.[r.chiave] ?? (Number(r.quantita) || 0)}
                 titolo="Quanti pezzi partono per il corso"
                 onCambia={(n) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: n } })}
               />
-            </div>
-          ))}
+            )}
+          />
+        ))}
+
+        {/* Le consulenze: pezzi interi, non quanto sono pieni. Il livello
+            di riempimento e' un'altra cosa e un altro momento — lo
+            dichiara la master all'inventario di fine corso. */}
+        {consulenzeEdizione.length > 0 && (
+          <div style={{ ...fontBody, fontSize: ALLESTIMENTO.colonna, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "14px 0 2px" }}>Consulenze</div>
+        )}
+        {Object.values(consulenzeEdizione.reduce((gruppi, r) => {
+          if (!gruppi[r.prodotto_id]) gruppi[r.prodotto_id] = { prodottoId: r.prodotto_id, pezzi: [] };
+          gruppi[r.prodotto_id].pezzi.push(r);
+          return gruppi;
+        }, {})).map((g, idx, tutte) => (
+          <RigaCorredo
+            key={g.prodottoId}
+            ultima={idx === tutte.length - 1 && prodottiExtraIds.length === 0}
+            foto={<FotoProdotto prodottoId={g.prodottoId} lato={42} />}
+            nome={nomeProdotto(g.prodottoId)}
+            nota={`disponibili a magazzino: ${prodottiShop.find((p) => p.id === g.prodottoId)?.quantita ?? 0}`}
+            destra={(
+              <>
+                {/* "Da vendere" sta sulle consulenze e non sui prodotti
+                    extra: una consulenza che parte per essere venduta e'
+                    un caso che si pone davvero, un rotolo lettino no. */}
+                <label title="Parte per essere venduta al corso, non per essere usata in aula" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, color: extraDaVendita[g.prodottoId] ? NAVY : MUTED, whiteSpace: "nowrap" }}>
+                  <input type="checkbox" checked={!!extraDaVendita[g.prodottoId]} onChange={(e) => cambiaExtraDaVendita(g.prodottoId, e.target.checked)} />
+                  Da vendere
+                </label>
+                <ContatoreQuantita
+                  frecce max={99}
+                  valore={g.pezzi.length}
+                  titolo="Quanti pezzi di questa consulenza partono"
+                  onCambia={(n) => impostaQuantitaConsulenza(g.prodottoId, n)}
+                />
+                <button onClick={() => impostaQuantitaConsulenza(g.prodottoId, 0)} title="Togli questa consulenza" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+              </>
+            )}
+          />
+        ))}
+
+        {prodottiExtraIds.length > 0 && (
+          <div style={{ ...fontBody, fontSize: ALLESTIMENTO.colonna, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, padding: "14px 0 2px" }}>Prodotti extra o da vendita</div>
+        )}
+        {prodottiExtraIds.map((prodottoId, idx) => (
+          <RigaCorredo
+            key={prodottoId}
+            ultima={idx === prodottiExtraIds.length - 1}
+            foto={<FotoProdotto prodottoId={prodottoId} lato={42} />}
+            nome={nomeProdotto(prodottoId)}
+            destra={(
+              <>
+                {/* La spunta "Da vendere" qui non c'e' piu': questa lista
+                    e' quella dei consumabili del corso — olio, guanti,
+                    rotolo lettino — e chiedeva a ogni pezzo una domanda
+                    che per quasi tutti non si pone. Le righe gia' segnate
+                    restano segnate: e' sparito il modo di cambiarle da
+                    qui, non il dato. */}
+                {extraDaVendita[prodottoId] && (
+                  <span title="Segnato da vendere prima che questa casella sparisse da qui: non scarica il magazzino alla spedizione" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#8A6A1B", background: "#F7EEDE", borderRadius: 8, padding: "3px 8px", textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap" }}>
+                    da vendere
+                  </span>
+                )}
+                <ContatoreQuantita
+                  frecce
+                  valore={accessoriQuantita[`extra::${prodottoId}`] ?? 0}
+                  titolo="Quanti pezzi partono per il corso"
+                  onCambia={(n) => onSalvaCampi({ accessori_quantita: { ...accessoriQuantita, [`extra::${prodottoId}`]: n } })}
+                />
+                <button onClick={() => rimuoviProdottoExtra(prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+              </>
+            )}
+          />
+        ))}
+
+        {/* I DUE TASTI CHE AGGIUNGONO, affiancati in fondo. Quando uno
+            dei due si apre prende il posto del suo tasto e basta:
+            l'altro resta dov'e', perche' chi sta cercando una
+            consulenza non ha smesso di poter aggiungere un extra. */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start", marginTop: 14 }}>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            {pickerConsulenzaAperto ? (
+              <div>
+                <input autoFocus style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Cerca consulenza…" value={ricercaConsulenza} onChange={(e) => setRicercaConsulenza(e.target.value)} />
+                <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
+                  {risultatiConsulenza.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessuna consulenza trovata.</div>
+                  ) : risultatiConsulenza.map((p) => (
+                    <button key={p.id} onClick={() => aggiungiConsulenza(p.id)} style={{ display: "flex", justifyContent: "space-between", gap: 8, width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.nome}</span><span style={{ color: MUTED, fontSize: 11.5, flexShrink: 0 }}>disp. {p.quantita ?? 0}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => { setPickerConsulenzaAperto(false); setRicercaConsulenza(""); }} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", marginTop: 6, padding: 0 }}>Annulla</button>
+              </div>
+            ) : (
+              <TastoAggiungi onClick={() => setPickerConsulenzaAperto(true)}>+ Aggiungi consulenze</TastoAggiungi>
+            )}
+          </div>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            {pickerExtraAperto ? (
+              <div>
+                <input autoFocus style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Cerca prodotto…" value={ricercaExtra} onChange={(e) => setRicercaExtra(e.target.value)} />
+                {ricercaExtra.trim() && (
+                  <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
+                    {risultatiExtra.length === 0 ? (
+                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessun prodotto trovato.</div>
+                    ) : risultatiExtra.map((p) => {
+                      const gia = giaNelPacco(p.id);
+                      return (
+                        <button key={p.id} data-extra-trovato={gia.totale > 0 ? "gia-nel-pacco" : "nuovo"} onClick={() => aggiungiProdottoExtra(p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                          {p.nome}
+                          {gia.totale > 0 && (
+                            <span style={{ display: "block", ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#A05A14", marginTop: 2 }}>
+                              già nel pacco: {gia.totale} {gia.totale === 1 ? "pezzo" : "pezzi"}
+                              {gia.daiKit > 0 ? ` · ${gia.daiKit} dai kit` : ""}
+                              {gia.daAccessori > 0 ? ` · ${gia.daAccessori} dagli accessori` : ""}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <button onClick={() => { setPickerExtraAperto(false); setRicercaExtra(""); }} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", marginTop: 6, padding: 0 }}>Annulla</button>
+              </div>
+            ) : (
+              <TastoAggiungi onClick={() => setPickerExtraAperto(true)}>+ Aggiungi prodotti extra o da vendita</TastoAggiungi>
+            )}
+          </div>
         </div>
-      )}
+      </SezioneAllestimento>
 
       </fieldset>
     </div>
