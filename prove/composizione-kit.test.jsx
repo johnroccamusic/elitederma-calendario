@@ -14,8 +14,9 @@ import React from "react";
 import {
   composizioneKit, listaMancanti, listaRaccoltaMateriale,
   ComposizioneKit, RaccoltaMateriale, RigaCorsoLogistica,
+  pezziGiaNelPacco, avvisoProdottoGiaNelPacco, PannelloPreparazioneKit,
 } from "../src/App.jsx";
-import { monta, clicca } from "./aiuto.js";
+import { monta, clicca, scrivi } from "./aiuto.js";
 
 const KIT_PRO = { id: "k1", nome: "PMU Pro", corso_id: "c1", tipo: "kit", ordine: 1 };
 const KIT_BASE = { id: "k2", nome: "PMU Base", corso_id: "c1", tipo: "kit", ordine: 2 };
@@ -24,6 +25,9 @@ const PRODOTTI = [
   { id: "p-aghi", nome: "Aghi 1RL (5 pz)" },
   { id: "p-pelle", nome: "Pelle sintetica" },
   { id: "p-busta", nome: "Busta nera kit" },
+  // a magazzino, ma dentro nessun kit: e' il prodotto che si aggiunge
+  // senza che nessuno debba chiedere niente
+  { id: "p-olio", nome: "Olio detergente" },
 ];
 const DISTINTE = [
   { id: "r1", kit_id: "k1", corso_id: "c1", prodotto_id: "p-aghi", quantita: 2, tipo: "kit" },
@@ -296,6 +300,134 @@ describe("il pacco non si dichiara preparato se manca qualcosa", () => {
     expect(p.nodo.querySelector("[data-lista-mancanti]")).toBeTruthy();
     await clicca(p.tasto("Pacco da preparare"));
     expect(avanzamenti).toEqual(["bolla_stampata"]);
+    await p.smonta();
+  });
+});
+
+// UN PRODOTTO CHE IL PACCO STA GIA' PORTANDO (15/11/2026).
+//
+// Il titolare: «se Raf aggiunge "prodotto extra o da vendita" e quel
+// prodotto è già elencato tra quelli presenti dei kit, il sistema deve
+// avvisare con un popup […] sei sicuro di aggiungerne altri?».
+//
+// Il rischio non è estetico: un extra scarica il magazzino come tutto
+// il resto, quindi lo stesso prodotto aggiunto due volte esce due volte.
+describe("pezziGiaNelPacco e il suo avviso", () => {
+  const blocchi = composizioneKit({ ...COMUNE, statoEdizione: { riserva_per_kit: { k1: 1 } } });
+  const ACCESSORI = [{ prodotto_id: "p-busta", quantita: 9 }];
+
+  it("conta i pezzi dei kit sommando tutti i tipi di kit", () => {
+    // 3 PRO × 2 aghi + 1 BASE × 1 ago
+    expect(pezziGiaNelPacco({ prodottoId: "p-aghi", blocchi }).daiKit).toBe(7);
+    expect(pezziGiaNelPacco({ prodottoId: "p-pelle", blocchi }).daiKit).toBe(3);
+  });
+
+  it("conta anche gli accessori didattica, con la quantità che partirà davvero", () => {
+    const dalloScheda = pezziGiaNelPacco({ prodottoId: "p-busta", blocchi, accessori: ACCESSORI });
+    expect(dalloScheda.daAccessori).toBe(9);
+    // 1 dal kit BASE + 9 dall'accessorio
+    expect(dalloScheda.totale).toBe(10);
+    // una quantità scritta a mano comanda su quella della scheda
+    const aMano = pezziGiaNelPacco({
+      prodottoId: "p-busta", blocchi, accessori: ACCESSORI, accessoriQuantita: { "accessorio::p-busta": 2 },
+    });
+    expect(aMano.daAccessori).toBe(2);
+  });
+
+  it("un prodotto che nel pacco non c'è non ha niente da dire", () => {
+    const gia = pezziGiaNelPacco({ prodottoId: "p-sconosciuto", blocchi, accessori: ACCESSORI });
+    expect(gia.totale).toBe(0);
+    expect(avvisoProdottoGiaNelPacco({ nome: "Qualcosa", ...gia })).toBe("");
+  });
+
+  it("l'avviso dice quanti pezzi, di quale prodotto e da dove", () => {
+    const testo = avvisoProdottoGiaNelPacco({ nome: "Aghi 1RL (5 pz)", daiKit: 7, daAccessori: 0 });
+    expect(testo).toContain("Attenzione: 7 pezzi di «Aghi 1RL (5 pz)»");
+    expect(testo).toContain("vengono già scaricati dal magazzino perché presenti nei prodotti associati ai kit");
+    expect(testo).toContain("Sei sicuro di aggiungerne altri?");
+    // un pezzo solo si dice al singolare: un avviso scritto male si salta
+    expect(avvisoProdottoGiaNelPacco({ nome: "Busta nera kit", daiKit: 1 }))
+      .toContain("1 pezzo di «Busta nera kit» viene già scaricato");
+    // dai kit E dagli accessori: si dicono tutti e due, col loro numero
+    const doppio = avvisoProdottoGiaNelPacco({ nome: "Busta nera kit", daiKit: 1, daAccessori: 9 });
+    expect(doppio).toContain("10 pezzi");
+    expect(doppio).toContain("nei prodotti associati ai kit (1) e negli accessori didattica del corso (9)");
+  });
+});
+
+describe("il gesto: aggiungere un extra che c'è già", () => {
+  const CORSO_DATA = { id: "cd1", corso_id: "c1", location_id: "l1", data_inizio: "2099-01-10", data_fine: "2099-01-11" };
+  const CORSO = { id: "c1", nome: "COLORI E CORREZIONI", colore: "#123456" };
+  const LOC = { id: "l1", nome: "MILANO" };
+
+  async function pannello(onSalvaCampi) {
+    return monta(
+      <PannelloPreparazioneKit
+        corsoData={CORSO_DATA} corso={CORSO} loc={LOC}
+        statoEdizione={{ corso_data_id: "cd1", riserva_per_kit: {}, accessori_quantita: {} }}
+        kitDefinizioni={[KIT_PRO, KIT_BASE]} corsiKitProdotti={DISTINTE} prodottiShop={PRODOTTI}
+        iscrittiEdizione={ISCRITTI} inventarioSede={[]} prodottiApertiMagazzino={[]}
+        nomeUtente="Raf" onSalvaCampi={onSalvaCampi} onCambiaTagliaIscritto={() => {}}
+      />
+    );
+  }
+
+  async function cercaExtra(p, testo) {
+    await clicca(p.tasto("Aggiungi prodotti extra o da vendita"));
+    const casella = [...p.nodo.querySelectorAll("input")].find((i) => i.placeholder === "Cerca prodotto…");
+    await scrivi(casella, testo);
+    return casella;
+  }
+
+  it("l'elenco lo dice già prima di premere: «già nel pacco»", async () => {
+    const p = await pannello(() => {});
+    await cercaExtra(p, "Aghi");
+    const riga = p.nodo.querySelector('[data-extra-trovato="gia-nel-pacco"]');
+    expect(riga.textContent).toContain("già nel pacco: 5 pezzi");
+    expect(riga.textContent).toContain("5 dai kit");
+    await p.smonta();
+  });
+
+  it("premendo chiede, e con «no» non aggiunge niente", async () => {
+    const salvataggi = [];
+    const domande = [];
+    window.confirm = (t) => { domande.push(t); return false; };
+    const p = await pannello((campi) => salvataggi.push(campi));
+    await cercaExtra(p, "Aghi");
+    await clicca(p.nodo.querySelector('[data-extra-trovato="gia-nel-pacco"]'));
+    expect(domande.length).toBe(1);
+    expect(domande[0]).toContain("Attenzione: 5 pezzi di «Aghi 1RL (5 pz)»");
+    expect(domande[0]).toContain("Sei sicuro di aggiungerne altri?");
+    expect(salvataggi).toEqual([]);
+    window.confirm = () => true;
+    await p.smonta();
+  });
+
+  it("con «sì» l'extra si aggiunge, come sempre", async () => {
+    const salvataggi = [];
+    window.confirm = () => true;
+    const p = await pannello((campi) => salvataggi.push(campi));
+    await cercaExtra(p, "Aghi");
+    await clicca(p.nodo.querySelector('[data-extra-trovato="gia-nel-pacco"]'));
+    expect(salvataggi).toEqual([{ accessori_quantita: { "extra::p-aghi": 0 } }]);
+    await p.smonta();
+  });
+
+  it("un prodotto che nel pacco non c'è si aggiunge senza chiedere niente", async () => {
+    const salvataggi = [];
+    const domande = [];
+    window.confirm = (t) => { domande.push(t); return true; };
+    const p = await pannello((campi) => salvataggi.push(campi));
+    await cercaExtra(p, "Olio");
+    const riga = p.nodo.querySelector("[data-extra-trovato]");
+    // nessun avviso in elenco, e premendo nessuna domanda: un avviso che
+    // compare sempre si impara a saltare, e si porta dietro anche quelli
+    // che contano
+    expect(riga.getAttribute("data-extra-trovato")).toBe("nuovo");
+    expect(riga.textContent).not.toContain("già nel pacco");
+    await clicca(riga);
+    expect(domande).toEqual([]);
+    expect(salvataggi).toEqual([{ accessori_quantita: { "extra::p-olio": 0 } }]);
     await p.smonta();
   });
 });

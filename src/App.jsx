@@ -82155,6 +82155,52 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
   );
 }
 
+// UN PRODOTTO CHE IL PACCO STA GIA' PORTANDO (15/11/2026, chiesto dal
+// titolare): «se Raf aggiunge "prodotto extra o da vendita" e quel
+// prodotto è già elencato tra quelli presenti dei kit, il sistema deve
+// avvisare con un popup».
+//
+// Il rischio non e' estetico: un extra scarica il magazzino come tutto
+// il resto, quindi lo stesso prodotto aggiunto due volte esce due volte
+// — e la seconda nessuno la mette in dubbio, perche' l'ha scritta
+// qualcuno apposta. «Ruota colori» sta nella distinta del Kit Colori e
+// anche fra gli accessori didattica: e' esattamente il caso.
+//
+// I pezzi dei kit si contano dai blocchi della composizione, cioe' dallo
+// stesso conto che riempie le buste; quelli degli accessori dalla
+// quantita' che partira' davvero — quella scritta a mano se c'e', se no
+// quella della scheda dell'accessorio, la stessa regola di
+// componiSpedizione.
+function pezziGiaNelPacco({ prodottoId, blocchi = [], accessori = [], accessoriQuantita = {} }) {
+  const daiKit = (blocchi || []).reduce(
+    (s, b) => s + (b.righe || []).filter((r) => r.prodottoId === prodottoId).reduce((n, r) => n + (Number(r.totale) || 0), 0),
+    0,
+  );
+  const daAccessori = (accessori || [])
+    .filter((r) => r.prodotto_id === prodottoId)
+    .reduce((s, r) => {
+      const scritta = (accessoriQuantita || {})[`accessorio::${r.prodotto_id}`];
+      return s + (scritta != null ? Number(scritta) || 0 : Number(r.quantita) || 0);
+    }, 0);
+  return { daiKit, daAccessori, totale: daiKit + daAccessori };
+}
+
+// La domanda, scritta una volta sola: dice QUANTI pezzi e DA DOVE —
+// «sei sicuro?» da solo, davanti a un elenco di prodotti, non dice su
+// quale si e' premuto. Torna stringa vuota quando non c'e' niente da
+// chiedere: un avviso che compare sempre si impara a saltare.
+function avvisoProdottoGiaNelPacco({ nome, daiKit = 0, daAccessori = 0 }) {
+  if (!(daiKit > 0) && !(daAccessori > 0)) return "";
+  const dove = [];
+  if (daiKit > 0) dove.push(`nei prodotti associati ai kit${daAccessori > 0 ? ` (${daiKit})` : ""}`);
+  if (daAccessori > 0) dove.push(`negli accessori didattica del corso${daiKit > 0 ? ` (${daAccessori})` : ""}`);
+  const quanti = daiKit + daAccessori;
+  const uno = quanti === 1;
+  return `Attenzione: ${quanti} ${uno ? "pezzo" : "pezzi"} di «${nome}» ${uno ? "viene" : "vengono"} già `
+    + `${uno ? "scaricato" : "scaricati"} dal magazzino perché ${uno ? "presente" : "presenti"} ${dove.join(" e ")}.`
+    + `\n\nSei sicuro di aggiungerne altri?`;
+}
+
 // LA PAGINA DELLA COMPOSIZIONE, a tutta pagina come la raccolta: stessa
 // barra che resta in cima, stesso fondo, stesse righe grandi — e' il
 // gesto dopo, fatto dalla stessa persona in piedi con lo scatolone
@@ -82463,7 +82509,19 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   const risultatiExtra = ricercaExtra.trim()
     ? prodottiShop.filter((p) => p.nome.toLowerCase().includes(ricercaExtra.trim().toLowerCase()) && !prodottiExtraIds.includes(p.id)).slice(0, 8)
     : [];
+  // quanti pezzi di quel prodotto il pacco sta gia' portando, e da dove:
+  // si legge nell'elenco PRIMA di premere, e si richiede nel popup dopo.
+  // Dirlo prima non rende inutile la domanda — l'elenco si scorre in
+  // fretta — ma toglie la sorpresa a chi guarda.
+  const giaNelPacco = (prodottoId) => pezziGiaNelPacco({
+    prodottoId, blocchi: blocchiComposizione, accessori: tuttiAccessori, accessoriQuantita,
+  });
   function aggiungiProdottoExtra(prodottoId) {
+    const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+    const avviso = avvisoProdottoGiaNelPacco({ nome: prodotto?.nome || "questo prodotto", ...giaNelPacco(prodottoId) });
+    // due sole risposte, sì o no: con «no» non si aggiunge niente e la
+    // ricerca resta aperta dov'era, per sceglierne un altro
+    if (avviso && !window.confirm(avviso)) return;
     onSalvaCampi({ accessori_quantita: { ...accessoriQuantita, [`extra::${prodottoId}`]: 0 } });
     setRicercaExtra(""); setPickerExtraAperto(false);
   }
@@ -82924,11 +82982,21 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
               <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
                 {risultatiExtra.length === 0 ? (
                   <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessun prodotto trovato.</div>
-                ) : risultatiExtra.map((p) => (
-                  <button key={p.id} onClick={() => aggiungiProdottoExtra(p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-                    {p.nome}
-                  </button>
-                ))}
+                ) : risultatiExtra.map((p) => {
+                  const gia = giaNelPacco(p.id);
+                  return (
+                    <button key={p.id} data-extra-trovato={gia.totale > 0 ? "gia-nel-pacco" : "nuovo"} onClick={() => aggiungiProdottoExtra(p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                      {p.nome}
+                      {gia.totale > 0 && (
+                        <span style={{ display: "block", ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#A05A14", marginTop: 2 }}>
+                          già nel pacco: {gia.totale} {gia.totale === 1 ? "pezzo" : "pezzi"}
+                          {gia.daiKit > 0 ? ` · ${gia.daiKit} dai kit` : ""}
+                          {gia.daAccessori > 0 ? ` · ${gia.daAccessori} dagli accessori` : ""}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <button onClick={() => { setPickerExtraAperto(false); setRicercaExtra(""); }} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", marginTop: 6, padding: 0 }}>Annulla</button>
@@ -91907,6 +91975,8 @@ export {
   calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse, costoKitDellaClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
   composizioneKit, listaMancanti, ComposizioneKit, RigaCorsoLogistica,
+  pezziGiaNelPacco, avvisoProdottoGiaNelPacco,
+  PannelloPreparazioneKit,
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
   bustaChiusa, statoViaggioBusta, bustaDepositata, statoViaggioAppendice, appendiceDepositata,

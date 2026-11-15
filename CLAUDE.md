@@ -1909,6 +1909,24 @@ resta in elenco** e lo dice: farlo sparire vorrebbe dire che chi prepara
 cerca un blocco che non c'è e non sa perché (la stessa regola del bundle
 aperto a vuoto del 6/11).
 
+**E un extra che il pacco sta già portando lo dice prima** (15/11/2026,
+chiesto lo stesso giorno: «se Raf aggiunge "prodotto extra o da
+vendita" e quel prodotto è già elencato tra quelli presenti dei kit, il
+sistema deve avvisare con un popup»). Il rischio non è estetico: un
+extra scarica il magazzino come tutto il resto, quindi lo stesso
+prodotto aggiunto due volte esce due volte — e la seconda nessuno la
+mette in dubbio, perché l'ha scritta qualcuno apposta. «Ruota colori»
+sta nella distinta del Kit Colori **e** fra gli accessori didattica: è
+esattamente il caso. Ora l'elenco della ricerca scrive «già nel pacco: 5
+pezzi · 5 dai kit» sotto il nome, e premendo si apre la domanda —
+quanti pezzi, di quale prodotto, da dove, e «Sei sicuro di aggiungerne
+altri?» con sì e no. Con «no» non si aggiunge niente e la ricerca resta
+aperta dov'era. **Un prodotto che nel pacco non c'è non chiede niente**:
+un avviso che compare sempre si impara a saltare, e si porta dietro
+anche quelli che contano. I pezzi dei kit si contano dai blocchi della
+composizione — lo stesso conto che riempie le buste — e quelli degli
+accessori dalla quantità che partirà davvero, scritta a mano se c'è.
+
 «Terminato», in cima alla composizione, **chiude e basta**: non dichiara
 niente. Quello che è fatto lo dicono i tasti verdi dei blocchi, uno per
 kit (`kit_composti`), che si disfano con lo stesso dito.
