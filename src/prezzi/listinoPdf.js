@@ -113,6 +113,31 @@ async function aJpegRidotto(blob) {
 // nessuno. E quelli che si vendono SOLO AL BANCO — i "solo POS" — che
 // sullo shop non ci sono: offrirli a un rivenditore vorrebbe dire
 // promettere una merce che poi non si sa come fargli avere.
+// il lordo di una cifra netta. Scritto qui e non dentro la riga perche'
+// lo usano la colonna e la nota in fondo, e due conti diversi sullo
+// stesso prezzo sono il difetto da cui viene tutta questa correzione.
+export function conIva(netto, aliquota) {
+  if (netto == null) return null;
+  // Number(null) e Number("") fanno zero, non «non lo so»: un'aliquota
+  // che manca diventerebbe «IVA non dovuta», e la colonna del lordo
+  // ripeterebbe il netto dicendo una cosa falsa. Senza aliquota vale il
+  // 22%, che e' quella di tutti e 187 i prodotti del listino.
+  const scritta = aliquota === null || aliquota === undefined || aliquota === "" ? null : Number(aliquota);
+  const iva = Number.isFinite(scritta) ? scritta : 22;
+  return Math.round(Number(netto) * (1 + iva / 100) * 100) / 100;
+}
+
+// che cosa scrivere in fondo alla pagina. Oggi i 187 prodotti del
+// listino sono tutti al 22%, e dirlo in cifra tonda vale piu' di una
+// formula; ma se un domani ce ne fosse uno a un'aliquota diversa, una
+// riga che dice «22%» mentirebbe su quello. Quindi il piede si guarda i
+// prodotti che sta stampando.
+export function notaIvaListino(righe) {
+  const aliquote = [...new Set((righe || []).map((r) => Number(r.aliquota_iva)).filter((n) => Number.isFinite(n)))];
+  const quale = aliquote.length === 1 ? `IVA ${String(aliquote[0]).replace(".", ",")}%` : "IVA secondo l'aliquota di ciascun prodotto";
+  return `prezzi in euro, ${quale}`;
+}
+
 export function raggruppaPerReparto(righe) {
   const dentro = (righe || []).filter((r) =>
     r.prezzo_rivenditore != null && r.pubblico_lordo != null && r.sullo_shop !== false);
@@ -205,15 +230,31 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   const xFoto = MARGINE;
   const xNome = MARGINE + LATO_FOTO + 10;
   const destraPagina = A4.larghezza - MARGINE;
-  // Due colonne, non tre. Lo sconto in percentuale c'era e se n'e' andato
-  // l'08/10/2026: a chi compra interessa quanto paga, e una percentuale
-  // scritta accanto al prezzo e' un invito a contrattare su quella invece
-  // che sul prezzo. Resta nel listino dentro l'app, dove serve a decidere.
+  // QUATTRO NUMERI, NETTO E LORDO PER TUTTI E DUE I PREZZI (15/11/2026,
+  // scelto dal titolare: «quel listino genera una lista che e'
+  // contraddittoria… dovremmo elencare i prezzi per entrambe le colonne
+  // IVA esclusa e IVA inclusa»).
+  //
+  // Prima erano due, e stavano su DUE BASI DIVERSE senza dirlo: al
+  // pubblico il lordo (600,00), al rivenditore il netto (290,16). Chi
+  // leggeva calcolava uno sconto del 51,6% che non esiste — quello vero
+  // e' il 41% — e il piede della pagina dichiarava «prezzi IVA inclusa»,
+  // che era falso proprio sulla colonna che il rivenditore guarda. Su un
+  // foglio che gira e viene stampato, sono ventidue punti di
+  // malinteso su una fattura.
+  //
+  // Lo sconto in percentuale resta fuori: c'era e se n'e' andato
+  // l'08/10/2026, perche' a chi compra interessa quanto paga e una
+  // percentuale accanto al prezzo e' un invito a contrattare su quella
+  // invece che sul prezzo. Nel listino dentro l'app c'e', dove serve a
+  // decidere.
   const colonne = [
-    { titolo: "Prezzo al pubblico", destra: destraPagina - 160 },
-    { titolo: "Prezzo rivenditore", destra: destraPagina },
+    { chiave: "pubblico_netto", gruppo: "Prezzo al pubblico", sotto: "netto", destra: destraPagina - 220 },
+    { chiave: "pubblico_lordo", gruppo: "Prezzo al pubblico", sotto: "lordo", destra: destraPagina - 150 },
+    { chiave: "prezzo_rivenditore", gruppo: "Prezzo rivenditore", sotto: "netto", destra: destraPagina - 70 },
+    { chiave: "rivenditore_lordo", gruppo: "Prezzo rivenditore", sotto: "lordo", destra: destraPagina },
   ];
-  const larghezzaNome = colonne[0].destra - 92 - xNome;
+  const larghezzaNome = colonne[0].destra - 56 - xNome;
 
   let pagina = null;
   let y = 0;
@@ -289,10 +330,13 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   }
 
   function intestazioneColonne() {
-    pagina.drawText("PRODOTTO", { x: xNome, y: y - 9, size: 7.5, font: grassetto, color: colore(GRIGIO) });
-    colonne.forEach((c) => scriviDestra(c.titolo.toUpperCase(), c.destra, y - 9, grassetto, 7.5, GRIGIO));
-    pagina.drawLine({ start: { x: MARGINE, y: y - 16 }, end: { x: destraPagina, y: y - 16 }, thickness: 0.8, color: colore(BORDO) });
-    y -= 24;
+    pagina.drawText("PRODOTTO", { x: xNome, y: y - 16, size: 7.5, font: grassetto, color: colore(GRIGIO) });
+    // il nome del gruppo sopra le sue due colonne, allineato a destra
+    // sull'ultima: scritto su ognuna sarebbe lo stesso titolo due volte
+    [1, 3].forEach((i) => scriviDestra(colonne[i].gruppo.toUpperCase(), colonne[i].destra, y - 6, grassetto, 7.5, GRIGIO));
+    colonne.forEach((c) => scriviDestra(c.sotto, c.destra, y - 16, normale, 7, GRIGIO));
+    pagina.drawLine({ start: { x: MARGINE, y: y - 23 }, end: { x: destraPagina, y: y - 23 }, thickness: 0.8, color: colore(BORDO) });
+    y -= 31;
   }
 
   function spazio(quanto) {
@@ -334,8 +378,13 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
 
       const yTesto = y - 14;
       pagina.drawText(accorcia(p.nome, normale, 9, larghezzaNome), { x: xNome, y: yTesto, size: 9, font: normale, color: colore(NAVY) });
-      scriviDestra(euro(p.pubblico_lordo), colonne[0].destra, yTesto, normale, 9.5, GRIGIO);
-      scriviDestra(euro(p.prezzo_rivenditore), colonne[1].destra, yTesto, grassetto, 10.5, NAVY);
+      // il prezzo al pubblico in grigio, quello del rivenditore in navy:
+      // e' il suo, ed e' quello che cerca per primo. Il netto in
+      // grassetto perche' e' la cifra che gli verra' fatturata
+      scriviDestra(euro(p.pubblico_netto), colonne[0].destra, yTesto, normale, 9, GRIGIO);
+      scriviDestra(euro(p.pubblico_lordo), colonne[1].destra, yTesto, normale, 9, GRIGIO);
+      scriviDestra(euro(p.prezzo_rivenditore), colonne[2].destra, yTesto, grassetto, 10, NAVY);
+      scriviDestra(euro(conIva(p.prezzo_rivenditore, p.aliquota_iva)), colonne[3].destra, yTesto, normale, 9, NAVY);
 
       y -= ALTEZZA_RIGA;
     }
@@ -347,13 +396,16 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   // vuole ordinare — e deve poter leggere chi siamo e dove scrivere senza
   // tornare a cercare la mail con cui gliel'abbiamo mandato.
   const data = new Date().toLocaleDateString("it-IT", { timeZone: "Europe/Rome" });
+  // la nota sull'IVA si legge dai prodotti stampati, non da una
+  // costante: vedi notaIvaListino
+  const notaIva = notaIvaListino(tutti);
   const rigaSocieta = righeSocieta.length
     ? righeSocieta.join("  \u00B7  ")
     : "Elitederma";
   pdf.getPages().forEach((pg, i) => {
     pg.drawLine({ start: { x: MARGINE, y: 34 }, end: { x: destraPagina, y: 34 }, thickness: 0.6, color: colore(BORDO) });
     pg.drawText(soloWinAnsi(rigaSocieta), { x: MARGINE, y: 24, size: 7, font: normale, color: colore(GRIGIO) });
-    pg.drawText(soloWinAnsi(`Listino rivenditore del ${data} - prezzi IVA inclusa`), {
+    pg.drawText(soloWinAnsi(`Listino rivenditore del ${data} - ${notaIva}`), {
       x: MARGINE, y: 15, size: 7, font: normale, color: colore(GRIGIO),
     });
     const n = `${i + 1} / ${pdf.getPageCount()}`;

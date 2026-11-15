@@ -1400,6 +1400,43 @@ che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
 resta come rete per far vedere la pagina se la query fallisce, ma non è più
 quello che si firma. Prove in `prove/testi-contratto.test.js`.
 
+### Il listino rivenditore diceva due basi diverse senza dirlo (15/11/2026)
+
+Il titolare: «non mi ricordo più se quando si genera il listino del
+rivenditore il suo prezzo è IVA inclusa o IVA esclusa». Misurato sul
+dato: **il prezzo rivenditore è il NETTO**
+(`prezzo_vendita × (1 − sconto)` in `v_prezzi_listini`), mentre la
+colonna «Prezzo al pubblico» stampava il **lordo**.
+
+Due basi diverse sullo stesso foglio, e nessuna delle due scritta. Sul
+Dermografo Horus: 600,00 contro 290,16 si legge come uno sconto del
+**51,6%**, mentre quello vero sul netto è il **41%**. E in fondo a ogni
+pagina c'era scritto «prezzi IVA inclusa», **falso proprio sulla
+colonna che il rivenditore guarda**: chi leggeva 290,16 come totale si
+vedeva arrivare una fattura da 354,00.
+
+Deciso dal titolare: **quattro colonne pari** — netto e lordo per tutti
+e due i prezzi, con il gruppo scritto sopra e `netto`/`lordo` sotto. Il
+prezzo al pubblico in grigio, quello del rivenditore in navy col netto
+in grassetto, che è la cifra che gli verrà fatturata.
+
+Tre cose decise lì dentro:
+
+- **il lordo si calcola in un posto solo** (`conIva` in
+  `src/prezzi/listinoPdf.js`): due conti diversi sullo stesso prezzo
+  sono il difetto da cui viene tutta questa correzione;
+- **un'aliquota che manca vale 22, non zero.** `Number(null)` fa zero,
+  non «non lo so»: senza questa accortezza la colonna del lordo
+  ripeterebbe il netto, cioè dichiarerebbe che l'IVA non è dovuta;
+- **la nota in fondo si legge dai prodotti stampati**
+  (`notaIvaListino`), non da una costante. Oggi i 187 prodotti del
+  listino sono tutti al 22% e dirlo in cifra vale più di una formula,
+  ma una riga che dicesse «22%» con dentro un prodotto a un'altra
+  aliquota mentirebbe su quello.
+
+Prove in `prove/listino-rivenditore.test.js` (8), sui numeri veri dei
+due dermografi, compreso lo sconto apparente contro quello vero.
+
 ### Gli snippet di WordPress si importano, non si incollano (10/11/2026)
 
 Gli snippet stanno in `wordpress/` come file PHP veri — si leggono, si
