@@ -1844,6 +1844,76 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
+### La lista di allestimento, ridisegnata sul mockup (15/11/2026)
+
+Il titolare, con un mockup in mano: «rifai il design della pagina
+rispettando a perfezione la mia proposta, con particolare attenzione
+alla grandezza delle icone e dei numeri rispetto al testo e al rispetto
+della grandezza dei titoli».
+
+**Quello che è cambiato non è la decorazione, è la gerarchia.** Chi apre
+quella pagina ha una domanda sola — quanta roba preparo — e doveva
+ricavarla da etichette tutte della stessa misura: il nome del corso 19,
+il titolo della lista 12,5 in maiuscoletto, i conti 16, le intestazioni
+di colonna 10,5. Tutto importante vuol dire niente importante. Adesso:
+
+| Cosa | Misura | Perché |
+|---|---|---|
+| i due conti in cima | 30 | sono la risposta alla domanda per cui si apre la pagina |
+| i conti di riga e i totali | 24 | si leggono per primi, prima del nome |
+| «Lista di allestimento» | 26 | è il titolo della pagina, non un'etichetta |
+| «01 KIT DIDATTICI» | 17 | il gradino sotto |
+| il nome di un articolo | 15 | |
+| intestazioni di colonna e note | 11,5–12 | testo di servizio, grigio |
+
+Le misure stanno in **una costante sola** (`ALLESTIMENTO` in App.jsx) e
+le leggono tutte e tre le sezioni: due blocchi che si somigliano al 90%
+ma hanno tre numeri diversi si notano, e si correggono in due posti.
+Stessa cosa per la griglia delle quattro colonne (`grigliaAllestimento`),
+scritta una volta per l'intestazione e per le righe — due copie si
+disallineano al primo nome lungo.
+
+Com'è fatta adesso: **intestazione** (la tessera della data, il filo oro,
+il nome del corso in maiuscolo e la città sotto, i due tasti impilati a
+destra), **i due conti** in una fascia crema con le icone in un tondo
+bianco — Allievi iscritti e Kit da preparare — e poi le **sezioni
+numerate**, ognuna una scheda bianca con la sua banda: `01 Kit
+didattici` (Articolo · Iscritti · Riserva · Totale), `02 Dermografi`
+(Modello · Allievi · Riserva · Totale), `03 Abbigliamento` (Magliette
+totali e le pastiglie delle taglie). In fondo la barra **Specifiche
+degli allievi**, chiusa, che si apre sulla riga per persona.
+
+Quattro decisioni:
+
+- **Il totale è una colonna, e non c'era.** «8 iscritti» e «2 di
+  riserva» erano due numeri da sommare a mente, e quello che parte è la
+  somma. Il conto in cima è lo stesso di `totaleKitPerEdizione`, cioè
+  quello che il magazzino scarica: un secondo calcolo direbbe un altro
+  numero.
+- **La numerazione si conta, non si scrive.** I dermografi hanno la loro
+  sezione solo dove il corso li manda (`prevede_dermografi_sicurezza`):
+  saltare da 01 a 03 farebbe cercare una sezione che non esiste, quindi
+  senza dermografi l'abbigliamento è 02.
+- **Le magliette sono uscite da dentro l'elenco degli iscritti.** Il
+  totale per taglia serve a chi va allo scaffale, e stava in fondo a una
+  lista chiusa dietro un tasto. La riga per persona resta, nella barra,
+  dove serve a chi riempie una scatola per volta.
+- **Il riepilogo «8 KIT KIT COLORI / 8 KIT TOTALI» è stato tolto**
+  (`RiepilogoKitPacchetti`, che lo usava solo questa pagina): quelle
+  stesse quantità adesso si leggono riga per riga nella sezione 01, con
+  il totale accanto. Una colonnina che ripete quello che c'è due
+  centimetri sotto è rumore.
+
+Prove in `prove/lista-allestimento.test.jsx` (8), con il pannello
+montato: i due conti, le tre sezioni col loro numero e le loro colonne,
+la numerazione che non salta, il totale che è iscritti + riserva, le
+taglie, la barra che si apre — e **due prove sulla gerarchia**: il
+numero di riga più grande del nome che accompagna, e i tre titoli in
+ordine di grandezza. Senza quelle, la prima modifica distratta rimette
+le cose come stavano e non se ne accorge nessuno. Quello che le prove
+**non** vedono è l'impaginazione vera: jsdom non impagina, e il
+confronto col mockup si fa con gli occhi.
+
 ### Composizione kit, e il prodotto che non è ancora arrivato (15/11/2026)
 
 Il titolare: «aggiungi la pagina "Composizione kit", che si apre dopo la

@@ -13573,11 +13573,13 @@ function etichettaIntervalloGiorni(dataInizio, dataFine) {
 // Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
 // in lettura, il caricamento resta un compito di chi gestisce
 // l'assegnazione)
-// I kit di un'edizione, contati per tipo. Estratto da
-// RiepilogoKitPacchetti perche' ora serve anche alla scheda della
+// I kit di un'edizione, contati per tipo. Nato dentro il riepilogo di
+// Logistica ed estratto quando e' servito anche alla scheda della
 // dashboard master, che li mostra come numeri grossi invece che come
 // elenco: la stessa conta scritta due volte e' la stessa conta che fra
-// sei mesi da' due risultati diversi.
+// sei mesi da' due risultati diversi. (Dal 15/11/2026 quel riepilogo
+// non esiste piu': in Logistica le quantita' si leggono riga per riga
+// nella sezione «Kit didattici».)
 //
 // Si raggruppa per kit E dermografo insieme: chi prepara deve leggere in
 // una riga sola cosa mettere nella scatola. "3 kit Pro" con il dermografo
@@ -81574,29 +81576,6 @@ function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riserva
   });
   return totale;
 }
-// riepilogo "2 KIT PRO / 1 KIT BASE / 3 KIT TOTALI": quanti iscritti di
-// questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
-// riusato sia nella riga del corso sia in cima a "Preparazione kit"
-function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true }) {
-  const voci = conteggioKitEdizione(iscrittiEdizione);
-  if (voci.length === 0) return null;
-  const totale = voci.reduce((s, [, n]) => s + n, 0);
-  const righe = [...voci.map(([nome, n]) => [n, `KIT ${nome.toUpperCase()}`]), ...(mostraTotale ? [[totale, "KIT TOTALI"]] : [])];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, ...style }}>
-      {righe.map(([n, etichetta], idx) => (
-        // niente "nowrap" sull'etichetta: un nome lungo ("KIT PMU parz.
-        // Sopracciglia - 3 gg + Dermografo Tekna da ritirare al corso")
-        // allargava il riquadro oltre lo schermo, e su mobile finivano
-        // fuori vista le quantità e le caselle da spuntare alla sua destra
-        <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9, minWidth: 0 }}>
-          <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{n}</span>
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.35, minWidth: 0, overflowWrap: "anywhere" }}>{etichetta}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 // una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
 // attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
 // la pillola della fase corrente è cliccabile, mai una a caso: l'ordine
@@ -81647,7 +81626,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
   // non ha senso gestire il rientro di un pacco non ancora consegnato
   const speditoCompletamente = completata;
   // solo il totale qui (il dettaglio per tipo di kit resta nel
-  // pannello "Preparazione kit" a destra, vedi RiepilogoKitPacchetti)
+  // pannello "Preparazione kit" a destra, nella sezione «Kit didattici»)
   const kitTotali = iscrittiEdizione.filter((i) => i.pacchetto_kit).length;
   // riquadro data e contorno della card nel colore assegnato al corso
   // (Gestione corsi), non un colore fisso uguale per tutti
@@ -82307,6 +82286,136 @@ function ComposizioneKit({ titolo, sottotitolo, blocchi = [], composti = {}, att
   );
 }
 
+// ===========================================================
+// LA LISTA DI ALLESTIMENTO, RIDISEGNATA SUL MOCKUP DEL TITOLARE
+// (15/11/2026): «rifai il design della pagina rispettando a perfezione
+// la mia proposta, con particolare attenzione alla grandezza delle
+// icone e dei numeri rispetto al testo e al rispetto della grandezza
+// dei titoli».
+//
+// Quello che cambia non e' la decorazione, e' la GERARCHIA. Chi apre
+// questa pagina ha una domanda sola — quanta roba preparo — e prima
+// doveva ricavarla da etichette tutte della stessa misura: il nome del
+// corso 19, il titolo della lista 12,5 in maiuscoletto, i numeri 16.
+// Adesso i numeri sono la cosa piu' grande della riga (24-30), i titoli
+// di sezione hanno il loro gradino, e il testo di servizio — le
+// intestazioni di colonna, le note — sta sotto i 13.
+//
+// Le tre misure stanno in un posto solo, qui sotto: due blocchi che si
+// somigliano al 90% ma hanno tre numeri diversi si notano, e si
+// correggono in due posti.
+// ===========================================================
+const ALLESTIMENTO = {
+  numero: 24,        // i conti delle righe: la cosa che si legge per prima
+  numeroGrande: 30,  // i due totali in cima
+  titoloSezione: 17, // 01 KIT DIDATTICI
+  titoloPagina: 26,  // Lista di allestimento
+  nome: 15,          // il nome di un articolo
+  colonna: 12,       // le intestazioni di colonna, grigie
+  icona: 24,
+};
+const BANDA_SEZIONE = "#F7EFE1";
+const PILLOLA_TOTALE = "#FBECD2";
+
+// il numeretto della sezione: «01» in una pastiglia oro chiara. E' un
+// indice, non un dato, quindi resta piccolo anche se e' un numero
+function BadgeSezione({ numero }) {
+  return (
+    <span style={{
+      ...fontDisplay, fontSize: 13, fontWeight: 800, color: NAVY, background: "#F0DEB8",
+      border: `1px solid ${GOLD}`, borderRadius: 8, padding: "3px 9px", flexShrink: 0, lineHeight: 1.2,
+    }}>{numero}</span>
+  );
+}
+
+// una tessera dei due conti in cima: cerchio bianco con l'icona,
+// l'etichetta piccola e il numero grande sotto
+function TesseraConto({ icona, etichetta, numero }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "1 1 170px", minWidth: 0 }}>
+      <span style={{ width: 52, height: 52, borderRadius: "50%", background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {icona}
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", ...fontBody, fontSize: 13.5, color: GRAFITE, lineHeight: 1.25, overflowWrap: "anywhere" }}>{etichetta}</span>
+        <span style={{ display: "block", ...fontDisplay, fontSize: ALLESTIMENTO.numeroGrande, fontWeight: 800, color: NAVY, lineHeight: 1.05 }}>{numero}</span>
+      </span>
+    </div>
+  );
+}
+
+// la griglia di una riga: nome, un conto, il contatore della riserva, il
+// totale. Le quattro colonne sono le stesse per l'intestazione e per le
+// righe — scritte due volte si disallineano al primo nome lungo
+function grigliaAllestimento(mobile) {
+  return mobile ? "minmax(0,1fr) 38px 84px 44px" : "minmax(0,1fr) 62px 100px 58px";
+}
+
+// un blocco numerato: la banda col titolo, l'intestazione delle colonne
+// e dentro le righe
+function SezioneAllestimento({ numero, titolo, colonne = null, children }) {
+  const mobile = useIsMobile();
+  return (
+    <section data-sezione-allestimento={titolo} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 16, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: BANDA_SEZIONE, padding: "10px 14px" }}>
+        <BadgeSezione numero={numero} />
+        <h3 style={{ margin: 0, ...fontDisplay, fontSize: ALLESTIMENTO.titoloSezione, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+          {titolo}
+        </h3>
+      </div>
+      {colonne && (
+        <div style={{ display: "grid", gridTemplateColumns: grigliaAllestimento(mobile), alignItems: "center", gap: 8, padding: "8px 14px 4px", background: "#FCFAF5" }}>
+          {colonne.map((c, i) => (
+            <span key={c} style={{ ...fontBody, fontSize: ALLESTIMENTO.colonna, color: i === colonne.length - 1 ? NAVY : MUTED, fontWeight: i === colonne.length - 1 ? 700 : 400, textAlign: i === 0 ? "left" : "center" }}>{c}</span>
+          ))}
+        </div>
+      )}
+      <div style={{ padding: "4px 14px 12px" }}>{children}</div>
+    </section>
+  );
+}
+
+// una riga della lista: l'icona e il nome a sinistra, poi il conto, il
+// contatore e il totale nella sua pastiglia
+function RigaAllestimento({ icona, nome, nota = "", onNome = null, titoloNome = "", numero, contatore, totale, ultima = false }) {
+  const mobile = useIsMobile();
+  return (
+    <div
+      data-riga-allestimento={nome}
+      style={{ display: "grid", gridTemplateColumns: grigliaAllestimento(mobile), alignItems: "center", gap: 8, padding: "9px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}`, minWidth: 0 }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+        <span style={{ flexShrink: 0, display: "inline-flex" }}>{icona}</span>
+        <span style={{ minWidth: 0 }}>
+          <span
+            onClick={onNome || undefined} title={titoloNome || undefined}
+            style={{
+              display: "block", ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY, lineHeight: 1.25, overflowWrap: "anywhere",
+              cursor: onNome ? "pointer" : "default",
+              textDecoration: onNome ? "underline" : "none", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1,
+            }}
+          >{nome}</span>
+          {nota && <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{nota}</span>}
+        </span>
+      </span>
+      <span style={{ ...fontDisplay, fontSize: ALLESTIMENTO.numero, fontWeight: 800, color: NAVY, textAlign: "center", lineHeight: 1 }}>{numero}</span>
+      <span style={{ display: "flex", justifyContent: "center", minWidth: 0 }}>{contatore}</span>
+      <span style={{ ...fontDisplay, fontSize: ALLESTIMENTO.numero, fontWeight: 800, color: NAVY, textAlign: "center", lineHeight: 1, background: PILLOLA_TOTALE, borderRadius: 9, padding: "6px 0" }}>{totale}</span>
+    </div>
+  );
+}
+
+// la maglietta del mockup e' di contorno come tutte le altre icone di
+// questa pagina: quella piena che esiste gia' (IconaMaglietta) pesa il
+// doppio accanto a una scatola disegnata a filo
+function IconaMagliettaContorno({ size = 24, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 3.5 5 5.2 3 8.4l2.6 1.7V20h12.8v-9.9L21 8.4 19 5.2 15 3.5a3 3 0 0 1-6 0Z" />
+    </svg>
+  );
+}
+
 function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, prodottiImmagini = [], categorieProdotti = [], prodottiCategorie = [], inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onAggiornaPacco, onCambiaTagliaIscritto, soloLettura = false, motivoSoloLettura = "" }) {
   const oggiStr = dataOggiStr();
   // stessa intestazione (data/corso/città nel colore del corso) della
@@ -82362,6 +82471,16 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   const righeKitRichiesti = Object.entries(kitRichiesti).sort(
     (a, b) => (kitDefinizioni.find((k) => k.id === a[0])?.ordine || 0) - (kitDefinizioni.find((k) => k.id === b[0])?.ordine || 0)
   );
+  // il secondo dei due conti in cima: i kit che partono davvero, cioe'
+  // quelli degli iscritti PIU' quelli di riserva. E' lo stesso conto che
+  // il magazzino scarica (totaleKitPerEdizione), non un secondo calcolo
+  const kitDaPreparare = Object.values(totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null, riservaPerKit))
+    .reduce((n, q) => n + (Number(q) || 0), 0);
+  // i dermografi hanno una sezione solo dove il corso li manda, quindi
+  // la numerazione si conta invece di essere scritta: saltare da 01 a 03
+  // farebbe cercare una sezione che non esiste
+  const mostraDermografi = !!corso?.prevede_dermografi_sicurezza;
+  const numeroSezione = { kit: "01", dermografi: "02", abbigliamento: mostraDermografi ? "03" : "02" };
   // il contenuto del kit non serve sempre in vista: si apre solo
   // cliccando sul nome, qui nella stessa riga del kit
   const [kitEspansi, setKitEspansi] = useState(() => new Set());
@@ -82605,34 +82724,48 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <Button variant="ghost" onClick={onAggiornaPacco} style={{ marginTop: 10 }}>Aggiorna il pacco</Button>
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 18, minWidth: 0 }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
-          <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#fff" }}>{gg}</div>
-            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 14, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, flex: "1 1 220px" }}>
+          <div style={{ background: coloreCorso, borderRadius: 14, padding: "10px 12px", textAlign: "center", flexShrink: 0, minWidth: 62 }}>
+            <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: "#fff", lineHeight: 1 }}>{gg}</div>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: 0.6, marginTop: 2 }}>{MESI_ABBR[Number(mm) - 1]}</div>
           </div>
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
+          {/* il filo oro separa il QUANDO dal COSA: due cose diverse
+              appoggiate l'una all'altra senza niente in mezzo si leggono
+              come una riga sola */}
+          <div aria-hidden style={{ width: 3, alignSelf: "stretch", background: GOLD, borderRadius: 2, flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 25, fontWeight: 800, color: NAVY, lineHeight: 1.1, textTransform: "uppercase", overflowWrap: "anywhere" }}>{corso?.nome || "—"}</div>
+            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 500, color: NAVY, lineHeight: 1.3, overflowWrap: "anywhere" }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0, minWidth: 152 }}>
           {/* «Prepara» (30/10/2026): la lista di raccolta a tutta pagina,
               prodotto per prodotto, con le quantita' gia' sommate su tutti
               i kit. Sta qui in alto a destra perche' e' il primo gesto di
               chi prepara, prima ancora di guardare i singoli kit */}
-          <Button onClick={() => setRaccoltaAperta(true)} disabled={righeRaccolta.length === 0} title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo">
+          <Button onClick={() => setRaccoltaAperta(true)} disabled={righeRaccolta.length === 0} style={{ width: "100%" }} title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo">
             Prepara{spunteRaccolta > 0 ? ` · ${spunteRaccolta}/${righeRaccolta.length}` : ""}
           </Button>
           {/* «Componi kit» (15/11/2026): il gesto dopo la raccolta —
-              riempire le buste, un blocco per tipo di kit. Sta accanto a
+              riempire le buste, un blocco per tipo di kit. Sta sotto
               «Prepara» perche' sono i due gesti di chi prepara, in
               ordine */}
-          <Button variant="ghost" onClick={() => setComposizioneAperta(true)} disabled={blocchiComposizione.length === 0} title="Un blocco per tipo di kit, con i prodotti da mettere in ogni busta">
+          <Button variant="ghost" onClick={() => setComposizioneAperta(true)} disabled={blocchiComposizione.length === 0} style={{ width: "100%" }} title="Un blocco per tipo di kit, con i prodotti da mettere in ogni busta">
             Componi kit{kitFatti > 0 ? ` · ${kitFatti}/${blocchiComposizione.length}` : ""}
           </Button>
-          <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
         </div>
+      </div>
+
+      {/* I DUE CONTI, GRANDI. Sono la risposta alla domanda per cui si
+          apre questa pagina — quante persone, quanti kit — e prima
+          stavano in una colonnina a destra, scritti alla stessa misura
+          di tutto il resto. Il riepilogo per tipo di pacchetto non si
+          perde: e' la sezione 01 qui sotto, riga per riga. */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 14, flexWrap: "wrap", background: "#F4F1E9", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "12px 14px", marginBottom: 18 }}>
+        <TesseraConto icona={<IconaTrePersoneAccento size={26} color={NAVY} />} etichetta="Allievi iscritti" numero={iscrittiEdizione.length} />
+        <div aria-hidden style={{ width: 2, alignSelf: "stretch", background: GOLD, opacity: 0.55, borderRadius: 2, flexShrink: 0 }} />
+        <TesseraConto icona={<IconaScatolaErp size={26} color={NAVY} />} etichetta="Kit da preparare" numero={kitDaPreparare} />
       </div>
       {raccoltaAperta && (
         <RaccoltaMateriale
@@ -82667,10 +82800,13 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         />
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        {/* il titolo della pagina, non un'etichetta: sotto di lui c'e'
+            tutto, e in maiuscoletto da 12,5 pesava meno dei nomi dei
+            prodotti che gli stanno sotto */}
+        <h2 style={{ margin: 0, ...fontDisplay, fontSize: ALLESTIMENTO.titoloPagina, fontWeight: 800, color: NAVY, lineHeight: 1.15 }}>
           {listaMostrata === "rientro" ? "Lista di rientro" : "Lista di allestimento"}
-        </div>
+        </h2>
         {listaRientro && (
           <button
             onClick={() => setListaMostrata((v) => (v === "rientro" ? "allestimento" : "rientro"))}
@@ -82727,52 +82863,42 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           controlli disattivati a mano, che alla prossima riga aggiunta ci
           si dimentica di disattivare */}
       <fieldset disabled={soloLettura} hidden={listaMostrata === "rientro"} style={{ border: "none", margin: 0, padding: 0, minInlineSize: 0, opacity: soloLettura ? 0.65 : 1 }}>
-      <div style={labelStyle}>Kit previsti (dagli iscritti)</div>
-      <div style={{ marginBottom: 20 }}>
+      <SezioneAllestimento numero={numeroSezione.kit} titolo="Kit didattici" colonne={["Articolo", "Iscritti", "Riserva", "Totale"]}>
         {righeKitRichiesti.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ha ancora scelto un kit.</div>
-        ) : (
-          <>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 40, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, paddingRight: 2 }}>
-              <span>Iscritti</span><span>Di riserva</span>
-            </div>
-            {righeKitRichiesti.map(([kitId, quantitaIscritti]) => {
-              const espanso = kitEspansi.has(kitId);
-              const contenutoKit = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
-              return (
-                <div key={kitId} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}`, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
-                    <span
-                      onClick={() => setKitEspansi((prev) => { const n = new Set(prev); if (n.has(kitId)) n.delete(kitId); else n.add(kitId); return n; })}
-                      title="Clicca per vedere il contenuto del kit"
-                      style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}
-                    >
-                      {nomeKit(kitId)}
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                      <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, width: 24, textAlign: "center" }}>{quantitaIscritti}</span>
-                      <input
-                        type="number" min="0" style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
-                        value={riservaPerKit[kitId] ?? ""} placeholder="0"
-                        onChange={(e) => cambiaRiservaKit(kitId, e.target.value)}
-                      />
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 2px" }}>Nessun iscritto ha ancora scelto un kit.</div>
+        ) : righeKitRichiesti.map(([kitId, quantitaIscritti], idx) => {
+          const espanso = kitEspansi.has(kitId);
+          const contenutoKit = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
+          const riserva = Number(riservaPerKit[kitId]) || 0;
+          return (
+            <div key={kitId} style={{ minWidth: 0 }}>
+              <RigaAllestimento
+                ultima={idx === righeKitRichiesti.length - 1 && !espanso}
+                icona={<IconaScatolaErp size={ALLESTIMENTO.icona} color={NAVY} />}
+                nome={nomeKit(kitId)}
+                titoloNome="Clicca per vedere il contenuto del kit"
+                onNome={() => setKitEspansi((prev) => { const n = new Set(prev); if (n.has(kitId)) n.delete(kitId); else n.add(kitId); return n; })}
+                numero={quantitaIscritti}
+                contatore={<ContatoreQuantita frecce compatto valore={riserva} titolo="Quanti kit in più, oltre agli iscritti" onCambia={(n) => cambiaRiservaKit(kitId, n)} />}
+                totale={quantitaIscritti + riserva}
+              />
+              {espanso && contenutoKit.length > 0 && (
+                <div style={{ padding: "2px 0 10px 33px", borderBottom: idx === righeKitRichiesti.length - 1 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                  {contenutoKit.map((r) => (
+                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12.5, color: MUTED, padding: "3px 0" }}>
+                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                        {nomeProdotto(r.prodotto_id)}
+                        {giaInSede(r.prodotto_id) && <span style={{ fontSize: 11 }}> · già in sede: {giaInSede(r.prodotto_id).quantita}</span>}
+                      </span>
+                      <span style={{ fontWeight: 700, flexShrink: 0 }}>{r.quantita}x</span>
                     </div>
-                  </div>
-                  {espanso && contenutoKit.length > 0 && (
-                    <div style={{ marginTop: 8, paddingLeft: 2 }}>
-                      {contenutoKit.map((r) => (
-                        <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, padding: "3px 0" }}>
-                          <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              );
-            })}
-          </>
-        )}
-      </div>
+              )}
+            </div>
+          );
+        })}
+      </SezioneAllestimento>
 
       {/* i dermografi degli allievi li conta la loro scheda; qui si
           aggiungono solo quelli di riserva, che nessun allievo ha
@@ -82780,104 +82906,115 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           vanno guardati uno per uno, sono i pezzi più costosi del pacco.
           Su un corso che non li manda (laminazione, extension, henne) le
           righe non compaiono affatto: lo dice il corso, in Setting. */}
-      {corso?.prevede_dermografi_sicurezza && (
-      <>
-      <div style={labelStyle}>Dermografi di riserva</div>
-      <div style={{ marginBottom: 20 }}>
-        {DERMOGRAFI.map((d) => (
-          <div key={d.chiave} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>
-              {d.etichetta}
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 400, color: MUTED, marginLeft: 8 }}>
-                agli allievi: {dermografiDegliAllievi[d.chiave] || 0}
-              </span>
-            </span>
-            <input
-              type="number" min="0" style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
-              value={dermografiRiserva[d.chiave] ?? ""} placeholder="0"
-              onChange={(e) => cambiaDermografiRiserva(d.chiave, e.target.value)}
-            />
-          </div>
-        ))}
-      </div>
-      </>
+      {mostraDermografi && (
+        <SezioneAllestimento numero={numeroSezione.dermografi} titolo="Dermografi" colonne={["Modello", "Allievi", "Riserva", "Totale"]}>
+          {DERMOGRAFI.map((d, idx) => {
+            const agliAllievi = dermografiDegliAllievi[d.chiave] || 0;
+            const riserva = Number(dermografiRiserva[d.chiave]) || 0;
+            return (
+              <RigaAllestimento
+                key={d.chiave}
+                ultima={idx === DERMOGRAFI.length - 1}
+                icona={<IconaDermografoAdvisor size={ALLESTIMENTO.icona} color={NAVY} />}
+                nome={d.etichetta}
+                nota={`Allievi: ${agliAllievi}`}
+                numero={agliAllievi}
+                contatore={<ContatoreQuantita frecce compatto valore={riserva} titolo="Quanti dermografi di riserva partono" onCambia={(n) => cambiaDermografiRiserva(d.chiave, n)} />}
+                totale={agliAllievi + riserva}
+              />
+            );
+          })}
+        </SezioneAllestimento>
       )}
 
-      {/* Una riga per iscritto con quello che lo distingue dagli altri
-          mentre si prepara la sua scatola: il kit che ha scelto e la
-          taglia della divisa. Si chiamava "Divise" quando c'era solo la
-          taglia; il kit sta qui e non in un altro elenco perche' chi
-          prepara guarda una persona per volta, non due liste.
+      {/* 03 ABBIGLIAMENTO. Quante magliette partono e di che taglia: e'
+          il totale che serve a chi va allo scaffale, e prima stava in
+          fondo all'elenco degli iscritti — cioe' dietro un tasto da
+          aprire. La riga per persona resta, nella barra qui sotto, dove
+          serve a chi riempie una scatola per volta.
+          "NO DIVISA" non e' una taglia: e' una persona che la maglietta
+          non la riceve, e sommarla farebbe partire un pezzo di troppo. */}
+      {iscrittiEdizione.length > 0 && (
+        <SezioneAllestimento numero={numeroSezione.abbigliamento} titolo="Abbigliamento">
+          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 0 2px", minWidth: 0 }}>
+            <IconaMagliettaContorno size={ALLESTIMENTO.icona} color={NAVY} />
+            <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY }}>Magliette totali</span>
+            <span style={{ ...fontDisplay, fontSize: ALLESTIMENTO.numeroGrande, fontWeight: 800, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{riepilogoTaglie.totale}</span>
+          </div>
+          {riepilogoTaglie.righe.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, paddingLeft: 33 }}>
+              {riepilogoTaglie.righe.map((r) => (
+                <span key={r.taglia} style={{ ...fontBody, fontSize: 13, color: NAVY, background: PILLOLA_TOTALE, borderRadius: 10, padding: "6px 12px", whiteSpace: "nowrap" }}>
+                  Taglia {r.taglia}: <b style={{ ...fontDisplay, fontSize: 15, fontWeight: 800 }}>{r.quante}</b>
+                </span>
+              ))}
+            </div>
+          )}
+          {(riepilogoTaglie.senzaTaglia > 0 || riepilogoTaglie.senzaDivisa > 0) && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: riepilogoTaglie.senzaTaglia > 0 ? "#C0392B" : MUTED, marginTop: 8, paddingLeft: 33, lineHeight: 1.4 }}>
+              {riepilogoTaglie.senzaTaglia > 0 && `${riepilogoTaglie.senzaTaglia} ${riepilogoTaglie.senzaTaglia === 1 ? "iscritto è" : "iscritti sono"} senza taglia: ${riepilogoTaglie.senzaTaglia === 1 ? "la sua maglietta non è" : "le loro magliette non sono"} nel conto.`}
+              {riepilogoTaglie.senzaTaglia > 0 && riepilogoTaglie.senzaDivisa > 0 && " "}
+              {riepilogoTaglie.senzaDivisa > 0 && `${riepilogoTaglie.senzaDivisa} senza divisa.`}
+            </div>
+          )}
+        </SezioneAllestimento>
+      )}
+
+      {/* SPECIFICHE DEGLI ALLIEVI: una riga per iscritto con quello che
+          lo distingue dagli altri mentre si prepara la sua scatola — il
+          kit che ha scelto e la taglia della divisa. Sta chiusa, perche'
+          con dodici allievi sono dodici righe fra chi prepara e tutto il
+          resto: si apre al momento di mettere nella scatola la maglietta
+          giusta per la persona giusta.
           La taglia si autocompila da quella scelta nel modulo di
           iscrizione (iscritti.taglia_divisa): qui solo la possibilita' di
           correggerla. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div style={labelStyle}>Specifiche</div>
-        {iscrittiEdizione.length > 0 && (
-          <button
-            onClick={() => setSpecificheAperte((v) => !v)}
-            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: "1px solid " + CREAM_BORDER, borderRadius: 16, padding: "7px 13px", cursor: "pointer", marginBottom: 6, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
-          >
-            {specificheAperte ? "Chiudi specifiche" : "Espandi specifiche"}
-            <span style={{ color: MUTED, fontWeight: 400 }}>
-              {specificheAperte ? "▴" : iscrittiEdizione.length + " ▾"}
-            </span>
-          </button>
-        )}
-      </div>
-      <div style={{ marginBottom: 20 }}>
-        {iscrittiEdizione.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ancora.</div>
-        ) : !specificheAperte ? null : iscrittiEdizione.map((i) => (
-          <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-              <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: i.pacchetto_kit ? GRAFITE : MUTED }}>
-                {i.pacchetto_kit || "nessun kit"}
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Tg.</span>
-              {/* stretta quanto basta a contenere "NO DIVISA", che e' la
-                  voce piu' lunga: una casella larga il doppio della parola
-                  faceva sembrare la taglia il dato principale della riga */}
-              <select
-                value={i.taglia_divisa || ""}
-                onChange={(e) => onCambiaTagliaIscritto(i.id, e.target.value || null)}
-                style={{ ...inputStyle, width: 84, padding: "5px 4px", fontSize: 12 }}
-              >
-                <option value="">—</option>
-                {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-        ))}
-        {iscrittiEdizione.length > 0 && (riepilogoTaglie.totale > 0 || riepilogoTaglie.senzaTaglia > 0) && (
-          <div style={specificheAperte
-            ? { marginTop: 10, paddingTop: 10, borderTop: "1px solid " + CREAM_BORDER }
-            : { marginTop: 2 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                Magliette totali
-              </span>
-              <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{riepilogoTaglie.totale}</span>
-            </div>
-            {riepilogoTaglie.righe.length > 0 && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                {riepilogoTaglie.righe.map((r) => (
-                  <span key={r.taglia} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#FBF6EA", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "4px 9px", whiteSpace: "nowrap" }}>
-                    {r.quante} taglia {r.taglia}
+      <div data-specifiche style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
+        <button
+          type="button"
+          onClick={() => { if (iscrittiEdizione.length > 0) setSpecificheAperte((v) => !v); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", background: "none", border: "none",
+            padding: "12px 14px", cursor: iscrittiEdizione.length > 0 ? "pointer" : "default", minHeight: 56,
+          }}
+        >
+          <span style={{ width: 40, height: 40, borderRadius: 11, background: "#FCFAF5", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaClipboardErp size={21} color={NAVY} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY }}>Specifiche degli allievi</span>
+          <span style={{ ...fontBody, fontSize: 13, color: MUTED, flexShrink: 0 }}>
+            {iscrittiEdizione.length > 0 ? `${iscrittiEdizione.length} ${iscrittiEdizione.length === 1 ? "allievo" : "allievi"}` : "Nessun iscritto ancora"}
+          </span>
+          {iscrittiEdizione.length > 0 && (
+            <span aria-hidden style={{ ...fontBody, fontSize: 15, color: MUTED, flexShrink: 0, lineHeight: 1 }}>{specificheAperte ? "⌃" : "⌄"}</span>
+          )}
+        </button>
+        {specificheAperte && iscrittiEdizione.length > 0 && (
+          <div style={{ padding: "0 14px 10px" }}>
+            {iscrittiEdizione.map((i) => (
+              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: i.pacchetto_kit ? GRAFITE : MUTED }}>
+                    {i.pacchetto_kit || "nessun kit"}
                   </span>
-                ))}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Tg.</span>
+                  {/* stretta quanto basta a contenere "NO DIVISA", che e' la
+                      voce piu' lunga: una casella larga il doppio della parola
+                      faceva sembrare la taglia il dato principale della riga */}
+                  <select
+                    value={i.taglia_divisa || ""}
+                    onChange={(e) => onCambiaTagliaIscritto(i.id, e.target.value || null)}
+                    style={{ ...inputStyle, width: 84, padding: "5px 4px", fontSize: 12 }}
+                  >
+                    <option value="">—</option>
+                    {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
               </div>
-            )}
-            {(riepilogoTaglie.senzaTaglia > 0 || riepilogoTaglie.senzaDivisa > 0) && (
-              <div style={{ ...fontBody, fontSize: 11.5, color: riepilogoTaglie.senzaTaglia > 0 ? "#C0392B" : MUTED, marginTop: 6, lineHeight: 1.4 }}>
-                {riepilogoTaglie.senzaTaglia > 0 && `${riepilogoTaglie.senzaTaglia} ${riepilogoTaglie.senzaTaglia === 1 ? "iscritto è" : "iscritti sono"} senza taglia: ${riepilogoTaglie.senzaTaglia === 1 ? "la sua maglietta non è" : "le loro magliette non sono"} nel conto.`}
-                {riepilogoTaglie.senzaTaglia > 0 && riepilogoTaglie.senzaDivisa > 0 && " "}
-                {riepilogoTaglie.senzaDivisa > 0 && `${riepilogoTaglie.senzaDivisa} senza divisa.`}
-              </div>
-            )}
+            ))}
           </div>
         )}
       </div>
