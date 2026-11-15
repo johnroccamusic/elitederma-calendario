@@ -81565,7 +81565,7 @@ function TastoIndietroFase({ onClick, titolo }) {
       data-indietro-fase
       onClick={onClick}
       title={titolo}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", padding: "2px 2px", cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED }}
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 22, flexShrink: 0, background: "none", border: "none", padding: "0 2px 0 8px", cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}
     >
       <IconaFrecciaSinistra size={13} /> Indietro
     </button>
@@ -81622,7 +81622,13 @@ function TappaFase({ stato, etichetta, onClick = null, bloccata = false, titolo 
       {/* l'etichetta: grigia quando la fase e' fatta o di la' da venire,
           nella pastiglia rosa quando e' quella da fare adesso */}
       <span style={{
-        ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1.25, textAlign: "center", overflowWrap: "break-word",
+        ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1.25, textAlign: "center", overflowWrap: "break-word",
+        // LARGA QUANTO BASTA (15/11/2026, chiesto dal titolare: «le
+        // righe di testo troppo lunghe messe a capo su due righe»).
+        // Senza questo tetto «Pacco ritirato dal corriere» resta su una
+        // riga sola e si porta dietro la sua colonna: le quattro tappe
+        // smettono di essere distanziate uguali, e la linea si storce.
+        maxWidth: 112, boxSizing: "border-box",
         color: stato === "corrente" ? "#C0392B" : MUTED,
         ...(stato === "corrente"
           ? { background: "#FBEAE4", borderRadius: 9, padding: "5px 8px", display: "block" }
@@ -81769,30 +81775,28 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                     );
                   });
                 })()}
+                {/* indietro si torna finche' il materiale non e' sceso in
+                    aula: da "preparato" si rientra in magazzino, da
+                    "consegnato" no. Consegnato vuol dire che le scatole
+                    sono aperte sul tavolo e qualcuno ci ha gia' messo le
+                    mani. L'unico che passa comunque e' chi programma */}
+                {!inventarioTs && (allestitoTs ? puoForzare : !!preparatoTs) && (
+                  <TastoIndietroFase
+                    titolo={allestitoTs ? "Torna a «Materiale preparato»" : "Torna a «Materiale da preparare»: il materiale rientra in magazzino"}
+                    onClick={(e) => { e.stopPropagation(); if (allestitoTs) onAllestisci(false); else onPrepara(false); }}
+                  />
+                )}
               </div>
             )}
-            {/* indietro si torna finche' il materiale non e' sceso in aula:
-                da "preparato" si rientra in magazzino, da "consegnato" no.
-                Consegnato vuol dire che le scatole sono aperte sul tavolo
-                e qualcuno ci ha gia' messo le mani. L'unico che passa
-                comunque e' chi programma */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 6 }}>
-              {!inventarioTs && !inLavorazione && (allestitoTs ? puoForzare : !!preparatoTs) && (
-                <TastoIndietroFase
-                  titolo={allestitoTs ? "Torna a «Materiale preparato»" : "Torna a «Materiale da preparare»: il materiale rientra in magazzino"}
-                  onClick={(e) => { e.stopPropagation(); if (allestitoTs) onAllestisci(false); else onPrepara(false); }}
-                />
-              )}
-              {allestitoTs && !inventarioTs && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onApriInventarioSede(); }}
-                  data-niente-ombra="1"
-                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "0 2px", whiteSpace: "nowrap" }}
-                >
-                  Cosa torna in magazzino →
-                </button>
-              )}
-            </div>
+            {allestitoTs && !inventarioTs && !inLavorazione && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onApriInventarioSede(); }}
+                data-niente-ombra="1"
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "6px 2px 0", whiteSpace: "nowrap" }}
+              >
+                Cosa torna in magazzino →
+              </button>
+            )}
           </div>
         ) : (
         <div>
@@ -81820,23 +81824,22 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                   />
                 );
               })}
-            </div>
-          )}
-          {/* indietro si torna fino al ritiro, non oltre. Finche' il
-              pacco e' in casa si puo' riaprire, aggiungere, rifare la
-              bolla; quando il corriere se l'e' portato via quella scatola
-              e' fuori dalle nostre mani, e dire in app che non e' ancora
-              partita vorrebbe dire raccontarsi una cosa che non e' vera */}
-          {(() => {
-            const idx = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
-            const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
-            return idx > 0 && (idx <= iRitiro || puoForzare) && !inLavorazione;
-          })() && (
-            <div style={{ marginTop: 6 }}>
-              <TastoIndietroFase
-                titolo="Torna alla fase precedente"
-                onClick={(e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
-              />
+              {/* indietro si torna fino al ritiro, non oltre. Finche' il
+                  pacco e' in casa si puo' riaprire, aggiungere, rifare la
+                  bolla; quando il corriere se l'e' portato via quella
+                  scatola e' fuori dalle nostre mani, e dire in app che non
+                  e' ancora partita vorrebbe dire raccontarsi una cosa che
+                  non e' vera */}
+              {(() => {
+                const idx = indiceFaseLogistica(FASI_LOGISTICA, faseCorrente);
+                const iRitiro = FASI_LOGISTICA.findIndex((f) => f.chiave === "ritirato_corriere");
+                return idx > 0 && (idx <= iRitiro || puoForzare);
+              })() && (
+                <TastoIndietroFase
+                  titolo="Torna alla fase precedente"
+                  onClick={(e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -81897,15 +81900,13 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
                     />
                   );
                 })}
-              </div>
-              {indiceFaseLogistica(FASI_RIENTRO, faseRientroCorrente) > 0 && (
-                <div style={{ marginTop: 6 }}>
+                {indiceFaseLogistica(FASI_RIENTRO, faseRientroCorrente) > 0 && (
                   <TastoIndietroFase
                     titolo="Torna alla fase precedente"
                     onClick={(e) => { e.stopPropagation(); onTornaIndietroFaseRientro(faseIndietroLogistica(FASI_RIENTRO, faseRientroCorrente)); }}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </>

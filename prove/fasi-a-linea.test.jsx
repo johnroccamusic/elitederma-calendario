@@ -77,6 +77,30 @@ describe("la linea delle fasi di una spedizione", () => {
     await q.smonta();
   });
 
+  // 15/11/2026, corretto dal titolare: «hai spostato la freccetta
+  // indietro sotto la linea dello stato mentre prima doveva stare alla
+  // destra dei cerchietti». Sotto, in mezzo alle etichette, sembrava
+  // l'etichetta di una quinta tappa.
+  it("«Indietro» sta nella riga dei cerchietti, non sotto", async () => {
+    const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="bolla_stampata" />);
+    const riga = p.nodo.querySelector("[data-tappa-fase]").parentElement;
+    expect(p.nodo.querySelector("[data-indietro-fase]").parentElement).toBe(riga);
+    await p.smonta();
+  });
+
+  // «ci sono testi ora troppo piccoli e vanno aumentati di 2 punti e le
+  // righe di testo troppo lunghe messe a capo su due righe»: il tetto
+  // di larghezza e' quello che manda a capo, e senza di lui una tappa
+  // dal nome lungo si allarga e storce la linea.
+  it("l'etichetta è 13 e non si allarga oltre il suo spazio", async () => {
+    const p = await monta(<RigaCorsoLogistica {...comuni} loc={MILANO} faseCorrente="completato" />);
+    const etichetta = [...p.nodo.querySelectorAll("[data-tappa-fase] span")]
+      .find((x) => (x.textContent || "").includes("Pacco ritirato dal corriere"));
+    expect(etichetta.style.fontSize).toBe("13px");
+    expect(etichetta.style.maxWidth).toBe("112px");
+    await p.smonta();
+  });
+
   it("la freccia della testata apre il corso, e non è il passo indietro", async () => {
     let aperto = 0;
     const indietro = [];

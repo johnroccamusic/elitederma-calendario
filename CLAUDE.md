@@ -2059,7 +2059,15 @@ lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
   quello che fa premere la scheda — che resta premibile, ma un bordo che
   si preme non lo vede nessuno. **Non** è il passo indietro: quello è
   scritto, «← Indietro», perché una freccia nuda in una fila di
-  cerchietti non dice che cosa disfa.
+  cerchietti non dice che cosa disfa, e **sta in fondo alla riga dei
+  cerchietti**, non sotto la linea: sotto, in mezzo alle etichette,
+  sembra l'etichetta di una quinta tappa (corretto dal titolare lo
+  stesso giorno).
+- **Le etichette sono 13 e vanno a capo su due righe.** A 11 erano
+  troppo piccole; e senza un tetto di larghezza (112 px) «Pacco ritirato
+  dal corriere» resta su una riga sola e si porta dietro la sua colonna,
+  le quattro tappe smettono di essere distanziate uguali e la linea si
+  storce.
 - **La scritta rossa o verde sotto «N KIT» è sparita** («Verifica pacco
   a destinazione»): la diceva la stessa cosa della linea, e scritta due
   volte era una da leggere e una da saltare. Resta come suggerimento
@@ -2074,7 +2082,7 @@ lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
   scarico lavora (`BandaMagazzinoInMovimento`, scritta una volta per
   tutte e due le strade).
 
-Prove in `prove/fasi-a-linea.test.jsx` (9): chi è verde, chi è rosso e
+Prove in `prove/fasi-a-linea.test.jsx` (11): chi è verde, chi è rosso e
 chi è grigio nei tre momenti di un corso, la rossa che si preme e la
 futura che non fa niente, «Indietro» che torna di una fase e che su un
 corso appena nato non c'è, la freccia che apre e non disfa, le tre
