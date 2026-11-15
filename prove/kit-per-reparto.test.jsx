@@ -186,19 +186,43 @@ describe("il contenuto del kit, nella pagina", () => {
 describe("gli accessori didattica", () => {
   const apriAccessori = async (p) => clicca(p.tasto("Accessori didattica"));
 
-  it("sono divisi per reparto come il contenuto del kit", async () => {
+  it("sono divisi per reparto, e ogni reparto è una banda che si apre", async () => {
+    // dal 15/11/2026 (mockup del titolare): trenta accessori di fila
+    // sono tre schermate da scorrere per arrivare al tasto sotto. Le
+    // bande ci sono tutte, aperta la prima.
     rispondiCon({});
     const p = await pagina();
     await apriAccessori(p);
+    const bande = [...p.nodo.querySelectorAll("[data-banda-reparto]")];
+    expect(bande.map((b) => b.getAttribute("data-banda-reparto"))).toEqual(["Accessori", "Aghi"]);
+    // ognuna dice quanti prodotti contiene, anche da chiusa
+    expect(bande[1].textContent).toContain("1 prodotto");
+    // aperta la prima: si vede una riga sola, quella dei guanti
     const righe = [...p.nodo.querySelectorAll("[data-riga-accessorio]")];
-    expect(righe.length).toBe(2);
-    // i guanti stanno in «Accessori», l'ago in «Aghi»: due intestazioni,
-    // nella scheda degli accessori e non da qualche altra parte
-    const scheda = righe[0].closest("div[style]").parentElement.closest("div");
-    const titoli = [...p.nodo.querySelectorAll("[data-reparto]")].map((x) => x.getAttribute("data-reparto"));
-    expect(titoli).toContain("Accessori");
-    expect(titoli).toContain("Aghi");
-    expect(scheda).toBeTruthy();
+    expect(righe.length).toBe(1);
+    expect(righe[0].getAttribute("data-riga-accessorio")).toContain("Taglia M");
+    // premendo la seconda banda compare anche l'ago
+    await clicca(bande[1].querySelector("button"));
+    const dopo = [...p.nodo.querySelectorAll("[data-riga-accessorio]")]
+      .map((r) => r.getAttribute("data-riga-accessorio"));
+    expect(dopo.length).toBe(2);
+    expect(dopo.some((x) => x.includes("ago singolo"))).toBe(true);
+    await p.smonta();
+  });
+
+  it("la quantità di un accessorio si scrive da qui", async () => {
+    // è il numero che la logistica si ritrova già scritto nella casella
+    // di ogni edizione: prima nasceva a 1 e da qui non si poteva toccare
+    const chiamato = rispondiCon({ corsi_kit_prodotti: [{ id: "a1" }] });
+    const p = await pagina();
+    await apriAccessori(p);
+    const riga = p.nodo.querySelector("[data-riga-accessorio]");
+    const su = [...riga.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || "").includes("più"))
+      || riga.querySelectorAll("button")[0];
+    await clicca(su);
+    const patch = chiamato.mock.calls.find(([, o]) => o?.method === "PATCH");
+    expect(patch, "la scrittura della quantità").toBeTruthy();
+    expect(JSON.parse(patch[1].body).quantita).toBeGreaterThan(0);
     await p.smonta();
   });
 

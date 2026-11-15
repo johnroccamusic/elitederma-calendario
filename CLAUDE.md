@@ -1844,6 +1844,44 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
+### «Tipologie di kit» sul mockup, e la quantità che mancava (15/11/2026)
+
+Il titolare, con il secondo mockup: «nella pagina "Tipologie di kit"
+applica questo mockup». Stessa famiglia del lavoro sulla lista di
+allestimento, stesse misure (`ALLESTIMENTO`), e una cosa che non è
+grafica.
+
+- **Gli accessori didattica sono bande che si aprono.** Erano trenta
+  righe in fila sotto le loro intestazioni: tre schermate da scorrere
+  per arrivare al tasto sotto. Ora ogni reparto è una banda crema con la
+  sua icona, il nome e una pastiglia che dice **quanti prodotti
+  contiene anche da chiusa** — l'indice si legge in un colpo e si apre
+  quello che serve. Resta aperta **la prima**, così la pagina mostra di
+  che cosa sono fatte le bande invece di presentarsi tutta chiusa.
+- **E dentro c'è la quantità, che da qui non si poteva scrivere.** Ogni
+  accessorio nasceva a 1 e restava a 1; quel numero non è decorativo, è
+  **quello che la logistica si ritrova già scritto nella casella di ogni
+  edizione** (`accessoriDaElencare`), e chi lo voleva diverso lo
+  correggeva a mano su ogni classe. Ora c'è il contatore a freccette,
+  come in Logistica, e la scrittura conta le righe cambiate
+  (`.select("id")`): un update senza select dice «va bene» anche quando
+  non ha toccato niente.
+- **L'icona della banda è decorazione, con un ripiego.** Una mappa su
+  qualche parola del nome (consumabili, hennè, stampe, uncategorized) e
+  la scatola per tutto il resto: i reparti sono un dato che cambia, e
+  una mappa che non li copre tutti deve restare una mappa incompleta,
+  non un buco nella pagina.
+- **Il resto è peso.** Il filo oro fra il tasto «Impostazioni» e il
+  titolo, i tre tasti del corso come pastiglie con **«+ Nuovo
+  pacchetto» pieno** (fra tre tasti affiancati uno solo crea qualcosa, ed
+  è quello che si cerca), il nome del pacchetto da 14,5 a 17, e il
+  **cestino al posto della crocetta**: una ✕ accanto a quattro pastiglie
+  si legge come «chiudi», e quel tasto cancella un pacchetto.
+
+Prove in `prove/kit-per-reparto.test.jsx` (17): le bande ci sono tutte,
+la prima aperta, la pastiglia conta anche da chiusa, premere la seconda
+mostra le sue righe, e la quantità scrive davvero.
+
 ### La lista di allestimento, ridisegnata sul mockup (15/11/2026)
 
 Il titolare, con un mockup in mano: «rifai il design della pagina

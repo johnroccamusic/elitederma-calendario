@@ -84722,7 +84722,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         <input
           value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaNome}
           title={kit.tipo === "divisore" ? undefined : spento ? "Spento: non si può più scegliere iscrivendo un'allieva" : "Acceso: si può scegliere iscrivendo un'allieva"}
-          style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: spento ? MUTED : NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120, textDecoration: spento ? "line-through" : "none" }}
+          style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: spento ? MUTED : NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120, textDecoration: spento ? "line-through" : "none" }}
         />
         {spento && kit.tipo !== "divisore" && (
           <span
@@ -84757,7 +84757,11 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           Importa pacchetto
         </button>
         <button onClick={() => { setMostraRicercaKit((v) => !v); onImpostaAperto(kit.id); }} style={pillBtn}>+ Prodotto</button>
-        <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
+        {/* un cestino e non una crocetta: la crocetta accanto a quattro
+            pastiglie sembra «chiudi», e questa cancella un pacchetto */}
+        <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: "4px 2px", flexShrink: 0, display: "inline-flex", alignItems: "center" }}>
+          <IconaCestino size={17} color="#C0392B" />
+        </button>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 8, paddingLeft: 22 }}>
@@ -84899,8 +84903,55 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 // specifico ma a tutto il corso — vengono mostrati e scaricati dal
 // magazzino insieme a QUALUNQUE kit/pacchetto scelto per l'edizione,
 // tramite "corso_id" su corsi_kit_prodotti (kit_id resta nullo)
+// L'ICONA DI UNA BANDA DI REPARTO (15/11/2026, dal mockup del
+// titolare). E' decorazione: serve a riconoscere una banda con la coda
+// dell'occhio scorrendo sei categorie, non a dire qualcosa che il nome
+// non dica gia'. Per questo il ripiego e' la scatola e non un errore: i
+// reparti sono un dato che cambia, e una mappa che non li copre tutti
+// deve restare una mappa incompleta, non un buco nella pagina.
+function IconaReparto({ nome, size = 22, color = NAVY }) {
+  const n = String(nome || "").toLowerCase();
+  if (/consumabil/.test(n)) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z" /><path d="M3 12.5 12 17l9-4.5" /><path d="M3 17 12 21.5 21 17" />
+      </svg>
+    );
+  }
+  if (/henn|erbe|natural/.test(n)) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 4c0 8-5 13-13 13H4c0-8 5-13 13-13h3Z" /><path d="M4 20c3-5 7-8 11-9" />
+      </svg>
+    );
+  }
+  if (/stamp|quadern|manual|dispens|catalog|libr/.test(n)) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4.5h6a2.5 2.5 0 0 1 2 2.5v12a2 2 0 0 0-2-1.5H4Z" /><path d="M20 4.5h-6a2.5 2.5 0 0 0-2 2.5v12a2 2 0 0 1 2-1.5h6Z" />
+      </svg>
+    );
+  }
+  if (/uncategorized|senza/.test(n)) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
+        <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" />
+      </svg>
+    );
+  }
+  return <IconaScatolaErp size={size} color={color} />;
+}
+
 function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto, onChiudi, repartoDi = null, immaginePerProdotto = {} }) {
   const [ricerca, setRicerca] = useState("");
+  // LE BANDE DEI REPARTI SI APRONO E SI CHIUDONO (15/11/2026, dal mockup
+  // del titolare). Trenta accessori di fila sono tre schermate da
+  // scorrere per arrivare al tasto sotto; a bande chiuse si vede l'indice
+  // e si apre quella che serve. `null` vuol dire «nessuno ha ancora
+  // toccato niente»: resta aperta la prima, cosi' la pagina mostra di che
+  // cosa sono fatte le bande invece di presentarsi tutta chiusa.
+  const [repartiAperti, setRepartiAperti] = useState(null);
   const [corsoOrigineId, setCorsoOrigineId] = useState("");
   const [copiando, setCopiando] = useState(false);
   const [avvisoDuplicati, setAvvisoDuplicati] = useState("");
@@ -84928,6 +84979,21 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
     if (!confermaCancellazione(nome ? `"${nome}" da questo elenco` : "questo prodotto da questo elenco")) return;
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
     if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    ricarica(["corsi_kit_prodotti"]);
+  }
+  // LA QUANTITA' DI UN ACCESSORIO, che prima da qui non si poteva
+  // scrivere: ogni riga nasceva a 1 e restava a 1, e quel numero non e'
+  // decorativo — e' quello che la logistica si ritrova gia' scritto
+  // nella casella di ogni edizione (vedi accessoriDaElencare). Chi lo
+  // voleva diverso doveva correggerlo a mano su ogni corso.
+  //
+  // `.select("id")` e il conto delle righe: un update senza select dice
+  // «va bene» anche quando non ha cambiato niente.
+  async function cambiaQuantita(rigaId, quantita) {
+    const { data, error } = await supabase.from("corsi_kit_prodotti")
+      .update({ quantita: Math.max(0, Number(quantita) || 0) }).eq("id", rigaId).select("id");
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) { window.alert("Il database non ha cambiato nessuna riga: ricarica la pagina e riprova."); return; }
     ricarica(["corsi_kit_prodotti"]);
   }
   // importa i prodotti della lista scelta: quelli già presenti in questa
@@ -85003,21 +85069,62 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 
       {righe.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio ancora.</div>
-      ) : raggruppaPerReparto(righe, repartoDi, (r) => r.prodotto_id).map((g) => (
-        <div key={g.nome}>
-          <IntestazioneReparto nome={g.nome} nota={`${g.righe.length} ${g.righe.length === 1 ? "riga" : "righe"}`} />
-          {g.righe.map((r) => {
-            const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
-            return (
-              <div key={r.id} data-riga-accessorio="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-                <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
-                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
-                <button onClick={() => rimuovi(r.id, p?.nome)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5 }}>✕</button>
+      ) : raggruppaPerReparto(righe, repartoDi, (r) => r.prodotto_id).map((g, idx, gruppi) => {
+        const apertaBanda = repartiAperti ? repartiAperti.has(g.nome) : idx === 0;
+        return (
+        <div key={g.nome} data-banda-reparto={g.nome} style={{ marginBottom: 10 }}>
+          <button
+            type="button"
+            onClick={() => setRepartiAperti((prev) => {
+              const base = prev ? new Set(prev) : new Set(gruppi.slice(0, 1).map((x) => x.nome));
+              if (base.has(g.nome)) base.delete(g.nome); else base.add(g.nome);
+              return base;
+            })}
+            data-banda-aperta={apertaBanda ? "si" : "no"}
+            style={{
+              display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", cursor: "pointer",
+              background: BANDA_SEZIONE, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", minHeight: 52,
+            }}
+          >
+            <IconaReparto nome={g.nome} size={22} color={NAVY} />
+            <span style={{ flex: 1, minWidth: 0, ...fontDisplay, fontSize: ALLESTIMENTO.titoloSezione, fontWeight: 800, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+              {g.nome}
+            </span>
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "4px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
+              {g.righe.length} {g.righe.length === 1 ? "prodotto" : "prodotti"}
+            </span>
+            <span aria-hidden style={{ ...fontBody, fontSize: 15, color: MUTED, flexShrink: 0, lineHeight: 1 }}>{apertaBanda ? "⌃" : "⌄"}</span>
+          </button>
+          {apertaBanda && (
+            <div style={{ padding: "4px 6px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 4px 4px" }}>
+                <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: ALLESTIMENTO.colonna, color: MUTED }}>Prodotto</span>
+                <span style={{ ...fontBody, fontSize: ALLESTIMENTO.colonna, color: MUTED, width: 108, textAlign: "center", flexShrink: 0 }}>Quantità</span>
+                <span style={{ width: 26, flexShrink: 0 }} />
               </div>
-            );
-          })}
+              {g.righe.map((r, i) => {
+                const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+                return (
+                  <div key={r.id} data-riga-accessorio={p?.nome || ""} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                    <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
+                    <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
+                    {/* quanti pezzi ne partono di solito: e' il numero che
+                        la logistica si ritrova gia' scritto su ogni
+                        edizione, e da qui si scrive una volta per tutte */}
+                    <ContatoreQuantita
+                      frecce compatto valore={r.quantita ?? 0}
+                      titolo="Quanti pezzi di questo accessorio partono di solito per un corso"
+                      onCambia={(n) => cambiaQuantita(r.id, n)}
+                    />
+                    <button onClick={() => rimuovi(r.id, p?.nome)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, padding: 5, flexShrink: 0 }}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -85094,19 +85201,22 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
         <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
           <button
             onClick={() => setMostraAccessori((v) => !v)}
-            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}
           >
             Accessori didattica
           </button>
           <button
             onClick={creaDivisore}
-            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}
           >
             Genera divisore
           </button>
+          {/* pieno, e gli altri due vuoti: fra tre tasti affiancati
+              uno solo crea qualcosa di nuovo, e quello e' il gesto che
+              si cerca arrivando su un corso */}
           <button
             onClick={() => setMostraNuovo((v) => !v)}
-            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}
           >
             + Nuovo pacchetto
           </button>
@@ -85239,6 +85349,10 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
+          {/* il filo oro fra il tasto che torna indietro e il titolo:
+              sono due cose diverse appoggiate l'una all'altra, e senza
+              niente in mezzo si leggono come una riga sola */}
+          <div aria-hidden style={{ width: 3, alignSelf: "stretch", minHeight: 30, background: GOLD, borderRadius: 2, flexShrink: 0 }} />
           <div style={{ ...stileTitoloPagina, color: NAVY }}>Tipologie di kit</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
