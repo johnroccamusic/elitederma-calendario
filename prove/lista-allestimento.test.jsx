@@ -23,13 +23,17 @@ const PRODOTTI = [
   { id: "p1", nome: "Pelle sintetica Premium" },
   { id: "p2", nome: "Ruota colori" },
   { id: "p3", nome: "Cuffie monouso TNT - 1pz" },
+  { id: "p4", nome: "Aghi 1RL" },
+  { id: "p5", nome: "Telini monouso" },
 ];
 const DISTINTA = [
   { id: "r1", kit_id: "k1", corso_id: "c1", prodotto_id: "p1", quantita: 2, tipo: "kit" },
   { id: "r2", kit_id: "k1", corso_id: "c1", prodotto_id: "p2", quantita: 1, tipo: "kit" },
-  // un accessorio didattica del corso: non sta in nessun kit, parte con
-  // la quantità scritta nella sua scheda
+  // gli accessori didattica del corso: non stanno in nessun kit, e sulla
+  // scheda sono scritti nell'ordine in cui qualcuno li ha aggiunti
   { id: "r3", kit_id: null, corso_id: "c1", prodotto_id: "p3", quantita: 20, tipo: "accessorio" },
+  { id: "r4", kit_id: null, corso_id: "c1", prodotto_id: "p5", quantita: 4, tipo: "accessorio" },
+  { id: "r5", kit_id: null, corso_id: "c1", prodotto_id: "p4", quantita: 1, tipo: "accessorio" },
 ];
 // otto allievi, sei taglia M e due taglia L, come nel mockup
 const ISCRITTI = Array.from({ length: 8 }, (_, i) => ({
@@ -205,6 +209,59 @@ describe("04 Accessori per il corso", () => {
     expect([...p.nodo.querySelectorAll("input")].some((i) => i.placeholder === "Cerca consulenza…")).toBe(true);
     // chi cerca una consulenza non ha smesso di poter aggiungere un extra
     expect(p.tasto("+ Aggiungi prodotti extra o da vendita")).toBeTruthy();
+    await p.smonta();
+  });
+});
+
+// IL TASTO «COMPONI KIT» STA IN UN POSTO SOLO (15/11/2026, detto dal
+// titolare davanti alla scheda: «togli il tasto "componi kit": quel
+// tasto si trova solo nella sezione prepara, dopo che hai messo da
+// parte tutti i materiali»). Comporre le buste è il gesto DOPO la
+// raccolta, e un tasto che lo offre prima invita a cominciare dalla
+// fine.
+describe("dove sta «Componi kit»", () => {
+  it("nella scheda del corso c'è solo «Prepara»", async () => {
+    const p = await pannello();
+    expect(p.tasto("Prepara")).toBeTruthy();
+    expect(p.tasto("Componi kit")).toBeFalsy();
+    await p.smonta();
+  });
+
+  it("ci si arriva da dentro «Prepara», e dice a che punto sono i kit", async () => {
+    const p = await pannello();
+    await clicca(p.tasto("Prepara"));
+    const vai = p.nodo.querySelector("[data-vai-composizione]");
+    expect(vai).toBeTruthy();
+    expect(vai.textContent).toContain("Componi i kit");
+    // nessun kit composto ancora: 0 su 1
+    expect(vai.textContent).toContain("0/1");
+    // la raccolta non è finita, quindi il tasto non è ancora quello acceso
+    expect(vai.getAttribute("data-vai-composizione")).toBe("si");
+    await p.smonta();
+  });
+
+  it("raccolto tutto, il tasto si accende: è il passo dopo", async () => {
+    // ogni riga della raccolta spuntata
+    const tutte = {};
+    ["p1", "p2", "p3", "p4", "p5"].forEach((id) => { tutte[`prodotto::${id}`] = { il: "2026-11-15T10:00:00Z", da: "Raf" }; });
+    const p = await pannello({ statoEdizione: { corso_data_id: "cd1", riserva_per_kit: {}, accessori_quantita: {}, checklist: tutte } });
+    await clicca(p.tasto("Prepara"));
+    expect(p.nodo.querySelector("[data-vai-composizione]").getAttribute("data-vai-composizione")).toBe("pronto");
+    await p.smonta();
+  });
+});
+
+// L'ORDINE ALFABETICO (15/11/2026, chiesto dal titolare: «questi
+// accessori vanno in ordine alfabetico»). Arrivavano nell'ordine in cui
+// le righe erano state scritte sulla scheda del corso, cioè in nessun
+// ordine: con quindici righe fra cui tre tipi di guanti che si
+// somigliano, trovare quello che si ha in mano voleva dire leggerle
+// tutte.
+describe("gli accessori in ordine alfabetico", () => {
+  it("l'elenco segue i nomi, non l'ordine in cui sono stati scritti", async () => {
+    const p = await pannello();
+    const nomi = [...p.nodo.querySelectorAll("[data-riga-corredo]")].map((r) => r.getAttribute("data-riga-corredo"));
+    expect(nomi).toEqual(["Aghi 1RL", "Cuffie monouso TNT - 1pz", "Telini monouso"]);
     await p.smonta();
   });
 });

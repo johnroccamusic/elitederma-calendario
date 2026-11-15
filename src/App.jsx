@@ -82009,7 +82009,7 @@ function listaMancanti({ righeRaccolta = [], blocchi = [], inAttesa = {} }) {
 // o si chiude la pagina a meta', si riprende da dove si era. L'ordine
 // delle righe non cambia mentre si spunta, o chi raccoglie perde il
 // segno fra uno scaffale e l'altro.
-function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {}, repartoDi = null, attesa = {}, onAttesa = null, onComponi = null }) {
+function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzzera, onChiudi, immaginePerProdotto = {}, repartoDi = null, attesa = {}, onAttesa = null, onComponi = null, componiNota = "" }) {
   // tre stati, non due: preso, in attesa di ricezione, ancora da
   // prendere. «In attesa» non e' il contrario di «preso» — e' un
   // prodotto che non c'e' ancora e che qualcuno sta aspettando — e per
@@ -82047,7 +82047,22 @@ function RaccoltaMateriale({ titolo, sottotitolo, righe, spunte, onSpunta, onAzz
               con le stesse mani occupate: ci si arriva da qui, senza
               tornare indietro a cercare un tasto nella scheda */}
           {onComponi && (
-            <button type="button" onClick={onComponi} data-vai-composizione style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1.5px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "9px 16px", cursor: "pointer" }}>Componi i kit →</button>
+            <button
+              type="button" onClick={onComponi} data-vai-composizione={completa ? "pronto" : "si"}
+              title="Un blocco per tipo di kit, con i prodotti da mettere in ogni busta"
+              style={{
+                ...fontBody, fontSize: 13, fontWeight: 700, borderRadius: 999, padding: "9px 16px", cursor: "pointer",
+                // raccolto tutto, il passo dopo e' questo e si vede; prima
+                // resta un tasto qualunque — non si spegne, perche' un
+                // prodotto in attesa di ricezione non deve impedire di
+                // riempire le buste che si possono gia' riempire
+                color: completa ? "#fff" : NAVY,
+                background: completa ? "#2E7D32" : "#fff",
+                border: completa ? "none" : `1.5px solid ${CREAM_BORDER}`,
+              }}
+            >
+              Componi i kit{componiNota ? ` · ${componiNota}` : ""} →
+            </button>
           )}
           <button type="button" onClick={onChiudi} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer" }}>Chiudi</button>
         </div>
@@ -82654,20 +82669,30 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
     );
   }
 
+  // IN ORDINE ALFABETICO (15/11/2026, chiesto dal titolare: «questi
+  // accessori vanno in ordine alfabetico»). L'elenco arrivava nell'ordine
+  // in cui le righe erano state scritte sulla scheda del corso, cioe' in
+  // nessun ordine: con quindici righe fra cui tre tipi di guanti che si
+  // somigliano, trovare quello che si ha in mano voleva dire leggerle
+  // tutte. Vale per tutte e tre le liste di questa sezione, o una
+  // ordinata accanto a due a caso sembra un difetto.
+  const perNomeProdotto = (a, b) => String(nomeProdotto(a)).localeCompare(String(nomeProdotto(b)), "it", { numeric: true });
   const tuttiAccessori = accessoriDaElencare({
     corsiKitProdotti,
     corsoId: corso?.id || null,
     accessoriQuantita: statoEdizione.accessori_quantita,
     dataInizio: corsoData?.data_inizio,
     oggi: oggiStr,
-  }).map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }));
+  })
+    .map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }))
+    .sort((a, b) => perNomeProdotto(a.prodotto_id, b.prodotto_id));
 
   // "Prodotti extra kit": pescati a mano dall'intero magazzino per
   // questa singola edizione (non un accessorio del corso, non il
   // contenuto di un kit) — stessa mappa accessori_quantita/
   // accessori_scaricati degli accessori sopra, chiave "extra::prodottoId"
   const accessoriQuantita = statoEdizione.accessori_quantita || {};
-  const prodottiExtraIds = Object.keys(accessoriQuantita).filter((k) => k.startsWith("extra::")).map((k) => k.slice(7));
+  const prodottiExtraIds = Object.keys(accessoriQuantita).filter((k) => k.startsWith("extra::")).map((k) => k.slice(7)).sort(perNomeProdotto);
   const [pickerExtraAperto, setPickerExtraAperto] = useState(false);
   const [ricercaExtra, setRicercaExtra] = useState("");
   const risultatiExtra = ricercaExtra.trim()
@@ -82792,13 +82817,13 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <Button onClick={() => setRaccoltaAperta(true)} disabled={righeRaccolta.length === 0} style={{ width: "100%" }} title="La lista di tutto il materiale da raccogliere, da spuntare pezzo per pezzo">
             Prepara{spunteRaccolta > 0 ? ` · ${spunteRaccolta}/${righeRaccolta.length}` : ""}
           </Button>
-          {/* «Componi kit» (15/11/2026): il gesto dopo la raccolta —
-              riempire le buste, un blocco per tipo di kit. Sta sotto
-              «Prepara» perche' sono i due gesti di chi prepara, in
-              ordine */}
-          <Button variant="ghost" onClick={() => setComposizioneAperta(true)} disabled={blocchiComposizione.length === 0} style={{ width: "100%" }} title="Un blocco per tipo di kit, con i prodotti da mettere in ogni busta">
-            Componi kit{kitFatti > 0 ? ` · ${kitFatti}/${blocchiComposizione.length}` : ""}
-          </Button>
+          {/* QUI IL TASTO «COMPONI KIT» NON C'E' (15/11/2026, detto dal
+              titolare: «quel tasto si trova solo nella sezione prepara,
+              dopo che hai messo da parte tutti i materiali»). Comporre
+              le buste e' il gesto DOPO la raccolta, e un tasto che lo
+              offre prima invita a cominciare dalla fine. Sta dentro
+              «Prepara», in cima alla lista, dove arriva chi ha appena
+              finito di raccogliere. */}
         </div>
       </div>
 
@@ -82824,6 +82849,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           onSpunta={segnaPresa}
           onAttesa={segnaInAttesa}
           onComponi={blocchiComposizione.length > 0 ? () => { setRaccoltaAperta(false); setComposizioneAperta(true); } : null}
+          componiNota={blocchiComposizione.length > 0 ? `${kitFatti}/${blocchiComposizione.length}` : ""}
           onAzzera={() => onSalvaCampi({ checklist: {} })}
           onChiudi={chiudiRaccolta}
         />
@@ -83106,7 +83132,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           if (!gruppi[r.prodotto_id]) gruppi[r.prodotto_id] = { prodottoId: r.prodotto_id, pezzi: [] };
           gruppi[r.prodotto_id].pezzi.push(r);
           return gruppi;
-        }, {})).map((g, idx, tutte) => (
+        }, {})).sort((a, b) => perNomeProdotto(a.prodottoId, b.prodottoId)).map((g, idx, tutte) => (
           <RigaCorredo
             key={g.prodottoId}
             ultima={idx === tutte.length - 1 && prodottiExtraIds.length === 0}

@@ -1921,7 +1921,26 @@ tre, non uno. Quando una delle due ricerche si apre prende il posto del
 suo tasto e basta: chi cerca una consulenza non ha smesso di poter
 aggiungere un extra.
 
-Prove in `prove/lista-allestimento.test.jsx` (12), con il pannello
+**«Componi kit» sta in un posto solo** (15/11/2026, detto davanti alla
+scheda: «togli il tasto "componi kit": quel tasto si trova solo nella
+sezione prepara, dopo che hai messo da parte tutti i materiali»).
+Comporre le buste è il gesto **dopo** la raccolta, e un tasto che lo
+offre prima invita a cominciare dalla fine. Ora sta in cima alla pagina
+«Prepara», dove arriva chi ha appena finito di raccogliere, dice a che
+punto sono i kit («Componi i kit · 1/2 →») e **si accende in verde
+quando non resta più niente da prendere**. Non si spegne mai, però: un
+prodotto in attesa di ricezione non deve impedire di riempire le buste
+che si possono già riempire.
+
+**E le tre liste della sezione 04 sono in ordine alfabetico**
+(15/11/2026: «questi accessori vanno in ordine alfabetico»).
+Arrivavano nell'ordine in cui le righe erano state scritte sulla scheda
+del corso, cioè in nessun ordine: con quindici righe fra cui tre tipi di
+guanti che si somigliano, trovare quello che si ha in mano voleva dire
+leggerle tutte. Vale per accessori, consulenze ed extra insieme — una
+lista ordinata accanto a due a caso sembra un difetto.
+
+Prove in `prove/lista-allestimento.test.jsx` (16), con il pannello
 montato: i due conti, le tre sezioni col loro numero e le loro colonne,
 la numerazione che non salta, il totale che è iscritti + riserva, le
 taglie, la barra che si apre — e **due prove sulla gerarchia**: il
