@@ -12,7 +12,7 @@
 // risponde al dito.
 import { describe, it, expect } from "vitest";
 import React from "react";
-import { RigaCorsoLogistica } from "../src/App.jsx";
+import { RigaCorsoLogistica, PaginaLogisticaProdotti } from "../src/App.jsx";
 import { monta, clicca } from "./aiuto.js";
 
 const CORSO_DATA = { id: "cd1", corso_id: "c1", location_id: "l1", data_inizio: "2099-01-10", data_fine: "2099-01-11" };
@@ -198,6 +198,37 @@ describe("la linea di un corso in sede centrale", () => {
     const p = await monta(<RigaCorsoLogistica {...comuni} loc={SEDE} faseCorrente="da_preparare" inLavorazione avanzamento={{ fatti: 3, totale: 9 }} />);
     expect(stati(p.nodo)).toEqual([]);
     expect(p.nodo.textContent).toContain("Magazzino in movimento: 3 di 9 prodotti");
+    await p.smonta();
+  });
+});
+
+// LA LISTA PARTE DAL CORSO CHE SI E' SCELTO (15/11/2026, chiesto dal
+// titolare: «quando selezioni un corso, la lista di preparazione
+// relativa sia graficamente collegata al corso e parta sempre da quel
+// corso a scendere, non attaccata in alto»).
+//
+// Quello che jsdom NON vede e' l'impaginazione: offsetTop e
+// offsetHeight qui valgono zero, quindi la misura vera si guarda con
+// gli occhi. Qui si prova che la striscia che unisce le due colonne
+// esista quando un corso e' scelto, e che se ne vada da telefono, dove
+// le colonne non sono affiancate.
+describe("la lista agganciata al corso scelto", () => {
+  const dati = {
+    corsi: [CORSO],
+    location: [MILANO],
+    corsiDate: [{ ...CORSO_DATA, data_fine: "2099-01-11" }],
+    iscritti: ISCRITTI.map((i) => ({ ...i, corso_data_id: "cd1" })),
+    corsiKitProdotti: [], kitDefinizioni: [], logisticaKitEdizioni: [],
+    prodottiShop: [], prodottiImmagini: [], categorieProdotti: [], prodottiCategorie: [],
+    bundleComponenti: [], inventarioSede: [], prodottiApertiMagazzino: [],
+    utenteLoggato: { nome: "Raf" }, ruoloUtente: "programmatore",
+    onApriMagazziniLocali: () => {}, onBack: () => {}, ricarica: () => {},
+  };
+
+  it("fra la scheda scelta e la sua lista c'è la striscia che le tiene insieme", async () => {
+    const p = await monta(<PaginaLogisticaProdotti {...dati} />);
+    expect(p.nodo.querySelector("[data-riga-corso='cd1']")).toBeTruthy();
+    expect(p.nodo.querySelector("[data-ponte-corso]")).toBeTruthy();
     await p.smonta();
   });
 });

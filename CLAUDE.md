@@ -2028,13 +2028,25 @@ dividevano niente, e la pagina si leggeva come un elenco solo. Il
 numero resta nella sua pastiglia oro — è l'indice, e sul blu si vede
 meglio di prima.
 
-**Le due colonne partono dalla stessa riga** («le due celle devono
-partire dalla stessa linea in alto»). A sinistra, sopra le schede, c'è
-«Corsi in arrivo», e quel titolo le spingeva giù di una trentina di
-pixel. Invece di una misura scritta a mano — che il giorno che il
-titolo cambia corpo resta indietro — la colonna di destra tiene **lo
-stesso titolo, invisibile** (`STILE_TITOLO_COLONNA`): si sposta da sé.
-Su telefono non c'è, perché le due colonne non sono affiancate.
+**La lista parte dal corso che si è scelto** (15/11/2026: «quando
+selezioni un corso, la lista di preparazione relativa sia graficamente
+collegata al corso e parta sempre da quel corso a scendere, non
+attaccata in alto»). Il pannello stava incollato in cima, e con otto
+corsi in colonna quello scelto poteva essere il sesto: si premeva una
+scheda a metà pagina e la risposta compariva due schermate più su,
+senza niente che dicesse che le due cose fossero la stessa. Adesso
+scende fino alla riga della sua scheda, e nel vuoto fra le due colonne
+c'è una **striscia dello stesso crema** (`data-ponte-corso`) alta
+quanto la scheda, che le tiene insieme.
+
+**La misura si prende dal DOM, non si calcola**: l'altezza di una
+scheda dipende da quante fasi ha, se la lista mancanti è aperta, se c'è
+la gestione rientro — un conto a mano sbaglierebbe al primo corso
+diverso dagli altri. Si rimisura con un `ResizeObserver` sulla griglia e
+sul ridimensionamento della finestra, e lo stato si riscrive solo se i
+numeri sono cambiati, o il pannello che si allunga rifarebbe partire la
+misura all'infinito. Su telefono non vale: le colonne non sono
+affiancate.
 
 **E la tessera della data è una sola** (`TesseraData`, «il numero della
 data della cella di destra deve avere lo stesso stile di quello della

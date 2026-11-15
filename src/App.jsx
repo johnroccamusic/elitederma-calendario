@@ -81769,6 +81769,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
   const kitTotali = iscrittiEdizione.filter((i) => i.pacchetto_kit).length;
   return (
     <div
+      data-riga-corso={corsoData.id}
       onClick={onSeleziona}
       // Niente filo colorato attorno alla scheda: con sei corsi in
       // colonna erano sei cornici di sei colori diversi, e il colore —
@@ -83511,6 +83512,49 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   }, [corsiDate, oggiStr, vistaStorico, ricercaStorico, corsoById, locById]);
   const [edizioneSelId, setEdizioneSelId] = useState(null);
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
+  // LA LISTA PARTE DAL CORSO CHE SI E' SCELTO (15/11/2026, chiesto dal
+  // titolare: «quando selezioni un corso, la lista di preparazione
+  // relativa sia graficamente collegata al corso e parta sempre da quel
+  // corso a scendere, non attaccata in alto»).
+  //
+  // Finora il pannello stava incollato in cima, e con otto corsi in
+  // colonna quello scelto poteva essere il sesto: si premeva una scheda
+  // a meta' pagina e la risposta compariva due schermate piu' su, senza
+  // niente che dicesse che le due cose fossero la stessa. Adesso il
+  // pannello scende fino alla riga della sua scheda, e fra le due resta
+  // una striscia dello stesso crema che le tiene insieme.
+  //
+  // La misura si prende dal DOM e non si calcola: l'altezza di una
+  // scheda dipende da quante fasi ha, se la lista mancanti e' aperta, se
+  // c'e' la gestione rientro — un conto a mano sbaglierebbe al primo
+  // corso diverso dagli altri.
+  const grigliaRef = useRef(null);
+  const [aggancio, setAggancio] = useState(null);
+  useLayoutEffect(() => {
+    if (isMobile) { setAggancio(null); return; }
+    const griglia = grigliaRef.current;
+    if (!griglia) return;
+    let fermo = false;
+    const misura = () => {
+      if (fermo) return;
+      const scheda = edizioneSel ? griglia.querySelector(`[data-riga-corso="${edizioneSel.id}"]`) : null;
+      if (!scheda) { setAggancio(null); return; }
+      const colonna = scheda.offsetParent === griglia ? null : scheda.parentElement;
+      const top = scheda.offsetTop + (colonna && colonna.offsetParent === griglia ? colonna.offsetTop : 0);
+      const prossimo = { top, altezza: scheda.offsetHeight, larghezza: (colonna || scheda).offsetWidth };
+      setAggancio((prima) => (
+        prima && prima.top === prossimo.top && prima.altezza === prossimo.altezza && prima.larghezza === prossimo.larghezza
+          ? prima : prossimo
+      ));
+    };
+    misura();
+    // le schede cambiano altezza da sole: una fase premuta, una lista
+    // mancanti che compare, la finestra che si stringe
+    const osserva = typeof ResizeObserver !== "undefined" ? new ResizeObserver(misura) : null;
+    if (osserva) osserva.observe(griglia);
+    window.addEventListener("resize", misura);
+    return () => { fermo = true; if (osserva) osserva.disconnect(); window.removeEventListener("resize", misura); };
+  }, [isMobile, edizioneSel?.id, edizioniInArrivo.length, vistaStorico]);
   // LA LISTA MANCANTI DI OGNI CORSO IN ELENCO, non solo di quello
   // aperto: il tasto che dichiara il pacco preparato sta sulla riga, e
   // la regola deve valere anche per una riga che nessuno ha ancora
@@ -84176,7 +84220,22 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
             <IconaFrecciaSinistra size={14} /> {vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}
           </button>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
+        <div ref={grigliaRef} style={{ position: "relative", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
+          {/* la striscia che tiene insieme la scheda scelta e la sua
+              lista: sta nel vuoto fra le due colonne, alta quanto la
+              scheda, dello stesso crema. Senza, sono due riquadri dello
+              stesso colore che si guardano da lontano. */}
+          {aggancio && (
+            <div
+              aria-hidden
+              data-ponte-corso
+              style={{
+                position: "absolute", left: aggancio.larghezza, width: 18,
+                top: aggancio.top, height: aggancio.altezza,
+                background: FONDO_ALLESTIMENTO, pointerEvents: "none",
+              }}
+            />
+          )}
           {(!isMobile || vistaMobile === "lista") && (
           <div
             // Nessun foglio bianco sotto: ogni corso e' gia' una scheda
@@ -84232,17 +84291,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           )}
 
           {(!isMobile || vistaMobile === "dettaglio") && (
-          <div style={{ minWidth: 0 }}>
-          {/* LE DUE COLONNE PARTONO DALLA STESSA RIGA (15/11/2026,
-              chiesto dal titolare: «le due celle devono partire dalla
-              stessa linea in alto»). A sinistra sopra le schede c'e'
-              «Corsi in arrivo», e quel titolo le spingeva giu' di una
-              trentina di pixel: il pannello sembrava sfalsato. Invece
-              di una misura scritta a mano — che il giorno che il titolo
-              cambia corpo resta indietro — qui c'e' LO STESSO titolo,
-              invisibile: si sposta da se'. Su telefono non c'e', perche'
-              le due colonne non sono affiancate. */}
-          {!isMobile && <div aria-hidden style={{ ...STILE_TITOLO_COLONNA, visibility: "hidden" }}>&nbsp;</div>}
+          <div style={{ minWidth: 0, marginTop: aggancio ? aggancio.top : 0 }}>
           <div
             // niente filo colorato nemmeno qui: quale corso si sta
             // guardando lo dicono la tessera della data e il nome
@@ -92566,6 +92615,7 @@ export {
   composizioneKit, listaMancanti, ComposizioneKit, RigaCorsoLogistica,
   pezziGiaNelPacco, avvisoProdottoGiaNelPacco,
   PannelloPreparazioneKit,
+  PaginaLogisticaProdotti,
   movimentiKitDaDelta, righeScarico,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
   bustaChiusa, statoViaggioBusta, bustaDepositata, statoViaggioAppendice, appendiceDepositata,
