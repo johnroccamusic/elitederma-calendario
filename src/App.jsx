@@ -82330,11 +82330,13 @@ const ALLESTIMENTO = {
   icona: 24,
 };
 const BANDA_SEZIONE = "#F7EFE1";
-// lo stesso crema delle bande, schiarito: il fondo della scheda che
-// tiene tutta la lista. Sta accanto a BANDA_SEZIONE perche' e' lei che
-// lo decide — schiarito a mano in un altro punto, il giorno che la
-// banda cambia tinta i due si staccano.
-const FONDO_ALLESTIMENTO = "#FDFAF5";
+// lo stesso crema delle bande, schiarito di circa il 40% verso il
+// bianco: il fondo della scheda che tiene tutta la lista. Sta accanto a
+// BANDA_SEZIONE perche' e' lei che lo decide — schiarito a mano in un
+// altro punto, il giorno che la banda cambia tinta i due si staccano.
+// Il primo giro era #FDFAF5, due punti dal bianco: sullo schermo non si
+// vedeva, e schiarire «un po'» un crema vuol dire cancellarlo.
+const FONDO_ALLESTIMENTO = "#FAF4EB";
 const PILLOLA_TOTALE = "#FBECD2";
 
 // il numeretto della sezione: «01» in una pastiglia oro chiara. E' un

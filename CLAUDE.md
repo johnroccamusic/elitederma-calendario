@@ -1999,7 +1999,7 @@ prodotto in attesa di ricezione non deve impedire di riempire le buste
 che si possono già riempire.
 
 **E il pannello ha un fondo suo** (15/11/2026): il crema delle bande
-delle sezioni, schiarito (`FONDO_ALLESTIMENTO`, scritto accanto a
+delle sezioni, schiarito (`FONDO_ALLESTIMENTO` = `#FAF4EB`, scritto accanto a
 `BANDA_SEZIONE` perche' e' lei a deciderlo). Su una scheda bianca come
 tutto il resto le sezioni bianche non si staccavano da niente; adesso
 il bianco e' quello su cui si lavora, e il fondo e' solo il foglio
