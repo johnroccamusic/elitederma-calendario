@@ -52,9 +52,14 @@ function elitederma_punti_del_prodotto( $prodotto ) {
 
 	if ( ! $prodotto instanceof WC_Product ) { return 0; }
 
-	// Il plugin c'e'? Se e' spento non esiste ne' la classe ne' la
-	// funzione, e qui si esce subito: nessuna promessa.
-	if ( ! function_exists( 'YITH_WC_Points_Rewards' ) ) { return 0; }
+	// Il plugin c'e'? Se e' spento non esiste la funzione. In quel caso
+	// si esce — nessuna promessa a un cliente — TRANNE che per chi
+	// amministra, a cui si fa vedere l'anteprima: senza, chi installa
+	// questo snippet non ha nessun modo di sapere se funziona, perche'
+	// una pagina muta e una pagina rotta si assomigliano.
+	if ( ! function_exists( 'YITH_WC_Points_Rewards' ) ) {
+		return elitederma_punti_anteprima() ? elitederma_punti_dal_netto( $prodotto ) : 0;
+	}
 
 	$plugin = YITH_WC_Points_Rewards();
 
@@ -71,12 +76,28 @@ function elitederma_punti_del_prodotto( $prodotto ) {
 		}
 	}
 
-	// Ripiego: la regola generale sul prezzo NETTO. Netto e non lordo
-	// perche' e' quello il numero su cui il plugin conta — misurato:
-	// 5 pigmenti da 32,70 netti hanno fatto 3 punti l'uno, 15 in tutto.
+	return elitederma_punti_dal_netto( $prodotto );
+}
+}
+
+// Il ripiego: la regola generale sul prezzo NETTO. Netto e non lordo
+// perche' e' quello il numero su cui il plugin conta — misurato: 5
+// pigmenti da 32,70 netti hanno fatto 3 punti l'uno, 15 in tutto.
+if ( ! function_exists( 'elitederma_punti_dal_netto' ) ) {
+function elitederma_punti_dal_netto( $prodotto ) {
 	$netto = (float) wc_get_price_excluding_tax( $prodotto );
 	if ( $netto <= 0 ) { return 0; }
 	return (int) floor( $netto / ELITEDERMA_EURO_PER_PUNTO );
+}
+}
+
+// Chi vede l'anteprima quando il plugin dei punti e' spento: solo chi
+// puo' accendere i plugin. Le pagine in cache non si servono a chi ha
+// fatto accesso (ne' Breeze ne' Varnish le danno a un utente loggato),
+// quindi questa riga non finisce addosso a un cliente.
+if ( ! function_exists( 'elitederma_punti_anteprima' ) ) {
+function elitederma_punti_anteprima() {
+	return is_user_logged_in() && current_user_can( 'manage_options' );
 }
 }
 
@@ -105,7 +126,17 @@ function elitederma_punti_nel_suffisso( $html, $prodotto, $prezzo, $quantita ) {
 		$da . $punti
 	);
 
-	return $html . '<span class="ed-punti-prodotto">' . $testo . '</span>';
+	// Quando la raccolta e' spenta e sta guardando chi amministra, la
+	// riga deve DIRE che e' una prova: un numero che sembra vero su un
+	// negozio in cui i punti non si accumulano piu' e' una bugia anche
+	// se la legge una persona sola.
+	$classe = 'ed-punti-prodotto';
+	if ( ! function_exists( 'YITH_WC_Points_Rewards' ) ) {
+		$classe .= ' ed-punti-anteprima';
+		$testo  .= ' <em>(anteprima: la raccolta e&#768; spenta)</em>';
+	}
+
+	return $html . '<span class="' . $classe . '">' . $testo . '</span>';
 }
 }
 add_filter( 'woocommerce_get_price_suffix', 'elitederma_punti_nel_suffisso', 10, 4 );
@@ -119,7 +150,9 @@ function elitederma_punti_stile() {
 	if ( is_cart() || is_checkout() ) { return; }
 	$css = '.ed-punti-prodotto{display:block;font-size:.62rem;font-weight:600;'
 		. 'letter-spacing:.02em;color:#a5813f;margin-top:.12rem;}'
-		. '.ed-punti-prodotto::before{content:"\\2726";margin-right:.28em;opacity:.75;}';
+		. '.ed-punti-prodotto::before{content:"\\2726";margin-right:.28em;opacity:.75;}'
+		. '.ed-punti-anteprima{color:#9a9a9a;}'
+		. '.ed-punti-anteprima em{font-style:normal;font-weight:400;opacity:.8;}';
 	wp_register_style( 'elitederma-punti', false );
 	wp_enqueue_style( 'elitederma-punti' );
 	wp_add_inline_style( 'elitederma-punti', $css );
