@@ -264,6 +264,24 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
   if (errore) return guscio(<Avviso titolo="Qualcosa non ha funzionato" testo={`Riprova fra poco. (${errore})`} />);
   if (!dati) return guscio(<Avviso titolo="Non trovo la tua scheda" testo="Scrivi all'amministrazione: senza la scheda il contratto non si può preparare." />);
 
+  // LA PORTA CHIUSA SI DICE, e si dice QUI e non dopo aver fatto
+  // compilare tutto. Normalmente a porta chiusa la nuvola non compare
+  // nemmeno; questa pagina però si apre anche da chi amministra, che
+  // guarda la dashboard di una master, e un modulo che lascia firmare e
+  // poi si sente dire no dal database è peggio di un modulo che non c'è.
+  //
+  // Il contratto già firmato invece si continua a leggere: chiudere la
+  // porta vuol dire «per ora non si firma», non «quello che è stato
+  // firmato non si vede più».
+  if (dati.aperta === false && !dati.firmato) {
+    return guscio(
+      <Avviso
+        titolo="La firma non è ancora aperta"
+        testo="L'Accademia sta ancora sistemando il contratto: quando si potrà firmare lo troverai qui, e te lo diremo."
+      />,
+    );
+  }
+
   // CHI RESTA FUORI LO LEGGE, col motivo. Una nuvola che si apre su una
   // pagina vuota è peggio di una nuvola che non c'è.
   if (dati.master?.escluso) {

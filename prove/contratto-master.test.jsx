@@ -362,6 +362,10 @@ function banco(vista) {
 }
 
 const VISTA_VUOTA = {
+  // `aperta: true`: le prove del gesto girano a porta aperta, che è la
+  // condizione in cui c'è qualcosa da provare. La porta chiusa ha le sue
+  // prove, in fondo.
+  aperta: true,
   master: { id: MASTER, nome: "MARIA ROSSI", escluso: false, escluso_motivo: null },
   contratto: null,
   firmato: null,
@@ -565,6 +569,157 @@ describe("«Contratti master», montata", () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(String(window.confirm.mock.calls[0][0])).toContain("togliere");
     expect(chiamate).toHaveLength(0);
+    await p.smonta();
+  });
+});
+
+// LA PORTA DELLA FIRMA (16/11/2026, sera): «blocca per il momento
+// l'accesso alle master alla firma del contratto».
+//
+// Tre cose si provano, e la seconda è quella che conta: che la porta NON
+// sia un tasto nascosto. Nascondere la nuvola e lasciare la funzione
+// aperta vorrebbe dire che chi ha la pagina già aperta, o un indirizzo,
+// firma comunque — ed è esattamente la differenza fra una regola e una
+// tendina tirata.
+describe("la porta della firma", () => {
+  const sql = fs.readFileSync(
+    path.join(process.cwd(), "supabase", "migrations",
+              "20261116200000_la_firma_del_contratto_si_apre_con_un_interruttore.sql"), "utf8",
+  );
+
+  it("la serratura sta nel database, non nella pagina", () => {
+    // le due funzioni che SCRIVONO la controllano
+    for (const funzione of ["contratto_master_salva", "contratto_master_bozza"]) {
+      const corpo = sql.slice(sql.indexOf(`function public.${funzione}`));
+      const controllo = corpo.indexOf("if not public.contratti_master_firma_aperta() then");
+      expect(controllo).toBeGreaterThan(-1);
+      // e la controllano PRIMA di tutto il resto: a porta chiusa non c'è
+      // niente da sapere su nessuno
+      expect(controllo).toBeLessThan(corpo.indexOf("select * into"));
+    }
+    expect(sql).toContain("'chiusa'");
+  });
+
+  // ASSENZA = CHIUSA. Una porta che si apre perché un'impostazione non è
+  // stata trovata è una porta che non è mai stata chiusa.
+  it("se l'impostazione manca la porta è chiusa, non aperta", () => {
+    const f = sql.slice(sql.indexOf("function public.contratti_master_firma_aperta"));
+    const corpo = f.slice(0, f.indexOf("$function$;"));
+    expect(corpo).toContain("coalesce(");
+    expect(corpo).toContain("false)");
+    // e nella pagina il predefinito è lo stesso: niente letto = chiusa
+    const app = fs.readFileSync(path.join(process.cwd(), "src", "App.jsx"), "utf8");
+    expect(app).toContain("portaFirmaContratto?.aperta === true");
+  });
+
+  // NON SI SPEGNE MASTER PER MASTER: `contratto_escluso` vuol dire «questa
+  // persona, per un motivo suo», e riempirla di diciannove righe identiche
+  // farebbe perdere la sola che aveva un significato.
+  it("non tocca le esclusioni delle singole master", () => {
+    expect(sql).not.toMatch(/update\s+public\.master\s+set\s+contratto_escluso/);
+  });
+
+  it("a porta chiusa la pagina lo dice e non mostra nessun modulo", async () => {
+    banco({ ...VISTA_VUOTA, aperta: false });
+    const p = await monta(<FirmaContratto masterId={MASTER} />);
+    await attendi(80);
+    expect(p.testo()).toContain("La firma non è ancora aperta");
+    expect(p.tasto("Firmo il contratto")).toBeUndefined();
+    expect(p.nodo.querySelector("canvas")).toBeNull();
+    await p.smonta();
+  });
+
+  // CHIUDERE LA PORTA NON CANCELLA QUELLO CHE È STATO FIRMATO: «per ora
+  // non si firma» non vuol dire «quello che hai firmato non si vede più».
+  it("a porta chiusa un contratto già firmato si continua a leggere", async () => {
+    banco({
+      ...VISTA_VUOTA, aperta: false,
+      firmato: {
+        id: "c1", stato: "firmato", firmato_il: "2026-11-16T10:00:00Z", luogo_firma: "Roma",
+        dati: PIENI, consenso_contratto_il: "2026-11-16T10:00:00Z",
+        consenso_clausole_il: "2026-11-16T10:00:00Z", consenso_manifesto_il: "2026-11-16T10:00:00Z",
+        pdf_path: "contratti/x/contratto.pdf",
+      },
+    });
+    const p = await monta(<FirmaContratto masterId={MASTER} />);
+    await attendi(80);
+    expect(p.testo()).toContain("Contratto firmato");
+    expect(p.tasto("Apri la copia firmata")).toBeTruthy();
+    await p.smonta();
+  });
+
+  function bancoPorta(aperta, testi = CHIAVI.map((k) => ({ chiave: k, corpo: DAL_CODICE[k] }))) {
+    const scritture = [];
+    rispondiCon({
+      "/rest/v1/master?": () => [
+        { id: "m1", nome: "MARIA ROSSI", contratto_escluso: false },
+        { id: "m2", nome: "ANNA BIANCHI", contratto_escluso: false },
+      ],
+      "contratti_master_firma_aperta": () => ({ valore: { aperta }, aggiornato_il: "2026-11-16T21:00:00Z" }),
+      "/rest/v1/master_contratti_testi": () => testi,
+      "/rest/v1/master_contratti": () => [],
+      "/rest/v1/impostazioni_layout_tabelle": (corpo) => {
+        if (corpo) { scritture.push(corpo); return [{ chiave: "contratti_master_firma_aperta" }]; }
+        return [{ valore: { aperta }, aggiornato_il: "2026-11-16T21:00:00Z" }];
+      },
+    });
+    return scritture;
+  }
+
+  it("«Contratti master» dice in cima com'è la porta", async () => {
+    bancoPorta(false);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    const riquadro = p.nodo.querySelector('[data-campo="porta"]');
+    expect(riquadro.textContent).toContain("La firma è chiusa alle master");
+    expect(riquadro.textContent).toContain("non è un tasto nascosto");
+    expect(p.tasto("Apri la firma alle master")).toBeTruthy();
+    await p.smonta();
+  });
+
+  // APRIRE SI CHIEDE, e la domanda dice QUANTE persone potranno firmare:
+  // «sei sicuro?» da solo non dice cosa si sta aprendo.
+  it("aprire chiede e nomina quante master, e col «no» non scrive niente", async () => {
+    const scritture = bancoPorta(false);
+    window.confirm = vi.fn(() => false);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await clicca(p.tasto("Apri la firma alle master"));
+    await attendi(60);
+    expect(window.confirm).toHaveBeenCalled();
+    expect(String(window.confirm.mock.calls[0][0])).toContain("2 master");
+    expect(scritture).toHaveLength(0);
+    await p.smonta();
+  });
+
+  // E SE IL TESTO NON È NEL DATABASE lo dice prima: aprire adesso vuol
+  // dire congelare alla firma il testo del browser invece di quello del
+  // database.
+  it("aprire col testo mancante avvisa prima", async () => {
+    bancoPorta(false, []);
+    window.confirm = vi.fn(() => false);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await clicca(p.tasto("Apri la firma alle master"));
+    await attendi(60);
+    expect(String(window.confirm.mock.calls[0][0])).toContain("non è ancora nel database");
+    await p.smonta();
+  });
+
+  // CHIUDERE NON SI CHIEDE: non fa sparire niente e si disfa con lo
+  // stesso dito. Una domanda a cui si risponde sempre sì insegna a
+  // premere a occhi chiusi.
+  it("chiudere non chiede, e scrive la porta chiusa", async () => {
+    const scritture = bancoPorta(true);
+    window.confirm = vi.fn(() => true);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    expect(p.nodo.querySelector('[data-campo="porta"]').textContent).toContain("La firma è aperta alle master");
+    await clicca(p.tasto("Chiudi la firma"));
+    await attendi(60);
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(scritture).toHaveLength(1);
+    expect(scritture[0][0]?.valore?.aperta ?? scritture[0].valore?.aperta).toBe(false);
     await p.smonta();
   });
 });

@@ -2065,6 +2065,56 @@ Prove in `prove/contratto-master.test.jsx` (43): il testo per intero, le
 regole pure, **i due elenchi dei campi obbligatori — SQL e JavaScript —
 che devono coincidere**, e le pagine montate per davvero.
 
+**E LA FIRMA NASCE CHIUSA** (16/11/2026, sera, poche ore dopo la
+consegna: «blocca per il momento l'accesso alle master alla firma del
+contratto»).
+
+Un interruttore solo, in cima a «Contratti master»: **«Apri la firma
+alle master» / «Chiudi la firma»**. È un dato
+(`impostazioni_layout_tabelle`, chiave `contratti_master_firma_aperta`,
+con dentro chi l'ha mosso e quando), quindi si riapre senza pubblicare
+niente — che è esattamente quello che serve a un «per il momento».
+
+**Non si spegne master per master, ed è il punto.** La strada corta
+sarebbe accendere `master.contratto_escluso` su tutte e diciannove. Non
+si fa: quella colonna vuol dire «questa persona, per un motivo suo, non
+firma questa versione» — oggi Tommaso Giumbini, «condizioni da
+riscrivere» — e riempirla di diciannove righe identiche farebbe perdere
+la sola che aveva un significato, con nessuno che il giorno della
+riapertura sa più quale esclusione era vera. Sono due cose diverse: una è
+una decisione su una persona, l'altra è una porta chiusa per tutti.
+
+**E non è una tendina tirata.** La nuvola sparisce dalla dashboard, ma la
+serratura sta nel database: `contratto_master_salva` e
+`contratto_master_bozza` controllano la porta **prima di tutto il
+resto** e rifiutano con `motivo: 'chiusa'`. Senza, chi avesse la pagina
+aperta da prima firmerebbe comunque — nascondere un tasto non è chiudere
+una porta.
+
+**Assenza = chiusa**, in tutti e due i posti: se la riga mancasse, o
+avesse dentro qualcosa che non si capisce, non si firma. Una porta che si
+apre perché un'impostazione non è stata trovata è una porta che non è mai
+stata chiusa.
+
+**Aprire si chiede e chiudere no.** La domanda dice **quante** persone
+potranno firmare («sei sicuro?» da solo non dice cosa si sta aprendo), e
+se il testo non è ancora nel database lo avverte prima — aprire in quel
+momento vorrebbe dire congelare alla firma il testo del browser. Chiudere
+non fa sparire niente e si disfa con lo stesso dito: chiederlo
+insegnerebbe a premere a occhi chiusi, e allora anche la domanda
+dell'apertura smetterebbe di proteggere (regola dell'11/11/2026).
+
+**Chiudere non cancella quello che è stato firmato:** un contratto già
+sottoscritto si continua a leggere, con la sua copia. «Per ora non si
+firma» non vuol dire «quello che hai firmato non si vede più».
+
+Migrazione `20261116200000_la_firma_del_contratto_si_apre_con_un_interruttore.sql`,
+provata in una transazione annullata (firma e bozza rifiutate a porta
+chiusa con zero righe scritte, la vista che si apre e lo dice, la firma
+che passa a porta aperta, la riga cancellata che vale «chiusa»). Nove
+prove in più nel banco, fra cui quelle che leggono la migrazione e
+pretendono che il controllo venga **prima** di ogni altra cosa.
+
 **Resta da fare, e va deciso:** una schermata per **correggere** il
 testo dall'app, come Setting → Il contratto per il modulo (oggi si
 corregge nel repo e si ricarica col tasto); e l'invio di un **promemoria**

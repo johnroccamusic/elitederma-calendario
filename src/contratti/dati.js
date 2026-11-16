@@ -110,3 +110,54 @@ export async function cambiaEsclusione(masterId, escluso, motivo) {
   if (!data?.length) return "Il database non ha cambiato nessuna riga: ricarica la pagina e riprova.";
   return "";
 }
+
+// ---------------------------------------------------------------------------
+// L'INTERRUTTORE DELLA FIRMA (16/11/2026, sera).
+//
+// «Blocca per il momento l'accesso alle master alla firma del
+// contratto». Una porta chiusa per tutti, che si riapre da «Contratti
+// master» senza pubblicare niente.
+//
+// NON è `master.contratto_escluso` accesa su tutte: quella colonna vuol
+// dire «questa persona, per un motivo suo, non firma questa versione» —
+// riempirla di diciannove righe identiche farebbe perdere la sola che
+// aveva un significato.
+//
+// La serratura NON è qui: `contratto_master_salva` e
+// `contratto_master_bozza` leggono la stessa riga e rifiutano con
+// `motivo: 'chiusa'`. Questo è il modo di guardarla e di muoverla.
+export const CHIAVE_FIRMA_APERTA = "contratti_master_firma_aperta";
+
+export async function leggiApertura() {
+  const { data, error } = await supabase
+    .from("impostazioni_layout_tabelle")
+    .select("valore, aggiornato_il")
+    .eq("chiave", CHIAVE_FIRMA_APERTA)
+    .maybeSingle();
+  // ASSENZA = CHIUSA, e un errore pure: una porta che si apre perché
+  // un'impostazione non è stata trovata è una porta che non è mai stata
+  // chiusa. È la stessa regola che fa rispettare il database.
+  if (error) return { aperta: false, errore: error.message, cambiato: null };
+  return {
+    aperta: data?.valore?.aperta === true,
+    cambiato: data?.valore ? { da: data.valore.cambiato_da, il: data.valore.cambiato_il || data.aggiornato_il } : null,
+    errore: "",
+  };
+}
+
+export async function cambiaApertura(aperta, chi) {
+  const valore = {
+    aperta: !!aperta,
+    cambiato_il: new Date().toISOString(),
+    cambiato_da: chi || null,
+  };
+  const { data, error } = await supabase
+    .from("impostazioni_layout_tabelle")
+    .upsert({ chiave: CHIAVE_FIRMA_APERTA, valore, aggiornato_il: valore.cambiato_il }, { onConflict: "chiave" })
+    .select("chiave");
+  if (error) return error.message;
+  // un upsert senza select dice «va bene» anche a zero righe, e qui zero
+  // righe vorrebbe dire una porta che si crede aperta e non lo è
+  if (!data?.length) return "Il database non ha cambiato nessuna riga: ricarica la pagina e riprova.";
+  return "";
+}

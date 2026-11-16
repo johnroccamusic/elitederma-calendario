@@ -484,6 +484,12 @@ const CHIAVE_SFONDO_LOCALE = "edc_sfondo_app";
 // i cerchietti "i" con le istruzioni dei tasti: un interruttore solo per
 // tutta l'app, in Aspetto dell'app. Vuoto = accesi
 const CHIAVE_AIUTI = "aiuti_visibili";
+// LA PORTA DELLA FIRMA DEL CONTRATTO MASTER (16/11/2026, sera): «blocca
+// per il momento l'accesso alle master alla firma del contratto». Vuoto
+// o `false` = CHIUSA, e la nuvola nella dashboard non compare. La
+// serratura vera sta nel database (`contratto_master_salva` rifiuta con
+// `motivo: 'chiusa'`): qui si decide solo se la tessera si vede.
+const CHIAVE_FIRMA_CONTRATTO_MASTER = "contratti_master_firma_aperta";
 // Il tasto flottante "Stile", quello che sta appoggiato in basso a
 // destra e apre la tavolozza dei 256 colori. Lo vede solo chi programma,
 // ma sul telefono finisce sopra la barra del dock e copre i tasti che
@@ -15241,6 +15247,12 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // da cui prendere e il quadro sarebbe vuoto
   const [edizioniConScorte, setEdizioniConScorte] = useState(new Set());
   useEffect(() => { edizioniConSpedizione().then(setEdizioniConScorte); }, []);
+  // la porta della firma del contratto: finche' e' chiusa la nuvola non
+  // c'e'. Sta QUI con le altre impostazioni condivise e non accanto a
+  // dove si usa, perche' sotto ci sono i return anticipati di questa
+  // pagina e un hook dichiarato dopo di loro la spegne al primo giro.
+  const [portaFirmaContratto] = useImpostazioneCondivisa(CHIAVE_FIRMA_CONTRATTO_MASTER, null);
+  const firmaContrattoAperta = portaFirmaContratto?.aperta === true;
   const [schemaPuntiSalvato] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
   const sicurezzaPunti = sicurezzaPuntiDi(schemaPuntiSalvato);
   const [quotePuntiSalvate] = useImpostazioneCondivisa(CHIAVE_QUOTE_PUNTI_MASTER, QUOTE_PUNTI_MASTER_DEFAULT);
@@ -15768,7 +15780,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     { chiave: "punti", testo: "Gestione punti", Icona: IconaTilePuntiMaster, badge: puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined },
     { chiave: "loghi", testo: "Loghi", Icona: IconaTileLoghi },
     { chiave: "notifiche", testo: "Notifiche", Icona: IconaCampanellaErp },
-    ...(masterSel && !masterSel.contratto_escluso
+    // «Firma del contratto» compare solo a PORTA APERTA e solo a chi non
+    // e' fuori. Le due condizioni restano diverse: la porta e' chiusa per
+    // tutti e si riapre da «Contratti master», l'esclusione e' una
+    // decisione su una persona.
+    ...(masterSel && firmaContrattoAperta && !masterSel.contratto_escluso
       ? [{ chiave: "contratto", testo: "Firma del contratto", Icona: IconaClipboardErp }]
       : []),
   ];
@@ -15880,7 +15896,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             arrivano da `contratto_master_vista`, quindi non ha bisogno
             di niente da questa dashboard oltre a sapere di CHI e' il
             contratto. */}
-        {masterSel && tabMaster === "contratto" && (
+        {masterSel && tabMaster === "contratto" && firmaContrattoAperta && (
           <div style={{ marginBottom: 20 }}>
             <FirmaContratto
               masterId={masterSel.id}

@@ -22,7 +22,7 @@ import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { confermaRimozione } from "../ui/conferma.js";
 import { urlAllegato } from "../file/allegati.js";
-import { leggiTuttiIContratti, riapriContratto, cambiaEsclusione } from "./dati.js";
+import { leggiTuttiIContratti, riapriContratto, cambiaEsclusione, leggiApertura, cambiaApertura } from "./dati.js";
 import { CHIAVI, NOMI, DAL_CODICE, PARTENZA, impronta, leggiTesti, caricaDiPartenza } from "./testi.js";
 
 const pannello = { ...areaSchedaIscritto, marginBottom: 16 };
@@ -74,11 +74,13 @@ export default function PaginaContrattiMaster({
   const [caricandoTesti, setCaricandoTesti] = useState(false);
   const [alLavoro, setAlLavoro] = useState("");
   const [motivoNuovo, setMotivoNuovo] = useState({});
+  const [porta, setPorta] = useState({ aperta: false, cambiato: null });
 
   const ricarica = useCallback(async () => {
     setCaricando(true);
-    const [elenco, t] = await Promise.all([leggiTuttiIContratti(), leggiTesti()]);
+    const [elenco, t, apertura] = await Promise.all([leggiTuttiIContratti(), leggiTesti(), leggiApertura()]);
     setCaricando(false);
+    setPorta(apertura);
     if (elenco.errore) { setErrore(elenco.errore); return; }
     setRighe(elenco.righe);
     setTesti(t);
@@ -160,6 +162,34 @@ export default function PaginaContrattiMaster({
     await ricarica();
   }
 
+  async function muoviLaPorta(aperta) {
+    // APRIRE LA FIRMA NON È UN DETTAGLIO: da quel momento diciotto
+    // persone possono sottoscrivere un contratto. Si chiede, e la
+    // domanda dice quante sono — «sei sicuro?» da solo non dice cosa si
+    // sta aprendo.
+    //
+    // E CHIUDERE NON SI CHIEDE: chiudere non fa sparire niente e si
+    // disfa con lo stesso dito; una domanda a cui si risponde sempre sì
+    // insegna a premere a occhi chiusi, e allora anche quella
+    // dell'apertura smette di proteggere.
+    if (aperta) {
+      const quante = righe.filter((r) => !r.master.contratto_escluso).length;
+      if (mancanti.length > 0 && !window.confirm(
+        `Il testo del contratto non è ancora nel database (${mancanti.length} ${mancanti.length === 1 ? "parte" : "parti"} su ${CHIAVI.length}).\n\n`
+        + "Aprendo adesso, un contratto firmato verrebbe congelato col testo che la pagina mostra invece che con quello del database. Conviene prima premere «Carica il testo di partenza».\n\n"
+        + "Aprire comunque?")) return;
+      if (!window.confirm(`Da adesso ${quante} master potranno firmare il contratto dalla loro dashboard.\n\nConfermi?`)) return;
+    }
+    setAlLavoro("porta"); setErrore(""); setAvviso("");
+    const e = await cambiaApertura(aperta, chiOpera);
+    setAlLavoro("");
+    if (e) { setErrore(e); return; }
+    setAvviso(aperta
+      ? "La firma è aperta. Le master la trovano nella loro dashboard: chi ha già l'app aperta la vede dopo aver ricaricato la pagina."
+      : "La firma è chiusa. La nuvola non compare più a nessuna, e il database rifiuta comunque qualunque firma.");
+    await ricarica();
+  }
+
   async function carica(chiavi) {
     setCaricandoTesti(true); setErrore(""); setAvviso("");
     const e = await caricaDiPartenza(chiavi);
@@ -199,6 +229,50 @@ export default function PaginaContrattiMaster({
           <div style={{ ...fontBody, fontSize: 12.5, lineHeight: 1.6, color: "#B3261E", background: "#FDECEC",
                         border: "1px solid #F0C9C9", borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>{errore}</div>
         )}
+
+        {/* LA PORTA, PRIMA DI TUTTO IL RESTO. È la cosa che decide se
+            quella nuvola esiste per qualcuno: leggerla in fondo alla
+            pagina vorrebbe dire scoprire solo dopo aver guardato
+            diciannove righe che nessuna di quelle persone può firmare. */}
+        {/* `borderLeft` dopo `border` e non solo `border`: il pannello
+            porta la striscia oro a sinistra (`areaSchedaIscritto`), e
+            riscrivere la sola scorciatoia lascia React a litigare fra le
+            due — «don't mix shorthand and non-shorthand», e la striscia
+            compare o sparisce secondo l'ordine in cui si disegna. */}
+        <div data-campo="porta" style={{
+          ...pannello,
+          background: porta.aperta ? "#F2F9F3" : "#FFF8E6",
+          border: `1px solid ${porta.aperta ? "#CFE6D5" : "#E6CF8C"}`,
+          borderLeft: `4px solid ${porta.aperta ? "#1C5E33" : "#E6CF8C"}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: porta.aperta ? "#1C5E33" : "#6B4E00" }}>
+                {porta.aperta ? "La firma è aperta alle master" : "La firma è chiusa alle master"}
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.55, marginTop: 4 }}>
+                {porta.aperta
+                  ? "Ognuna trova «Firma del contratto» nella sua dashboard. Chi è fra «Chi resta fuori» non la vede."
+                  : "La nuvola «Firma del contratto» non compare a nessuna, e il database rifiuta comunque qualunque firma: non è un tasto nascosto."}
+                {porta.cambiato?.il && (
+                  <> {porta.aperta ? "Aperta" : "Chiusa"} il {quando(porta.cambiato.il)}
+                    {porta.cambiato.da ? ` da ${porta.cambiato.da}` : ""}.</>
+                )}
+              </div>
+            </div>
+            <button
+              type="button" data-campo="muovi-porta" disabled={alLavoro === "porta"}
+              onClick={() => muoviLaPorta(!porta.aperta)}
+              style={{
+                ...fontBody, fontSize: 13, fontWeight: 700, minHeight: 44, padding: "11px 16px",
+                borderRadius: 10, cursor: "pointer", color: "#fff", border: "none",
+                background: porta.aperta ? "#B3261E" : NAVY,
+              }}
+            >
+              {alLavoro === "porta" ? "…" : porta.aperta ? "Chiudi la firma" : "Apri la firma alle master"}
+            </button>
+          </div>
+        </div>
 
         {/* IL TESTO PRIMA DELL'ELENCO, e non è un vezzo: se il database
             non ha le righe, il server non può congelare niente e alla
