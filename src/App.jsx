@@ -73,6 +73,11 @@ import { creaZip, siPuoCondividere } from "./file/zip.js";
 const ModelliEmail = pezzo(() => import("./email/ModelliEmail.jsx"));
 const PaginaRegolamenti = pezzo(() => import("./regole/PaginaRegolamenti.jsx"));
 const RegistrazioneClienti = pezzo(() => import("./clienti/RegistrazioneClienti.jsx"));
+// I CONTRATTI DELLE MASTER (16/11/2026): l'area di chi amministra e la
+// pagina da cui ciascuna master firma il suo. A richiesta, come le altre:
+// chi non le apre non si porta dietro ventitre articoli di contratto.
+const PaginaContrattiMaster = pezzo(() => import("./contratti/PaginaContrattiMaster.jsx"));
+const FirmaContratto = pezzo(() => import("./contratti/FirmaContratto.jsx"));
 const AssistenteRegole = pezzo(() => import("./regole/AssistenteRegole.jsx"));
 const AllegatiProgetto = pezzo(() => import("./progetti/AllegatiProgetto.jsx"));
 const ModuloIscrizione = pezzo(() => import("./iscrizione/ModuloIscrizione.jsx"));
@@ -15747,6 +15752,27 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   // sulle vendite, cioe' sul meccanismo di prima ancora dei punti.
   // Tolta l'08/10/2026 insieme al resto.
 
+  // LE NUVOLE DI QUESTA DASHBOARD.
+  //
+  // Stavano scritte dentro il JSX. Da quando sono cinque e una compare
+  // solo a chi la riguarda, l'elenco va deciso PRIMA di disegnarlo: la
+  // griglia si misura su quante sono, e `repeat(4, ...)` con quattro
+  // tessere su cinque lascerebbe un buco in fondo alla riga.
+  //
+  // «Firma del contratto» non compare a chi e' fuori
+  // (`master.contratto_escluso`, che oggi vale per una persona e il cui
+  // motivo si legge in «Contratti master»): quella pagina non avrebbe
+  // altro da dire che «non c'e' niente da fare».
+  const nuvoleMaster = [
+    { chiave: "corsi", testo: "Corsi", Icona: IconaTileCorsi },
+    { chiave: "punti", testo: "Gestione punti", Icona: IconaTilePuntiMaster, badge: puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined },
+    { chiave: "loghi", testo: "Loghi", Icona: IconaTileLoghi },
+    { chiave: "notifiche", testo: "Notifiche", Icona: IconaCampanellaErp },
+    ...(masterSel && !masterSel.contratto_escluso
+      ? [{ chiave: "contratto", testo: "Firma del contratto", Icona: IconaClipboardErp }]
+      : []),
+  ];
+
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -15773,18 +15799,22 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           {masterSel && <FotoMaster url={masterSel.foto_url} lato={isMobile ? 84 : 118} titolo={toTitleCase(masterSel.nome)} />}
         </div>
 
-        {/* LE TRE SEZIONI, come nella dashboard venditori: tessere in
-            cima, sotto quella aperta. Tre colonne anche da telefono —
-            sono tre, ci stanno, e mandarne una a capo da sola e' il modo
-            di farla sembrare un'altra cosa. */}
+        {/* LE SEZIONI, come nella dashboard venditori: tessere in cima,
+            sotto quella aperta.
+
+            DAL 16/11/2026 SONO CINQUE: si e' aggiunta «Firma del
+            contratto». Cinque in una riga sola da telefono sarebbero
+            cinque francobolli, quindi su telefono vanno a tre e a due —
+            una tessera che non si legge e' una tessera che non si preme.
+
+            A chi il contratto non lo deve firmare la nuvola NON compare,
+            e l'esclusione e' un dato (`master.contratto_escluso`) e non
+            un nome scritto qui: una tessera che si apre su una pagina
+            che dice solo «non c'e' niente da fare» e' peggio di una
+            tessera che manca. */}
         {masterSel && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: isMobile ? 8 : 14, maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 12 : 18}px` }}>
-            {[
-              { chiave: "corsi", testo: "Corsi", Icona: IconaTileCorsi },
-              { chiave: "punti", testo: "Gestione punti", Icona: IconaTilePuntiMaster, badge: puntiDaVendite ? `${fmtPunti(puntiDaVendite.punti_carriera || 0)} pt` : undefined },
-              { chiave: "loghi", testo: "Loghi", Icona: IconaTileLoghi },
-              { chiave: "notifiche", testo: "Notifiche", Icona: IconaCampanellaErp },
-            ].map((t) => (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : `repeat(${nuvoleMaster.length}, minmax(0, 1fr))`, gap: isMobile ? 8 : 14, maxWidth: isMobile ? "none" : 1000, margin: `0 auto ${isMobile ? 12 : 18}px` }}>
+            {nuvoleMaster.map((t) => (
               <TileHome
                 key={t.chiave}
                 title={t.testo}
@@ -15803,7 +15833,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             i corsi il titolo ce l'hanno gia' loro */}
         {masterSel && tabMaster !== "corsi" && (
           <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 14, textAlign: "center", textTransform: "uppercase" }}>
-            {tabMaster === "punti" ? "Gestione punti" : tabMaster === "loghi" ? "Loghi" : "Notifiche"}
+            {nuvoleMaster.find((n) => n.chiave === tabMaster)?.testo || ""}
           </div>
         )}
 
@@ -15842,6 +15872,22 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               {" "}Su iPhone funzionano solo se apri GENYON dall'icona sulla schermata Home.
             </div>
             <PannelloNotifiche masterId={masterSel.id} utente={masterSel.nome} />
+          </div>
+        )}
+
+        {/* FIRMA DEL CONTRATTO. La pagina si legge e si compila da sola:
+            testo, dati che l'anagrafica sa gia' e stato della firma
+            arrivano da `contratto_master_vista`, quindi non ha bisogno
+            di niente da questa dashboard oltre a sapere di CHI e' il
+            contratto. */}
+        {masterSel && tabMaster === "contratto" && (
+          <div style={{ marginBottom: 20 }}>
+            <FirmaContratto
+              masterId={masterSel.id}
+              nomeMaster={masterSel.nome}
+              isMobile={isMobile}
+              onBack={() => { setTabMaster("corsi"); window.scrollTo(0, 0); }}
+            />
           </div>
         )}
 
@@ -29337,6 +29383,12 @@ export const TASTI_HOME = [
   // sta in `PERMESSI_DI_PARTENZA`: un utente nuovo non la trova dentro
   // da se'.
   { chiave: "modellefiera", etichetta: "Modelle fiera" },
+  // I CONTRATTI DI COLLABORAZIONE DELLE MASTER (16/11/2026). Qui si
+  // guarda chi ha firmato e chi deve, si rilegge una copia e si riapre
+  // un contratto; a firmare si va dalla dashboard di ciascuna master.
+  // NON sta in `PERMESSI_DI_PARTENZA`: sono contratti, e chi li vede
+  // legge i dati fiscali e di nascita di tutte.
+  { chiave: "contrattimaster", etichetta: "Contratti master" },
 ];
 // Quello che un utente nuovo ha acceso appena nasce. Finora era una
 // lista vuota, e andava bene finche' ogni area era da concedere; la
@@ -89580,6 +89632,11 @@ function Gestionale() {
     // la pagina legge la sua tabella da sola (come Regolamenti): niente
     // da caricare qui
     registrazioneclienti: [],
+    // non chiede niente al giro generale: `master`, `master_contratti` e
+    // `master_contratti_testi` se le legge da sola. La voce c'e' lo
+    // stesso, perche' una vista che manca da questa mappa sembra una
+    // dimenticanza e non una scelta.
+    contrattimaster: [],
     crmallievi: [],
     crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
@@ -91369,6 +91426,11 @@ function Gestionale() {
               // migrazione l'ha accesa anche sul profilo Programmatore,
               // che e' quello da cui la tessera si verifica.
               { chiave: "modellefiera", title: "Modelle fiera", descrizione: "I consensi da far compilare alle modelle al banco della fiera", Icona: IconaTileModelle, attivo: tastoAbilitato("modellefiera"), onClick: () => setView("modellefiera") },
+              // «CONTRATTI MASTER»: la vede chi ha quella casella, piu'
+              // chi amministra — di qua si leggono i dati fiscali e di
+              // nascita di tutte le master, e chi amministra deve poterci
+              // entrare senza che qualcuno gli accenda un permesso.
+              { chiave: "contrattimaster", title: "Contratti master", descrizione: "Chi ha firmato il contratto di collaborazione, e con quale testo", Icona: IconaClipboardErp, attivo: tastoAbilitato("contrattimaster") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("contrattimaster") },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "regolamenti", title: "Regolamenti", descrizione: "Prezzi, sconti, procedure: le decisioni prese, da consultare", Icona: IconaClipboardErp, attivo: tastoAbilitato("regolamenti") || ruoloUtente === "programmatore" || ruoloUtente === "amministratore", onClick: () => setView("regolamenti") },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaTileCrm, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
@@ -92317,6 +92379,19 @@ function Gestionale() {
           onBack={() => setView("home")}
           TastoIndietro={TastoLivelloPrecedente}
           titolo={etichettaTasto("home", "modellefiera", "Modelle fiera")}
+        />
+      )}
+
+      {/* «CONTRATTI MASTER»: legge da se' le master, i loro contratti e
+          il testo nel database, quindi non ha bisogno di niente dal giro
+          generale. */}
+      {view === "contrattimaster" && (
+        <PaginaContrattiMaster
+          isMobile={isMobile}
+          onBack={() => setView("home")}
+          TastoIndietro={TastoLivelloPrecedente}
+          titolo={etichettaTasto("home", "contrattimaster", "Contratti master")}
+          chiOpera={operatoreCorrente(utenteLoggato, venditoreLoggato)?.nome || ""}
         />
       )}
 

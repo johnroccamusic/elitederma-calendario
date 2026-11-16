@@ -17,7 +17,7 @@ contabilità. Nessun utente finale anonimo.
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
 | Storage | 22 bucket Supabase, dieci privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`, `progetti-allegati`, `allegati-iscritti`, `master-documenti`, `venditori-documenti`, `leve-assistenti-documenti`, `spese-allegati`) |
-| Backend | 49 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Backend | 56 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -33,15 +33,16 @@ src/main.jsx             entry point
 src/Accesso.jsx          gate Supabase Auth (collegato, vedi § 4)
 src/comuni-regioni.js    dati statici
 src/ui/                  mattoni condivisi: Button, Field, CampoNumero, colori
-src/<modulo>/            fette già uscite dal monolite — consensi, content,
-                         email, eventi, file, iscrizione, iscrizioni, magazzino,
-                         notifiche, pos, prezzi, punti, recesso, rientri,
-                         salvataggi, spese, stampe
-prove/                   101 file, 839 prove (Vitest + jsdom), con preparazione e aiuto
+src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
+                         content, contratti, crm, email, eventi, file,
+                         iscrizione, iscrizioni, magazzino, notifiche, pos,
+                         prezzi, progetti, punti, recesso, regole, rientri,
+                         salvataggi, spese, stampe, statistiche
+prove/                   124 file, 1.200 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
-supabase/functions/      45 edge function + _shared
-supabase/migrations/     329 migrazioni versionate
+supabase/functions/      56 edge function + _shared
+supabase/migrations/     migrazioni versionate (+ script cumulativi alla radice)
 supabase-*.sql           130 script di setup storici, cumulativi e idempotenti
 ```
 
@@ -1880,6 +1881,195 @@ Tre conseguenze, tutte volute:
 Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
+
+### Il contratto delle master si firma dall'app (16/11/2026)
+
+Il titolare: «dobbiamo creare una nuova area nella home page che si
+chiama contratti master. La compilazione del contratto deve avvenire
+come quella del modulo di iscrizione. Le master troveranno in ciascuna
+delle loro dashboard una nuova nuvola che si chiama firma del contratto
+(ad esclusione di Tommaso Giumbini le cui condizioni vanno riscritte).»
+
+**Il testo è trascritto, non riscritto, e nemmeno battuto a mano.**
+`Contratto_Elitederma_completo.pdf` — ventun pagine, versione sintetica
+del 14 novembre 2026 — letto con pdfjs e ricomposto in paragrafi dalle
+coordinate delle righe, non dal taglio delle righe stesse. Sono clausole
+contrattuali: un «quasi uguale» qui vuol dire far firmare una cosa
+diversa da quella consegnata, e battere a mano quarantamila caratteri è
+il modo di sbagliarne uno e non accorgersene. Sta in
+`supabase/functions/_shared/contratto-master.js`: premesse (le sei
+lettere), **ventitré articoli**, l'approvazione specifica delle clausole
+degli artt. 1341-1342 c.c. con le **sedici voci**, e l'Allegato A —
+Manifesto, **diciannove blocchi**.
+
+**Gli spazi in bianco del cartaceo sono di due specie, e non si
+riempiono nello stesso modo.** Uno solo era testo: l'art. 9.6, «entro il
+giorno [___] del mese successivo», il giorno in cui si pagano le dodici
+rate del patto di non concorrenza — deciso dal titolare, **il giorno 5**,
+e scritto nel testo. Tutti gli altri **non sono testo, sono dati**:
+l'epigrafe del/della Master (nome, codice fiscale, nascita, residenza,
+P. IVA, PEC, email) la compone `epigrafeMaster` dai valori veri, e
+«Luogo e data» dal comune di residenza e dal giorno della firma — «la
+data farà fede quella della compilazione». Lasciarli come trattini su un
+PDF da riempire a penna vorrebbe dire un contratto che si firma senza
+sapere chi lo firma.
+
+**Il gesto è quello del modulo di iscrizione, e i mattoni sono gli
+stessi.** `DaRiempire`, `Foto`, `Dichiarazione`, `Letto` e `Avviso` sono
+stati esportati da `PaginaModulo.jsx`, e la cascata della residenza è
+uscita da dentro quella pagina in `src/iscrizione/cascata-residenza.js`.
+Riscriverli avrebbe voluto dire due modi di scattare la foto di un
+documento e due idee di dove abita una persona — una che offre i cantoni
+svizzeri e una che non li offre, e nessuna delle due che sa di essere
+quella sbagliata. L'estrazione della cascata è un refactor del modulo
+pubblico: le 68 prove della residenza l'hanno verificata.
+
+**Dove è diverso dal modulo, ed è una semplificazione vera:** la master
+NON arriva da un link pubblico. È già dentro il gestionale con la sua
+password, quindi ha una sessione Supabase — le funzioni si aprono ad
+`authenticated` e non ad `anon`, e i file vanno in `master-documenti`,
+che è già privato (31/10/2026). Resta il limite del § 4: con un account
+per tutti, «authenticated» vuol dire «uno dei dispositivi che hanno
+quella password», non «questa persona», e chi firma lo decide ancora il
+Gate interno.
+
+**Le serrature che il database fa rispettare comunque**, perché non
+dipendono dall'identità — provate tutte e nove in una transazione
+annullata: senza firma non si registra (`senza_firma`); un file fuori
+dalla cartella `contratti/<id della master>/`, o con `..` dentro, è
+rifiutato (`percorso_non_valido`); senza le due foto del documento no
+(`senza_documento`); senza le tre dichiarazioni no
+(`senza_dichiarazioni`); un dato obbligatorio mancante è rifiutato e la
+funzione dice **quale** (`dati_incompleti`, con `campo`); un contratto
+già firmato non si rifirma (`gia_firmato`); una master esclusa non firma
+(`escluso`); e un vincolo impedisce che una riga «firmato» esista senza
+firma, senza data e senza testo congelato.
+
+**Il testo che si firma lo compone il server**, come per il modulo
+(31/10/2026): sta in `master_contratti_testi`, sette righe, e
+`contratto_master_salva` congela quelle — dal browser accetta solo
+`p_contratto` per dire se la pagina mostrava la stessa cosa
+(`uguale_a_quello_mostrato`). Se le righe mancassero si ricade sul testo
+del client e lo dice `origine: 'client'`, che «Contratti master» segna
+in rosso: meglio un contratto firmato che un contratto bloccato, ma si
+deve vedere.
+
+**Le due copie del testo nascono identiche, e lo si controlla invece di
+crederlo.** `scripts/genera-testi-contratto.mjs` genera
+`supabase/testi-contratto-master.sql` dal file del codice e stampa
+l'impronta sha256 di ogni chiave; «Contratti master → Il testo del
+contratto» mette accanto l'impronta del database e quella del repo. Una
+prova del banco legge lo script e il codice e pretende che il testo sia
+identico carattere per carattere: se qualcuno corregge il testo e si
+dimentica di rigenerare, il database e il repo farebbero firmare due
+contratti diversi.
+
+**Quello script NON sta in `supabase/migrations/` ed è voluto:** sono 78
+KB di insert, e il canale con cui questo progetto applica le migrazioni
+non li regge. Sta fra gli script cumulativi e idempotenti della radice,
+e si carica in due modi che scrivono le stesse righe — dall'editor SQL,
+oppure dal tasto **«Carica il testo di partenza»** in Contratti master.
+**Al 16/11/2026 le righe nel database sono zero:** va premuto quel tasto
+una volta.
+
+**Tre dichiarazioni, non una**, perché il cartaceo ha **tre righe di
+firma** — in fondo al contratto, in fondo all'approvazione delle
+clausole, in fondo al Manifesto — e tre atti distinti non si provano con
+una spunta sola (è la lezione del 19/10/2026 sui consensi delle
+modelle). Ognuna si salva col suo istante. **La firma col dito è una** e
+si stampa su tutte e tre le righe: disegnarla tre volte non aggiunge
+niente, e quello che distingue i tre atti è la spunta, non il tratto.
+Le tre frasi sopra le caselle sono le sole **NON trascritte** dal
+cartaceo — le ho scritte io, e **vanno lette e approvate dal titolare**
+prima della prima firma vera, come si fece per il consenso del trico e
+dell'areola.
+
+**Il testo va aperto e richiuso prima di firmare**, e si segna alla
+chiusura: aperto e lasciato aperto vuol dire che ci si è scorsi
+attraverso. Vale **a parte** per il contratto e per l'Allegato A — sono
+due documenti, e la terza dichiarazione è la ricevuta del secondo. Fino
+ad allora le spunte sono spente e, al posto della lavagna, un riquadro
+che dice perché.
+
+**Niente è bloccato, ed è la differenza voluta dal modulo.** Lì il
+prezzo e il pacchetto li ha scritti il venditore e l'allieva non li deve
+toccare; qui ogni casella è un dato suo — il suo codice fiscale, la sua
+residenza, la sua partita IVA — e l'unica che li sa per certo è lei.
+Quello che l'anagrafica sa già è precompilato e si corregge tutto; alla
+firma i dati restano **congelati** sul contratto e, in avanti e solo
+dove la colonna era vuota, finiscono sulla sua scheda. **Di 19 master
+nessuna aveva una data di nascita e dodici nemmeno la città**: non che
+non li abbiano, è che nessuno li aveva mai chiesti. Le colonne nuove su
+`master` sono `codice_fiscale`, `sesso`, `data_nascita`,
+`comune_nascita`, `stato_nascita`, `provincia`, `cap`,
+`stato_residenza`.
+
+**Il codice fiscale qui NON si calcola, si controlla.** Nel modulo si
+calcola da sesso, data e comune; qui il nome è **una casella sola**
+(`master.nome` è una colonna sola, e spezzare «MARIA T. NAPOLEONE»
+vorrebbe dire decidere noi dove finisce il nome), e un cognome indovinato
+produce un codice che **passa la lettera di controllo** e appartiene a
+un'altra persona. Resta `avvisoCampo`, che confronta il codice scritto
+con la data e il sesso dichiarati due righe sopra.
+
+**I due Stati subito dopo il nome**, come nel modulo dal 7/11/2026, e
+per lo stesso motivo: una casella di luogo incontrata prima dello Stato
+si riempie col paese sbagliato. Una prova confronta le posizioni.
+
+**La partita IVA è obbligatoria, ed è una conseguenza del contratto**:
+l'art. 2.3 vuole che il/la Master operi con propria posizione fiscale e
+l'art. 12.3 che emetta fattura. Oggi **quattro master in anagrafica non
+ce l'hanno scritta** — Andrea Paura, Chiara Colonnelli, Giulia Tamasi,
+Maurè Acosta — e da qui glielo si chiede. **Se il titolare decide che
+qualcuna firma senza, va cambiato `obbligatorio` in `CAMPI` e detto
+perché:** è una decisione sua, non una casella da allargare di nascosto.
+
+**Chi resta fuori è un dato, non un nome nel codice.**
+`master.contratto_escluso` + `contratto_escluso_motivo`, acceso su
+Tommaso Giumbini con «Condizioni da riscrivere». A chi è dentro quella
+colonna la nuvola **non compare** — una tessera che si apre su una
+pagina che dice solo «non c'è niente da fare» è peggio di una tessera
+che manca — e in Contratti master si legge il motivo e si toglie o si
+rimette senza pubblicare niente. Una prova controlla che nei file
+dell'area non ci sia nessun nome di persona.
+
+**Un contratto firmato non si rifirma.** `contratto_master_riapri`
+**prima archivia** la riga intera in `master_contratti_riaperture` —
+firma, documenti, testo congelato, consensi e date — e solo dopo riporta
+a «da firmare», azzerando `contratto_firmato` apposta: si rifirma il
+testo di adesso, non quello di allora. Il motivo si scrive. Non è una
+cancellazione e la domanda lo dice: «togliere la firma», non
+«cancellare» — chiamarla cancellazione farebbe credere di distruggere un
+documento, e nessuno premerebbe più.
+
+**La copia firmata la compone il server**, ed è la seconda deroga
+dichiarata alla regola «i PDF si fanno nel browser», per la stessa
+ragione della prima: deve **partire allegata** a una mail che manda il
+server — a lei e all'Accademia («una volta confermato io lo riceverò
+firmato»). La fa `contratto-master-firmato` con
+`_shared/contratto-master-pdf.ts`: contratto per intero con l'epigrafe,
+«Luogo e data», le tre firme, l'Allegato A, le dichiarazioni con la loro
+ora, il timbro della società (ritagliato sul CropBox, come nel modulo) e
+le due foto del documento. **Si archivia prima di mandare**: se la mail
+non parte, quel documento deve esistere comunque, e si rimanda da
+«Contratti master». Se la copia non parte **la firma è comunque
+registrata** e la pagina lo dice invece di far rifirmare.
+
+**La funzione è scritta e controllata (`deno check` verde) ma NON
+pubblicata:** le edge function si pubblicano quando lo dice il titolare.
+Finché non lo è, la firma si registra e la pagina dice che la copia
+arriverà — che è esattamente il ramo scritto per quel caso.
+
+Migrazione `20261116120000_contratti_master.sql` (rollback dentro).
+Prove in `prove/contratto-master.test.jsx` (43): il testo per intero, le
+regole pure, **i due elenchi dei campi obbligatori — SQL e JavaScript —
+che devono coincidere**, e le pagine montate per davvero.
+
+**Resta da fare, e va deciso:** una schermata per **correggere** il
+testo dall'app, come Setting → Il contratto per il modulo (oggi si
+corregge nel repo e si ricarica col tasto); e l'invio di un **promemoria**
+a chi non ha ancora firmato, che oggi non esiste — un contratto mai
+aperto resta invisibile finché qualcuno non guarda l'elenco.
 
 ### Il buono Amazon verificato risultava non verificato (16/11/2026)
 
@@ -6373,11 +6563,13 @@ di `supabase functions deploy`. Deno sta in `~/.deno/bin/deno`.
   prima il diff e l'impatto sui dati storici.
 - Mettere segreti in variabili `VITE_*`: finiscono nel bundle pubblico.
 - Spostare la generazione dei PDF lato server: è client-side per scelta.
-  **Un'eccezione, dichiarata:** il modulo di iscrizione firmato
-  (`supabase/functions/_shared/modulo-pdf.ts`). Quel PDF deve partire
-  *allegato* a una mail che manda il server; se lo facesse il telefono
-  basterebbe che la pagina si chiuda un istante prima e la conferma
-  uscirebbe senza allegato, cioè senza la cosa per cui esiste.
+  **Due eccezioni, dichiarate, e per la stessa ragione:** il modulo di
+  iscrizione firmato (`supabase/functions/_shared/modulo-pdf.ts`) e la
+  copia firmata del contratto master
+  (`supabase/functions/_shared/contratto-master-pdf.ts`). Quei due PDF
+  devono partire *allegati* a una mail che manda il server; se li facesse
+  il telefono basterebbe che la pagina si chiuda un istante prima e la
+  copia uscirebbe senza allegato, cioè senza la cosa per cui esiste.
 - Riformattare o "sistemare" file non toccati dal task in corso.
 - Aggiungere dipendenze per problemi che il codice esistente già risolve.
 

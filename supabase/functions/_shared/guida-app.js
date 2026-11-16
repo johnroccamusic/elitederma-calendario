@@ -180,8 +180,24 @@ Ci sono gli stessi filtri di Gestione corsi — corso, citta', master — la ste
 
 «Diplomi» compone il PDF dei diplomi della classe e «Nomi» il foglio dei segnaposti. Il diploma viene SOLO dal pacchetto dell'allieva: se un'allieva non ce l'ha, o il suo pacchetto non ha il modello di diploma, il suo foglio non esce e l'app lo dice allieva per allieva, con il motivo. Da qui non si puo' rimediare: va sistemato da chi amministra, in Tipologie di kit. Se la classe non ha iscritti lo dice e non genera niente.`,
   },
-];
+  {
+    chiave: "contrattimaster",
+    titolo: "Contratti master",
+    testo: `CONTRATTI MASTER — il contratto di collaborazione professionale autonoma che ogni master sottoscrive con l'Accademia. La tessera in Home la vede chi ha quel permesso e chi amministra, e serve a guardare a che punto siamo: chi ha firmato e quando, chi non ha ancora aperto il contratto, e chi resta fuori con il motivo scritto.
 
+A FIRMARE NON SI VA DA QUI: ogni master trova il suo contratto nella sua dashboard, nella nuvola «Firma del contratto». Il gesto e' quello del modulo di iscrizione — si apre e si richiude il contratto, si apre e si richiude l'Allegato A (il Manifesto), si compilano i propri dati, si allegano le due foto del documento, si spuntano le tre dichiarazioni e si firma col dito. Finche' i due testi non sono stati aperti e richiusi, le dichiarazioni e la lavagna della firma restano spente: non si firma un documento che non si e' aperto.
+
+LE DICHIARAZIONI SONO TRE e sono tre atti distinti, come le tre righe di firma del cartaceo: il contratto, l'approvazione specifica delle clausole ai sensi degli artt. 1341 e 1342 c.c., e la ricevuta dell'Allegato A. Ognuna si spunta per se' e ognuna si salva con la sua ora. La firma col dito invece e' una, e nella copia compare in fondo a tutte e tre.
+
+I DATI CHE LA MASTER SCRIVE sono quelli dell'epigrafe: nome e cognome, sesso, data e comune di nascita, identificativo fiscale, residenza, partita IVA, PEC, email e telefono. Quello che l'anagrafica sa gia' arriva precompilato e si puo' correggere tutto, perche' l'unica che li sa per certo e' lei; mentre compila vede la frase come comparira' nel contratto. Alla firma quei dati restano congelati sul contratto e, se in anagrafica mancavano, finiscono anche sulla sua scheda.
+
+QUELLO CHE SUCCEDE DOPO: il contratto resta scritto, la copia in PDF — contratto, elenco delle clausole approvate, Manifesto, firma e documento — le arriva per email e l'Accademia la riceve. Se la copia non parte, la firma e' comunque registrata e la si rifa' da «Contratti master» con «Rimanda la copia»: non si rifirma niente.
+
+UN CONTRATTO FIRMATO NON SI RIFIRMA. Per farlo rifare si usa «Riapri» in «Contratti master», che prima ARCHIVIA firma, documenti e testo di quel giorno e poi riporta il contratto a «da firmare»; si rifirma il testo di adesso, non quello di allora, e va scritto il perche'.
+
+IL TESTO CHE SI FIRMA sta nel database, non nella pagina di chi firma: alla firma lo congela il server, cosi' una correzione fatta domani non cambia una virgola di quello che qualcuno ha sottoscritto ieri. In fondo alla pagina si vede, parte per parte, se il testo nel database e' quello del repo.`,
+  },
+];
 /**
  * La guida per chi ha fatto accesso: la parte generale piu' le aree che
  * i suoi permessi gli aprono. Chi amministra le vede tutte.

@@ -33,7 +33,11 @@ const CHIARO = rgb(0.62, 0.63, 0.66);
 // che arrivano dal testo del contratto non ci stanno e fanno fallire il
 // disegno. Si riportano ai loro equivalenti diritti invece di perdere la
 // riga.
-function soloCaratteriScrivibili(testo: unknown): string {
+// ESPORTATA DAL 16/11/2026: la usa anche il PDF del contratto master.
+// Due idee di «cosa Helvetica sa scrivere» vorrebbero dire una penale
+// senza il simbolo dell'euro su uno dei due documenti, e quello
+// sbagliato sarebbe sempre quello che serve come prova.
+export function soloCaratteriScrivibili(testo: unknown): string {
   return String(testo ?? "")
     .replace(/[‘’ʼ]/g, "'")
     .replace(/[“”]/g, '"')

@@ -28,6 +28,14 @@
 // la fotocamera e non lascia scegliere; senza, iPhone e Android offrono
 // galleria, fotocamera e file. E si accettano anche i PDF, perche' da
 // computer un documento scansionato e' quasi sempre un PDF.
+// I MATTONI DI QUESTA PAGINA LI USA ANCHE IL CONTRATTO DELLA MASTER
+// (16/11/2026): `DaRiempire`, `Foto`, `Dichiarazione`, `Letto` e
+// `Avviso` sono esportati. Il contratto e' lo stesso gesto — leggere,
+// compilare, allegare il documento, firmare col dito — e due copie di
+// queste caselle vorrebbero dire due modi di scattare la foto di un
+// documento, due modi di spuntare una dichiarazione e, prima o poi, una
+// delle due che smette di dire quello che l'altra dice. Chi le cambia
+// cambia tutti e due i posti: vedi `src/contratti/FirmaContratto.jsx`.
 import { leggiRifiuto } from "./rifiuti.js";
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
@@ -46,11 +54,8 @@ import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
 import { nomiStati } from "../comuni-regioni.js";
 // gli elenchi della residenza, uno per Stato: gli stessi della scheda
 // del venditore, perche' la cascata e' una sola (vedi residenza.js)
-import { elencoResidenza, vociStatoResidenza, etichettaResidenza, campoFiscale, formattaFiscale, ITALIA } from "./residenza.js";
-// lo stesso confronto della cascata della scheda: "PATERNO" e
-// "Paternò" sono lo stesso posto, e due copie di questa regola
-// prima o poi direbbero cose diverse
-import { normalizzaNome } from "./AreeAnagrafiche.jsx";
+import { elencoResidenza, formattaFiscale, ITALIA } from "./residenza.js";
+import { cascataResidenza } from "./cascata-residenza.js";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
 
@@ -128,7 +133,7 @@ function mostra(chiave, valore) {
   return t;
 }
 
-function Avviso({ titolo, testo, buono = false }) {
+export function Avviso({ titolo, testo, buono = false }) {
   return (
     <div style={{ ...fontBody, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ maxWidth: 440, textAlign: "center" }}>
@@ -142,7 +147,7 @@ function Avviso({ titolo, testo, buono = false }) {
 const etichettaStile = { ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 };
 
 /** Un dato gia' scritto: si legge, non si tocca. */
-function Letto({ etichetta, valore, larghezza = "1 1 180px" }) {
+export function Letto({ etichetta, valore, larghezza = "1 1 180px" }) {
   return (
     <div style={{ flex: larghezza, minWidth: 0, marginBottom: 12 }}>
       <div style={etichettaStile}>{etichetta}</div>
@@ -160,7 +165,7 @@ function perChiaveValore(dati, chiave) {
   return (dati?.campi || []).find((x) => x.chiave === chiave)?.valore || "";
 }
 
-function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tutte = null, nota = null }) {
+export function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tutte = null, nota = null }) {
   const { chiave, maiuscolo, lunghezza, suggerimento, tipo } = campo;
   // un elenco chiuso si sceglie, non si scrive: cosi' "patente",
   // "Patente" e "pat." non diventano tre cose diverse in archivio
@@ -345,7 +350,7 @@ function SceltaIntestazione({ valore, onCambia }) {
 // selettore dei file. Quello che non si accetta SI DICE, con il rimedio
 // accanto: scartare in silenzio e' il modo migliore per ricevere moduli
 // senza documento senza che nessuno se ne accorga.
-function Foto({ etichetta, file, onCambia, obbligatorio }) {
+export function Foto({ etichetta, file, onCambia, obbligatorio }) {
   const [daRitagliare, setDaRitagliare] = useState(null);
   const [rifiutato, setRifiutato] = useState("");
 
@@ -439,7 +444,7 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
 //
 // Tutta la riga e' cliccabile, etichetta compresa: su un telefono
 // centrare una casella di 18 pixel col pollice non funziona.
-function Dichiarazione({ casella, segnata, onCambia, spenta = false }) {
+export function Dichiarazione({ casella, segnata, onCambia, spenta = false }) {
   return (
     <label
       style={{
@@ -698,72 +703,11 @@ export default function PaginaModulo({ token }) {
   // la casella resta di testo libero com'era: un elenco chiuso
   // incompleto impedirebbe di registrare chi esiste.
   const valoreDi = (k) => String(risposte[k] ?? c(k)?.valore ?? "").trim();
-  const statoScritto = valoreDi("stato_residenza");
-  // L'ELENCO DELLO STATO. Italia e Svizzera ne hanno uno; degli altri
-  // 230 non abbiamo ne' localita' ne' codici postali, e la' le caselle
-  // restano libere com'erano.
-  const elencoModulo = elencoResidenza(statoScritto);
-  const comuneScritto = valoreDi("citta_residenza");
-  const provinciaModulo = (valoreDi("prov_residenza")
-    || (elencoModulo ? elencoModulo.provinciaDi(comuneScritto, valoreDi("cap_residenza")) : "")
-    || "").toUpperCase();
-  // UN ELENCO CHIUSO NON PUO' CANCELLARE QUELLO CHE C'E' GIA'. Se il
-  // valore in casella non e' fra le voci, la tendina lo mostrerebbe
-  // vuoto e basterebbe spedire per perderlo: li' si resta sul testo.
-  const elencoBuono = (voci, valore) => voci.length > 0
-    && (!valore || voci.some((x) => normalizzaNome(x) === normalizzaNome(valore)));
-  const comuniModulo = elencoModulo && provinciaModulo ? elencoModulo.comuniDi(provinciaModulo) : [];
-  const capModulo = elencoModulo && comuneScritto ? elencoModulo.capDi(provinciaModulo, comuneScritto) : [];
-  // DOVE SOPRA LA PROVINCIA NON C'E' NIENTE, la provincia si scegli da
-  // qui. In Svizzera i cantoni sono ventisei e stanno in una tendina;
-  // le 107 province italiane senza il gradino della regione sarebbero
-  // un elenco da scorrere a vuoto, e di qua quella casella la riempie
-  // quasi sempre il venditore. Senza questa tendina una allieva
-  // svizzera non arriverebbe mai alla sua localita': la cascata parte
-  // dal cantone.
-  const provinceModulo = elencoModulo && !elencoModulo.conRegione
-    ? elencoModulo.provinceDi().map((x) => ({ valore: x.sigla, etichetta: `${x.nome} (${x.sigla})` }))
-    : [];
-  // LO STATO SI SCEGLIE DALLA STESSA LISTA DELLA SCHEDA, e con la
-  // stessa scrittura: due liste vorrebbero dire «Svizzera» da una parte
-  // e «SVIZZERA» dall'altra, cioe' due paesi per chi conta. Uno Stato
-  // che in archivio c'e' e nella lista non c'e' resta in coda marcato:
-  // una tendina che mostra il vuoto si spedisce senza accorgersene.
-  const vociStato = (() => {
-    const voci = vociStatoResidenza({ conAltro: false })
-      .map((v) => ({ valore: v.valore, etichetta: v.testo }));
-    if (statoScritto && !voci.some((v) => normalizzaNome(v.valore) === normalizzaNome(statoScritto))) {
-      return [...voci, { valore: statoScritto, etichetta: `${statoScritto} — già scritto` }];
-    }
-    return voci;
-  })();
-  function campoConElenco(campo) {
-    // in Svizzera «Provincia» si chiama «Cantone» e il CAP «NPA»: chi
-    // compila legge l'etichetta, e quella deve dire il vero
-    const conNome = campoFiscale(etichettaResidenza(campo, elencoModulo), elencoModulo);
-    // il prefisso del telefono parte dal paese che l'allieva ha appena
-    // scelto qui sopra: di la' il venditore, di qua lei, stessa regola
-    if (conNome.tipo === "telefono") return { ...conNome, statoResidenza: statoScritto };
-    // di qua compila LEI, quindi il suggerimento le da' del tu: nella
-    // scheda del venditore la stessa casella dice «Inserisci
-    // l'identificativo fiscale», perche' li' compila un'altra persona
-    if (campo.chiave === "codice_fiscale") {
-      return { ...conNome, suggerimento: "Inserisci il tuo identificativo fiscale" };
-    }
-    if (campo.chiave === "stato_residenza") {
-      return { ...conNome, opzioni: vociStato };
-    }
-    if (campo.chiave === "prov_residenza" && elencoBuono(provinceModulo.map((x) => x.valore), valoreDi("prov_residenza"))) {
-      return { ...conNome, opzioni: provinceModulo };
-    }
-    if (campo.chiave === "citta_residenza" && elencoBuono(comuniModulo, comuneScritto)) {
-      return { ...conNome, opzioni: comuniModulo };
-    }
-    if (campo.chiave === "cap_residenza" && elencoBuono(capModulo, valoreDi("cap_residenza"))) {
-      return { ...conNome, opzioni: capModulo };
-    }
-    return conNome;
-  }
+  // LA CASCATA DELLA RESIDENZA sta in `cascata-residenza.js`, insieme
+  // agli elenchi per Stato: dal 16/11/2026 la usa anche il contratto
+  // che firma la master, e due copie vorrebbero dire due idee di dove
+  // abita una persona.
+  const { campoConElenco } = cascataResidenza(valoreDi);
   const scrivi = (k, v) => setRisposte((r) => ({ ...r, [k]: v }));
   const testi = {
     intro:       dati.contratto?.intro       || DAL_CODICE.intro,
