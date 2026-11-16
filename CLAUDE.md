@@ -1881,6 +1881,61 @@ Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
 inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
 marcato tutto, e **non** vale dove non ha marcato.
 
+### Il buono Amazon verificato risultava non verificato (16/11/2026)
+
+Dalla logistica: «quando clicchiamo il tasto con cui diciamo che abbiamo
+verificato il pagamento con buono Amazon, compare "La verifica non è
+stata scritta: forse qualcun altro l'ha già fatta", ma nessun altro
+l'ha fatta e non possiamo proseguire».
+
+**Misurato prima di toccare niente, e il messaggio diceva il vero a
+metà:** la verifica *era* scritta — `pagamento_verificato_il` su
+POS-1794752606485, alle 10:54 di quel giorno, con il nome di chi aveva
+premuto. **L'aveva scritta lui stesso, al primo tocco.** Il secondo
+tocco non trovava più niente da scrivere (`.is("pagamento_verificato_il",
+null)`, perché una verifica fatta non si riscrive), zero righe, e
+l'avviso dava la colpa a un collega.
+
+**La causa vera è un piano più sotto: il caricatore di `vendite_shop`
+elenca le colonne una per una, e quelle due non erano nell'elenco.** Dal
+12/09/2026 quella lettura non è più `select("*")` — serviva a non
+portarsi dietro 4 MB di storico a ogni apertura — e il lavoro del
+23/10/2026 sul buono Amazon ha aggiunto le colonne al database senza
+aggiungerle lì. **Una colonna che manca in quell'elenco non dà nessun
+errore: arriva `undefined`**, e tre punti dell'app leggono quel vuoto
+come «non verificato» — il tasto che resta «In attesa di verifica
+pagamento», il blocco di «Spedita» in Ordini in arrivo e quello in
+Spedizioni POS. Il pacco non poteva partire da nessuna delle due strade.
+
+**Nello stesso elenco mancava `pagamento_codice`**, trovato di fianco e
+dello stesso giorno: senza, la pastiglia «pagato con Stripe» e il
+dettaglio ordine (23/10/2026) riconoscevano un incasso solo quando il
+pagamento portava `vendita_id`, e non quando lo legava il codice.
+Aggiunte tutte e tre.
+
+**Perché le prove non l'avevano preso, ed è la parte che insegna.**
+`prove/buono-amazon-si-verifica-in-logistica.test.jsx` monta la pagina
+con una vendita *che il campo ce l'ha*: il componente è sempre stato
+giusto. Il difetto non stava in un componente, stava **fra il database e
+tutti i componenti insieme**, e lì non arriva nessuna prova che monti
+una pagina. Ora una prova legge il sorgente, prende l'elenco delle
+colonne di `vendite_shop` e pretende che contenga quelle che la
+logistica legge da una vendita. È la stessa famiglia di «elenco vuoto =
+tabella non chiesta»: **campo assente = colonna non chiesta**, e si
+riconosce dal fatto che la pagina mostra con sicurezza il contrario di
+quello che dice il database.
+
+E l'avviso non accusa più nessuno: dice che l'ordine risulta già
+verificato e che la pagina si ricarica per mostrarlo.
+
+**Una prova rossa trovata per strada, la seconda in due giorni.**
+`prove/vendita-fiera.test.jsx` montava il flag con la Fiera di Napoli
+del 7-9 novembre: il componente il giorno di oggi se lo legge da solo, e
+il 16/11 quella fiera è uscita dalla coda dei sette giorni
+(`GIORNI_DI_CODA`) — la tendina con due fiere non compariva più. Le
+fiere di quelle prove adesso nascono rispetto a oggi. **Una data scritta
+a calendario in una prova è una prova con una scadenza.**
+
 ### «Tipologie di kit» sul mockup, e la quantità che mancava (15/11/2026)
 
 Il titolare, con il secondo mockup: «nella pagina "Tipologie di kit"

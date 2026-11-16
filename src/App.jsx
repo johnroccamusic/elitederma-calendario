@@ -58042,7 +58042,7 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
       .update({ pagamento_verificato_il: new Date().toISOString(), pagamento_verificato_da: chi })
       .eq("id", vendita.id).is("pagamento_verificato_il", null).select("id");
     if (error) { window.alert("Non sono riuscito a registrare la verifica: " + testoErrore(error)); return; }
-    if (!data?.length) { window.alert("La verifica non è stata scritta: forse qualcun altro l'ha già fatta. Ricarico."); }
+    if (!data?.length) { window.alert("Questo ordine risulta già verificato: niente da scrivere. Ricarico la pagina, così si vede la verifica che c'è."); }
     await ricarica(["vendite_shop"]);
   }
 
@@ -89234,9 +89234,15 @@ function Gestionale() {
     // sotto: da quel momento anche le ricariche dopo una vendita portano
     // tutto, cosi' le pagine di statistica non si ritrovano un elenco
     // corto a meta' lavoro.
+    // UNA COLONNA CHE MANCA QUI NON DA' NESSUN ERRORE: arriva `undefined`,
+    // e chi la legge crede che il dato non ci sia. E' il guasto del buono
+    // Amazon del 16/11/2026 — `pagamento_verificato_il` non era in questo
+    // elenco, quindi la verifica scritta non si vedeva, il tasto restava
+    // «In attesa di verifica pagamento» e il pacco non partiva piu'.
+    // Aggiungendo una colonna a `vendite_shop` va aggiunta anche qui.
     vendite_shop: async () => {
       const query = () => {
-        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero, da_preparare, preparata_in_sede_il, incasso_contanti_eur, incasso_carta_eur").eq("simulazione", false);
+        const q = supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, richiede_fattura, note, operatore_tipo, operatore_id, operatore_nome, registrata_da_nome, tipo_movimento, vendita_collegata_id, corso_data_id, evento_id, coupon_id, codice_coupon, prelevato_dai_kit, consegnato_in_aula, busta_numero, da_preparare, preparata_in_sede_il, incasso_contanti_eur, incasso_carta_eur, pagamento_codice, pagamento_verificato_il, pagamento_verificato_da").eq("simulazione", false);
         return (venditeStoricoIntero.current ? q : q.gte("data_ordine", DA_QUANDO_VENDITE_IN_MEMORIA)).order("data_ordine", { ascending: false }).order("id");
       };
       setVenditeShop(await leggiTutte(query));

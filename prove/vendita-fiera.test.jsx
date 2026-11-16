@@ -189,6 +189,16 @@ describe("il conto della fiera", () => {
 
 // ---------------------------------------------------------------------
 // IL GESTO: il flag in cima alla scheda
+// QUESTE PROVE MONTANO IL COMPONENTE, che il giorno di oggi se lo legge
+// da solo: due date scritte a calendario qui sarebbero una prova con una
+// scadenza — il 16/11/2026 e' diventata rossa perche' la fiera del 7-9
+// novembre era uscita dalla coda dei sette giorni. Le fiere nascono
+// rispetto a oggi.
+const OGGI = giornoRoma(new Date().toISOString());
+const IN_CORSO = { ...NAPOLI, data_inizio: giorniPrima(OGGI, 1), data_fine: OGGI };
+const APPENA_FINITA = { ...NAPOLI, id: "ev-2", nome: "Congresso Roma", data_inizio: giorniPrima(OGGI, 4), data_fine: giorniPrima(OGGI, 3) };
+const VECCHIA = { ...CATANIA, data_inizio: giorniPrima(OGGI, 40), data_fine: giorniPrima(OGGI, 38) };
+
 describe("il flag in cima alla scheda", () => {
   const apri = (eventi, props = {}) => {
     rispondiCon({ "/eventi": eventi });
@@ -197,7 +207,7 @@ describe("il flag in cima alla scheda", () => {
 
   it("con una fiera aperta, spuntare scrive QUELLA fiera", async () => {
     let scritto = "non chiamato";
-    const p = await apri([NAPOLI], { onCambia: (v) => { scritto = v; } });
+    const p = await apri([IN_CORSO], { onCambia: (v) => { scritto = v; } });
     expect(pulito(p)).toContain("Vendita fiera");
     expect(pulito(p)).toContain("Fiera di Napoli");
     const casella = p.nodo.querySelector('[data-campo="vendita-fiera"]');
@@ -209,7 +219,7 @@ describe("il flag in cima alla scheda", () => {
 
   it("togliendo la spunta si scrive il vuoto, non un'altra fiera", async () => {
     let scritto = "non chiamato";
-    const p = await apri([NAPOLI], { valore: "ev-na", onCambia: (v) => { scritto = v; } });
+    const p = await apri([IN_CORSO], { valore: "ev-na", onCambia: (v) => { scritto = v; } });
     await clicca(p.nodo.querySelector('[data-campo="vendita-fiera"]'));
     expect(scritto).toBe("");
     await p.smonta();
@@ -217,8 +227,7 @@ describe("il flag in cima alla scheda", () => {
 
   it("con due fiere c'è la tendina, e si cambia", async () => {
     let scritto = "";
-    const ieri = { ...NAPOLI, id: "ev-2", nome: "Congresso Roma", data_inizio: "2026-11-06", data_fine: "2026-11-08" };
-    const p = await apri([NAPOLI, ieri], { valore: "ev-na", onCambia: (v) => { scritto = v; } });
+    const p = await apri([IN_CORSO, APPENA_FINITA], { valore: "ev-na", onCambia: (v) => { scritto = v; } });
     const tendina = p.nodo.querySelector('[data-campo="vendita_evento_id"]');
     expect(tendina).not.toBe(null);
     expect([...tendina.options].map((o) => o.value)).toEqual(["ev-na", "ev-2"]);
@@ -229,18 +238,18 @@ describe("il flag in cima alla scheda", () => {
 
   // UNA SPUNTA CHE NON PUÒ SCRIVERE NIENTE È UN DUBBIO, NON UNA SCELTA.
   it("senza nessuna fiera aperta non c'è la casella, e si dice dove si fa", async () => {
-    const p = await apri([CATANIA]);
+    const p = await apri([VECCHIA]);
     expect(p.nodo.querySelector('[data-campo="vendita-fiera"]')).toBe(null);
     expect(pulito(p)).toContain("Gestione eventi");
     await p.smonta();
   });
 
   it("a scheda chiusa si legge la fiera, e si legge SOLO se c'è", async () => {
-    const con = await apri([NAPOLI], { valore: "ev-na", soloLettura: true });
+    const con = await apri([IN_CORSO], { valore: "ev-na", soloLettura: true });
     expect(pulito(con)).toContain("Fiera di Napoli");
     expect(con.nodo.querySelector('[data-campo="vendita-fiera"]').disabled).toBe(true);
     await con.smonta();
-    const senza = await apri([NAPOLI], { soloLettura: true });
+    const senza = await apri([IN_CORSO], { soloLettura: true });
     expect(pulito(senza)).toBe("");
     await senza.smonta();
   });
