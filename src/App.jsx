@@ -45,7 +45,7 @@ import { analizzaConsumi, consumoRealePerAllievo } from "./rientri/consumi";
 const AnomalieRientri = pezzo(() => import("./rientri/AnomalieRientri.jsx"));
 import { edizioniConSpedizione } from "./rientri/scorte";
 import { registraPartenza } from "./rientri/dati";
-import { accessoriDaElencare } from "./rientri/composizione";
+import { accessoriDaElencare, quantitaAccessorio } from "./rientri/composizione";
 import PaginaConsenso from "./consensi/PaginaConsenso.jsx";
 const ArchivioConsensi = pezzo(() => import("./consensi/ArchivioConsensi.jsx"));
 const ConsensiDelCorso = pezzo(() => import("./consensi/ConsensiDelCorso.jsx"));
@@ -16071,8 +16071,11 @@ function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitPr
       mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + q;
     });
   });
+  // «1 ogni N allievi» si conta sugli allievi di questa classe, come in
+  // logistica: due conti diversi direbbero due quantita' spedite
+  const allieviClasse = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id).length;
   (corsiKitProdotti || []).filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null)).forEach((r) => {
-    mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + (r.quantita || 0);
+    mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + quantitaAccessorio(r, allieviClasse);
   });
   // "Prodotti extra kit": chiave "extra::prodottoId" nella stessa mappa
   Object.entries(stato.accessori_quantita || {}).forEach(([chiave, q]) => {
@@ -81563,8 +81566,10 @@ function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, c
   // non aveva dove segnare quanti pezzi rimandava indietro.
   // ...ma solo per le edizioni che devono ancora cominciare: un accessorio
   // aggiunto al corso oggi non deve comparire nel pacco di un corso gia'
-  // fatto (vedi accessoriDaElencare)
-  accessoriDaElencare({ corsiKitProdotti, corsoId, accessoriQuantita: quantitaScritte, dataInizio, oggi: oggiStr })
+  // fatto (vedi accessoriDaElencare). E la quantita' e' quella per QUESTA
+  // classe: con «1 ogni 4 allievi» cresce con gli iscritti (vedi
+  // quantitaAccessorio), con lo stesso conto che si legge nella scheda.
+  accessoriDaElencare({ corsiKitProdotti, corsoId, accessoriQuantita: quantitaScritte, dataInizio, oggi: oggiStr, allievi: (iscrittiEdizione || []).length })
     .forEach((r) => {
       if (quantitaScritte[`accessorio::${r.prodotto_id}`] != null) return;
       const q = Number(r.quantita) || 0;
@@ -82994,6 +82999,7 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
     accessoriQuantita: statoEdizione.accessori_quantita,
     dataInizio: corsoData?.data_inizio,
     oggi: oggiStr,
+    allievi: iscrittiEdizione.length,
   })
     .map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }))
     .sort((a, b) => perNomeProdotto(a.prodotto_id, b.prodotto_id));
@@ -83428,7 +83434,16 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
             ultima={idx === tuttiAccessori.length - 1 && consulenzeEdizione.length === 0 && prodottiExtraIds.length === 0}
             foto={<FotoProdotto prodottoId={r.prodotto_id} lato={32} />}
             nome={nomeProdotto(r.prodotto_id)}
-            nota={giaInSede(r.prodotto_id) ? `già in sede: ${giaInSede(r.prodotto_id).quantita}` : ""}
+            nota={[
+              // la regola si legge accanto al numero: senza, «2» su uno
+              // specchio non dice che domani, con un'allieva in piu',
+              // potrebbe diventare 3
+              Number(r.ogni_allievi) > 0
+                ? `${r.quantita_scheda ?? r.quantita} ogni ${r.ogni_allievi} ${Number(r.ogni_allievi) === 1 ? "allievo" : "allievi"}`
+                  + (statoEdizione.accessori_quantita?.[r.chiave] != null ? ` · scritto a mano (dal conto: ${r.quantita})` : "")
+                : "",
+              giaInSede(r.prodotto_id) ? `già in sede: ${giaInSede(r.prodotto_id).quantita}` : "",
+            ].filter(Boolean).join(" · ")}
             destra={(
               <ContatoreQuantita
                 frecce compatto
@@ -85413,6 +85428,21 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
     if (!(data || []).length) { window.alert("Il database non ha cambiato nessuna riga: ricarica la pagina e riprova."); return; }
     ricarica(["corsi_kit_prodotti"]);
   }
+  // «OGNI QUANTI ALLIEVI» (17/11/2026, chiesto dal titolare: «1 specchio
+  // ogni 4 allievi; se ci sono 5 allievi, al quinto saranno 2 specchi da
+  // inviare»). Accanto alla quantita' c'e' la casella del gruppo: vuota,
+  // la quantita' e' fissa per corso come prima; con un numero, la
+  // quantita' vale per ogni gruppo di quegli allievi e la logistica se la
+  // trova gia' calcolata su ogni classe (vedi quantitaAccessorio). Zero o
+  // vuoto spengono la regola: «ogni 0 allievi» non vuol dire niente.
+  async function cambiaOgniAllievi(rigaId, valore) {
+    const n = Math.floor(Number(valore) || 0);
+    const { data, error } = await supabase.from("corsi_kit_prodotti")
+      .update({ ogni_allievi: n > 0 ? n : null }).eq("id", rigaId).select("id");
+    if (error) { window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) { window.alert("Il database non ha cambiato nessuna riga: ricarica la pagina e riprova."); return; }
+    ricarica(["corsi_kit_prodotti"]);
+  }
   // importa i prodotti della lista scelta: quelli già presenti in questa
   // lista (stesso prodotto aggiunto singolarmente) non vengono duplicati
   // — restano quelli già qui, e si segnalano per nome
@@ -85526,22 +85556,29 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 4px 4px" }}>
                 <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: ALLESTIMENTO.colonna, color: MUTED }}>Prodotto</span>
                 <span style={{ ...fontBody, fontSize: ALLESTIMENTO.colonna, color: MUTED, width: 108, textAlign: "center", flexShrink: 0 }}>Quantità</span>
+                <span style={{ ...fontBody, fontSize: ALLESTIMENTO.colonna, color: MUTED, width: 92, textAlign: "center", flexShrink: 0, lineHeight: 1.2 }}>Ogni quanti allievi</span>
                 <span style={{ width: 26, flexShrink: 0 }} />
               </div>
               {g.righe.map((r, i) => {
                 const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
                 return (
-                  <div key={r.id} data-riga-accessorio={p?.nome || ""} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                  <div key={r.id} data-riga-accessorio={p?.nome || ""} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "6px 4px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
                     <RiquadroFotoProdotto url={immaginePerProdotto[r.prodotto_id]} lato={34} />
-                    <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
+                    {/* sul telefono il nome tiene almeno 150 px e i comandi
+                        vanno a capo sotto: con due caselle accanto, il
+                        nome sarebbe rimasto con una parola per riga */}
+                    <span style={{ flex: "1 1 150px", minWidth: 0, ...fontBody, fontSize: TESTO_PRODOTTO_KIT, lineHeight: 1.25, color: NAVY, overflowWrap: "anywhere" }}>{p?.nome || "—"}</span>
                     {/* quanti pezzi ne partono di solito: e' il numero che
                         la logistica si ritrova gia' scritto su ogni
                         edizione, e da qui si scrive una volta per tutte */}
                     <ContatoreQuantita
                       frecce compatto valore={r.quantita ?? 0}
-                      titolo="Quanti pezzi di questo accessorio partono di solito per un corso"
+                      titolo={Number(r.ogni_allievi) > 0
+                        ? `Quanti pezzi partono per ogni gruppo di ${r.ogni_allievi} allievi`
+                        : "Quanti pezzi di questo accessorio partono per un corso"}
                       onCambia={(n) => cambiaQuantita(r.id, n)}
                     />
+                    <CasellaOgniAllievi valore={r.ogni_allievi} onSalva={(n) => cambiaOgniAllievi(r.id, n)} />
                     <button onClick={() => rimuovi(r.id, p?.nome)} title="Elimina questo prodotto dall'elenco" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 5, display: "inline-flex", alignItems: "center", flexShrink: 0 }}><IconaCestino size={17} color="#C0392B" /></button>
                   </div>
                 );
@@ -85552,6 +85589,42 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
         );
       })}
     </div>
+  );
+}
+// La casella «ogni quanti allievi» di un accessorio didattica. Si salva
+// uscendo (o con Invio), come il nome di un pacchetto: un numero solo,
+// non serve un tasto. Vuota vuol dire «per corso», e la scritta grigia
+// dentro lo dice; sotto, quando c'e' un numero, si legge la regola per
+// intero, perche' «4» da solo non dice se e' un tetto o un gruppo.
+function CasellaOgniAllievi({ valore, onSalva }) {
+  const iniziale = Number(valore) > 0 ? String(valore) : "";
+  const [testo, setTesto] = useState(iniziale);
+  useEffect(() => { setTesto(iniziale); }, [iniziale]);
+  function salva() {
+    const pulito = testo.replace(/\D/g, "");
+    const n = Math.floor(Number(pulito) || 0);
+    const prima = Number(valore) > 0 ? Number(valore) : 0;
+    setTesto(n > 0 ? String(n) : "");
+    if (n !== prima) onSalva(n);
+  }
+  return (
+    <span style={{ width: 92, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+      <input
+        type="text" inputMode="numeric" value={testo} placeholder="per corso"
+        data-campo="ogni-allievi"
+        aria-label="Ogni quanti allievi"
+        title="Lascia vuoto se la quantità è fissa per corso. Scrivi 4 se la quantità vale per ogni 4 allievi: con 5 allievi parte il doppio."
+        onChange={(e) => setTesto(e.target.value.replace(/\D/g, ""))}
+        onBlur={salva}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        style={{ ...inputStyle, width: 84, padding: "6px 6px", textAlign: "center", fontSize: 13 }}
+      />
+      {Number(valore) > 0 && (
+        <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, textAlign: "center", lineHeight: 1.2 }}>
+          allievi
+        </span>
+      )}
+    </span>
   );
 }
 // una sezione di "Tipologie di kit": il corso (o, per corso=null, i

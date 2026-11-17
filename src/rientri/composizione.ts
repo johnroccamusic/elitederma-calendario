@@ -9,6 +9,37 @@ interface RigaKitProdotto {
   prodotto_id: string;
   tipo: string;
   quantita: number;
+  // «quantita» pezzi ogni N allievi; vuoto = quantita fissa per corso
+  ogni_allievi?: number | null;
+}
+
+/**
+ * Quanti pezzi di un accessorio didattica partono per una classe.
+ *
+ * Una riga puo' dire due cose (17/11/2026, chiesto dal titolare: «1
+ * specchio ogni 4 allievi; se ci sono 5 allievi, al quinto saranno 2
+ * specchi da inviare»):
+ *
+ *   - senza «ogni N allievi»  -> «quantita» pezzi per corso, fissi,
+ *     com'e' sempre stato (un microscopio, una forbicina);
+ *   - con «ogni N allievi»    -> «quantita» pezzi per ogni gruppo di N
+ *     allievi, e un gruppo cominciato conta intero: 5 allievi, uno
+ *     specchio ogni 4 -> 2 specchi. Arrotondare in giu' vorrebbe dire
+ *     un'allieva senza specchio.
+ *
+ * Se gli allievi non si sanno (null) vale la quantita' scritta: meglio
+ * il numero della scheda che uno zero inventato. Con zero allievi
+ * invece il conto e' zero davvero — una classe vuota non riceve niente.
+ */
+export function quantitaAccessorio(
+  riga: { quantita?: number | null; ogni_allievi?: number | null },
+  allievi: number | null | undefined,
+): number {
+  const pezzi = Math.max(0, Number(riga?.quantita) || 0);
+  const ogni = Math.floor(Number(riga?.ogni_allievi) || 0);
+  if (!(ogni > 0) || allievi == null) return pezzi;
+  const n = Math.max(0, Math.floor(Number(allievi) || 0));
+  return pezzi * Math.ceil(n / ogni);
 }
 
 /**
@@ -46,17 +77,21 @@ export function distintaDelKit(corsiKitProdotti: RigaKitProdotto[], kitId: strin
  * troverebbe a dover render conto di roba che non ha mai avuto in aula.
  */
 export function accessoriDaElencare({
-  corsiKitProdotti, corsoId, accessoriQuantita, dataInizio, oggi,
+  corsiKitProdotti, corsoId, accessoriQuantita, dataInizio, oggi, allievi = null,
 }: {
   corsiKitProdotti: RigaKitProdotto[];
   corsoId: string | null;
   accessoriQuantita: Record<string, unknown> | null | undefined;
   dataInizio: string | null | undefined;
   oggi: string;
-}): RigaKitProdotto[] {
-  const delCorso = (corsiKitProdotti || []).filter(
-    (r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corsoId || null),
-  );
+  // gli allievi della classe: chi li passa riceve in «quantita» i pezzi
+  // gia' calcolati per quella classe (vedi quantitaAccessorio), e in
+  // «quantita_scheda» il numero scritto sulla scheda del corso
+  allievi?: number | null;
+}): (RigaKitProdotto & { quantita_scheda?: number })[] {
+  const delCorso = (corsiKitProdotti || [])
+    .filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corsoId || null))
+    .map((r) => (allievi == null ? r : { ...r, quantita_scheda: r.quantita, quantita: quantitaAccessorio(r, allievi) }));
   // un corso che comincia oggi e' gia' in essere: il pacco e' partito
   const giaIniziato = !!dataInizio && dataInizio <= oggi;
   if (!giaIniziato) return delCorso;
