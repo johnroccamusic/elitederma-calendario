@@ -18146,7 +18146,7 @@ function PaginaModulistica({ ruoloUtente, onBack, titolo = "Modulistica" }) {
   );
 }
 
-function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordineLocandine, onSalvaOrdineLocandine }) {
+export function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordineLocandine, onSalvaOrdineLocandine }) {
   const maniglieAttive = useManiglieAttive();
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
@@ -18294,28 +18294,92 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
     });
   }
 
-  // copia l'immagine intera negli appunti, per incollarla altrove (es.
-  // WhatsApp): il ClipboardItem va costruito con una Promise e
-  // navigator.clipboard.write chiamato subito, senza await prima —
-  // altrimenti Safari perde il "gesto utente" e la copia fallisce in
-  // silenzio
+  // IL FILE VA GIA' IN MANO PRIMA DEL TOCCO (17/11/2026).
+  //
+  // Su iPhone «Copia» e «Scarica» davano errore: Safari lascia aprire la
+  // condivisione (e scrivere negli appunti) solo per pochi istanti dopo il
+  // tocco, e prima di chiederlo noi scaricavamo il file — due megabyte,
+  // un secondo o piu' sul telefono. Arrivati alla condivisione il tocco
+  // era «scaduto» e Safari rispondeva NotAllowedError. I log lo dicono:
+  // il file arrivava (200), l'errore nasceva dopo, nel telefono.
+  //
+  // Quindi i file delle immagini si mettono da parte appena la pagina li
+  // mostra (sono gli stessi indirizzi delle anteprime: il browser li ha
+  // gia', non si scarica niente due volte), e al tocco la condivisione
+  // parte SUBITO, senza nessuna attesa davanti. I PDF no — uno pesa 50 MB
+  // — e per loro, se il primo tocco arriva tardi, il file resta pronto e
+  // la pagina dice di toccare ancora: il secondo tocco e' immediato.
+  const fileLocandineRef = React.useRef(new Map()); // nome -> { url, blob, png }
+  function filePronto(locandina) {
+    const c = fileLocandineRef.current.get(locandina.nome);
+    return c && c.url === locandina.url ? c : null;
+  }
+  async function procuraFile(locandina) {
+    const pronto = filePronto(locandina);
+    if (pronto) return pronto.blob;
+    let blob = null;
+    try {
+      const r = await fetch(locandina.url);
+      if (r.ok) blob = await r.blob();
+    } catch { /* si ripiega sullo storage */ }
+    if (!blob || !blob.size) {
+      const { data, error } = await supabase.storage.from(SECCHIO_LOCANDINE).download(locandina.nome);
+      if (error) throw error;
+      blob = data;
+    }
+    fileLocandineRef.current.set(locandina.nome, { url: locandina.url, blob, png: null });
+    return blob;
+  }
+  async function procuraPng(locandina) {
+    const blob = await procuraFile(locandina);
+    const c = filePronto(locandina);
+    if (c?.png) return c.png;
+    // un PNG non si ridisegna: gia' cosi' e' quello che gli appunti vogliono
+    const png = blob.type === "image/png" ? blob : await convertiInPng(blob);
+    if (c) c.png = png;
+    return png;
+  }
+  useEffect(() => {
+    let annullato = false;
+    (async () => {
+      for (const l of locandine) {
+        if (annullato) return;
+        if (l.pdf || filePronto(l)) continue;
+        try { await procuraFile(l); } catch { /* al tocco si riprova */ }
+      }
+    })();
+    return () => { annullato = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locandine]);
+
+  function avvisa(testo, ms = 2200) {
+    setMessaggioCopia(testo);
+    setTimeout(() => setMessaggioCopia((c) => (c === testo ? "" : c)), ms);
+  }
+  // il tocco e' scaduto mentre il file arrivava: adesso il file c'e', e il
+  // tocco dopo parte subito. Dirlo, invece di un errore che non spiega niente
+  const toccoScaduto = (e) => e?.name === "NotAllowedError";
+  const TOCCA_ANCORA = "La locandina è pronta: tocca di nuovo l'icona.";
+
+  function segnaCopiato(locandina, testo) {
+    setCopiatoNome(locandina.nome);
+    setTimeout(() => setCopiatoNome((c) => (c === locandina.nome ? null : c)), 1500);
+    avvisa(testo);
+  }
+
   // un PDF non si incolla come un'immagine: i browser non lasciano scrivere
   // application/pdf negli appunti, quindi si prova, e se non si puo' si apre
   // la condivisione del telefono (WhatsApp, Mail...) o, sul computer, si
   // scarica il file da trascinare nella chat
   async function copiaPdf(locandina) {
+    const eraPronto = !!filePronto(locandina);
     setCopiandoNome(locandina.nome);
     try {
-      const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
-      if (error) throw error;
-      const pdf = new Blob([data], { type: "application/pdf" });
+      const pdf = new Blob([await procuraFile(locandina)], { type: "application/pdf" });
       try {
         if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined" && ClipboardItem.supports?.("application/pdf")) {
           await navigator.clipboard.write([new ClipboardItem({ "application/pdf": pdf })]);
-          setCopiatoNome(locandina.nome);
-          setTimeout(() => setCopiatoNome((c) => (c === locandina.nome ? null : c)), 1500);
-          setMessaggioCopia("PDF copiato.");
-          setTimeout(() => setMessaggioCopia((c) => (c === "PDF copiato." ? "" : c)), 2200);
+          segnaCopiato(locandina, "PDF copiato.");
           return;
         }
       } catch { /* si ripiega sulla condivisione */ }
@@ -18326,56 +18390,77 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
         return;
       }
       scaricaBlob(pdf, nomePdf);
-      setMessaggioCopia("Il browser non copia i PDF: l'ho scaricato, trascinalo nella chat.");
-      setTimeout(() => setMessaggioCopia(""), 4000);
+      avvisa("Il browser non copia i PDF: l'ho scaricato, trascinalo nella chat.", 4000);
     } catch (e) {
-      if (e?.name !== "AbortError") window.alert("Non riesco a copiare il PDF: " + (e?.message || e));
+      if (e?.name === "AbortError") return;
+      if (toccoScaduto(e) && !eraPronto) { avvisa(TOCCA_ANCORA, 4000); return; }
+      window.alert("Non riesco a copiare il PDF: " + (e?.message || e));
     } finally {
       setCopiandoNome(null);
     }
   }
+
+  // copia l'immagine intera negli appunti, per incollarla altrove (es.
+  // WhatsApp): il ClipboardItem va costruito con una Promise e
+  // navigator.clipboard.write chiamato subito, senza await prima —
+  // altrimenti Safari perde il "gesto utente" e la copia fallisce
   async function copiaNegliAppunti(locandina) {
     if (locandina.pdf) return copiaPdf(locandina);
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       window.alert("Il tuo browser non supporta la copia diretta dell'immagine. Usa il download.");
       return;
     }
+    const eraPronto = !!filePronto(locandina)?.png || filePronto(locandina)?.blob?.type === "image/png";
     setCopiandoNome(locandina.nome);
     try {
-      const item = new ClipboardItem({
-        "image/png": (async () => {
-          const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
-          if (error) throw error;
-          return convertiInPng(data);
-        })(),
-      });
-      await navigator.clipboard.write([item]);
-      setCopiatoNome(locandina.nome);
-      setTimeout(() => setCopiatoNome((corrente) => (corrente === locandina.nome ? null : corrente)), 1500);
-      setMessaggioCopia("Immagine copiata.");
-      setTimeout(() => setMessaggioCopia((corrente) => (corrente === "Immagine copiata." ? "" : corrente)), 2200);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": procuraPng(locandina) })]);
+      segnaCopiato(locandina, "Immagine copiata.");
     } catch (e) {
-      window.alert("Non riesco a copiare l'immagine: " + (e?.message || e));
+      if (toccoScaduto(e) && !eraPronto) {
+        // il file intanto e' arrivato: preparo il PNG, cosi' il prossimo tocco e' immediato
+        procuraPng(locandina).catch(() => {});
+        avvisa(TOCCA_ANCORA, 4000);
+      } else {
+        window.alert("Non riesco a copiare l'immagine: " + (e?.message || e));
+      }
     } finally {
       setCopiandoNome(null);
     }
   }
 
+  function fileDaCondividere(locandina, blob) {
+    return new File([blob], locandina.nome, { type: blob.type || (locandina.pdf ? "application/pdf" : "image/jpeg") });
+  }
   async function scaricaOCondividi(locandina) {
+    const puoCondividere = isMobile && navigator.share && navigator.canShare;
+    const pronto = filePronto(locandina);
+    // il file e' gia' qui: la condivisione parte dentro il tocco, senza attese
+    if (puoCondividere && pronto) {
+      const file = fileDaCondividere(locandina, pronto.blob);
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: locandina.titolo });
+        } catch (e) {
+          if (e?.name !== "AbortError") window.alert("Errore nello scaricare la locandina: " + (e?.message || e));
+        }
+        return;
+      }
+    }
     setScaricandoNome(locandina.nome);
     try {
-      const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
-      if (error) throw error;
-      if (isMobile && navigator.share && navigator.canShare) {
-        const file = new File([data], locandina.nome, { type: data.type || (locandina.pdf ? "application/pdf" : "image/jpeg") });
+      const blob = await procuraFile(locandina);
+      if (puoCondividere) {
+        const file = fileDaCondividere(locandina, blob);
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: locandina.titolo });
           return;
         }
       }
-      scaricaBlob(data, locandina.nome);
+      scaricaBlob(blob, locandina.nome);
     } catch (e) {
-      if (e?.name !== "AbortError") window.alert("Errore nello scaricare la locandina: " + (e?.message || e));
+      if (e?.name === "AbortError") return;
+      if (toccoScaduto(e) && !pronto) { avvisa(TOCCA_ANCORA, 4000); return; }
+      window.alert("Errore nello scaricare la locandina: " + (e?.message || e));
     } finally {
       setScaricandoNome(null);
     }
