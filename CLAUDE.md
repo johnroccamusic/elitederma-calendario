@@ -1902,6 +1902,30 @@ lettere), **ventitré articoli**, l'approvazione specifica delle clausole
 degli artt. 1341-1342 c.c. con le **sedici voci**, e l'Allegato A —
 Manifesto, **diciannove blocchi**.
 
+**Cosa sostituisce, e cosa no (17/11/2026).** Il titolare ha chiesto di
+verificare se il contratto dica che sostituisce qualunque accordo
+commerciale firmato prima. Lo dice la **premessa F)** — ed è nel
+cartaceo, verificata sul PDF — ma con un confine: sostituisce i
+precedenti accordi **«di pari oggetto»**, salvi i diritti già maturati,
+le obbligazioni già eseguite e le pattuizioni che le parti indichino per
+iscritto come ancora efficaci; e nessuna penale qui prevista opera per
+fatti anteriori alla firma. Le premesse sono parte integrante del
+contratto, quindi quella riga vincola.
+
+**Confermato dal titolare lo stesso giorno: «sostituisce solo gli
+accordi sulla docenza e sullo stesso argomento».** Quindi quelle tre
+parole restano, e **non si allargano**: un accordo di un'altra materia —
+una quota venditore, una provvigione sui prodotti, un accordo da
+rivenditrice, una partecipazione a un progetto — **resta in piedi**, e
+non è una dimenticanza. Lo dicono anche due articoli: l'**art. 14.1**
+(«il contratto non costituisce né sostituisce l'accordo tra il titolare
+e la Società» sul marchio) e l'**art. 7.6**, che prevede un «accordo
+commerciale scritto con Elitederma» *accanto* a questo contratto. Una
+prova inchioda la premessa F parola per parola: se un giorno si allarga,
+è una decisione del titolare e quella prova deve cadere con il perché
+scritto accanto — togliere «di pari oggetto» vorrebbe dire far firmare
+la cancellazione di accordi che nessuno ha nominato.
+
 **Gli spazi in bianco del cartaceo sono di due specie, e non si
 riempiono nello stesso modo.** Uno solo era testo: l'art. 9.6, «entro il
 giorno [___] del mese successivo», il giorno in cui si pagano le dodici

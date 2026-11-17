@@ -68,6 +68,29 @@ describe("il testo del contratto", () => {
     expect(PREMESSE.punti.at(-1)).toContain("parte integrante del contratto");
   });
 
+  // COSA SOSTITUISCE, E COSA NO (17/11/2026, confermato dal titolare:
+  // «sostituisce solo gli accordi sulla docenza e sullo stesso
+  // argomento»). «Di pari oggetto» non è un'imprecisione del cartaceo:
+  // è il confine. Togliere quelle parole farebbe firmare la
+  // cancellazione di una quota venditore, di una provvigione sui
+  // prodotti o di un accordo da rivenditrice — accordi di un'altra
+  // materia, che restano in piedi apposta (lo dicono anche gli
+  // artt. 14.1 e 7.6). Allargarlo è una decisione sua, non una
+  // sistemazione: se un giorno si allarga, questa prova deve cadere
+  // con il suo perché scritto accanto.
+  it("la premessa F sostituisce i soli accordi DI PARI OGGETTO, e salva i diritti maturati", () => {
+    const f = PREMESSE.punti.find((p) => p.startsWith("F) "));
+    expect(f).toContain("sostituisce i precedenti accordi di pari oggetto");
+    expect(f).toContain("salvi i diritti già maturati");
+    expect(f).toContain("pattuizioni che le parti indichino per iscritto come ancora efficaci");
+    // e non vale a ritroso: nessuna penale per fatti anteriori
+    expect(f).toContain("nessuna penale o restrizione qui prevista opera per fatti anteriori");
+    // il contratto NON assorbe l'accordo sul marchio fra il titolare e
+    // la Società: è l'esclusione dichiarata dell'art. 14.1
+    const art14 = ARTICOLI.find((a) => a.titolo.startsWith("Art. 14 "));
+    expect(art14.punti.find((p) => p.startsWith("14.1."))).toContain("non costituisce né sostituisce l'accordo tra il titolare e la Società");
+  });
+
   // IL SEGNAPOSTO DELL'ART. 9.6, compilato come ha deciso il titolare.
   it("l'art. 9.6 dice il giorno 5, e non è rimasto un trattino", () => {
     const art9 = ARTICOLI.find((a) => a.titolo.startsWith("Art. 9 "));
