@@ -54,6 +54,11 @@ const FILTRI_VUOTI = {
   cerca: "", anno: "", dal: "", al: "", corso: "", regione: "", provincia: "", comune: "",
   qualifica: "", stato: "", trattato_da: "", mestiere: "", collegamento: "",
   disiscritti: false, da_verificare: false, con_email: false, senza_data: false,
+  // I CLIENTI DELLO SHOP (17/11/2026). Stanno nella stessa lista, e si
+  // isolano con questi: le chiavi arrivano a `crm_contatti_filtrati`,
+  // che e' l'unica WHERE — quindi valgono anche per i destinatari che
+  // una campagna congela.
+  cliente_shop: false, non_in_crm: false, reparto: "", acquisto_dal: "", acquisto_al: "", speso_da: "",
 };
 
 // "03/2024 Microblading · 05/2025 Laminazione": la storia di una persona
@@ -98,11 +103,27 @@ export function riassuntoFiltri(f) {
   if (f.trattato_da) pezzi.push(`trattati da ${f.trattato_da}`);
   if (f.mestiere) pezzi.push(f.mestiere);
   if (f.collegamento) pezzi.push(COLLEGAMENTI[f.collegamento] || f.collegamento);
+  if (f.cliente_shop) pezzi.push("clienti shop");
+  if (f.non_in_crm) pezzi.push("non in CRM");
+  if (f.reparto) pezzi.push(`comprato ${f.reparto}`);
+  if (f.acquisto_dal || f.acquisto_al) pezzi.push(`acquisti ${etichettaPeriodo(f.acquisto_dal, f.acquisto_al || f.acquisto_dal)}`);
+  if (f.speso_da) pezzi.push(`da ${f.speso_da} € in su`);
   if (f.da_verificare) pezzi.push("da verificare");
   if (f.con_email) pezzi.push("con email");
   if (f.senza_data) pezzi.push("data non nota");
   if (f.disiscritti) pezzi.push("disiscritti");
   return pezzi.join(" · ");
+}
+
+// «, di cui 1.888 clienti dello shop e 12 disiscritti»: il pezzo si
+// compone, non si incolla. Con una delle due cose a zero la frase
+// resterebbe con una virgola che non regge («contatti, , 12
+// disiscritti»), e quella la legge tutto lo staff.
+export function pezziArchivio(v) {
+  const p = [];
+  if (v?.clienti_shop) p.push(`${numero(v.clienti_shop)} clienti dello shop`);
+  if (v?.disiscritti) p.push(`${numero(v.disiscritti)} disiscritti`);
+  return p.length ? `, di cui ${p.join(" e ")}` : "";
 }
 
 // quello che si manda al database: solo le chiavi piene
@@ -126,6 +147,7 @@ function useIsMobile(limite = 700) {
 }
 
 const numero = (n) => Number(n || 0).toLocaleString("it-IT");
+const euro = (n) => `${Number(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 function Pastiglia({ children, colore = GRAFITE, sfondo = "#F3F0E8", bordo = CREAM_BORDER, titolo }) {
   return (
@@ -200,6 +222,7 @@ function SchedaContatto({ c, onCambiato }) {
   const [richieste, setRichieste] = useState(null);
   const [opportunita, setOpportunita] = useState(null);
   const [campagne, setCampagne] = useState(null);   // le mail di campagna ricevute, con lo stato
+  const [ordini, setOrdini] = useState(null);       // gli acquisti sullo shop, letti da `vendite_shop`
   const [msg, setMsg] = useState("");
   useEffect(() => {
     let vivo = true;
@@ -211,6 +234,17 @@ function SchedaContatto({ c, onCambiato }) {
       .then(({ data, error }) => { if (vivo) setRichieste(error ? [] : data || []); });
     supabase.from("crm_contatti").select("opportunita, email_aggiuntive, telefoni_aggiuntivi").eq("id", c.id).maybeSingle()
       .then(({ data }) => { if (vivo) setOpportunita(data || { opportunita: [] }); });
+    // GLI ORDINI NON SONO COPIATI SULLA RIGA: sulla riga c'e' il
+    // riassunto (quanti, quanto, quando, quali reparti) perche' e'
+    // quello su cui si filtra; i singoli ordini si rileggono da
+    // `vendite_shop`, che e' il loro posto. Copiarli vorrebbe dire due
+    // verita' sullo stesso acquisto.
+    if (Number(c.acquisti_shop) > 0 && c.email) {
+      supabase.from("vendite_shop").select("id, numero_ordine, data_ordine, totale, prodotti")
+        .ilike("cliente_email", c.email).eq("origine", "woocommerce")
+        .order("data_ordine", { ascending: false }).limit(50)
+        .then(({ data }) => { if (vivo) setOrdini(Array.isArray(data) ? data : []); });
+    } else if (vivo) setOrdini([]);
     return () => { vivo = false; };
   }, [c.id]);
 
@@ -295,6 +329,30 @@ function SchedaContatto({ c, onCambiato }) {
             ))}
           </>
         )}
+        {Number(c.acquisti_shop) > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 10, marginBottom: 2 }} data-acquisti-shop>
+              Acquisti sullo shop ({numero(c.acquisti_shop)})
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 700 }}>
+              {euro(c.speso_shop)} in tutto
+              {c.primo_acquisto_shop_il ? ` · dal ${dataIt(c.primo_acquisto_shop_il)}` : ""}
+              {c.ultimo_acquisto_shop_il && c.ultimo_acquisto_shop_il !== c.primo_acquisto_shop_il ? ` al ${dataIt(c.ultimo_acquisto_shop_il)}` : ""}
+            </div>
+            {(c.reparti_acquistati || []).length > 0 && (
+              <div style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5 }}>{(c.reparti_acquistati || []).join(" · ")}</div>
+            )}
+            {ordini === null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Carico gli ordini…</div>}
+            {(ordini || []).map((o) => (
+              <div key={o.id} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5, padding: "4px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <b style={{ color: NAVY }}>{dataIt(o.data_ordine)}</b>
+                {o.numero_ordine ? ` · ${o.numero_ordine}` : ""}
+                {o.totale != null ? ` · ${euro(o.totale)}` : ""}
+                {(o.prodotti || []).length ? <div style={{ color: MUTED }}>{(o.prodotti || []).map((r) => `${r.quantita || 1}× ${r.nome || "prodotto"}`).join(", ")}</div> : null}
+              </div>
+            ))}
+          </>
+        )}
         {campagne && campagne.length > 0 && (
           <>
             <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 10, marginBottom: 2 }}>Mail di campagna ({campagne.length})</div>
@@ -374,6 +432,8 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
   const [errore, setErrore] = useState("");
   const [apertoId, setApertoId] = useState(() => statoIniziale?.apertoId || null);
   const [giro, setGiro] = useState(0);
+  const [sincronizzando, setSincronizzando] = useState(false);
+  const [esitoShop, setEsitoShop] = useState("");
   const ultimaRichiesta = useRef(0);
 
   // quello che si deve ritrovare tornando qui. Si consegna a ogni
@@ -452,6 +512,25 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
     });
   };
 
+  // RIFA' ADESSO IL RIASSUNTO DEI CLIENTI SHOP. Lo fa anche il cron
+  // ogni notte alle 04:50: questo tasto c'e' perche' chi ha appena
+  // venduto non deve aspettare domani per scrivere a quel cliente.
+  // Dopo, si rileggono i valori dei filtri E la lista, o la pagina
+  // mostrerebbe i conti di prima dicendo di aver aggiornato.
+  async function aggiornaClientiShop() {
+    setSincronizzando(true); setErrore("");
+    const { data, error } = await supabase.rpc("crm_sincronizza_clienti_shop");
+    setSincronizzando(false);
+    if (error) { setErrore("Non riesco ad aggiornare i clienti shop: " + error.message); return; }
+    const { data: v } = await supabase.rpc("crm_filtri_valori");
+    if (v) setValori(v);
+    setGiro((g) => g + 1);
+    const creati = Number(data?.creati) || 0;
+    setEsitoShop(creati
+      ? `Aggiornati: ${creati} client${creati === 1 ? "e" : "i"} dello shop ${creati === 1 ? "è entrato" : "sono entrati"} in lista adesso.`
+      : "Aggiornati: nessun cliente nuovo, i conti sono stati rifatti.");
+  }
+
   const province = useMemo(() => (valori?.province || []).filter((p) => !filtri.regione || p.regione === filtri.regione), [valori, filtri.regione]);
   const comuni = useMemo(() => (valori?.comuni || []).filter((c) => !filtri.provincia || c.provincia === filtri.provincia).filter((c) => filtri.provincia || !filtri.regione || province.some((p) => p.valore === c.provincia)), [valori, filtri.provincia, filtri.regione, province]);
   const riassunto = riassuntoFiltri(filtri);
@@ -506,8 +585,8 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
           <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
-          Chi ha scritto a Elitederma, importato da Vetta: una scheda a persona, con tutte le richieste sotto.
-          {valori?.totale != null && ` In archivio ${numero(valori.totale)} contatti${valori.disiscritti ? `, di cui ${numero(valori.disiscritti)} disiscritti` : ""}.`}
+          Chi ha scritto a Elitederma (importati da Vetta) e chi ha comprato sullo shop: una scheda a persona, con le richieste e gli acquisti sotto.
+          {valori?.totale != null && ` In archivio ${numero(valori.totale)} contatti${pezziArchivio(valori)}.`}
           {valori?.senza_data > 0 && ` Per ${numero(valori.senza_data)} la data della richiesta non è nota: sono stati caricati in Vetta in blocco il 9 marzo 2026, e il filtro per anno li lascia fuori.`}
         </div>
 
@@ -564,6 +643,50 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
                 Azzera i filtri
               </button>
             )}
+          </div>
+
+          {/* I CLIENTI DELLO SHOP (17/11/2026). Una banda sua, perche'
+              questi filtri guardano gli ORDINI e non le richieste: chi
+              cerca «chi ha comprato pigmenti» non lo cerca fra i filtri
+              del CRM. Il filo sopra la divide senza aggiungere parole. */}
+          <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 14, paddingTop: 12 }} data-banda-shop>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>
+              I clienti dello shop
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <Tendina etichetta="Reparto comprato" larghezza={200} valore={filtri.reparto} onCambia={(v) => cambia("reparto", v)} opzioni={valori?.reparti || []} tutto="Qualunque" />
+              <label style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Ha comprato (dal → al)</span>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <SelettorePeriodo da={filtri.acquisto_dal} a={filtri.acquisto_al || filtri.acquisto_dal} vuoto="Quando ha comprato"
+                    onCambia={({ da: d, a }) => { setDa(0); setFiltri((f) => ({ ...f, acquisto_dal: d, acquisto_al: a })); }} />
+                  {(filtri.acquisto_dal || filtri.acquisto_al) && (
+                    <button type="button" onClick={() => { cambia("acquisto_dal", ""); cambia("acquisto_al", ""); }} title="Togli il periodo d'acquisto"
+                      style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4 }}>✕</button>
+                  )}
+                </div>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Ha speso almeno (€)</span>
+                <input value={filtri.speso_da} onChange={(e) => cambia("speso_da", e.target.value.replace(/[^0-9.,]/g, "").replace(",", "."))}
+                  inputMode="decimal" placeholder="0" style={{ ...inputStyle, padding: "7px 9px", fontSize: 12.5, width: 100 }} />
+              </label>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", paddingBottom: 6 }}>
+                <Spunta etichetta="Solo clienti shop" valore={filtri.cliente_shop} onCambia={(v) => cambia("cliente_shop", v)} />
+                <Spunta etichetta="Solo quelli che non sono in CRM" valore={filtri.non_in_crm} onCambia={(v) => cambia("non_in_crm", v)} />
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }} data-nota-shop>
+              {valori?.clienti_shop != null && <>In lista ci sono <b>{numero(valori.clienti_shop)}</b> clienti dello shop{valori?.non_in_crm ? <>, e <b>{numero(valori.non_in_crm)}</b> persone che non vengono dal CRM</> : null}. </>}
+              Il reparto si riconosce dal prodotto dell’ordine: sugli ordini più vecchi quel prodotto non è più a catalogo, quindi il filtro per reparto trova chi ha comprato <i>fra quello che si riconosce</i>, non tutti.
+              {valori?.shop_sincronizzato_il && <> Ultimo aggiornamento: {dataIt(valori.shop_sincronizzato_il)}.</>}
+              {" "}
+              <button type="button" onClick={aggiornaClientiShop} disabled={sincronizzando}
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, background: "none", border: "none", cursor: sincronizzando ? "default" : "pointer", padding: 0 }}>
+                {sincronizzando ? "Aggiorno…" : "Aggiorna i clienti shop"}
+              </button>
+              {esitoShop && <span style={{ color: "#2E7D32", fontWeight: 700 }}> {esitoShop}</span>}
+            </div>
           </div>
         </div>
 

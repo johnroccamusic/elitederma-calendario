@@ -38,7 +38,7 @@ src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
                          iscrizione, iscrizioni, magazzino, notifiche, pos,
                          prezzi, progetti, punti, recesso, regole, rientri,
                          salvataggi, spese, stampe, statistiche
-prove/                   124 file, 1.200 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   127 file, 1.239 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      56 edge function + _shared
@@ -1186,6 +1186,134 @@ quell'email. Due ingressi: la rotta pubblica `?disiscrizione=<gettone>`
 (`src/crm/PaginaDisiscrizione.jsx`, disiscrive appena si apre) e la edge
 function pubblica `crm-disiscrivi` (POST = one-click dal programma di
 posta, GET = rimanda alla pagina). Prove in `prove/crm-campagna.test.jsx`.
+
+### La mailing list arriva anche ai clienti dello shop (17/11/2026)
+
+Il titolare: «dobbiamo attivare la possibilità di fare mailing list
+anche per i clienti shop, anche lì ci deve essere la possibilità di
+filtrarli e selezionarli comporre una mail come succede per la lista di
+tutti i contatti importati dal CRM». E, sul come: «metti un filtro che
+si chiama "solo quelli che non sono in CRM"», e si scrive a «tutti».
+
+**Misurato prima di toccare niente**: i clienti shop sono **1.888 email
+distinte su 4.291 ordini** WooCommerce dal 15/03/2022. Di quelle, **772
+erano già in `crm_contatti`** e 1.116 no. Le **235 vendite al banco non
+hanno nessuna email** (al POS non si chiede) e restano fuori: non c'è
+niente da spedire. E **in WooCommerce non esiste un consenso al
+marketing**, verificato su tutte le `meta_data` degli ordini: esattamente
+come in Vetta, quindi vale la stessa decisione del 30/10 — si scrive a
+tutti, ogni mail porta il link per disiscriversi.
+
+**UNA LISTA SOLA, e il motivo è la disiscrizione.** I clienti shop
+diventano righe di `crm_contatti` e non una lista a parte, perché
+`crm_disiscrivi` scrive per **email** su tutte le righe e
+`crm_campagna_prepara` esclude per email: con due liste separate, chi si
+è disiscritto dalle mail del CRM continuerebbe a ricevere quelle dello
+shop, e la sua seconda disiscrizione non avrebbe dove essere scritta. Le
+772 in comune non ricevono due copie perché il dedup per email in
+`crm_campagna_prepara` c'era già.
+
+**E non è servito toccare né «Componi mail» né l'invio**:
+`crm_cerca_contatti` e `crm_campagna_prepara` delegano tutto il
+filtraggio a `crm_contatti_filtrati(filtri)`. I filtri nuovi stanno **là
+dentro**, in un posto solo, e valgono insieme per l'elenco, per il
+totale e per i destinatari che una campagna congela — due copie della
+WHERE darebbero due conteggi diversi sulla stessa lista.
+
+| Filtro | Cosa chiede |
+|---|---|
+| `cliente_shop` | ha comprato almeno una volta sullo shop |
+| `non_in_crm` | «solo quelli che non sono in CRM»: nessun record Vetta e nessuna richiesta |
+| `acquisto_dal` / `_al` | ha comprato **in quel periodo** (si guardano gli ordini, non il primo/ultimo acquisto) |
+| `reparto` | ha comprato roba di quel reparto, **nello stesso ordine** che rispetta il periodo |
+| `speso_da` | ha speso almeno tanto, in tutto, sullo shop |
+
+**«Non in CRM» si CALCOLA, non si congela.** È `vetta_id_principale is
+null` più nessuna riga in `crm_richieste`: così il giorno che quel
+cliente scrive e gli nasce una richiesta **esce da sé** da questo filtro,
+che è la risposta giusta — da quel momento è anche in CRM. Leggerlo da
+`fonte_lista` (la colonna che dice dove è nata la riga) l'avrebbe
+lasciato «non in CRM» per sempre. Una prova lo inchioda.
+
+**`vetta_id_principale` non è più NOT NULL**, ed è il punto in cui la
+tabella ha smesso di essere solo-Vetta: il primo cliente shop è stato
+rifiutato con un 23502 sul database vero. Il vincolo UNIQUE resta (in
+Postgres ammette più NULL) e l'importatore di Vetta continua a scriverlo
+sempre; mettere un id inventato avrebbe voluto dire un puntatore a un
+record che non esiste, e il filtro avrebbe risposto il falso.
+
+**Gli ordini non si copiano.** Sulla riga del contatto va il **riassunto**
+— `acquisti_shop`, `speso_shop`, `primo`/`ultimo_acquisto_shop_il`,
+`reparti_acquistati`, `fonte_lista` — perché è quello su cui si filtra; i
+singoli ordini la scheda li rilegge da `vendite_shop`, che è il loro
+posto. Un dato copiato in due posti un giorno dice due cose.
+
+**Quattro regole nella sincronizzazione** (`crm_sincronizza_clienti_shop`,
+idempotente, provata due volte di fila: il secondo giro crea zero):
+
+- **un disiscritto non torna dentro** — la funzione non scrive mai
+  `disiscritto_il`, come l'importazione di Vetta;
+- **i dati di Vetta non si riscrivono**: telefono, città e provincia si
+  riempiono **solo se erano vuoti**;
+- **`da_verificare` solo senza nome**, perché `crm_campagna_prepara`
+  esclude le righe da verificare: marcarle con larghezza vorrebbe dire
+  gente che non riceverà mai niente senza che si veda. Oggi sono **2**;
+- **`numero_richieste = 0`** per chi nasce dallo shop: il default della
+  colonna è 1, e lascerebbe scritto «una richiesta» addosso a chi non ha
+  mai scritto.
+
+**Il comune normalizzato non si inventa.** `crm_contatti.comune` tiene il
+nome ISTAT e da lì nasce la tendina dei comuni: scriverci la città di
+fatturazione così com'è battuta farebbe comparire «ROMA», «roma» e
+«Roma» come tre comuni diversi. La città grezza va in `citta_originale`;
+**provincia e regione invece si scrivono**, perché vengono dalla sigla
+(`billing.state`) tradotta da **`province_regioni`**, 107 righe generate
+da `src/comuni-regioni.js` con `node scripts/genera-province-sql.mjs` —
+una prova confronta la migrazione con quell'elenco. Conseguenza voluta:
+il filtro **Comune** non trova i clienti nati dallo shop, Regione e
+Provincia sì (1.105 su 1.108 hanno la regione).
+
+**Il reparto comprato è la categoria radice**, la stessa regola del
+9/11/2026 per le liste dei kit, e il prodotto di una riga si riconosce
+**per id e poi per nome**: misurato sulle 12.920 righe in archivio, 7.094
+non hanno nemmeno il `woo_product_id` (sono gli ordini dello storico, col
+solo nome) e altre 4.601 ne hanno uno che in anagrafica non c'è più. Per
+solo id si riconoscevano **1.225 righe su 12.920**; col nome si passa a
+5.905, e i clienti con almeno un reparto riconosciuto da 118 a **1.026 su
+1.888**. Non contraddice «raggruppa per prodotto, mai per nome»: quella
+regola vale per i conti delle statistiche, qui il nome è l'unica cosa che
+quelle righe hanno, e un nome che non combacia più non dà un reparto
+sbagliato ma «Senza categoria».
+
+**E il limite lo dice la pagina**, sotto i filtri: su 7.015 righe il
+prodotto non è più a catalogo in nessun modo, quindi il filtro per
+reparto trova chi ha comprato *fra quello che si riconosce*, non tutti.
+Un filtro che tace su ciò che non sa fa credere di aver scritto a tutti.
+
+**Il riassunto si rifà ogni notte alle 04:50** (cron `crm-clienti-shop`,
+che chiama la funzione SQL direttamente) e c'è il tasto **«Aggiorna i
+clienti shop»** in pagina, perché chi ha appena venduto non deve
+aspettare domani. Un ordine cestinato azzera il riassunto di quella
+persona ma **non cancella la sua riga**: una persona non sparisce perché
+un ordine è stato annullato.
+
+**Fatto girare il 17/11/2026**: 1.888 email, **780 righe aggiornate**
+(772 per email principale + 8 che stavano in `email_aggiuntive`, e senza
+quel controllo sarebbero nati 8 doppioni) e **1.108 create**. La lista
+passa da 23.757 a **24.865**, quindi una campagna senza filtri adesso
+raggiunge anche loro — che è la decisione «tutti». Provato in una
+transazione annullata anche il giro completo di una campagna con
+`non_in_crm`: **1.106 destinatari congelati** su 1.108, i 2 esclusi sono
+quelli senza nome di fatturazione.
+
+Migrazione `20261117150000_la_mailing_list_dei_clienti_shop.sql`
+(rollback dentro, e non cancella chi ha già ricevuto una mail). Prove in
+`prove/crm-clienti-shop.test.jsx` (19).
+
+**Resta da sapere**: la sincronizzazione crea una temp table
+`on commit drop`, quindi non si può chiamare due volte nella stessa
+transazione — come `crm_campagna_prepara`, che ha lo stesso limite da
+sempre. In produzione è una chiamata per richiesta e non si vede.
 
 ### La raccolta del materiale, a tutta pagina (30/10/2026)
 
