@@ -189,7 +189,7 @@ async function inParallelo(elementi, quanti, lavoro) {
 // (`intestazione_societa`). Si leggono qui: se non arrivano, il listino si
 // fa lo stesso — un piede senza partita IVA e' meno grave di un listino
 // che non esce.
-async function datiSocieta() {
+export async function datiSocieta() {
   try {
     const { data } = await supabase.from("intestazione_societa").select("*").maybeSingle();
     if (!data) return [];

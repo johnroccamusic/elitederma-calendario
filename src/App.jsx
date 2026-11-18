@@ -16,6 +16,7 @@ import {
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { qrSvg } from "./ui/qr.js";
 import { confermaCancellazione, confermaRimozione } from "./ui/conferma.js";
+import { nettoDaLordo } from "./prezzi/netto.js";
 import { caricaKitInAula } from "./rientri/pos";
 // LE PAGINE CHE SI APRONO A RICHIESTA.
 //
@@ -56,6 +57,7 @@ const GestioneEventi = pezzo(() => import("./eventi/GestioneEventi.jsx"));
 import { METODI_SPESA, METODO_SENZA_IVA, STATI_NON_PAGATA, valoreTendinaPagamento, leggiTendinaPagamento } from "./spese/metodi.js";
 import SelettorePeriodo from "./ui/SelettorePeriodo.jsx";
 const PrezziListini = pezzo(() => import("./prezzi/PrezziListini.jsx"));
+const PaginaListiniRivenditori = pezzo(() => import("./rivenditori/PaginaListiniRivenditori.jsx"));
 // il listino delle master: la quota e il conto del prezzo stanno li', in
 // un posto solo, e di qui si leggono per i codici con cui le master comprano
 import { leggiListino, CHIAVE_QUOTA_MASTER, QUOTA_MASTER_DEFAULT, quotaMasterDi, prezzoMasterDi, bloccoDi } from "./prezzi/dati.js";
@@ -6242,20 +6244,8 @@ function calcolaIvaELordo(netto, aliquotaPct) {
   const lordo = round2(netto * (1 + aliquotaPct / 100));
   return { iva: round2(lordo - netto), lordo };
 }
-// Unico punto in cui si parte dal lordo. Se scrivi 39,90 quel prezzo
-// ricalcola SOLO il netto, e il netto si tiene a sei decimali: cosi'
-// rifacendo il giro all'indietro il lordo torna 39,90 e non 39,89.
-// Arrotondando il netto a due decimali il lordo digitato si perdeva in
-// 54.098 casi su 300.000 al 22% (un prezzo su cinque), ed e' il motivo
-// per cui era nato il "prezzo forzato": un secondo lordo scritto a mano
-// che poi comandava di nascosto su sito, POS, fasce e punti. A sei
-// decimali il netto basta da solo — provato su ogni centesimo da 0,01 a
-// 3.000 € al 22, 10, 5, 4 e 0%: zero prezzi spostati. Il netto resta
-// l'unico valore salvato, e il lordo e' sempre e solo netto + IVA.
-function nettoDaLordo(lordo, aliquotaPct) {
-  if (lordo == null || aliquotaPct == null) return null;
-  return Math.round((lordo / (1 + aliquotaPct / 100) + Number.EPSILON) * 1e6) / 1e6;
-}
+// nettoDaLordo sta in src/prezzi/netto.js: lo usano la scheda prodotto,
+// l'elenco a righe e il listino dei rivenditori.
 // Un numero come lo si scrive nel campo. Il lordo ha sempre due decimali
 // (39,90). Il netto tiene quelli che ha: due se bastano, fino a sei se
 // servono — schiacciarlo a due sposterebbe di un centesimo il prezzo al
@@ -29539,6 +29529,7 @@ const AREA_MADRE_VISTA = {
   dashboardassistente: ["home"],
   prezzilistini: ["magazzinoshop"],
   listinoprivato: ["magazzinoshop"],
+  listinirivenditori: ["magazzinoshop"],
   venditeshop: ["magazzinoshop"],
   venditealbanco: ["magazzinoshop"],
   omaggi: ["magazzinoshop"],
@@ -42733,7 +42724,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, onApriListiniRivenditori, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -42801,6 +42792,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
             { chiave: "prezzilistini", title: "Prezzi e listini", descrizione: "Il listino per i rivenditori: prezzi, sconto massimo e quanto pagano. Sola lettura.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriPrezziListini },
             { chiave: "listinoprivato", title: "Listino privato", descrizione: "Lo stesso listino con i costi di acquisto e quello che resta in tasca. Da non mostrare a nessuno fuori.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriListinoPrivato },
+            { chiave: "listinirivenditori", title: "Listini rivenditori", descrizione: "Il programma a livelli: prezzi ricavati dal costo, qualifica dei rivenditori, regolamento da consegnare.", Icona: IconaTilePrezzi, attivo: true, onClick: onApriListiniRivenditori },
           ]}
         />
       </div>
@@ -90633,6 +90625,7 @@ function Gestionale() {
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
   function apriPrezziListini() { apriViewProtetta("prezzilistini"); }
   function apriListinoPrivato() { apriViewProtetta("listinoprivato"); }
+  function apriListiniRivenditori() { apriViewProtetta("listinirivenditori"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
@@ -91873,6 +91866,7 @@ function Gestionale() {
           onApriGestioneShop={apriGestioneShop}
           onApriPrezziListini={apriPrezziListini}
           onApriListinoPrivato={apriListinoPrivato}
+          onApriListiniRivenditori={apriListiniRivenditori}
           onApriVenditeShop={() => apriVenditeShop("magazzinoshop")}
           onApriVenditeAlBanco={() => apriVenditeAlBanco("magazzinoshop")}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
@@ -92079,6 +92073,15 @@ function Gestionale() {
           onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "prezzilistini")}
           onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "prezzilistini", "Prezzi e listini")}
+        />
+      )}
+
+      {view === "listinirivenditori" && (
+        <PaginaListiniRivenditori
+          getPdfLib={getPdfLib}
+          onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "listinirivenditori", "Listini rivenditori")}
+          operatore={operatoreApp?.nome || null}
         />
       )}
 

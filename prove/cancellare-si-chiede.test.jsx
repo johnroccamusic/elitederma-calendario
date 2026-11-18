@@ -207,6 +207,8 @@ const SCUSATE = {
   "stampe/dati.js::eliminaFile": "scrittura: la domanda sta in StampePackaging",
   "stampe/dati.js::eliminaStampa": "scrittura: la domanda sta in StampePackaging",
   "stampe/dati.js::eliminaRiga": "scrittura: la domanda sta in StampePackaging",
+  "rivenditori/dati.js::cancellaRivenditore": "scrittura: la domanda sta in SchedaRivenditori, col nome davanti",
+  "rivenditori/dati.js::cancellaOrdine": "scrittura: la domanda sta in SchedaRivenditori, con la data e l'importo davanti",
 };
 
 function corpoDa(testo, dallaRiga) {

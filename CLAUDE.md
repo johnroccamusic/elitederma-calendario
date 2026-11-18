@@ -38,7 +38,7 @@ src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
                          iscrizione, iscrizioni, magazzino, notifiche, pos,
                          prezzi, progetti, punti, recesso, regole, rientri,
                          salvataggi, spese, stampe, statistiche
-prove/                   127 file, 1.239 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   128 file, 1.295 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      56 edge function + _shared
@@ -1528,6 +1528,175 @@ altrimenti il server non avrebbe l'originale. Le righe con `aggiornato_da`
 che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
 resta come rete per far vedere la pagina se la query fallisce, ma non è più
 quello che si firma. Prove in `prove/testi-contratto.test.js`.
+
+### «Listini rivenditori»: il programma a livelli (18/11/2026)
+
+Il titolare, con una specifica scritta: una nuova area in Magazzino/Shop
+che gestisca «il listino a livelli per i rivenditori, il calcolo degli
+sconti in base al costo d'acquisto, la qualifica dei rivenditori e il
+regolamento commerciale». Cinque livelli, cinque pagine, due PDF.
+
+**Il conto, e le tre verifiche che tornano al centesimo.** Dal costo
+d'acquisto si ricava quanto sconto si può cedere senza scendere sotto
+`costo × (1 + ricarico minimo)` (default 30%), limitato al 50%; i cinque
+livelli se ne prendono un quinto per volta.
+
+| | netto | cedibile | Partner | Premium | Distributor |
+|---|---|---|---|---|---|
+| Arizona (44,90 · costo 10) | 36,80 | 64,7% → **50%** | 33,12 | 22,08 | **18,40** |
+| Kit laminazione ciglia (234,90) | 192,54 | **33,6%** | 179,60 | 140,79 | 127,85 |
+| Ago 5 Magnum (35,00, costo vuoto) | 28,69 | 50% | 25,82 | 17,21 | 14,35 |
+
+I due numeri che la specifica dava per buoni — i cinque prezzi di Arizona
+e il 33,6% del kit — escono identici dal database. Il costo del kit
+(98,34) **non è scritto da nessuna parte**: è la somma della sua distinta,
+e per questo la vista si appoggia a `v_prezzi_listini`, che quella somma
+la fa già.
+
+**Il conto sta in SQL, e non è un gusto.** `listino_cedibile` e
+`listino_prezzo_livello` sono due funzioni immutabili; la vista
+`v_listino_rivenditori` le usa per chi amministra, la funzione
+`listino_rivenditori_export()` per il file da consegnare. Il motivo è il
+punto 6 della specifica — «il listino e l'export per i rivenditori non
+devono mai ricevere costi e margini dal server» — e se il prezzo lo
+calcolasse il browser il costo dovrebbe uscire per forza. **Conseguenza
+voluta:** correggendo un prezzo si salva e si rilegge, invece di
+ricalcolare una seconda volta in pagina. Un secondo conto in JavaScript
+sarebbe la duplicazione che questo progetto ha già pagato due volte (il
+POS del 7/11, la cache del 2/11).
+
+**Quello che la RLS NON può fare oggi, detto per intero.** La specifica
+chiede costi e margini «visibili solo agli admin, protetti dalle RLS».
+Oggi non è esprimibile: l'account Supabase è uno per tutto lo staff
+(§ 4), quindi nel gettone non c'è niente da cui dedurre chi amministra, e
+una policy che dicesse «solo admin» sarebbe teatro. Quello che **è** vero
+già adesso: l'export è una funzione `security definer` che costo, margine
+e cedibile in euro non li restituisce — non li nasconde, non li manda — e
+il giorno in cui i ruoli passeranno dal JWT è la sola cosa da concedere a
+un rivenditore. Una prova legge il corpo della funzione e pretende che
+quelle parole non ci siano.
+
+**Tre decisioni di fondo.**
+
+- **La scala nuova si AFFIANCA, non sostituisce.**
+  `v_prezzi_listini.sconto_max_pct` non serve solo al listino: decide i
+  **punti delle master** (netto × sconto × 2) e la loro **provvigione**
+  (sconto ÷ 3). Rifarlo con la formula nuova avrebbe spostato i punti di
+  tutte le master senza che nessuno lo chieda. `v_prezzi_listini` non è
+  stata toccata di una riga, e «Prezzi e listini» dice quello che diceva
+  ieri — su Arizona 25,21, mentre il programma nuovo dice 18,40 al
+  Distributor. **Resta da decidere** se quella colonna va rinominata o
+  ritirata: oggi mostra un prezzo rivenditore che nessun rivenditore avrà.
+- **L'IVA è quella del prodotto, non 1,22 fisso.** La specifica dice
+  «netto = pubblico / 1,22», ma due prodotti sono a IVA 0 (Consulenza
+  Bianca e Consulenza Rossa): dividerli per 1,22 direbbe 114,75 invece di
+  140,00, venticinque euro di errore su una riga che nessuno metterebbe in
+  dubbio. Si usa `aliquota_iva` di ciascuno, e sui 202 al 22% il risultato
+  è identico.
+- **Si tronca, non si arrotonda.** Il cedibile si taglia al terzo decimale
+  per difetto, perché la regola del titolare è che il prezzo non scenda
+  **mai** sotto costo × (1 + ricarico): arrotondando per eccesso lo sconto
+  cresce di mezzo millesimo e quel pavimento si sfonda.
+
+**La tabella dei riassortimenti non esiste come tabella.** Le sei fasce
+della specifica (da 500 → 50%, 400-499,99 → 40%, …) si ricavano dai
+cinque `riassortimento_minimo_eur` dei livelli: un ordine da 450 € prende
+il tetto del livello più alto il cui minimo ci sta dentro — Premium, 40% —
+e la riga «400-499,99» dice infatti 10/20/30/40/40. Tutte e sei tornano da
+quei cinque numeri, quindi una tabella in più sarebbe la stessa regola
+scritta due volte. Lo stesso per la **revisione annuale**: le sue cinque
+fasce sono le soglie di mantenimento, lette da lì.
+
+**Il registro delle modifiche lo scrive un TRIGGER, non la pagina.** Il
+prezzo di un prodotto si cambia anche dalla scheda in Gestione magazzino,
+dall'elenco a righe e dal sito: un registro scritto dal listino avrebbe
+raccontato solo le modifiche fatte dal listino. Il nome di chi ha premuto
+arriva da `app.operatore`, che `listino_scrivi_prezzo` imposta per la
+durata della transazione; una modifica che arriva da un'altra strada resta
+registrata con scritto **«non registrato»** — meglio una riga senza nome
+che nessuna riga. Provati tutti e due i casi sul database vero, in
+transazione annullata.
+
+**La spunta dei livelli vale anche per quello che si vede**, così si
+guarda prima quello che verrà esportato. Con **un livello solo** il file
+si intitola «Listino rivenditori – livello Premium», porta la colonna
+«Sconto applicato» al posto di «Sconto max sul prodotto» — che sarebbe lo
+sconto del Distributor — e **non nomina nessun altro livello**: è la
+richiesta «per un rivenditore Professional spunto solo Professional e il
+file non deve rivelare nulla degli altri». Senza nessuna spunta i due
+tasti si spengono e la pagina dice perché. L'ultima scelta si ricorda.
+
+**L'«Excel» è un CSV** con punto e virgola e virgola decimale, come
+l'altro export del listino: si apre con un doppio clic. Un vero `.xlsx`
+vorrebbe dire una libreria per scrivere uno zip, e questo progetto ha sei
+dipendenze per scelta.
+
+**I rivenditori non esistevano come dato.** Nessuna tabella, e nessun
+ordine marcato «di un rivenditore»: fra i 1.888 clienti dello shop
+rivenditori e clienti finali sono mescolati, e attribuire a un
+rivenditore un ordine che non è suo vorrebbe dire fargli salire un
+livello che non ha comprato. Quindi `rivenditori` si cura a mano e gli
+acquisti validi si scrivono in `rivenditori_ordini` uno per uno. Un
+**reso è una riga negativa**, non una riga cancellata: «resi e note di
+credito riducono il volume», e un volume che scende senza lasciare
+traccia non si spiega a nessuno. **Ambassador è un flag e non un
+livello**, senza nessuno sconto in più. La **verifica trimestrale delle
+master** (10% → 20%) la fa una persona con esito e note: i criteri — tag
+della pagina, due post al mese, prodotti usati in aula — non stanno in
+nessun dato che abbiamo, e vale l'**ultima** verifica scritta.
+
+**Il testo del regolamento manca, ed è un segnaposto dichiarato.** La
+specifica dice «se non te lo allego, lascia un segnaposto e
+chiedimelo»: non è stato allegato. Il PDF esce con tutto quello che si
+ricava dalla configurazione — livelli, soglie, come si entra, ciclo,
+verifiche, revisione, rientro con l'esempio numerico, riassortimenti,
+condizioni generali, master — e **al posto degli articoli un riquadro che
+dice che il testo non c'è**, perché un documento che manca di un pezzo non
+deve sembrare completo. Scriverlo io vorrebbe dire inventare clausole
+contrattuali e farle firmare a qualcuno. In fondo ci sono le righe per
+ragione sociale, luogo, data e firma, e **a parte** la doppia firma delle
+clausole degli artt. 1341-1342 c.c. — che è un atto distinto, come sul
+contratto master. Caricato il testo (`rivenditori_regolamento`, con
+versione e data di entrata in vigore), il segnaposto sparisce da sé.
+
+**Cinque prodotti non reggono nessuno sconto**, e la pagina li nomina in
+rosso: Brow Wow espositore 10pz, DragonHawk Mast Pro 2, Dynamic BLKOUT
+Ink, Mascara Kerafill espositore 10pz, N3 Hydra Finish opaco. Il loro
+prezzo al pubblico è **sotto** costo × 1,30, quindi «rivedere prezzo» non
+è un avviso tecnico: è una decisione commerciale da prendere. E **un
+prodotto senza costo vale il tetto** (50%) con la nota «Costo mancante» —
+è la regola scritta nella specifica, ma va saputo: oggi *Ago 5 Magnum
+Universale 0.35 Cheyenne* finirebbe in un listino Distributor a 14,35 €
+senza che nessuno sappia quanto ci guadagniamo.
+
+**Il file del 15/11 era l'export dell'app, e il confronto lo dimostra.**
+Dei 201 prodotti di `new-listino-2026-11-15.xlsx`, **201 su 201 si
+riconoscono per nome**, i costi coincidono tutti, e di diverso c'è **una
+cifra sola**: *Lame 18 punte U - box 20pz*, 39,89 nel file e 39,90 in
+archivio (cambiata dopo l'export). Più un prodotto che in archivio c'è e
+nel file no, *DragonHawk Mast Pro 2 - 3RL 0.18 - 20pz*, aggiunto dopo.
+Quindi il punto 7 era **una verifica, non un'importazione**: reimportare
+quei numeri avrebbe riportato indietro un centesimo e riscritto 201
+prezzi che muovono anche il sito, i punti delle master e i margini.
+
+**Un difetto mio, trovato prima di pubblicare, che vale per tutte le
+migrazioni future:** `set search_path to 'public, pg_temp'` **fra apici è
+UNO schema** con la virgola nel nome, non due. Le due funzioni di calcolo
+non se ne accorgevano (non nominano tabelle), ma `listino_scrivi_prezzo`
+rispondeva «relation "prodotti_shop" does not exist». Senza apici e con
+l'uguale è una lista. Una prova lo inchioda.
+
+Migrazione `20261118100000_listini_rivenditori.sql` (rollback dentro, e
+le righe che porterebbero via anagrafica, registro e regolamento sono
+marcate ATTENZIONE). Prove in `prove/listini-rivenditori.test.jsx` (56).
+
+**Resta da fare, e va deciso:** il **testo del regolamento**; se la
+colonna «prezzo rivenditore» di «Prezzi e listini» va rinominata o
+ritirata, ora che convive con la scala nuova; se le due consulenze a IVA 0
+devono stare in un listino per rivenditori (oggi ci sono, col netto
+giusto); i cinque prezzi sotto costo × 1,30; e il **collegamento fra gli
+ordini dello shop e un rivenditore**, che oggi non esiste e che è l'unico
+modo per far girare ciclo e verifiche senza scrivere gli acquisti a mano.
 
 ### Il listino rivenditore diceva due basi diverse senza dirlo (15/11/2026)
 
