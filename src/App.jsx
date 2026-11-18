@@ -318,6 +318,25 @@ export function fondiListaCondivisa(remota, locale, rimossi) {
   (rimossi || new Set()).forEach((id) => perId.delete(id));
   return [...perId.values()];
 }
+// Le lapidi dei carrelli cancellati: { id: "quando" }. Si tengono
+// novanta giorni, che è molto più di quanto un telefono resti aperto
+// senza rileggere; gli id dei carrelli non si riusano (contengono l'ora
+// di nascita), quindi una lapide non può mai togliere un carrello nuovo.
+const GIORNI_LAPIDI = 90;
+export const chiaveEliminati = (chiave) => `${chiave}_eliminati`;
+export function leggiLapidi(valore) {
+  if (!valore || typeof valore !== "object" || Array.isArray(valore)) return {};
+  const fuori = {};
+  Object.entries(valore).forEach(([id, quando]) => { if (id && typeof quando === "string") fuori[id] = quando; });
+  return fuori;
+}
+export function aggiungiLapidi(lapidi, rimossi, adesso) {
+  const limite = new Date(adesso.getTime() - GIORNI_LAPIDI * 86400000).toISOString();
+  const fuori = {};
+  Object.entries(lapidi || {}).forEach(([id, quando]) => { if (quando >= limite) fuori[id] = quando; });
+  (rimossi || new Set()).forEach((id) => { if (id) fuori[id] = adesso.toISOString(); });
+  return fuori;
+}
 function inviaImpostazioneCondivisa(chiave) {
   clearTimeout(LAYOUT_TIMER[chiave]);
   LAYOUT_TIMER[chiave] = null;
@@ -362,18 +381,49 @@ function inviaImpostazioneCondivisa(chiave) {
       // automatica, che salta le chiavi con un invio in attesa) e si
       // riprova fra qualche secondo. Meglio un carrello che arriva al
       // server in ritardo che i carrelli degli altri cancellati subito.
+      //
+      // E SI RILEGGONO ANCHE LE LAPIDI (18/11/2026). Raffaele cancellava
+      // il carrello «stella», e dopo pochi minuti era di nuovo lì — tre
+      // volte in due giorni, si legge in `carrelli_sospesi_storico`. La
+      // fusione sapeva togliere solo quello che QUESTO dispositivo aveva
+      // buttato: un altro telefono, con la lista in memoria da prima della
+      // cancellazione, al primo salvataggio suo (sospendere un altro
+      // carrello) trovava «stella» nella sua copia e non nel database, lo
+      // prendeva per un carrello suo non ancora arrivato e lo rimetteva.
+      // Ora chi cancella scrive l'id in una lista di cancellati condivisa
+      // (`<chiave>_eliminati`, id → quando), e la fusione toglie anche
+      // quelli: una cancellazione fatta altrove resta una cancellazione.
+      const chiaveLapidi = chiaveEliminati(chiave);
       let letta = null;
+      let lapidiLette = null;
       let erroreLettura = null;
       try {
-        const { data, error } = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle();
-        if (error) erroreLettura = error; else letta = data;
+        const [lista, lapidi] = await Promise.all([
+          supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle(),
+          supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiaveLapidi).maybeSingle(),
+        ]);
+        if (lista.error) erroreLettura = lista.error; else letta = lista.data;
+        if (lapidi.error) erroreLettura = erroreLettura || lapidi.error; else lapidiLette = lapidi.data;
       } catch (e) { erroreLettura = e; }
       if (erroreLettura) {
         rimossi.forEach((id) => LAYOUT_RIMOSSI[chiave].add(id));
         riprovaInvioCondiviso(chiave);
         return { ok: false, motivo: erroreLettura?.message || "il server non ha risposto" };
       }
-      valore = fondiListaCondivisa(letta?.valore, valore, rimossi);
+      const lapidiPrima = leggiLapidi(lapidiLette?.valore);
+      const lapidi = aggiungiLapidi(lapidiPrima, rimossi, new Date());
+      if (rimossi.size || Object.keys(lapidi).length !== Object.keys(lapidiPrima).length) {
+        // prima le lapidi, poi la lista: se la lista partisse e le lapidi
+        // no, il prossimo telefono vecchio rimetterebbe il carrello
+        const { error: erroreLapidi } = await supabase.from("impostazioni_layout_tabelle")
+          .upsert({ chiave: chiaveLapidi, valore: lapidi, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+        if (erroreLapidi) {
+          rimossi.forEach((id) => LAYOUT_RIMOSSI[chiave].add(id));
+          riprovaInvioCondiviso(chiave);
+          return { ok: false, motivo: erroreLapidi.message };
+        }
+      }
+      valore = fondiListaCondivisa(letta?.valore, valore, new Set([...rimossi, ...Object.keys(lapidi)]));
       LAYOUT_CACHE[chiave] = valore;
       scriviCacheLocaleLayout(chiave, valore);
       notificaLayout(chiave);
