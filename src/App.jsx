@@ -53153,12 +53153,25 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
     .filter((sp) => !q || `${sp.descrizione || ""}`.toLowerCase().includes(q))
     .sort((a, b) => perVicinanza(Number(a.totale) || 0, Number(b.totale) || 0));
   const elenco = scheda === "dapagare" ? candidatiDaPagare : candidatiPagate;
+  // L'errore si scrive QUI DENTRO, non nella pagina sotto. Il messaggio
+  // della pagina sta dietro alla finestra, quindi un rifiuto non lo vedeva
+  // nessuno; e se il salvataggio si interrompeva a meta' (un'eccezione e
+  // non un errore restituito) il tasto restava su «Salvo…» per sempre,
+  // con «Annulla» spento accanto: l'unica uscita era ricaricare la pagina.
+  // Il «finally» rimette i tasti com'erano qualunque cosa succeda.
+  const [errore, setErrore] = useState("");
   async function conferma() {
-    if (scelti.length === 0) return;
+    if (scelti.length === 0 || salvando) return;
     setSalvando(true);
-    if (scheda === "dapagare") await onAssociaDaPagare(scelti);
-    else await onAssociaPagata(scelti);
-    setSalvando(false);
+    setErrore("");
+    try {
+      const esito = scheda === "dapagare" ? await onAssociaDaPagare(scelti) : await onAssociaPagata(scelti);
+      if (esito?.errore) setErrore(esito.errore);
+    } catch (e) {
+      setErrore(`Il salvataggio si e' interrotto: ${e?.message || e}. Niente e' stato perso: riprova, e se si ripete ricarica la pagina.`);
+    } finally {
+      setSalvando(false);
+    }
   }
   return (
     <div onClick={onChiudi} style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: isMobile ? "16px 10px" : "40px 16px", overflowY: "auto", zIndex: 2400 }}>
@@ -53239,6 +53252,9 @@ function ModaleAssociaDocumento({ documento, nomeFornitore, daPagare, spesePagat
         >
           <span style={{ width: 54, height: 4, borderRadius: 3, background: CREAM_BORDER }} />
         </div>
+        {errore && (
+          <div role="alert" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDECEC", borderRadius: 10, padding: "10px 12px", marginTop: 10, lineHeight: 1.45 }}>{errore}</div>
+        )}
         <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
           <button onClick={conferma} disabled={salvando || scelti.length === 0} style={{ ...stileTastoCardNavy(isMobile, salvando || scelti.length === 0), flex: "1 1 200px", justifyContent: "center", padding: "12px 16px" }}>
             {salvando ? "Salvo…" : scelti.length === 0 ? "Scegli una o piu' spese" : scelti.length === 1 ? "Associa" : `Associa le ${scelti.length} spese`}
@@ -54169,6 +54185,19 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
     // AGGIORNA quella, non se ne scrive un'altra: creando una riga nuova la
     // vecchia restava li' accanto, e la stessa spesa compariva due volte —
     // una nel cumulo e una da sola. Succedeva davvero.
+    // LE RATE. Una fattura pagata in due rate (Orthostetica n. 846: due
+    // volte 921,79, al 29/11 e al 29/12) prima dava a TUTTE le spese la
+    // scadenza della prima rata: la seconda risultava da pagare un mese
+    // prima del dovuto. Quando le spese scelte sono tante quante le rate,
+    // ognuna prende la sua, in ordine di scadenza. Negli altri casi non si
+    // puo' sapere quale spesa e' quale rata, e vale la regola di prima.
+    const rateDoc = Array.isArray(doc.rate) ? doc.rate.filter((r) => r?.due_date) : [];
+    const scadenzaPerVoce = new Map();
+    if (rateDoc.length > 1 && rateDoc.length === elenco.length) {
+      const rateInOrdine = [...rateDoc].sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+      const vociInOrdine = [...elenco].sort((a, b) => String(a.scadenza || a.spesaReale?.scadenza_pagamento || "").localeCompare(String(b.scadenza || b.spesaReale?.scadenza_pagamento || "")));
+      vociInOrdine.forEach((item, i) => scadenzaPerVoce.set(item, rateInOrdine[i].due_date));
+    }
     const daAggiornare = [];
     const daCreare = [];
     elenco.forEach((item) => {
@@ -54180,18 +54209,21 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
     });
     for (const { sp, item } of daAggiornare) {
       const vivo = round2(importoVivoDiSpesa(sp) + (sp.importo_pagato_cash || 0));
-      const { error } = await supabase.from("spese").update({
+      const { data, error } = await supabase.from("spese").update({
         numero_documento: doc.numero || null,
         data_documento: doc.data_documento || sp.data_documento || null,
-        scadenza_pagamento: doc.data_scadenza_prevista || sp.scadenza_pagamento || doc.data_documento || null,
+        scadenza_pagamento: scadenzaPerVoce.get(item) || doc.data_scadenza_prevista || sp.scadenza_pagamento || doc.data_documento || null,
         fornitore_id: sp.fornitore_id || doc.fornitore_id || null,
         stato: "fatturata",
         gruppo_pagamento: gruppo,
         totale: vivo,
         imponibile: round2(vivo / (1 + aliquota / 100)),
         iva_percentuale: aliquota,
-      }).eq("id", sp.id);
-      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      }).eq("id", sp.id).select("id");
+      if (error) return { errore: "Errore: " + testoErrore(error) };
+      // un update che non tocca nessuna riga non e' un errore per il
+      // database: e' il modo in cui le regole di accesso dicono di no
+      if (!data || data.length === 0) return { errore: `La spesa "${sp.descrizione || item.nome || "—"}" non si e' aggiornata: il database non ha cambiato nessuna riga. Ricarica la pagina e riprova.` };
     }
     const righe = daCreare.map((item) => {
       const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
@@ -54203,7 +54235,7 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
         tipo_ambito: "classe", classe_id: item.corsoData?.id || null, sede_id: item.corsoData?.location_id || null, corso_id: item.corsoData?.corso_id || null,
         imponibile: round2(item.totale / (1 + aliquota / 100)), iva_percentuale: aliquota, totale: round2(item.totale),
         numero_documento: doc.numero || null, data_documento: doc.data_documento || null,
-        scadenza_pagamento: doc.data_scadenza_prevista || item.scadenza || doc.data_documento || null,
+        scadenza_pagamento: scadenzaPerVoce.get(item) || doc.data_scadenza_prevista || item.scadenza || doc.data_documento || null,
         stato: "fatturata", metodo_pagamento: "Bonifico",
         origine: "automatico", origine_scadenziario_chiave: item.chiave,
         gruppo_pagamento: gruppo,
@@ -54211,7 +54243,7 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
     });
     if (righe.length > 0) {
       const { error } = await supabase.from("spese").insert(righe);
-      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      if (error) return { errore: "Errore: " + testoErrore(error) };
     }
     const sommaRighe = round2(elenco.reduce((t, it) => t + (Number(it.totale) || 0), 0));
     const allocato = round2(Number(doc.importo_allocato || 0) + sommaRighe);
@@ -54373,12 +54405,13 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
     if (elenco.length === 0) return;
     const totaleDoc = Number(doc.totale) || 0;
     for (const spesa of elenco) {
-      const { error } = await supabase.from("spese").update({
+      const { data, error } = await supabase.from("spese").update({
         numero_documento: doc.numero || null,
         data_documento: doc.data_documento || spesa.data_documento || null,
         fornitore_id: spesa.fornitore_id || doc.fornitore_id || null,
-      }).eq("id", spesa.id);
-      if (error) { setMsg("Errore: " + testoErrore(error)); return; }
+      }).eq("id", spesa.id).select("id");
+      if (error) return { errore: "Errore: " + testoErrore(error) };
+      if (!data || data.length === 0) return { errore: `La spesa "${spesa.descrizione || "—"}" non si e' aggiornata: il database non ha cambiato nessuna riga. Ricarica la pagina e riprova.` };
     }
     const somma = round2(elenco.reduce((t, sp) => t + (Number(sp.totale) || 0), 0));
     const allocato = round2(Number(doc.importo_allocato || 0) + somma);
