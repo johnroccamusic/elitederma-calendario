@@ -38,7 +38,7 @@ src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
                          iscrizione, iscrizioni, magazzino, notifiche, pos,
                          prezzi, progetti, punti, recesso, regole, rientri,
                          salvataggi, spese, stampe, statistiche
-prove/                   128 file, 1.296 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   128 file, 1.299 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      56 edge function + _shared
@@ -1697,7 +1697,10 @@ l'uguale è una lista. Una prova lo inchioda.
 
 Migrazione `20261118100000_listini_rivenditori.sql` (rollback dentro, e
 le righe che porterebbero via anagrafica, registro e regolamento sono
-marcate ATTENZIONE). Prove in `prove/listini-rivenditori.test.jsx` (57).
+marcate ATTENZIONE). Prove in `prove/listini-rivenditori.test.jsx` (60), e i due PDF si
+generano per davvero: un carattere fuori WinAnsi o un font non innestato
+fa fallire il documento a meta strada, e nessuna prova sulla struttura lo
+vedrebbe.
 
 **Resta da fare, e va deciso:** il **testo del regolamento**; se la
 colonna «prezzo rivenditore» di «Prezzi e listini» va rinominata o

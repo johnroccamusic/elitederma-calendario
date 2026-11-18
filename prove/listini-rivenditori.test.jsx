@@ -28,7 +28,9 @@ import {
 } from "../src/rivenditori/regole.js";
 import {
   csvListinoRivenditori, colonneListino, titoloListino, righeEsportabili, righeIntestazione,
+  creaListinoRivenditoriPdf,
 } from "../src/rivenditori/listinoPdf.js";
+import { creaRegolamentoPdf, spezzaInRighe } from "../src/rivenditori/regolamentoPdf.js";
 import { composizioneRegolamento, tabellaRiassortimenti, esempioRientro } from "../src/rivenditori/regolamento-testo.js";
 import { monta, attendi, clicca, scegli, scrivi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
@@ -467,6 +469,42 @@ describe("il regolamento", () => {
     expect(tutto).not.toContain("costo d'acquisto");
     expect(tutto).not.toContain("margine");
     expect(tutto).not.toContain("cedibile");
+  });
+});
+
+describe("i due PDF escono davvero", () => {
+  // Non si controlla l'impaginazione — jsdom non impagina — ma che
+  // pdf-lib arrivi in fondo: un carattere fuori WinAnsi, un font non
+  // innestato o una cifra nulla fanno fallire il documento a meta'
+  // strada, e nessuna prova che guardi la struttura lo vedrebbe.
+  it("il listino per i rivenditori, con tutti i livelli e con uno solo", async () => {
+    const tutti = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { tettoPct: 50, righeSocieta: ["ELITEDERMA Srl"] });
+    expect(String.fromCharCode(...tutti.bytes.slice(0, 5))).toBe("%PDF-");
+    expect(tutti.prodotti).toBe(4);
+    expect(tutti.pagine).toBeGreaterThan(0);
+    const uno = await creaListinoRivenditoriPdf(LISTINO, LIVELLI.filter((l) => l.codice === "premium"), { tettoPct: 50 });
+    expect(String.fromCharCode(...uno.bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
+  it("il regolamento, col segnaposto e col testo caricato", async () => {
+    const senza = await creaRegolamentoPdf(composizioneRegolamento({ livelli: LIVELLI, tettoPct: 50 }), { righeSocieta: ["ELITEDERMA Srl"] });
+    expect(String.fromCharCode(...senza.bytes.slice(0, 5))).toBe("%PDF-");
+    expect(senza.pagine).toBeGreaterThanOrEqual(2);
+    const con = await creaRegolamentoPdf(composizioneRegolamento({
+      livelli: LIVELLI, tettoPct: 50,
+      regolamento: { versione: "2026.1", in_vigore_dal: "2026-12-01", corpo: { articoli: ["Art. 1 — L'adesione al programma non comporta esclusiva né minimi garantiti."], clausole_1341: ["art. 1"] } },
+    }), { versione: "2026.1", inVigoreDal: "2026-12-01" });
+    expect(String.fromCharCode(...con.bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
+  it("un paragrafo va a capo misurando la larghezza vera, non contando i caratteri", async () => {
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const righe = spezzaInRighe("IIII IIII IIII IIII IIII IIII IIII IIII IIII IIII", font, 9, 60);
+    const larghe = spezzaInRighe("MMMM MMMM MMMM MMMM MMMM MMMM MMMM MMMM MMMM MMMM", font, 9, 60);
+    expect(larghe.length).toBeGreaterThan(righe.length);
+    righe.concat(larghe).forEach((r) => expect(font.widthOfTextAtSize(r, 9)).toBeLessThanOrEqual(60));
   });
 });
 
