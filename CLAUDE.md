@@ -1538,14 +1538,18 @@ regolamento commerciale». Cinque livelli, cinque pagine, due PDF.
 
 **Il conto, e le tre verifiche che tornano al centesimo.** Dal costo
 d'acquisto si ricava quanto sconto si può cedere senza scendere sotto
-`costo × (1 + ricarico minimo)` (default 30%), limitato al 50%; i cinque
-livelli se ne prendono un quinto per volta.
+`costo × (1 + ricarico minimo)` — nato a 30%, **portato a 67% il
+18/11/2026**, vedi più sotto — limitato al 50%; i cinque livelli se ne
+prendono un quinto per volta.
 
 | | netto | cedibile | Partner | Premium | Distributor |
 |---|---|---|---|---|---|
 | Arizona (44,90 · costo 10) | 36,80 | 64,7% → **50%** | 33,12 | 22,08 | **18,40** |
 | Kit laminazione ciglia (234,90) | 192,54 | **33,6%** | 179,60 | 140,79 | 127,85 |
 | Ago 5 Magnum (35,00, costo vuoto) | 28,69 | 50% | 25,82 | 17,21 | 14,35 |
+
+(La tabella è la verifica del primo giorno, a ricarico 30: col 67 di oggi
+Arizona non si muove — comanda il tetto — mentre il kit passa a 14,7%.)
 
 I due numeri che la specifica dava per buoni — i cinque prezzi di Arizona
 e il 33,6% del kit — escono identici dal database. Il costo del kit
@@ -1702,13 +1706,97 @@ generano per davvero: un carattere fuori WinAnsi o un font non innestato
 fa fallire il documento a meta strada, e nessuna prova sulla struttura lo
 vedrebbe.
 
-**Resta da fare, e va deciso:** il **testo del regolamento**; se la
+**IL RICARICO MINIMO È PASSATO DA 30 A 67 (18/11/2026).** Il titolare,
+davanti al listino: «se una ring lamp la paghiamo 25 euro come è possibile
+che un rivenditore la prenda a 28 lasciandoci 3 euro di margine che per una
+srl è zero?». Due cose, e la prima ribalta il conto.
+
+**I 25 € erano IVA inclusa, i 28 erano netti.** In anagrafica il costo della
+Ring Lamp è 20,49 — il netto — e 20,49 × 1,22 fa 25,00 esatti. Anche il
+28,69 del listino Distributor è un netto: al rivenditore si fatturava 35,00
+lordi. Il margine non era 3 €, era **8,20**. Quando si discute di un margine
+**i due numeri devono stare sulla stessa base**, e il costo d'acquisto in
+`prodotti_shop` è sempre il netto.
+
+**Ma «ricarico 30%» non è «margine 30%», e lì l'obiezione era giusta.** 30%
+sul costo è **23,1% sul ricavo** (30/130), e cinquanta prodotti su 201 stavano
+appoggiati a quel pavimento. Su un ordine Distributor da 500 € — il
+riassortimento minimo — sono 115 €, di cui 60-70 se ne vanno fra corriere,
+imballo, prelievo, commissioni d'incasso, capitale immobilizzato e rischio
+scadenza: restano ~50 € per aver movimentato 500 € di merce e immobilizzato
+il magazzino. Deciso dal titolare dopo la misura: **in casa resta il 40% del
+ricavo**, che è un ricarico del **67%** sul costo. (I costi di movimentazione
+sono una stima: in archivio ci sono 1.050 € di corrieri e le spese partono dal
+02/07/2026, quindi un costo per ordine dai libri non si ricava — servirebbe
+tracciare il corriere sulla singola spedizione.)
+
+**Alzare il pavimento non è costato niente sul catalogo sano**, ed è il senso
+di un pavimento: non si vede dove le cose vanno bene. Sul mix di vendita vero
+degli ultimi 12 mesi, prezzato al Distributor, il margine complessivo *sale*.
+
+| | con 30 | con 67 |
+|---|---|---|
+| margine garantito sul ricavo | 23,1% | **40,0%** |
+| prodotti al 50% pieno di sconto | 146 | 128 |
+| con sconto fra 30 e 50% | 18 | 21 |
+| con sconto fra 15 e 30% | — | 20 |
+| con sconto sotto il 15% | — | 13 |
+| a 0% («rivedere prezzo») | 5 | **19** |
+| margine sul mix venduto | 42,4% | **44,6%** |
+
+Arizona non si muove (18,40 al Distributor): il suo costo è così basso che
+comanda il **tetto** del 50%, non il pavimento. La Ring Lamp passa da 28,69 a
+**34,26** netti (41,80 lordi), 13,77 € di margine, 40,2%.
+
+**I 19 che escono dal programma non sono un danno del programma.** A prezzo
+pieno al pubblico rendono meno del 40% anche vendendoli a un cliente finale:
+*Brow Wow espositore 10pz* lo si paga 77,71 e si vende 89,90 — **13,6% su una
+vendita al dettaglio**. Sono tre famiglie, e ognuna è una decisione diversa:
+i **cinque espositori** (Brow Wow 1,16× il costo, Mascara Kerafill 1,27×,
+Excellentia 10pz 1,31×, Hydrafill 10pz 1,33×, Excellentia 8pz 1,43×), dove il
+prezzo è già quello dei pezzi singoli meno uno sconto quantità — il margine
+è ceduto prima che il rivenditore entri in scena; la **linea laminazione**
+(N1 Wave, N2 Fixa, N3 opaco e lucido, Kerafill bio, Shampoo Ciglia, Medical
+soap, Pennello), coi prezzi al pubblico fermi mentre i costi salivano; e i
+**marchi di terzi** (Cheyenne, DragonHawk, Dynamic Ink, Ago 3 Nano, Batteria
+Horus, Kit combo), dove Elitederma è distributrice e non proprietaria — lì
+25-30% è normale, ma allora un 50% al rivenditore non si può concedere.
+
+**E i tredici che restano con meno del 15% da cedere vanno guardati**, perché
+un 10% non interessa nessun rivenditore: le sette taglie della T-Shirt
+(10,3%), **Kit laminazione ciglia** (da 33,6% a **14,7%**), **Kit laminazione
+essential** (9,8%), Colla laminazione (6,5%), Optibond (4,0%), 3 slope PEAK
+(9,1%), Brow Wow cera gel (10,2%). Sui due kit è il caso più serio — sono
+prodotti di punta — e la causa è strutturale: **il costo di un kit è la somma
+della sua distinta**, cioè di pezzi già marginati, quindi un kit ha sempre
+poco da cedere. Chi vuole dare un kit a un rivenditore deve deciderlo sul
+kit, non sul pavimento.
+
+**Nessuna migrazione, ed è esattamente il senso del lavoro del 18/11**: il
+ricarico è una riga di `rivenditori_parametri`, si cambia dalla pagina, e il
+trigger ha scritto nel registro chi, quando e **30 → 67**. Il seed della
+migrazione resta 30, perché le migrazioni sono la storia e lo stato è il
+database. **I punti e le provvigioni delle master non si sono mossi di un
+centesimo**: controllato che `rivenditori_parametri` lo legge solo
+`v_listino_rivenditori`, mentre quei conti stanno su
+`v_prezzi_listini.sconto_max_pct`, che non è stata toccata.
+
+**Resta da fare, e va deciso:** il **testo del regolamento**; i **19 prezzi
+al pubblico** che non reggono il 40% (gli espositori, la linea laminazione, i
+marchi di terzi) e i **due kit** scesi sotto il 15% di sconto cedibile; se i
+marchi di terzi meritano un listino separato con un tetto più basso; se la
 colonna «prezzo rivenditore» di «Prezzi e listini» va rinominata o
 ritirata, ora che convive con la scala nuova; se le due consulenze a IVA 0
 devono stare in un listino per rivenditori (oggi ci sono, col netto
-giusto); i cinque prezzi sotto costo × 1,30; e il **collegamento fra gli
-ordini dello shop e un rivenditore**, che oggi non esiste e che è l'unico
-modo per far girare ciclo e verifiche senza scrivere gli acquisti a mano.
+giusto); e il **collegamento fra gli ordini dello shop e un rivenditore**,
+che oggi non esiste e che è l'unico modo per far girare ciclo e verifiche
+senza scrivere gli acquisti a mano.
+
+**E una cosa che manca nella pagina:** il **tetto di sconto** si cambia solo
+in tabella, non c'è un campo accanto al ricarico minimo. Dalla misura del
+18/11 si vede che su 128 prodotti su 201 è **lui** a decidere il margine e
+non il pavimento, quindi è la leva più importante delle due ed è l'unica
+che non si può muovere senza SQL.
 
 ### Il listino rivenditore diceva due basi diverse senza dirlo (15/11/2026)
 
