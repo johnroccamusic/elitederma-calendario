@@ -28,8 +28,10 @@ import {
 } from "../src/rivenditori/regole.js";
 import {
   csvListinoRivenditori, colonneListino, titoloListino, righeEsportabili, righeIntestazione,
-  creaListinoRivenditoriPdf,
+  creaListinoRivenditoriPdf, categorieDelListino, nomeCategoria, intestazioneACapo,
 } from "../src/rivenditori/listinoPdf.js";
+import { CHIAVE_CATEGORIE_ESCLUSE } from "../src/rivenditori/dati.js";
+import { soloWinAnsi } from "../src/prezzi/winansi.js";
 import { creaRegolamentoPdf, spezzaInRighe } from "../src/rivenditori/regolamentoPdf.js";
 import { composizioneRegolamento, tabellaRiassortimenti, esempioRientro } from "../src/rivenditori/regolamento-testo.js";
 import { monta, attendi, clicca, scegli, scrivi } from "./aiuto.js";
@@ -613,6 +615,164 @@ describe("la pagina, montata per davvero", () => {
     await clicca(p.nodo.querySelector('[data-scheda="regolamento"]'));
     expect(p.nodo.querySelector("[data-segnaposto-regolamento]")).toBeTruthy();
     expect(p.testo()).toContain("Genera regolamento");
+    await p.smonta();
+  });
+});
+
+// ---------------------------------------------------------------------
+// LE CATEGORIE SI ESCLUDONO DAL LISTINO (18/11/2026)
+//
+// Chiesto dal titolare: «dividi la lista dei prodotti per categorie, con
+// un flag che mi consenta di escluderne alcune dalla generazione del
+// listino per il rivenditore». Quello che va difeso è che l'esclusione
+// valga su TUTTE E TRE le uscite — PDF, foglio e conteggio in pagina —
+// perché tre filtri scritti a parte direbbero tre numeri diversi sullo
+// stesso listino; e che le righe escluse restino VISIBILI in pagina, o da
+// lì dentro non si potrebbero più correggere prezzo e costo.
+const LOGO = fs.readFileSync(path.join(process.cwd(), "public/logo-elitederma-testata.png"));
+
+describe("le categorie si escludono dal listino", () => {
+  it("le categorie si contano sulle righe ESPORTABILI, non su tutte", () => {
+    const soloBanco = { ...ARIZONA, id: "p-banco", nome: "Solo al banco", blocco: "DA BANCO", blocco_ordine: 9, sullo_shop: false };
+    const nomi = categorieDelListino([...LISTINO, soloBanco]).map((c) => c.nome);
+    // una categoria fatta di merce che non si può spedire non si offre da
+    // escludere: sarebbe una spunta che non fa niente
+    expect(nomi).toEqual(["PIGMENTI", "AGHI", "LAMINAZIONE"]);
+    expect(categorieDelListino(LISTINO).find((c) => c.nome === "PIGMENTI").quanti).toBe(2);
+  });
+
+  it("una categoria esclusa esce dalle righe del listino, e le altre restano", () => {
+    expect(righeEsportabili(LISTINO).map((r) => r.nome)).toContain("Arizona");
+    const rimaste = righeEsportabili(LISTINO, ["PIGMENTI"]).map((r) => r.nome);
+    expect(rimaste).not.toContain("Arizona");
+    expect(rimaste).not.toContain("Dynamic BLKOUT Ink 240 ml (8 oz)");
+    expect(rimaste).toContain("Kit laminazione ciglia");
+    expect(rimaste).toContain("Ago 5 Magnum Universale 0.35 Cheyenne");
+  });
+
+  it("una categoria senza nome vale «ALTRI PRODOTTI», e con quel nome si esclude", () => {
+    const orfano = { ...ARIZONA, id: "p-orfano", nome: "Senza reparto", blocco: null, blocco_ordine: null };
+    expect(nomeCategoria(orfano)).toBe("ALTRI PRODOTTI");
+    expect(righeEsportabili([orfano], ["ALTRI PRODOTTI"])).toHaveLength(0);
+  });
+
+  it("il foglio Excel non nomina nemmeno la categoria esclusa", () => {
+    const csv = csvListinoRivenditori(LISTINO, LIVELLI, ["PIGMENTI"]);
+    expect(csv).not.toContain("PIGMENTI");
+    expect(csv).not.toContain("Arizona");
+    expect(csv).toContain("LAMINAZIONE");
+  });
+
+  it("il PDF esce con meno prodotti, e il conto che torna è quello vero", async () => {
+    const tutto = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: null });
+    const senzaPigmenti = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: null, escluse: ["PIGMENTI"] });
+    expect(tutto.prodotti).toBe(4);
+    expect(senzaPigmenti.prodotti).toBe(2);
+  });
+
+  it("escludere TUTTE le categorie non fa esplodere niente: esce un listino vuoto", async () => {
+    const vuoto = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: null, escluse: ["PIGMENTI", "AGHI", "LAMINAZIONE"] });
+    expect(vuoto.prodotti).toBe(0);
+    expect(new TextDecoder().decode(vuoto.bytes.slice(0, 5))).toBe("%PDF-");
+  });
+});
+
+describe("la testata dei listini", () => {
+  it("il marchio è il file vero, e finisce DENTRO il PDF", async () => {
+    const con = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: new Uint8Array(LOGO) });
+    const testo = new TextDecoder("latin1").decode(con.bytes);
+    expect(testo).toContain("/Image");
+    expect(testo).toContain("/Subtype /Image");
+  });
+
+  it("senza il file del logo il listino esce lo stesso, col nome scritto", async () => {
+    const senza = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: null });
+    const testo = new TextDecoder("latin1").decode(senza.bytes);
+    expect(new TextDecoder().decode(senza.bytes.slice(0, 5))).toBe("%PDF-");
+    expect(testo).not.toContain("/Subtype /Image");
+  });
+
+  it("un PNG rotto non fa fallire il listino a metà strada", async () => {
+    const rotto = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: new Uint8Array([1, 2, 3, 4]) });
+    expect(new TextDecoder().decode(rotto.bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
+  it("un titolo di colonna che non ci sta va a capo invece di finire sopra quello accanto", () => {
+    // il font finto misura 5 punti per carattere: basta a provare la
+    // regola senza innestare Helvetica
+    const font = { widthOfTextAtSize: (t) => t.length * 5 };
+    expect(intestazioneACapo("PUBBLICO CONSIGLIATO", font, 7, 62)).toEqual(["PUBBLICO", "CONSIGLIATO"]);
+    expect(intestazioneACapo("SCONTO APPLICATO", font, 7, 62)).toEqual(["SCONTO", "APPLICATO"]);
+    // ci sta in una riga sola: non si spezza per abitudine
+    expect(intestazioneACapo("PARTNER", font, 7, 62)).toEqual(["PARTNER"]);
+    expect(intestazioneACapo("PREZZO NETTO", font, 7, 62)).toEqual(["PREZZO NETTO"]);
+    // tre parole: restano due righe, perché la terza mangerebbe i prodotti
+    expect(intestazioneACapo("PREZZO AL PUBBLICO CONSIGLIATO", font, 7, 62)).toHaveLength(2);
+    // e una parola sola più lunga della colonna si taglia coi puntini
+    expect(intestazioneACapo("PROFESSIONALISSIMO", font, 7, 40)[0]).toMatch(/\.\.\.$/);
+  });
+
+  it("l'euro si scrive € e non «EUR»: il simbolo passa il filtro WinAnsi", () => {
+    expect(soloWinAnsi("€ 3.000")).toBe("€ 3.000");
+    // e quello che WinAnsi non ha continua a cadere
+    expect(soloWinAnsi("prezzo — speciale …")).toBe("prezzo - speciale ...");
+  });
+
+  it("la testata È UNA SOLA: nessuno dei due listini se la disegna per conto suo", () => {
+    const rivenditori = fs.readFileSync(path.join(process.cwd(), "src/rivenditori/listinoPdf.js"), "utf8");
+    const prezzi = fs.readFileSync(path.join(process.cwd(), "src/prezzi/listinoPdf.js"), "utf8");
+    // il nome della ditta non si disegna più qui dentro: lo fa
+    // `intestazione.js`, altrimenti i due fogli che arrivano alla stessa
+    // persona avrebbero due carte intestate che si scostano al primo ritocco
+    [rivenditori, prezzi].forEach((sorgente) => {
+      expect(sorgente).not.toMatch(/drawText\([^)]*ELITEDERMA/);
+      expect(sorgente).toContain("disegnaTestata");
+    });
+  });
+});
+
+describe("la pagina divide i prodotti per categoria", () => {
+  it("ogni categoria ha la sua banda, con la spunta e il conto", async () => {
+    database();
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    const bande = p.nodo.querySelectorAll("[data-categoria]");
+    expect([...bande].map((b) => b.getAttribute("data-categoria"))).toEqual(["PIGMENTI", "AGHI", "LAMINAZIONE"]);
+    expect(p.nodo.querySelector('[data-categoria-spunta="PIGMENTI"]').checked).toBe(true);
+    expect(p.nodo.querySelector('[data-banda="PIGMENTI"]').textContent).toContain("2 prodotti");
+    await p.smonta();
+  });
+
+  it("togliendo la spunta la categoria esce dal listino, e la pagina lo dice prima di generare", async () => {
+    const scritture = [];
+    database({ "impostazioni_layout_tabelle": (corpo) => { if (corpo) scritture.push(corpo); return []; } });
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    await clicca(p.nodo.querySelector('[data-categoria-spunta="PIGMENTI"]'));
+    await attendi(60);
+    const scritta = scritture.flat().find((c) => c && c.chiave === CHIAVE_CATEGORIE_ESCLUSE);
+    expect(scritta, "l'esclusione non è stata scritta").toBeTruthy();
+    expect(scritta.valore).toEqual(["PIGMENTI"]);
+    expect(p.testo()).toContain("Fuori dal listino una categoria");
+    expect(p.nodo.querySelector('[data-fuori="PIGMENTI"]')).toBeTruthy();
+    await p.smonta();
+  });
+
+  it("le righe di una categoria esclusa RESTANO in pagina: da qui si correggono prezzo e costo", async () => {
+    database({ "impostazioni_layout_tabelle": [{ chiave: CHIAVE_CATEGORIE_ESCLUSE, valore: ["PIGMENTI"] }] });
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    expect(p.testo()).toContain("Arizona");
+    expect(p.nodo.querySelector('[data-prezzo="Arizona"]')).toBeTruthy();
+    expect(p.nodo.querySelector('[data-categoria-spunta="PIGMENTI"]').checked).toBe(false);
+    await p.smonta();
+  });
+
+  it("senza nessuna esclusione la pagina dice quante categorie entrano", async () => {
+    database();
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    expect(p.nodo.querySelector("[data-escluse]").textContent).toContain("Tutte le 3 categorie");
     await p.smonta();
   });
 });

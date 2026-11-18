@@ -8,7 +8,8 @@
 // Le tabelle dei livelli e dei riassortimenti si ricavano dalla
 // configurazione a ogni generazione: così il foglio che si consegna non
 // può promettere soglie vecchie.
-import { soloWinAnsi } from "../prezzi/listinoPdf.js";
+import { soloWinAnsi } from "../prezzi/winansi.js";
+import { caricaLogoTestata, innestaLogo, disegnaMarchio } from "../prezzi/intestazione.js";
 
 const A4 = { larghezza: 595.28, altezza: 841.89 };
 const MARGINE = 48;
@@ -45,14 +46,17 @@ export function spezzaInRighe(testo, font, dimensione, larghezza) {
 }
 
 export async function creaRegolamentoPdf(composizione, {
-  getPdfLib, righeSocieta = [], versione = null, inVigoreDal = null, dataDi = null,
+  getPdfLib, righeSocieta = [], versione = null, inVigoreDal = null, dataDi = null, logo,
 } = {}) {
   const { PDFDocument, StandardFonts, rgb } = await (getPdfLib || caricaPdfLib)();
   const pdf = await PDFDocument.create();
   pdf.setTitle(composizione.titolo);
   const normale = await pdf.embedFont(StandardFonts.Helvetica);
   const grassetto = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const serif = await pdf.embedFont(StandardFonts.TimesRoman);
   const serifGrassetto = await pdf.embedFont(StandardFonts.TimesRomanBold);
+  const immagineLogo = await innestaLogo(pdf, logo === undefined ? await caricaLogoTestata() : logo);
+  const caratteri = { normale, grassetto, serif, serifGrassetto };
   const colore = (c) => rgb(c[0], c[1], c[2]);
   const destra = A4.larghezza - MARGINE;
   const larghezza = destra - MARGINE;
@@ -67,8 +71,9 @@ export async function creaRegolamentoPdf(composizione, {
     numeroPagina += 1;
     y = A4.altezza - MARGINE;
     if (numeroPagina === 1) {
-      pagina.drawText(soloWinAnsi("ELITEDERMA"), { x: MARGINE, y: y - 24, size: 24, font: serifGrassetto, color: colore(NAVY) });
-      const larg = serifGrassetto.widthOfTextAtSize("ELITEDERMA", 24);
+      // lo stesso marchio del listino: è il foglio che arriva nella
+      // stessa busta, e due marchi diversi si notano
+      const larg = disegnaMarchio(pagina, { logo: immagineLogo, x: MARGINE, y: y - 24, altezza: 22, font: caratteri, colore, conRegistrato: true });
       pagina.drawLine({ start: { x: MARGINE, y: y - 31 }, end: { x: MARGINE + larg, y: y - 31 }, thickness: 1.6, color: colore(ORO) });
       pagina.drawText(soloWinAnsi(composizione.titolo.toUpperCase()), { x: MARGINE, y: y - 50, size: 14, font: grassetto, color: colore(NAVY) });
       const riga2 = [versione ? `Versione ${versione}` : null, inVigoreDal ? `in vigore dal ${new Date(`${inVigoreDal}T00:00:00Z`).toLocaleDateString("it-IT", { timeZone: "UTC" })}` : null, `documento del ${data}`]
@@ -76,8 +81,8 @@ export async function creaRegolamentoPdf(composizione, {
       pagina.drawText(soloWinAnsi(riga2), { x: MARGINE, y: y - 64, size: 8.5, font: normale, color: colore(GRIGIO) });
       y -= 84;
     } else {
-      pagina.drawText(soloWinAnsi("ELITEDERMA"), { x: MARGINE, y: y - 11, size: 12, font: serifGrassetto, color: colore(NAVY) });
-      pagina.drawText(soloWinAnsi(composizione.titolo), { x: MARGINE + 84, y: y - 11, size: 8.5, font: normale, color: colore(GRIGIO) });
+      const largPiccolo = disegnaMarchio(pagina, { logo: immagineLogo, x: MARGINE, y: y - 11, altezza: 10, font: caratteri, colore, conRegistrato: false });
+      pagina.drawText(soloWinAnsi(composizione.titolo), { x: MARGINE + largPiccolo + 14, y: y - 11, size: 8.5, font: normale, color: colore(GRIGIO) });
       y -= 30;
     }
   }
@@ -96,17 +101,31 @@ export async function creaRegolamentoPdf(composizione, {
       const largPrima = colonne > 3 ? 108 : 150;
       const largAltre = (larghezza - largPrima) / (colonne - 1);
       const x = (i) => MARGINE + (i === 0 ? 0 : largPrima + largAltre * (i - 1));
+      // UNA CELLA NON SBORDA NELLA COLONNA ACCANTO (18/11/2026, visto
+      // generando il documento vero): qui non c'era nessun taglio, e
+      // «ordine singolo € 1.000» finiva sopra la colonna degli acquisti
+      // annui. Su un regolamento che si firma, due colonne che si
+      // sovrappongono si leggono come un numero sbagliato.
+      const largCella = (i) => (i === 0 ? largPrima : largAltre) - 8;
+      const cella = (testo, i, font, dim) => {
+        const s = soloWinAnsi(testo);
+        if (font.widthOfTextAtSize(s, dim) <= largCella(i)) return s;
+        let taglio = s;
+        while (taglio.length > 1 && font.widthOfTextAtSize(`${taglio}...`, dim) > largCella(i)) taglio = taglio.slice(0, -1);
+        return `${taglio}...`;
+      };
       spazio(18 + 14 * blocco.tabella.righe.length);
       pagina.drawRectangle({ x: MARGINE, y: y - 12, width: larghezza, height: 15, color: colore(NAVY) });
       blocco.tabella.testata.forEach((t, i) => {
-        pagina.drawText(soloWinAnsi(t), { x: x(i) + 4, y: y - 8, size: 7, font: grassetto, color: rgb(1, 1, 1) });
+        pagina.drawText(cella(t, i, grassetto, 7), { x: x(i) + 4, y: y - 8, size: 7, font: grassetto, color: rgb(1, 1, 1) });
       });
       y -= 17;
       blocco.tabella.righe.forEach((riga, n) => {
         spazio(14);
         if (n % 2 === 0) pagina.drawRectangle({ x: MARGINE, y: y - 10, width: larghezza, height: 13, color: colore(RIGA_CHIARA) });
-        riga.forEach((cella, i) => {
-          pagina.drawText(soloWinAnsi(cella), { x: x(i) + 4, y: y - 6.5, size: 7.5, font: i === 0 ? grassetto : normale, color: colore(NAVY) });
+        riga.forEach((testoCella, i) => {
+          const f = i === 0 ? grassetto : normale;
+          pagina.drawText(cella(testoCella, i, f, 7.5), { x: x(i) + 4, y: y - 6.5, size: 7.5, font: f, color: colore(NAVY) });
         });
         y -= 13;
       });

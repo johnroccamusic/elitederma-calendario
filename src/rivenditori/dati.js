@@ -215,3 +215,31 @@ export async function salvaLivelliScelti(codici) {
     .upsert({ chiave: CHIAVE_LIVELLI_SCELTI, valore: codici, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
   if (error) throw error;
 }
+
+// LE CATEGORIE ESCLUSE DAL LISTINO (18/11/2026, chiesto dal titolare: «un
+// flag che mi consenta di escluderne alcune dalla generazione del listino
+// per il rivenditore»).
+//
+// Sta dove sta la spunta dei livelli, e per lo stesso motivo: è una scelta
+// di chi prepara il listino, si cambia senza pubblicare niente e si
+// ricorda alla volta dopo. Non è una proprietà del prodotto — lo stesso
+// reparto può entrare nel listino di oggi e restare fuori da quello di
+// domani — quindi non è una colonna di `prodotti_shop`.
+//
+// Si tiene la lista di quelle ESCLUSE e non di quelle incluse: una
+// categoria nuova nel catalogo entra nel listino da sé, che è quello che
+// uno si aspetta. Al contrario resterebbe fuori in silenzio.
+export const CHIAVE_CATEGORIE_ESCLUSE = "listini_rivenditori_categorie_escluse";
+
+export async function leggiCategorieEscluse() {
+  const { data, error } = await supabase.from("impostazioni_layout_tabelle")
+    .select("valore").eq("chiave", CHIAVE_CATEGORIE_ESCLUSE).maybeSingle();
+  if (error) return [];
+  return Array.isArray(data?.valore) ? data.valore.map(String) : [];
+}
+
+export async function salvaCategorieEscluse(nomi) {
+  const { error } = await supabase.from("impostazioni_layout_tabelle")
+    .upsert({ chiave: CHIAVE_CATEGORIE_ESCLUSE, valore: nomi, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+  if (error) throw error;
+}

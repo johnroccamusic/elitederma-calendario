@@ -21,10 +21,13 @@ import {
   leggiListinoDaEsportare, scriviPrezzoECosto, leggiModifiche, leggiRivenditori,
   salvaRivenditore, cancellaRivenditore, leggiOrdini, aggiungiOrdine, cancellaOrdine,
   leggiVerifiche, aggiungiVerifica, leggiRegolamenti, leggiLivelliScelti, salvaLivelliScelti,
-  salvaLivello,
+  salvaLivello, leggiCategorieEscluse, salvaCategorieEscluse,
 } from "./dati.js";
 import { livelliAttivi, nominalePct, euroIt } from "./regole.js";
-import { creaListinoRivenditoriPdf, csvListinoRivenditori, righeEsportabili, soglia, titoloListino } from "./listinoPdf.js";
+import {
+  creaListinoRivenditoriPdf, csvListinoRivenditori, righeEsportabili, soglia, titoloListino,
+  categorieDelListino, nomeCategoria,
+} from "./listinoPdf.js";
 import SchedaRivenditori from "./SchedaRivenditori.jsx";
 import SchedaRegolamento from "./SchedaRegolamento.jsx";
 
@@ -82,6 +85,7 @@ export default function PaginaListiniRivenditori({
   const [repartoScelto, setRepartoScelto] = useState("");
   const [notaScelta, setNotaScelta] = useState("");
   const [scelti, setScelti] = useState(null); // codici dei livelli spuntati
+  const [escluse, setEscluse] = useState([]); // categorie fuori dal listino
   const [bozzaPrezzo, setBozzaPrezzo] = useState({});
   const [bozzaCosto, setBozzaCosto] = useState({});
   const [salvando, setSalvando] = useState(null);
@@ -110,10 +114,12 @@ export default function PaginaListiniRivenditori({
   }, [giro]);
 
   // l'ultima spunta dei livelli si ricorda: chi prepara il listino di un
-  // Professional lo rifà con la stessa selezione
+  // Professional lo rifà con la stessa selezione. Lo stesso per le
+  // categorie escluse.
   useEffect(() => {
     let vivo = true;
     leggiLivelliScelti().then((c) => { if (vivo && scelti == null) setScelti(c); });
+    leggiCategorieEscluse().then((c) => { if (vivo) setEscluse(c || []); });
     return () => { vivo = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -142,6 +148,29 @@ export default function PaginaListiniRivenditori({
       && (!notaScelta || r.nota === notaScelta));
   }, [righe, cerca, repartoScelto, notaScelta]);
 
+  // Le categorie che il listino può contenere, con quante righe
+  // ESPORTABILI ha ognuna: le conta la stessa funzione che poi filtra il
+  // PDF e il foglio, non un conto a parte.
+  const categorie = useMemo(() => categorieDelListino(righe), [righe]);
+  const fuori = useMemo(() => new Set(escluse), [escluse]);
+  const prodottiFuori = useMemo(
+    () => categorie.filter((c) => fuori.has(c.nome)).reduce((s, c) => s + c.quanti, 0), [categorie, fuori]);
+  const nelListino = useMemo(() => righeEsportabili(righe, escluse).length, [righe, escluse]);
+
+  // La tabella si legge per categoria (18/11/2026): una fila di duecento
+  // righe non dice a che punto del catalogo si è, e la spunta per
+  // escludere una categoria dal listino deve stare SULLA categoria, dove
+  // la si guarda.
+  const perCategoria = useMemo(() => {
+    const m = new Map();
+    visibili.forEach((r) => {
+      const k = nomeCategoria(r);
+      if (!m.has(k)) m.set(k, { nome: k, ordine: r.blocco_ordine ?? 99, righe: [] });
+      m.get(k).righe.push(r);
+    });
+    return [...m.values()].sort((a, b) => a.ordine - b.ordine);
+  }, [visibili]);
+
   const contatori = useMemo(() => {
     const c = {};
     NOTE.forEach((n) => { c[n.chiave] = righe.filter((r) => r.nota === n.chiave).length; });
@@ -151,6 +180,15 @@ export default function PaginaListiniRivenditori({
   async function cambiaScelti(codici) {
     setScelti(codici);
     try { await salvaLivelliScelti(codici); } catch { /* una spunta che non si ricorda non ferma il listino */ }
+  }
+
+  // Una categoria esclusa resta VISIBILE qui dentro, in grigio: da questa
+  // pagina si correggono prezzi e costi, e nascondere le righe vorrebbe
+  // dire non poterle più toccare. Quello che cambia è il file che esce.
+  async function cambiaEscluse(nomi) {
+    setEscluse(nomi);
+    try { await salvaCategorieEscluse(nomi); }
+    catch { /* una spunta che non si ricorda non ferma il listino */ }
   }
 
   async function salvaRicarico() {
@@ -231,7 +269,7 @@ export default function PaginaListiniRivenditori({
       // riceve».
       const daEsportare = await leggiListinoDaEsportare();
       const { bytes, prodotti, pagine } = await creaListinoRivenditoriPdf(daEsportare, livelliScelti, {
-        tettoPct, getPdfLib, righeSocieta,
+        tettoPct, getPdfLib, righeSocieta, escluse,
       });
       const nome = unoSolo
         ? `listino-rivenditori-${livelliScelti[0].codice}-${new Date().toISOString().slice(0, 10)}.pdf`
@@ -247,12 +285,12 @@ export default function PaginaListiniRivenditori({
     setFacendo("excel"); setErrore(null); setEsito("");
     try {
       const daEsportare = await leggiListinoDaEsportare();
-      const testo = csvListinoRivenditori(daEsportare, livelliScelti);
+      const testo = csvListinoRivenditori(daEsportare, livelliScelti, escluse);
       const nome = unoSolo
         ? `listino-rivenditori-${livelliScelti[0].codice}-${new Date().toISOString().slice(0, 10)}.csv`
         : `listino-rivenditori-${new Date().toISOString().slice(0, 10)}.csv`;
       scaricaCsv(testo, nome);
-      setEsito(`Foglio creato: ${righeEsportabili(daEsportare).length} prodotti.`);
+      setEsito(`Foglio creato: ${righeEsportabili(daEsportare, escluse).length} prodotti.`);
     } catch (e) { setErrore(`Non sono riuscito a creare il foglio: ${e?.message || e}`); }
     setFacendo(null);
   }
@@ -394,6 +432,26 @@ export default function PaginaListiniRivenditori({
                   Nessun livello spuntato: non c'è niente da esportare.
                 </div>
               )}
+              {/* CHE COSA RESTA FUORI, prima di premere. La spunta sta sulla
+                  banda di ogni categoria, in fondo alla pagina: chi arriva
+                  qui per generare il file deve poter leggere da subito che
+                  qualcosa non ci sarà, senza scorrere duecento righe. */}
+              <div style={{ ...fontBody, fontSize: 12.5, color: escluse.length ? "#8A6D1D" : MUTED, marginTop: 8, lineHeight: 1.5 }}
+                data-escluse={escluse.length}>
+                {escluse.length ? (
+                  <>
+                    <b>Fuori dal listino {escluse.length === 1 ? "una categoria" : `${escluse.length} categorie`}</b> ({prodottiFuori} prodotti):{" "}
+                    {escluse.join(" · ")}. Il file ne conterrà <b>{nelListino}</b>.{" "}
+                    <button onClick={() => cambiaEscluse([])} data-rimetti-categorie
+                      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent",
+                        border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+                      Rimettile tutte
+                    </button>
+                  </>
+                ) : (
+                  <>Tutte le {categorie.length} categorie entrano nel listino ({nelListino} prodotti). Per escluderne una, togli la spunta sulla sua banda qui sotto.</>
+                )}
+              </div>
               <button onClick={() => setSoglieAperte((v) => !v)} data-apri-soglie
                 style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent",
                   border: "none", padding: "8px 0 0", cursor: "pointer" }}>
@@ -459,53 +517,91 @@ export default function PaginaListiniRivenditori({
                     <th style={{ textAlign: "left" }}>Nota</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {visibili.map((r) => {
-                    const n = notaDi(r.nota);
-                    return (
-                      <tr key={r.id} data-riga={r.nome} style={{ background: r.nota === "nessuno_sconto" ? "#FFFBFB" : undefined }}>
-                        <td className="lr-nome" style={{ paddingLeft: 10 }}>
-                          {r.nome}
-                          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{r.blocco}{r.tipo === "bundle" ? " · kit (costo dalla distinta)" : ""}</div>
-                        </td>
-                        <td>
-                          <input className="lr-campo" data-prezzo={r.nome}
-                            value={bozzaPrezzo[r.id] ?? cifra(r.pubblico_lordo)}
-                            onChange={(e) => setBozzaPrezzo((b) => ({ ...b, [r.id]: e.target.value }))}
-                            onFocus={(e) => e.target.select()}
-                            onBlur={() => salvaRiga(r)}
-                            disabled={salvando === r.id} />
-                        </td>
-                        <td className="lr-costo">{cifra(r.pubblico_netto)}</td>
-                        <td>
-                          <input className="lr-campo" data-costo={r.nome}
-                            value={bozzaCosto[r.id] ?? (r.costo == null ? "" : cifra(r.costo))}
-                            placeholder={r.tipo === "bundle" ? "distinta" : "—"}
-                            onChange={(e) => setBozzaCosto((b) => ({ ...b, [r.id]: e.target.value }))}
-                            onFocus={(e) => e.target.select()}
-                            onBlur={() => salvaRiga(r)}
-                            disabled={salvando === r.id || r.tipo === "bundle"}
-                            title={r.tipo === "bundle" ? "Su un kit il costo è la somma della distinta: si corregge sui componenti, non qui." : "Costo d'acquisto, IVA esclusa"} />
-                        </td>
-                        {livelliScelti.map((l) => (
-                          <td key={l.codice} className="lr-liv">{cifra(r.prezzi?.[l.codice])}</td>
-                        ))}
-                        <td style={{ fontWeight: 700, color: r.nota === "nessuno_sconto" ? ROSSO : NAVY }}>
-                          {pct(unoSolo ? r.sconti_pct?.[livelliScelti[0].codice] : r.sconto_max_pct)}
-                        </td>
-                        <td style={{ textAlign: "left" }}>
-                          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: n.colore, background: n.fondo,
-                            borderRadius: 9, padding: "2px 7px", whiteSpace: "nowrap" }}>{n.etichetta}</span>
+                {/* UNA CATEGORIA PER VOLTA, con la sua spunta (18/11/2026).
+                    La spunta decide che cosa esce nel file, non che cosa si
+                    vede: le righe di una categoria esclusa restano qui,
+                    perche' da questa pagina si correggono prezzi e costi e
+                    nasconderle vorrebbe dire non poterle piu' toccare. */}
+                {perCategoria.map((c) => {
+                  const esclusa = fuori.has(c.nome);
+                  return (
+                    <tbody key={c.nome} data-categoria={c.nome}>
+                      <tr>
+                        <td colSpan={4 + livelliScelti.length + 2}
+                          style={{ padding: 0, borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "left" }}>
+                          <label data-banda={c.nome}
+                            style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", cursor: "pointer",
+                              background: esclusa ? "#EFEEEC" : NAVY, color: esclusa ? MUTED : "#fff" }}
+                            title={esclusa
+                              ? `«${c.nome}» non entra nel listino da consegnare: i suoi ${c.quanti ?? c.righe.length} prodotti restano qui per essere corretti.`
+                              : `«${c.nome}» entra nel listino da consegnare. Togli la spunta per lasciarla fuori.`}>
+                            <input type="checkbox" data-categoria-spunta={c.nome} checked={!esclusa}
+                              onChange={(e) => cambiaEscluse(e.target.checked
+                                ? escluse.filter((n) => n !== c.nome)
+                                : [...escluse, c.nome])} />
+                            <b style={{ ...fontBody, fontSize: 12.5, letterSpacing: 0.3, textTransform: "uppercase" }}>{c.nome}</b>
+                            <span style={{ ...fontBody, fontSize: 11.5, opacity: 0.8 }}>{c.righe.length} prodotti</span>
+                            <div style={{ flex: 1 }} />
+                            {esclusa && (
+                              <span data-fuori={c.nome} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: ROSSO,
+                                background: "#FDECEC", borderRadius: 9, padding: "2px 8px", whiteSpace: "nowrap" }}>
+                                fuori dal listino
+                              </span>
+                            )}
+                          </label>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
+                      {c.righe.map((r) => {
+                      const n = notaDi(r.nota);
+                      return (
+                        <tr key={r.id} data-riga={r.nome} style={{ background: r.nota === "nessuno_sconto" ? "#FFFBFB" : undefined, opacity: esclusa ? 0.55 : 1 }}>
+                          <td className="lr-nome" style={{ paddingLeft: 10 }}>
+                            {r.nome}
+                            {r.tipo === "bundle" && (
+                              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>kit · costo dalla distinta</div>
+                            )}
+                          </td>
+                          <td>
+                            <input className="lr-campo" data-prezzo={r.nome}
+                              value={bozzaPrezzo[r.id] ?? cifra(r.pubblico_lordo)}
+                              onChange={(e) => setBozzaPrezzo((b) => ({ ...b, [r.id]: e.target.value }))}
+                              onFocus={(e) => e.target.select()}
+                              onBlur={() => salvaRiga(r)}
+                              disabled={salvando === r.id} />
+                          </td>
+                          <td className="lr-costo">{cifra(r.pubblico_netto)}</td>
+                          <td>
+                            <input className="lr-campo" data-costo={r.nome}
+                              value={bozzaCosto[r.id] ?? (r.costo == null ? "" : cifra(r.costo))}
+                              placeholder={r.tipo === "bundle" ? "distinta" : "—"}
+                              onChange={(e) => setBozzaCosto((b) => ({ ...b, [r.id]: e.target.value }))}
+                              onFocus={(e) => e.target.select()}
+                              onBlur={() => salvaRiga(r)}
+                              disabled={salvando === r.id || r.tipo === "bundle"}
+                              title={r.tipo === "bundle" ? "Su un kit il costo è la somma della distinta: si corregge sui componenti, non qui." : "Costo d'acquisto, IVA esclusa"} />
+                          </td>
+                          {livelliScelti.map((l) => (
+                            <td key={l.codice} className="lr-liv">{cifra(r.prezzi?.[l.codice])}</td>
+                          ))}
+                          <td style={{ fontWeight: 700, color: r.nota === "nessuno_sconto" ? ROSSO : NAVY }}>
+                            {pct(unoSolo ? r.sconti_pct?.[livelliScelti[0].codice] : r.sconto_max_pct)}
+                          </td>
+                          <td style={{ textAlign: "left" }}>
+                            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: n.colore, background: n.fondo,
+                              borderRadius: 9, padding: "2px 7px", whiteSpace: "nowrap" }}>{n.etichetta}</span>
+                          </td>
+                        </tr>
+                      );
+                      })}
+                    </tbody>
+                  );
+                })}
               </table>
             </div>
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
-              {visibili.length} prodotti. Il costo e il margine non entrano in nessun file: il listino da consegnare
-              nasce da una lettura separata che quei campi non li riceve.
+              {visibili.length} prodotti in {perCategoria.length} categorie; nel listino da consegnare ne entrano <b>{nelListino}</b>.
+              Il costo e il margine non entrano in nessun file: quel listino nasce da una lettura separata che quei campi
+              non li riceve.
             </div>
           </>
         )}

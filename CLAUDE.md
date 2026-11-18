@@ -38,7 +38,7 @@ src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
                          iscrizione, iscrizioni, magazzino, notifiche, pos,
                          prezzi, progetti, punti, recesso, regole, rientri,
                          salvataggi, spese, stampe, statistiche
-prove/                   128 file, 1.299 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   128 file, 1.315 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      56 edge function + _shared
@@ -1780,6 +1780,92 @@ database. **I punti e le provvigioni delle master non si sono mossi di un
 centesimo**: controllato che `rivenditori_parametri` lo legge solo
 `v_listino_rivenditori`, mentre quei conti stanno su
 `v_prezzi_listini.sconto_max_pct`, che non è stata toccata.
+
+**LA LISTA È PER CATEGORIE, E UNA CATEGORIA SI ESCLUDE (18/11/2026).** Il
+titolare: «dividi la lista dei prodotti per categorie, con un flag che mi
+consenta di escluderne alcune dalla generazione del listino per il
+rivenditore». In pagina ogni categoria ha la sua **banda** — come nel PDF —
+con dentro la spunta, il nome e quanti prodotti contiene.
+
+Tre decisioni, e ognuna è un modo di sbagliare:
+
+- **La spunta decide che cosa ESCE, non che cosa si vede.** Le righe di una
+  categoria esclusa restano in pagina, smorzate e con la pastiglia «fuori
+  dal listino»: da qui si correggono prezzo e costo, e nasconderle
+  vorrebbe dire non poterle più toccare. È il contrario della spunta dei
+  livelli, che invece filtra anche l'anteprima, perché là si tratta di
+  colonne e qui di righe da lavorare.
+- **Si tiene l'elenco di quelle ESCLUSE, non di quelle incluse.** Una
+  categoria nuova nel catalogo entra nel listino da sé, che è quello che
+  uno si aspetta; al contrario resterebbe fuori in silenzio. La chiave è
+  il **nome** (`blocco` è testo, non un id): una categoria rinominata
+  rientra nel listino, ed è il male minore — l'alternativa è che resti
+  esclusa per sempre senza comparire in nessun elenco.
+- **Il filtro sta in `righeEsportabili`, in un posto solo**, perché da lì
+  passano tutte e tre le uscite — il PDF, il foglio e il conteggio che la
+  pagina scrive. Tre filtri scritti a parte direbbero tre numeri diversi
+  sullo stesso listino. E le categorie si contano sulle righe
+  **esportabili**: una fatta di sola merce da banco non si offre da
+  escludere, sarebbe una spunta che non fa niente.
+
+La scelta sta in `impostazioni_layout_tabelle`
+(`listini_rivenditori_categorie_escluse`), come la spunta dei livelli: si
+cambia senza pubblicare niente e si ricorda alla volta dopo. Sopra ai due
+tasti la pagina scrive che cosa resta fuori e quanti prodotti avrà il file,
+perché chi arriva lì per generare deve leggerlo senza scorrere duecento
+righe.
+
+**LA CARTA INTESTATA È UNA SOLA, E IL MARCHIO È IL FILE VERO (18/11/2026).**
+Il titolare ha chiesto di prendere «l'intestazione dell'altra generazione
+dei listini» e ha mandato il logo. Ora la testata sta in
+`src/prezzi/intestazione.js` e la usano **tutti e tre** i documenti: il
+listino del 15/11, il listino rivenditori e il regolamento. Sono fogli che
+arrivano alla stessa persona nella stessa settimana, e due disegni dello
+stesso marchio si scostano al primo ritocco.
+
+Il marchio non è più «ELITEDERMA» disegnato in Times con le lettere
+distanziate ma `public/logo-elitederma-testata.png` (652×102, il marchio
+orizzontale). Il motivo non è estetico: nel marchio vero la E centrale è il
+simbolo ≈, e **nessun font di serie di pdf-lib lo contiene** — il testo
+disegnato era un'approssimazione. Il file in `public/logo-elitederma.png`
+non è stato toccato: è un altro taglio, e lo usa la schermata d'accesso.
+
+**Il ripiego resta, ed è voluto:** se il file non arriva si scrive il nome
+come prima. Un listino senza marchio è meno grave di un listino che non
+esce — la stessa regola di `datiSocieta()`. Vale anche per un PNG
+illeggibile: `innestaLogo` torna `null` invece di far fallire il documento
+a metà strada.
+
+**E tre difetti che si vedevano solo guardando il documento vero**, trovati
+generandolo e aprendolo (jsdom non impagina: è la stessa lezione del banco
+visivo del 23/10):
+
+- **«EUR 500» invece di «€ 500», ovunque.** `soloWinAnsi` sostituiva il
+  simbolo per prudenza, e la prudenza era di troppo: WinAnsi l'euro ce
+  l'ha (0x80) e i font di serie lo disegnano — provato. Sul regolamento da
+  far firmare ogni soglia diceva «EUR», e le tre lettere in più erano
+  anche la causa del difetto qui sotto. Il simbolo è U+20AC, cioè sopra
+  0xFF: va **escluso a mano** dal filtro finale, o lo butta via la riga che
+  toglie tutto quello che WinAnsi non ha.
+- **Le celle della tabella del regolamento sbordavano nella colonna
+  accanto**: «ordine singolo € 1.000» finiva sopra gli acquisti annui. Lì
+  non c'era nessun taglio. Su un documento che si firma, due colonne
+  sovrapposte si leggono come un numero sbagliato.
+- **I titoli delle colonne del listino si accavallavano** quando sono
+  lunghi: le colonne sono larghe 66 punti e i titoli si scrivono allineati
+  a destra, quindi «PREZZO PROFESSIONAL» (85 punti) finiva stampato sopra
+  «PREZZO NETTO» — e non si capiva più quale numero stesse sotto quale
+  colonna. Adesso `intestazioneACapo` li manda a capo su due righe, misurando
+  col font vero, e quello che non ci sta nemmeno così si taglia coi puntini.
+
+Prove nuove in `prove/listini-rivenditori.test.jsx` (76 in tutto): le
+categorie escluse su tutte e tre le uscite, la pagina con le bande e la
+spunta che scrive davvero, il marchio che finisce **dentro** il PDF
+(`/Subtype /Image`) e il listino che esce lo stesso senza, un PNG rotto che
+non ferma niente, l'euro che passa il filtro, i titoli che vanno a capo, e
+una guardia che pretende che **nessuno dei due listini disegni il nome per
+conto suo**: se un giorno torna un `drawText("ELITEDERMA")` lì dentro, sono
+di nuovo due carte intestate.
 
 **Resta da fare, e va deciso:** il **testo del regolamento**; i **19 prezzi
 al pubblico** che non reggono il 40% (gli espositori, la linea laminazione, i

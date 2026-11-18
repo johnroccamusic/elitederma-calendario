@@ -9,14 +9,15 @@
 // Il PDF si costruisce nel browser come tutti gli altri dell'app. Le
 // foto dei prodotti qui non ci sono: con cinque colonne di prezzi non
 // resta larghezza, e questo foglio si legge per confrontare numeri.
-import { soloWinAnsi } from "../prezzi/listinoPdf.js";
+import { soloWinAnsi } from "../prezzi/winansi.js";
+import { caricaLogoTestata, innestaLogo, disegnaTestata, disegnaTestatina } from "../prezzi/intestazione.js";
 
 const A4 = { corto: 595.28, lungo: 841.89 };
 const MARGINE = 34;
 const ALTEZZA_RIGA = 17;
 
 const NAVY = [0.055, 0.106, 0.2];
-const ORO = [0.722, 0.569, 0.333];
+// l'oro del filo sotto il marchio sta in `../prezzi/intestazione.js`
 const GRIGIO = [0.42, 0.45, 0.52];
 const RIGA_CHIARA = [0.976, 0.969, 0.953];
 const BORDO = [0.886, 0.867, 0.835];
@@ -39,17 +40,48 @@ export const soglia = (n) => `€ ${Number(n || 0).toLocaleString("it-IT", { max
 // Fuori restano i prodotti senza prezzo e quelli che si vendono SOLO AL
 // BANCO: offrirli a un rivenditore vorrebbe dire promettere merce che non
 // si sa come fargli avere. È la stessa regola del listino del 15/11.
-export function righeEsportabili(righe) {
+//
+// E fuori restano LE CATEGORIE ESCLUSE (18/11/2026, chiesto dal titolare:
+// «un flag che mi consenta di escluderne alcune dalla generazione del
+// listino»). L'esclusione si applica QUI, in un posto solo, perché da
+// questa funzione passano tutti e tre gli usi — il PDF, il foglio e il
+// conteggio che la pagina scrive — e tre filtri scritti a parte
+// direbbero tre numeri diversi sullo stesso listino.
+//
+// Il nome della categoria è la chiave, non un id: `blocco` arriva da
+// `v_prezzi_listini` ed è testo. Una categoria rinominata torna dentro al
+// listino da sé, ed è il male minore — l'alternativa è che resti esclusa
+// per sempre senza comparire in nessun elenco.
+export const nomeCategoria = (r) => r.blocco || "ALTRI PRODOTTI";
+
+export function righeEsportabili(righe, escluse = []) {
+  const fuori = new Set((escluse || []).map(String));
   return (righe || [])
     .filter((r) => r.pubblico_netto != null && r.pubblico_lordo != null && r.sullo_shop !== false)
+    .filter((r) => !fuori.has(nomeCategoria(r)))
     .slice()
     .sort((a, b) => (a.blocco_ordine - b.blocco_ordine) || String(a.nome).localeCompare(String(b.nome), "it"));
 }
 
-export function perReparto(righe) {
-  const mappa = new Map();
+// Le categorie del listino con quante righe esportabili contiene ognuna:
+// serve alla pagina per disegnare le spunte e per dire che cosa resta
+// fuori. Conta le righe ESPORTABILI, non tutte: una categoria fatta di
+// soli prodotti da banco non entrerebbe comunque, e offrirla da escludere
+// sarebbe una spunta che non fa niente.
+export function categorieDelListino(righe) {
+  const m = new Map();
   righeEsportabili(righe).forEach((r) => {
-    const k = r.blocco || "ALTRI PRODOTTI";
+    const k = nomeCategoria(r);
+    if (!m.has(k)) m.set(k, { nome: k, ordine: r.blocco_ordine ?? 99, quanti: 0 });
+    m.get(k).quanti += 1;
+  });
+  return [...m.values()].sort((a, b) => a.ordine - b.ordine);
+}
+
+export function perReparto(righe, escluse = []) {
+  const mappa = new Map();
+  righeEsportabili(righe, escluse).forEach((r) => {
+    const k = nomeCategoria(r);
     if (!mappa.has(k)) mappa.set(k, { nome: k, ordine: r.blocco_ordine ?? 99, prodotti: [] });
     mappa.get(k).prodotti.push(r);
   });
@@ -109,16 +141,43 @@ export function righeIntestazione(livelliScelti, tettoPct) {
 // export del listino: si apre in Excel con un doppio clic. Un vero .xlsx
 // vorrebbe dire una libreria per scrivere uno zip, e questo progetto ha
 // sei dipendenze per scelta.
-export function csvListinoRivenditori(righe, livelliScelti) {
+export function csvListinoRivenditori(righe, livelliScelti, escluse = []) {
   const colonne = colonneListino(livelliScelti);
   const cella = (v) => {
     const t = String(v ?? "");
     return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const testata = ["Categoria", "Prodotto", ...colonne.map((c) => `${c.titolo} (${c.sotto})`)].map(cella).join(";");
-  const corpo = righeEsportabili(righe).map((r) =>
-    [r.blocco || "ALTRI PRODOTTI", r.nome, ...colonne.map((c) => c.valore(r))].map(cella).join(";"));
+  const corpo = righeEsportabili(righe, escluse).map((r) =>
+    [nomeCategoria(r), r.nome, ...colonne.map((c) => c.valore(r))].map(cella).join(";"));
   return "﻿" + [testata, ...corpo].join("\r\n") + "\r\n";
+}
+
+// UN'INTESTAZIONE CHE NON STA NELLA SUA COLONNA VA A CAPO (18/11/2026,
+// visto generando il documento vero). Le colonne del listino sono larghe
+// 66 punti e i titoli si scrivono allineati a destra: «PREZZO
+// PROFESSIONAL» ne misura 85 e finiva stampato sopra «PREZZO NETTO». Due
+// titoli sovrapposti su un listino di prezzi non sono un difetto
+// estetico — non si capisce più quale numero sta sotto quale colonna.
+//
+// Due righe al massimo: la terza mangerebbe la prima riga di prodotti, e
+// quello che non ci sta si taglia coi puntini. La larghezza si misura col
+// font vero, perché fra "IIII" e "MMMM" contare i caratteri sbaglia di
+// parecchio.
+export function intestazioneACapo(testo, font, dimensione, larghezza) {
+  const parole = soloWinAnsi(testo).split(" ").filter(Boolean);
+  const righe = [];
+  parole.forEach((parola) => {
+    const unita = righe.length ? `${righe[righe.length - 1]} ${parola}` : null;
+    if (unita && font.widthOfTextAtSize(unita, dimensione) <= larghezza) righe[righe.length - 1] = unita;
+    else righe.push(parola);
+  });
+  return righe.slice(0, 2).map((r) => {
+    if (font.widthOfTextAtSize(r, dimensione) <= larghezza) return r;
+    let taglio = r;
+    while (taglio.length > 1 && font.widthOfTextAtSize(`${taglio}...`, dimensione) > larghezza) taglio = taglio.slice(0, -1);
+    return `${taglio}...`;
+  });
 }
 
 let _pdfLibLocale = null;
@@ -132,10 +191,15 @@ async function caricaPdfLibLocale() {
 
 // ---------- PDF ----------
 export async function creaListinoRivenditoriPdf(righe, livelliScelti, {
-  tettoPct = 50, getPdfLib, righeSocieta = [], dataDi = null,
+  tettoPct = 50, getPdfLib, righeSocieta = [], dataDi = null, escluse = [], logo,
 } = {}) {
   const { PDFDocument, StandardFonts, rgb } = await (getPdfLib || caricaPdfLibLocale)();
-  const reparti = perReparto(righe);
+  const reparti = perReparto(righe, escluse);
+  // il marchio: chi chiama puo' passarne i byte (le prove lo fanno),
+  // altrimenti si legge da `public/`. Se non arriva, la testata scrive il
+  // nome come prima — un listino senza logo e' meno grave di un listino
+  // che non esce.
+  const bytesLogo = logo === undefined ? await caricaLogoTestata() : logo;
   const colonne = colonneListino(livelliScelti);
   // con molte colonne si gira il foglio: nove colonne di numeri su un A4
   // in verticale si schiacciano fino a toccarsi
@@ -146,8 +210,11 @@ export async function creaListinoRivenditoriPdf(righe, livelliScelti, {
   pdf.setTitle(titoloListino(livelliScelti));
   const normale = await pdf.embedFont(StandardFonts.Helvetica);
   const grassetto = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const serif = await pdf.embedFont(StandardFonts.TimesRoman);
   const serifGrassetto = await pdf.embedFont(StandardFonts.TimesRomanBold);
   const colore = (c) => rgb(c[0], c[1], c[2]);
+  const immagineLogo = await innestaLogo(pdf, bytesLogo);
+  const caratteri = { normale, grassetto, serif, serifGrassetto };
 
   const destra = larghezzaPagina - MARGINE;
   const LARG_COLONNA = 66;
@@ -171,27 +238,44 @@ export async function creaListinoRivenditoriPdf(righe, livelliScelti, {
     return `${taglio}...`;
   }
 
+  // UN'INTESTAZIONE CHE NON STA NELLA SUA COLONNA VA A CAPO (18/11/2026,
+  // visto generando il documento vero). Le colonne sono larghe 66 e
+  // scritte allineate a destra: «PREZZO PROFESSIONAL» ne misura 85 e
+  // finiva stampato sopra «PREZZO NETTO». Due titoli sovrapposti su un
+  // listino di prezzi non sono un difetto estetico — non si capisce più
+  // quale numero sta sotto quale colonna.
   function intestazioneColonne() {
-    pagina.drawText("PRODOTTO", { x: MARGINE, y: y - 16, size: 7.5, font: grassetto, color: colore(GRIGIO) });
+    const titoli = colonne.map((c) => intestazioneACapo(c.titolo.toUpperCase(), grassetto, 7, LARG_COLONNA - 4));
+    // le righe del titolo si contano UNA VOLTA PER TUTTE le colonne: se
+    // ogni colonna si appoggiasse sulle proprie, "IVA esclusa" starebbe a
+    // un'altezza diversa in ognuna e la testata sembrerebbe storta
+    const quante = Math.max(1, ...titoli.map((r) => r.length));
+    const yTitolo = y - 6;
+    const ySotto = yTitolo - quante * 8;
+    pagina.drawText("PRODOTTO", { x: MARGINE, y: ySotto, size: 7.5, font: grassetto, color: colore(GRIGIO) });
     colonne.forEach((c, i) => {
-      scriviDestra(c.titolo.toUpperCase(), xColonne[i], y - 6, grassetto, 7, GRIGIO);
-      scriviDestra(c.sotto, xColonne[i], y - 16, normale, 6.5, GRIGIO);
+      titoli[i].forEach((riga, n) => scriviDestra(riga, xColonne[i], yTitolo - n * 8, grassetto, 7, GRIGIO));
+      scriviDestra(c.sotto, xColonne[i], ySotto, normale, 6.5, GRIGIO);
     });
-    pagina.drawLine({ start: { x: MARGINE, y: y - 23 }, end: { x: destra, y: y - 23 }, thickness: 0.8, color: colore(BORDO) });
-    y -= 31;
+    const yFilo = ySotto - 7;
+    pagina.drawLine({ start: { x: MARGINE, y: yFilo }, end: { x: destra, y: yFilo }, thickness: 0.8, color: colore(BORDO) });
+    y = yFilo - 8;
   }
 
   function nuovaPagina() {
     pagina = pdf.addPage([larghezzaPagina, altezzaPagina]);
     numeroPagina += 1;
     y = altezzaPagina - MARGINE;
+    // LA TESTATA è quella del listino del 15/11, e sta in
+    // `intestazione.js`: stesso marchio, stesso filo d'oro, stessa data in
+    // alto a destra. Due fogli che arrivano alla stessa persona nella
+    // stessa settimana non possono avere due carte intestate.
+    const comune = {
+      logo: immagineLogo, titolo: titoloListino(livelliScelti), data,
+      margine: MARGINE, destra, font: caratteri, colore, y,
+    };
     if (numeroPagina === 1) {
-      pagina.drawText(soloWinAnsi("ELITEDERMA"), { x: MARGINE, y: y - 26, size: 26, font: serifGrassetto, color: colore(NAVY) });
-      const larg = serifGrassetto.widthOfTextAtSize("ELITEDERMA", 26);
-      pagina.drawLine({ start: { x: MARGINE, y: y - 33 }, end: { x: MARGINE + larg, y: y - 33 }, thickness: 1.6, color: colore(ORO) });
-      pagina.drawText(soloWinAnsi(titoloListino(livelliScelti).toUpperCase()), { x: MARGINE, y: y - 50, size: 13, font: normale, color: colore(NAVY) });
-      scriviDestra(`AGGIORNATO AL ${data.toUpperCase()}`, destra, y - 26, grassetto, 8, GRIGIO);
-      y -= 64;
+      y = disegnaTestata(pagina, comune);
       // le condizioni del livello, in alto: è la prima cosa che un
       // rivenditore cerca sul foglio che gli arriva
       righeIntestazione(livelliScelti, tettoPct).forEach((r) => {
@@ -200,10 +284,7 @@ export async function creaListinoRivenditoriPdf(righe, livelliScelti, {
       });
       y -= 6;
     } else {
-      pagina.drawText(soloWinAnsi("ELITEDERMA"), { x: MARGINE, y: y - 12, size: 13, font: serifGrassetto, color: colore(NAVY) });
-      pagina.drawText(soloWinAnsi(titoloListino(livelliScelti)), { x: MARGINE + 90, y: y - 12, size: 9, font: normale, color: colore(GRIGIO) });
-      scriviDestra(data.toUpperCase(), destra, y - 12, grassetto, 8, GRIGIO);
-      y -= 34;
+      y = disegnaTestatina(pagina, comune);
     }
     intestazioneColonne();
   }
