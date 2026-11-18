@@ -43,9 +43,17 @@ const COLLEGAMENTI = [
 // V1: un ordine misto, con la spedizione. V2: un pigmento piu' una riga
 // scritta a mano (al banco si battono anche i saldi dei corsi), che non
 // sta in nessuna categoria perche' a catalogo non c'e'.
+//
+// LO STATO C'E' SU OGNI ORDINE DEL SITO, e non e' una formalita':
+// dal 18/11/2026 le statistiche contano solo quello che e' stato
+// incassato. Queste vendite finte non lo portavano — e un ordine vero
+// senza stato non esiste, tutte e 4.292 le righe in archivio ne hanno
+// uno. V4 e' un ordine ANNULLATO da 999 €: non deve comparire in
+// nessuno dei totali di questa pagina, ed e' la prova che il filtro
+// c'e'.
 const VENDITE = [
   {
-    id: "v1", origine: "woocommerce", tipo_movimento: "vendita", data_ordine: `${OGGI}T10:00:00Z`,
+    id: "v1", origine: "woocommerce", stato: "completed", tipo_movimento: "vendita", data_ordine: `${OGGI}T10:00:00Z`,
     totale: 100, cliente_nome: "Anna", numero_ordine: "1001",
     prodotti: [
       { prodotto_id: "p1", nome: "Kit laminazione", quantita: 2, totale_riga: 60 },
@@ -54,7 +62,7 @@ const VENDITE = [
     ],
   },
   {
-    id: "v2", origine: "woocommerce", tipo_movimento: "vendita", data_ordine: `${OGGI}T11:00:00Z`,
+    id: "v2", origine: "woocommerce", stato: "completed", tipo_movimento: "vendita", data_ordine: `${OGGI}T11:00:00Z`,
     totale: 530, cliente_nome: "Bea", numero_ordine: "1002",
     prodotti: [
       { prodotto_id: "p2", nome: "Pigmento nero", quantita: 1, totale_riga: 30 },
@@ -63,8 +71,14 @@ const VENDITE = [
   },
   // al banco, non sullo shop: non deve comparire nella pagina dello shop
   {
-    id: "v3", origine: "pos", tipo_movimento: "vendita", data_ordine: `${OGGI}T12:00:00Z`,
+    id: "v3", origine: "pos", stato: "completed", tipo_movimento: "vendita", data_ordine: `${OGGI}T12:00:00Z`,
     totale: 60, cliente_nome: "Cle", prodotti: [{ prodotto_id: "p1", nome: "Kit laminazione", quantita: 1, totale_riga: 60 }],
+  },
+  // mai pagato: fuori da ogni totale, anche dal filtro per categoria
+  {
+    id: "v4", origine: "woocommerce", stato: "cancelled", tipo_movimento: "vendita", data_ordine: `${OGGI}T13:00:00Z`,
+    totale: 999, cliente_nome: "Dea", numero_ordine: "1003",
+    prodotti: [{ prodotto_id: "p1", nome: "Kit laminazione", quantita: 9, totale_riga: 999 }],
   },
 ];
 
@@ -109,9 +123,12 @@ describe("il filtro per categoria nelle statistiche di canale", () => {
     const p = await apriCanale("Statistiche Vendite Shop Online");
     expect(pulito(p)).toContain("Statistiche Vendite Shop Online");
 
-    // senza filtro: i totali degli ordini dello shop (100 + 530), com'era
-    // prima che il filtro esistesse. La vendita al banco resta fuori.
+    // senza filtro: i totali degli ordini PAGATI dello shop (100 + 530).
+    // La vendita al banco resta fuori, e l'ordine annullato da 999 €
+    // anche: fino al 18/11/2026 ci sarebbe finito dentro.
     expect(pulito(p)).toContain("630,00 €");
+    expect(pulito(p)).not.toContain("999,00 €");
+    expect(pulito(p)).not.toContain("1.629,00 €");
     expect(pulito(p)).not.toContain("Pigmento nero · parte dell'ordine");
 
     const tendina = p.tendina("categoria");

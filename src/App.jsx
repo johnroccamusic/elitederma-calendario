@@ -43325,6 +43325,117 @@ function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, r
 }
 
 // ---------- CRM Shop Online ----------
+//
+// UN ORDINE CHE NON E' STATO PAGATO NON E' UN INCASSO (18/11/2026).
+//
+// Fino a oggi tutte le letture degli ordini del sito filtravano
+// `origine === "woocommerce"` e basta: nessuna guardava `stato`. Quindi
+// i tentativi di pagamento falliti e i carrelli abbandonati — che
+// WooCommerce conserva come ordini veri e propri — finivano sommati
+// agli incassi. Misurato il giorno in cui e' stato trovato: sui
+// 646.706,45 € davvero incassati se ne appoggiavano altri 710.752,88 €
+// mai entrati (507.710,51 annullati, 91.588,97 falliti, 87.797,40 in
+// sospeso, 23.656,00 in attesa). In cima alla classifica dei clienti
+// c'erano otto persone con 45.000, 41.020, 29.565 € di «speso» e zero
+// euro pagati: una da sola aveva quindici ordini da 3.000 €, tutti
+// annullati o falliti.
+//
+// Il danno peggiore non e' il numero sbagliato, e' che sembrava giusto:
+// nessuno mette in dubbio una classifica dei migliori clienti.
+//
+// LA REGOLA, E PERCHE' NON E' UNA LISTA DI STATI SCRITTA A CASO.
+// Di WooCommerce contano solo gli stati in cui i soldi sono arrivati:
+// `completed` e `processing` (quest'ultimo oggi non c'e' in archivio,
+// ma e' lo stato normale di un ordine pagato e non ancora evaso: il
+// giorno che compare deve contare da se'). `refunded` sta fuori — quei
+// soldi sono tornati indietro — e si legge a parte.
+//
+// Per le altre origini vale il contrario: al banco si registra solo
+// quello che si e' incassato, e dal 23/10/2026 il database pretende la
+// prova del pagamento prima di accettare una vendita con la carta.
+// Quindi una riga del POS conta sempre, anche se un giorno arrivasse
+// senza stato — pretendere `completed` anche li' vorrebbe dire far
+// sparire dalla contabilita' una vendita vera per una colonna vuota.
+export const STATI_ORDINE_INCASSATO = ["completed", "processing"];
+export const STATI_ORDINE_RIMBORSATO = ["refunded"];
+export function venditaIncassata(v) {
+  if (!v) return false;
+  const stato = String(v.stato || "").trim().toLowerCase();
+  if (v.origine !== "woocommerce") return !STATI_ORDINE_RIMBORSATO.includes(stato);
+  return STATI_ORDINE_INCASSATO.includes(stato);
+}
+export function venditaRimborsata(v) {
+  return STATI_ORDINE_RIMBORSATO.includes(String(v?.stato || "").trim().toLowerCase());
+}
+// quello che il cliente ha PROVATO a comprare e non ha pagato: non e'
+// spazzatura da cancellare — che una persona abbia tentato tre volte un
+// corso da 3.000 € e non ci sia riuscita e' l'informazione commerciale
+// piu' interessante di quell'elenco. Solo, non e' fatturato: ha una
+// colonna sua.
+export function venditaNonRiuscita(v) {
+  return !!v && !venditaIncassata(v) && !venditaRimborsata(v);
+}
+
+// UNA RIGA D'ORDINE E' UN PRODOTTO O UN CORSO, E LO DICE UNA REGOLA SOLA
+// (18/11/2026, chiesto dal titolare: «devi vedere che siano prodotti
+// acquistati, ho il dubbio che stai calcolando anche gli acconti dei
+// corsi che prima passavano sotto la voce kit»).
+//
+// Il dubbio era fondato, e misurato e' grosso: dei 646.706,45 €
+// incassati sullo shop, 242.435,70 € sono righe di CORSO — acconti e
+// saldi comprati dal sito — e 372.997,92 € prodotti veri. Un cliente
+// che ha versato l'acconto di un corso da 3.000 € non e' un cliente da
+// 3.000 € di prodotti, e in una classifica dei compratori dello shop
+// sta davanti a tutti senza aver comprato niente dal magazzino.
+//
+// La classificazione esiste gia' (`voci_shop_classificazione`, 453 voci
+// prodotto e 66 corso) e la usava solo la classifica dei prodotti.
+// Adesso la regola sta qui, in un posto solo, e la usano tutte e due:
+// due idee di «questa riga e' un corso» darebbero due numeri diversi
+// sullo stesso ordine.
+//
+// Il nome storico si impara dai dati e si impara da TUTTI gli ordini,
+// anche quelli non incassati: sapere come si chiamava un prodotto non
+// dipende dal fatto che quell'ordine sia andato a buon fine.
+function classificatoreVociShop(vociShopClassificazione, prodottiShop, venditeShop) {
+  const mappaTipo = Object.fromEntries((vociShopClassificazione || []).map((v) => [v.nome, v.tipo]));
+  const indici = indiciProdotti(prodottiShop);
+  const prodottoPerNomeStorico = new Map();
+  // TUTTI gli ordini, anche quelli mai pagati: come si chiamava un
+  // prodotto non dipende dal fatto che quell'ordine sia andato a buon fine
+  (venditeShop || []).filter((v) => v.origine === "woocommerce").forEach((v) => {
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
+      const p = prodottoDellaRiga(riga, indici);
+      const nome = String(riga?.nome || "").trim().toLowerCase();
+      if (p && nome && !prodottoPerNomeStorico.has(nome)) prodottoPerNomeStorico.set(nome, p);
+    });
+  });
+  // Si raggruppa per PRODOTTO, non per nome: rinominare un prodotto ne
+  // spezzerebbe la storia in due righe che non si parlano piu'. Il nome
+  // resta la chiave solo per le righe di prodotti che dal catalogo non
+  // ci sono piu', che altro appiglio non hanno.
+  //
+  // La classificazione e' scritta sul nome di quando e' stata decisa: si
+  // guarda anche quello vecchio, altrimenti un prodotto rinominato
+  // tornerebbe «non classificato» e rientrerebbe in classifica da una
+  // porta che qualcuno gli aveva chiuso.
+  return function classifica(riga) {
+    const nomeSalvato = String(riga?.nome || "").trim();
+    const prodotto = prodottoDellaRiga(riga, indici)
+      || prodottoPerNomeStorico.get(nomeSalvato.toLowerCase())
+      || null;
+    const nome = (prodotto?.nome || nomeSalvato).trim();
+    const tipo = mappaTipo[nome] ?? mappaTipo[nomeSalvato] ?? "prodotto";
+    return {
+      nome,
+      prodotto,
+      tipo,
+      classificato: mappaTipo[nome] != null || mappaTipo[nomeSalvato] != null,
+      chiave: prodotto?.id || nome.toLowerCase(),
+    };
+  };
+}
+
 // identità del cliente: per customer_id (account registrato, dentro
 // payload_raw — mai stato estratto in una colonna propria) quando c'è,
 // altrimenti per email normalizzata. "Unisci clienti" per i casi
@@ -43335,34 +43446,74 @@ function chiaveClienteShop(v) {
   if (customerId && Number(customerId) > 0) return `c:${customerId}`;
   return `e:${(v?.cliente_email || "").trim().toLowerCase()}`;
 }
-function costruisciClientiShop(venditeShop) {
+// I tre numeri di un cliente, e il fatto che TORNANO: prodotti + corsi +
+// resto = totale incassato. Il «resto» sono le spese di spedizione e le
+// differenze di sconto che stanno sul totale dell'ordine e non su
+// nessuna riga — misurate, 31.177,26 € su tutto l'archivio. Si mostra,
+// invece di sparire dentro uno degli altri due: un totale che non torna
+// con i suoi pezzi e' un totale che nessuno sa piu' leggere.
+export function costruisciClientiShop(venditeShop, vociShopClassificazione = [], prodottiShop = []) {
+  const classifica = classificatoreVociShop(vociShopClassificazione, prodottiShop, venditeShop);
   const gruppi = {};
+  // TUTTI gli ordini, anche i tentativi non riusciti: si raccolgono qui e
+  // si dividono dentro il gruppo, perche' la scheda del cliente li deve
+  // mostrare e la colonna «Non riusciti» li deve contare
   (venditeShop || []).filter((v) => v.origine === "woocommerce").forEach((v) => {
     const chiave = chiaveClienteShop(v);
     (gruppi[chiave] ||= []).push(v);
   });
   return Object.entries(gruppi).map(([chiave, righe]) => {
-    const ordini = righe.slice().sort((a, b) => (a.data_ordine || "").localeCompare(b.data_ordine || ""));
-    const conNome = [...ordini].reverse().find((o) => o.cliente_nome);
-    const conEmail = [...ordini].reverse().find((o) => o.cliente_email);
+    const tutti = righe.slice().sort((a, b) => (a.data_ordine || "").localeCompare(b.data_ordine || ""));
+    // IL CLIENTE E' QUELLO CHE HA PAGATO. Ordini, totali, date e giorni
+    // medi si contano sui soli ordini incassati: un primo ordine che e'
+    // un tentativo fallito del 2024 racconta una storia che non c'e'
+    // stata.
+    const ordini = tutti.filter(venditaIncassata);
+    const nonRiusciti = tutti.filter(venditaNonRiuscita);
+    const rimborsati = tutti.filter(venditaRimborsata);
+    // il nome e l'email sono quelli dell'ultimo ordine PAGATO; se non ce
+    // n'e' nessuno si ricade sull'ultimo tentativo, perche' una persona
+    // che ha solo provato a comprare si deve comunque poter chiamare per
+    // nome. Scritto in due passaggi e non con un `[...ordini, ...tutti]`:
+    // rovesciato, quell'array mette per primo l'ultimo ordine QUALUNQUE, e
+    // sulla riga comparirebbe il nome scritto su un carrello abbandonato.
+    const ultimoCon = (campo) => [...ordini].reverse().find((o) => o[campo])
+      || [...tutti].reverse().find((o) => o[campo]);
+    const conNome = ultimoCon("cliente_nome");
+    const conEmail = ultimoCon("cliente_email");
     // IL TELEFONO E L'INDIRIZZO STANNO NELL'ORDINE, non in un'anagrafica:
     // lo shop non ci ha mandato una rubrica, ci ha mandato ordini, e il
     // cliente e' scritto su ognuno. Si prende dal piu' recente che ce
     // l'ha — un numero cambiato si cambia comprando di nuovo, e l'ordine
     // vecchio porta quello vecchio.
-    const conFattura = [...ordini].reverse().find((o) => o?.payload_raw?.billing?.phone
+    const conFattura = [...tutti].reverse().find((o) => o?.payload_raw?.billing?.phone
       || o?.payload_raw?.billing?.address_1);
     const fatt = conFattura?.payload_raw?.billing || {};
     const sped = conFattura?.payload_raw?.shipping || {};
     const totali = ordini.map((o) => o.totale || 0);
     const numeroOrdini = ordini.length;
     const totaleSpeso = totali.reduce((a, b) => a + b, 0);
+    let totaleProdotti = 0, totaleCorsi = 0;
+    ordini.forEach((o) => {
+      (Array.isArray(o.prodotti) ? o.prodotti : []).forEach((riga) => {
+        if (riga?.spedizione) return;
+        const { tipo } = classifica(riga);
+        if (tipo === "escluso") return;
+        const importo = riga?.totale_riga || 0;
+        if (tipo === "corso") totaleCorsi += importo; else totaleProdotti += importo;
+      });
+    });
     const primoOrdine = ordini[0]?.data_ordine || null;
     const ultimoOrdine = ordini[ordini.length - 1]?.data_ordine || null;
     let giorniMedi = null;
     if (numeroOrdini > 1 && primoOrdine && ultimoOrdine) {
       giorniMedi = (new Date(ultimoOrdine) - new Date(primoOrdine)) / (1000 * 60 * 60 * 24 * (numeroOrdini - 1));
     }
+    // i nomi diversi dentro lo STESSO account: il raggruppamento e' per
+    // customer_id, e un account usato da piu' persone (o con
+    // l'intestazione cambiata) mostrerebbe in cima il nome dell'ultima
+    // senza dirlo. Sui soli ordini incassati sono 49 gruppi su 2.043.
+    const nomiVeri = [...new Set(ordini.map((o) => String(o.cliente_nome || "").trim().toLowerCase()).filter(Boolean))];
     return {
       chiave,
       nome: conNome?.cliente_nome || "",
@@ -43375,12 +43526,20 @@ function costruisciClientiShop(venditeShop) {
       spedizioneDiversa: [sped.address_1, sped.city].filter(Boolean).join(" ").trim(),
       numeroOrdini,
       totaleSpeso,
+      totaleProdotti: round2(totaleProdotti),
+      totaleCorsi: round2(totaleCorsi),
+      altroIncassato: round2(totaleSpeso - totaleProdotti - totaleCorsi),
       carrelloMedio: numeroOrdini > 0 ? totaleSpeso / numeroOrdini : 0,
       spesaMaggiore: totali.length ? Math.max(...totali) : 0,
+      ordiniNonRiusciti: nonRiusciti.length,
+      valoreNonRiuscito: round2(nonRiusciti.reduce((a, o) => a + (o.totale || 0), 0)),
+      ordiniRimborsati: rimborsati.length,
+      valoreRimborsato: round2(rimborsati.reduce((a, o) => a + (o.totale || 0), 0)),
+      piuNomi: nomiVeri.length > 1,
       primoOrdine,
       ultimoOrdine,
       giorniMedi,
-      ordini,
+      ordini: tutti,
     };
   });
 }
@@ -43389,55 +43548,21 @@ function costruisciClientiShop(venditeShop) {
 // voci_shop_classificazione: due elenchi separati (una voce "corso" non
 // entra mai nella classifica prodotti, e viceversa). Le voci non ancora
 // classificate contano come prodotto di default, ma sono segnalate.
-function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop) {
-  const mappaTipo = Object.fromEntries((vociShopClassificazione || []).map((v) => [v.nome, v.tipo]));
-  const indici = indiciProdotti(prodottiShop);
-  const righeOrdini = (venditeShop || []).filter((v) => v.origine === "woocommerce");
-
-  // I nomi che un prodotto ha avuto, imparati dai dati.
-  //
-  // Le righe piu' vecchie non portano ne' il codice del sito ne' lo sku:
-  // di loro si sa solo il nome che il prodotto aveva allora. Ma le righe
-  // che quel codice ce l'hanno insegnano a quale prodotto quel nome
-  // apparteneva, e cosi' anche le antiche si riattaccano al gruppo giusto
-  // invece di restare una riga a parte in fondo alla classifica.
-  const prodottoPerNomeStorico = new Map();
-  righeOrdini.forEach((v) => {
-    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
-      const p = prodottoDellaRiga(riga, indici);
-      const nome = String(riga?.nome || "").trim().toLowerCase();
-      if (p && nome && !prodottoPerNomeStorico.has(nome)) prodottoPerNomeStorico.set(nome, p);
-    });
-  });
+// Si contano i soli ordini incassati (vedi `venditaIncassata`): un
+// carrello abbandonato non ha venduto niente a nessuno.
+export function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop) {
+  const classifica = classificatoreVociShop(vociShopClassificazione, prodottiShop, venditeShop);
+  const righeOrdini = (venditeShop || []).filter((v) => v.origine === "woocommerce" && venditaIncassata(v));
 
   const perProdotto = {};
   const perCorso = {};
   righeOrdini.forEach((v) => {
     (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
-      // Si raggruppa per PRODOTTO, non per nome.
-      //
-      // Raggruppando per nome, rinominare un prodotto ne spezzava la
-      // storia in due righe che non si parlavano piu': una col nome
-      // vecchio fino a ieri, una col nuovo da oggi, e nessuna delle due
-      // diceva la verita'. Dove il prodotto si riconosce — dall'id del
-      // sito, dallo sku — comanda lui; il nome resta la chiave solo per
-      // le righe di prodotti che dal catalogo non ci sono piu', che
-      // altro appiglio non hanno.
-      const nomeSalvato = (riga?.nome || "").trim();
-      const prodotto = prodottoDellaRiga(riga, indici)
-        || prodottoPerNomeStorico.get(nomeSalvato.toLowerCase())
-        || null;
-      const nome = (prodotto?.nome || nomeSalvato).trim();
+      const { nome, tipo, chiave, classificato } = classifica(riga);
       if (!nome) return;
-      // La classificazione e' scritta sul nome di quando e' stata decisa:
-      // si guarda anche quello vecchio, altrimenti un prodotto rinominato
-      // tornerebbe "non classificato" e rientrerebbe in classifica da una
-      // porta che qualcuno gli aveva chiuso.
-      const tipo = mappaTipo[nome] ?? mappaTipo[nomeSalvato] ?? "prodotto";
       if (tipo === "escluso") return;
       const bucket = tipo === "corso" ? perCorso : perProdotto;
-      const chiave = prodotto?.id || nome.toLowerCase();
-      if (!bucket[chiave]) bucket[chiave] = { nome, quantita: 0, incasso: 0, classificato: mappaTipo[nome] != null || mappaTipo[nomeSalvato] != null };
+      if (!bucket[chiave]) bucket[chiave] = { nome, quantita: 0, incasso: 0, classificato };
       // il nome che si legge e' sempre quello di oggi, anche se la riga
       // piu' vecchia del gruppo ne portava un altro
       bucket[chiave].nome = nome;
@@ -43453,14 +43578,24 @@ function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, 
   };
 }
 
+// LE COLONNE DICONO DI CHE SOLDI SI STA PARLANDO.
+//
+// «Totale speso» da solo e' la parola che ha fatto il danno: dentro ci
+// stavano i tentativi non pagati e gli acconti dei corsi. Adesso ogni
+// colonna nomina cio' che contiene — prodotti, corsi, incassato — e i
+// tentativi non riusciti hanno una riga tutta loro invece di sparire o
+// di travestirsi da fatturato.
 const COLONNE_CRM_SHOP = [
   { chiave: "nome", etichetta: "Cliente" },
   { chiave: "email", etichetta: "Email" },
   { chiave: "telefono", etichetta: "Telefono" },
-  { chiave: "numeroOrdini", etichetta: "Ordini" },
-  { chiave: "totaleSpeso", etichetta: "Totale speso" },
-  { chiave: "carrelloMedio", etichetta: "Carrello medio" },
-  { chiave: "spesaMaggiore", etichetta: "Spesa maggiore" },
+  { chiave: "numeroOrdini", etichetta: "Ordini pagati" },
+  { chiave: "totaleProdotti", etichetta: "Prodotti", soldi: true },
+  { chiave: "totaleCorsi", etichetta: "Corsi", soldi: true },
+  { chiave: "totaleSpeso", etichetta: "Totale incassato", soldi: true },
+  { chiave: "carrelloMedio", etichetta: "Carrello medio", soldi: true },
+  { chiave: "spesaMaggiore", etichetta: "Spesa maggiore", soldi: true },
+  { chiave: "valoreNonRiuscito", etichetta: "Non riusciti" },
   { chiave: "primoOrdine", etichetta: "Primo ordine" },
   { chiave: "ultimoOrdine", etichetta: "Ultimo ordine" },
   { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
@@ -43534,13 +43669,16 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
     });
     return { email, nomi, perNome };
   }, [iscritti, storicoAllievi, master]);
-  const [colonnaOrdine, setColonnaOrdine] = useState("totaleSpeso");
+  // si parte dai PRODOTTI: e' la domanda per cui questa pagina esiste —
+  // chi compra davvero dal magazzino. Ordinare per «totale incassato»
+  // rimetterebbe in cima chi ha solo versato l'acconto di un corso.
+  const [colonnaOrdine, setColonnaOrdine] = useState("totaleProdotti");
   const [direzioneOrdine, setDirezioneOrdine] = useState("desc");
   const [chiaveAperta, setChiaveAperta] = useState(null);
 
   const clienti = useMemo(() => {
     const { email, nomi, perNome } = confrontoAllieve;
-    return costruisciClientiShop(venditeShop).map((c) => {
+    return costruisciClientiShop(venditeShop, vociShopClassificazione, prodottiShop).map((c) => {
       const sua = String(c.email || "").trim().toLowerCase();
       if (sua && email.has(sua)) return { ...c, statoAllievo: "allieva" };
       const suo = perNome(c.nome);
@@ -43549,7 +43687,7 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
       if (!sua || (suo && nomi.has(suo))) return { ...c, statoAllievo: "forse" };
       return { ...c, statoAllievo: "nessuno" };
     });
-  }, [venditeShop, confrontoAllieve]);
+  }, [venditeShop, vociShopClassificazione, prodottiShop, confrontoAllieve]);
   const quanti = useMemo(() => ({
     allieva: clienti.filter((c) => c.statoAllievo === "allieva").length,
     nessuno: clienti.filter((c) => c.statoAllievo === "nessuno").length,
@@ -43557,15 +43695,26 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
   }), [clienti]);
   const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione, prodottiShop), [venditeShop, vociShopClassificazione, prodottiShop]);
 
+  // I CONTI IN CIMA PARLANO SOLO DI SOLDI ARRIVATI.
+  //
+  // «Clienti» sono quelli che hanno pagato almeno una volta: chi ha solo
+  // tentativi falliti resta in elenco — e' un contatto, non una vendita
+  // — ma non si conta fra i clienti e non muove il carrello medio.
   const kpi = useMemo(() => {
-    const totale = clienti.length;
-    const conPiuOrdini = clienti.filter((c) => c.numeroOrdini > 1).length;
-    const totaleOrdini = clienti.reduce((a, c) => a + c.numeroOrdini, 0);
-    const totaleSpeso = clienti.reduce((a, c) => a + c.totaleSpeso, 0);
+    const paganti = clienti.filter((c) => c.numeroOrdini > 0);
+    const totale = paganti.length;
+    const conPiuOrdini = paganti.filter((c) => c.numeroOrdini > 1).length;
+    const totaleOrdini = paganti.reduce((a, c) => a + c.numeroOrdini, 0);
+    const totaleSpeso = paganti.reduce((a, c) => a + c.totaleSpeso, 0);
     return {
       totale,
+      soloTentativi: clienti.length - totale,
       conPiuOrdini,
       percentualeConPiuOrdini: totale > 0 ? (conPiuOrdini / totale) * 100 : 0,
+      prodotti: round2(paganti.reduce((a, c) => a + c.totaleProdotti, 0)),
+      corsi: round2(paganti.reduce((a, c) => a + c.totaleCorsi, 0)),
+      incassato: round2(totaleSpeso),
+      nonRiuscito: round2(clienti.reduce((a, c) => a + c.valoreNonRiuscito, 0)),
       carrelloMedio: totaleOrdini > 0 ? totaleSpeso / totaleOrdini : 0,
       ordiniMediPerCliente: totale > 0 ? totaleOrdini / totale : 0,
     };
@@ -43631,7 +43780,19 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
               <div style={kpiCardStyle}>
                 <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{kpi.totale.toLocaleString("it-IT")}</div>
-                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Clienti</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Clienti che hanno pagato</div>
+              </div>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.prodotti)}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Prodotti venduti</div>
+              </div>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.corsi)}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Corsi comprati dal sito</div>
+              </div>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incassato)}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Totale incassato</div>
               </div>
               <div style={kpiCardStyle}>
                 <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{kpi.conPiuOrdini.toLocaleString("it-IT")} <span style={{ fontSize: 14, color: MUTED }}>({fmtPctErp(kpi.percentualeConPiuOrdini)})</span></div>
@@ -43641,11 +43802,17 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
                 <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.carrelloMedio)}</div>
                 <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Carrello medio</div>
               </div>
-              <div style={kpiCardStyle}>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{kpi.ordiniMediPerCliente.toLocaleString("it-IT", { maximumFractionDigits: 2 })}</div>
-                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Ordini per cliente</div>
-              </div>
             </div>
+
+            {/* QUELLO CHE NON E' ENTRATO, detto prima della tabella e non
+                nascosto dentro una colonna: e' la cifra che per anni e'
+                stata contata come fatturato. */}
+            {kpi.nonRiuscito > 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 10, padding: "10px 12px", marginBottom: 16, lineHeight: 1.5 }}>
+                Fuori da questi conti ci sono <strong>{fmtEuroErp2(kpi.nonRiuscito)}</strong> di ordini mai pagati — annullati, falliti o rimasti in sospeso.
+                {kpi.soloTentativi > 0 && <> {kpi.soloTentativi.toLocaleString("it-IT")} person{kpi.soloTentativi === 1 ? "a ha" : "e hanno"} solo tentativi e nessun acquisto: {kpi.soloTentativi === 1 ? "resta" : "restano"} in elenco con zero euro, perché {kpi.soloTentativi === 1 ? "è un contatto" : "sono contatti"}, non {kpi.soloTentativi === 1 ? "una vendita" : "vendite"}.</>}
+              </div>
+            )}
 
             <div style={{ marginBottom: 14, maxWidth: 320 }}>
               <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca per nome, email o telefono…" />
@@ -43697,13 +43864,25 @@ export function PaginaCrmShop({ venditeShop, vociShopClassificazione, prodottiSh
                         {c.statoAllievo === "forse" && (
                           <span title="Il nome compare fra allievi, storico o master, ma l'email non lo conferma: può essere lei o un'omonima" style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>da verificare</span>
                         )}
+                        {c.piuNomi && (
+                          <span title="Gli ordini pagati di questo account portano più di un nome: può essere un account usato da più persone. Il nome qui sopra è quello dell'ordine più recente." style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#54585F", background: "#EFE9DC", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>più nomi</span>
+                        )}
                       </td>
                       <td style={tdStyleCrm}>{c.email || "—"}</td>
                       <td style={tdStyleCrm}>{c.telefono || "—"}</td>
                       <td style={tdStyleCrm}>{c.numeroOrdini}</td>
+                      <td style={{ ...tdStyleCrm, fontWeight: 700 }}>{fmtEuroErp2(c.totaleProdotti)}</td>
+                      <td style={tdStyleCrm}>{c.totaleCorsi ? fmtEuroErp2(c.totaleCorsi) : <span style={{ color: MUTED }}>—</span>}</td>
                       <td style={tdStyleCrm}>{fmtEuroErp2(c.totaleSpeso)}</td>
                       <td style={tdStyleCrm}>{fmtEuroErp2(c.carrelloMedio)}</td>
                       <td style={tdStyleCrm}>{fmtEuroErp2(c.spesaMaggiore)}</td>
+                      <td style={tdStyleCrm}>
+                        {c.ordiniNonRiusciti === 0 ? <span style={{ color: MUTED }}>—</span> : (
+                          <span title={`${c.ordiniNonRiusciti} ordini annullati, falliti o in sospeso: non sono mai stati pagati`} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>
+                            {c.ordiniNonRiusciti} · {fmtEuroErp2(c.valoreNonRiuscito)}
+                          </span>
+                        )}
+                      </td>
                       <td style={tdStyleCrm}>{c.primoOrdine ? fmtData(c.primoOrdine) : "—"}</td>
                       <td style={tdStyleCrm}>{c.ultimoOrdine ? fmtData(c.ultimoOrdine) : "—"}</td>
                       <td style={tdStyleCrm}>{c.giorniMedi != null ? Math.round(c.giorniMedi) : "—"}</td>
@@ -43732,7 +43911,39 @@ function DettaglioClienteShop({ cliente }) {
   return (
     <div>
       <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{cliente.nome ? toTitleCase(cliente.nome) : "Cliente senza nome"}</div>
-      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 14 }}>{cliente.email || "email non disponibile"} · {cliente.numeroOrdini} ordin{cliente.numeroOrdini === 1 ? "e" : "i"} · {fmtEuroErp2(cliente.totaleSpeso)} totali</div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 14 }}>{cliente.email || "email non disponibile"} · {cliente.numeroOrdini} ordin{cliente.numeroOrdini === 1 ? "e" : "i"} pagat{cliente.numeroOrdini === 1 ? "o" : "i"} · {fmtEuroErp2(cliente.totaleSpeso)} incassati</div>
+
+      {/* I TRE NUMERI CHE TORNANO. Prodotti + corsi + resto fa esattamente
+          il totale incassato: il «resto» sono spedizione e differenze di
+          sconto, che stanno sul totale dell'ordine e non su nessuna riga.
+          Si scrive invece di nasconderlo dentro uno degli altri due. */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        {[
+          ["Prodotti", cliente.totaleProdotti, NAVY],
+          ["Corsi", cliente.totaleCorsi, "#3D4A94"],
+          // puo' essere NEGATIVO, ed e' giusto: su un ordine scontato la
+          // somma delle righe e' piu' alta del totale pagato. Misurato su
+          // tutto l'archivio fa +31.177,26 € (le spedizioni).
+          ["Spedizione e sconti", cliente.altroIncassato, MUTED],
+        ].filter(([, v]) => Math.abs(v) >= 0.005).map(([etichetta, valore, colore]) => (
+          <div key={etichetta} style={{ ...cardStyle, marginBottom: 0, flex: "1 1 150px", textAlign: "center", padding: "12px 10px" }}>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: colore }}>{fmtEuroErp2(valore)}</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>{etichetta}</div>
+          </div>
+        ))}
+      </div>
+
+      {(cliente.ordiniNonRiusciti > 0 || cliente.ordiniRimborsati > 0) && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 10, padding: "10px 12px", marginBottom: 14, lineHeight: 1.5 }}>
+          {cliente.ordiniNonRiusciti > 0 && <>Ha provato a comprare altre {cliente.ordiniNonRiusciti} volt{cliente.ordiniNonRiusciti === 1 ? "a" : "e"} per <strong>{fmtEuroErp2(cliente.valoreNonRiuscito)}</strong> senza pagare: ordini annullati, falliti o rimasti in sospeso. Sono qui sotto nell'elenco, e non contano in nessuno dei numeri qui sopra.</>}
+          {cliente.ordiniRimborsati > 0 && <> {cliente.ordiniNonRiusciti > 0 ? "E " : ""}{cliente.ordiniRimborsati} ordin{cliente.ordiniRimborsati === 1 ? "e" : "i"} per {fmtEuroErp2(cliente.valoreRimborsato)} {cliente.ordiniRimborsati === 1 ? "è stato rimborsato" : "sono stati rimborsati"}: quei soldi sono tornati indietro.</>}
+        </div>
+      )}
+      {cliente.piuNomi && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 14, lineHeight: 1.5 }}>
+          Gli ordini pagati di questo account portano <strong>più di un nome</strong>: può essere un account usato da più persone. Qui sopra c'è quello dell'ordine più recente.
+        </div>
+      )}
 
       {/* QUELLO CHE DI QUESTA PERSONA SAPPIAMO, e che finora restava
           sepolto nell'ordine. Non e' un'anagrafica: lo shop non ci ha
@@ -43778,10 +43989,13 @@ function DettaglioClienteShop({ cliente }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{o.numero_ordine || "—"}</div>
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{o.data_ordine ? fmtData(o.data_ordine) : "—"} · {o.stato || "—"}</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>
+                    {o.data_ordine ? fmtData(o.data_ordine) : "—"} · {etichettaStatoVenditaShop(o.stato)}
+                    {!venditaIncassata(o) && <span style={{ marginLeft: 7, ...fontBody, fontSize: 10, fontWeight: 700, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>mai pagato</span>}
+                  </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(o.totale)}</div>
+                  <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: venditaIncassata(o) ? NAVY : MUTED, textDecoration: venditaIncassata(o) ? "none" : "line-through" }}>{fmtEuroErp2(o.totale)}</div>
                   <span style={{ color: MUTED, transform: espanso ? "rotate(180deg)" : "none", display: "flex" }}><IconaChevronGiuErp size={12} /></span>
                 </div>
               </div>
@@ -59671,6 +59885,9 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     ricarica(["vendite_shop", "sync_shop_esiti"]);
   }
 
+  // TUTTI gli ordini, annullati e falliti compresi: questa pagina e' il
+  // registro, e un ordine fallito si deve vedere per poterlo riprendere.
+  // I soldi li conta `incassate`, qui sotto.
   const venditeOrigine = (venditeShop || [])
     .filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio" && !idEliminati.has(v.id))
     .map((v) => (metodoCorretto[v.id] ? { ...v, ...metodoCorretto[v.id] } : v));
@@ -59706,22 +59923,32 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
     return true;
   });
 
+  // QUESTA PAGINA E' UN REGISTRO, e un registro mostra tutti gli ordini:
+  // annullati e falliti si devono vedere, altrimenti non si va a
+  // riprenderli. Ma i numeri in cima dicevano «Totale incassato» su una
+  // somma che quegli ordini li conteneva (18/11/2026): su tutto
+  // l'archivio erano 1.364.418,63 € al posto di 646.706,45 €.
+  // Adesso l'incasso e' l'incasso, e quello che non e' entrato si legge
+  // accanto invece di nascondersi dentro.
+  const incassate = venditeFiltrate.filter(venditaIncassata);
   const kpi = {
     nOrdini: venditeFiltrate.length,
-    totale: round2(venditeFiltrate.reduce((s, v) => s + (v.totale || 0), 0)),
-    imponibile: round2(venditeFiltrate.reduce((s, v) => s + (v.totale_imponibile ?? v.totale ?? 0), 0)),
-    iva: round2(venditeFiltrate.reduce((s, v) => s + (v.totale_iva || 0), 0)),
+    nIncassati: incassate.length,
+    totale: round2(incassate.reduce((s, v) => s + (v.totale || 0), 0)),
+    imponibile: round2(incassate.reduce((s, v) => s + (v.totale_imponibile ?? v.totale ?? 0), 0)),
+    iva: round2(incassate.reduce((s, v) => s + (v.totale_iva || 0), 0)),
+    nonIncassato: round2(venditeFiltrate.filter((v) => !venditaIncassata(v)).reduce((s, v) => s + (v.totale || 0), 0)),
   };
 
-  // "prodotti più venduti": aggrega le righe-prodotto di tutti gli
-  // ordini filtrati (stesso periodo/stato della tabella sopra). Se lo
-  // stato è "Tutti" include anche ordini annullati/rimborsati/falliti —
-  // per un'analisi realistica delle vendite conviene filtrare per
-  // "Completato" nella tendina qui sopra
+  // "prodotti più venduti": aggrega le righe-prodotto degli ordini
+  // filtrati (stesso periodo/stato della tabella sopra) CHE SONO STATI
+  // PAGATI. Prima includeva anche gli annullati e i falliti, e il
+  // commento qui diceva di filtrare a mano dalla tendina: un conto
+  // giusto che dipende da un gesto che nessuno fa non e' un conto.
   const [ordinePer, setOrdinePer] = useState("quantita");
   const prodottiAggregati = (() => {
     const mappa = {};
-    venditeFiltrate.forEach((v) => {
+    incassate.forEach((v) => {
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
         const nome = (p.nome || "").trim() || "—";
         if (!mappa[nome]) mappa[nome] = { nome, quantita: 0, ricavo: 0, ordini: new Set() };
@@ -59857,7 +60084,7 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 6 : 14, marginBottom: isMobile ? 16 : 22 }}>
           {[
             { etichetta: "Ordini", valore: kpi.nOrdini },
-            { etichetta: "Totale incassato", valore: fmtEuroErp2(kpi.totale) },
+            { etichetta: "Incassato", valore: fmtEuroErp2(kpi.totale) },
             { etichetta: "Imponibile", valore: fmtEuroErp2(kpi.imponibile) },
             { etichetta: "IVA", valore: fmtEuroErp2(kpi.iva) },
           ].map((k) => (
@@ -59873,6 +60100,14 @@ function PaginaVenditeShop({ venditeShop, corsi = [], corsiDate = [], prodottiSh
             </div>
           ))}
         </div>
+
+        {/* quello che in quegli ordini NON e' entrato: si scrive, non si
+            somma. E' la cifra che per anni e' stata letta come fatturato. */}
+        {kpi.nonIncassato > 0 && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6A1B", background: "#FBF3E0", borderRadius: 10, padding: "10px 12px", marginBottom: isMobile ? 14 : 18, lineHeight: 1.5 }}>
+            Di questi {kpi.nOrdini} ordini ne sono stati pagati <strong>{kpi.nIncassati}</strong>: gli altri {kpi.nOrdini - kpi.nIncassati}, per <strong>{fmtEuroErp2(kpi.nonIncassato)}</strong>, sono annullati, falliti, in sospeso o rimborsati e non entrano nei numeri qui sopra.
+          </div>
+        )}
 
         {/* l'esito del cambio di incasso si legge qui: niente finestre
             del browser, che si possono zittire */}
@@ -60728,7 +60963,10 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
   const isMobile = useIsMobile();
   const { range, barra: barraPeriodo } = useFiltroPeriodoStatistiche(venditeShop);
 
-  const righeCanale = (venditeShop || []).filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio").filter((v) => {
+  // Solo quello che e' stato incassato (`venditaIncassata`): un ordine
+  // del sito annullato o fallito non e' un ricavo. Al banco non cambia
+  // niente — li' si registra solo quello che si e' preso.
+  const righeCanale = (venditeShop || []).filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio" && venditaIncassata(v)).filter((v) => {
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     return d && d >= range.inizio && d <= range.fine;
   });
@@ -68013,8 +68251,11 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, categorie
   // banco): "Vendite Shop Online" e "Vendite al banco" sono le due viste
   // filtrate a parte, raggiungibili dai due tasti sotto. Gli omaggi hanno
   // una pagina propria ("Omaggi"): qui contano solo le vendite vere,
-  // altrimenti i pezzi regalati gonfierebbero le statistiche
-  const righeGlobali = (venditeShop || []).filter((v) => (v.origine === "pos" || v.origine === "woocommerce") && v.tipo_movimento !== "omaggio").filter((v) => {
+  // altrimenti i pezzi regalati gonfierebbero le statistiche.
+  // E contano solo gli ordini INCASSATI: fino al 18/11/2026 qui dentro
+  // finivano anche i carrelli abbandonati e i pagamenti falliti del
+  // sito, 710.752,88 € mai entrati sommati a 646.706,45 € veri.
+  const righeGlobali = (venditeShop || []).filter((v) => (v.origine === "pos" || v.origine === "woocommerce") && v.tipo_movimento !== "omaggio" && venditaIncassata(v)).filter((v) => {
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     return d && d >= range.inizio && d <= range.fine;
   });

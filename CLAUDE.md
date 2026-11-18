@@ -1315,6 +1315,125 @@ Migrazione `20261117150000_la_mailing_list_dei_clienti_shop.sql`
 transazione — come `crm_campagna_prepara`, che ha lo stesso limite da
 sempre. In produzione è una chiamata per richiesta e non si vede.
 
+### Un ordine che non è stato pagato non è un incasso (18/11/2026)
+
+Il titolare, davanti a «Clienti shop»: «come è possibile che questi
+clienti dello shop online abbiano totalizzato in pochi mesi dello stesso
+anno cifre che arrivano quasi a 50.000 euro con pochi acquisti?».
+
+**Non avevano speso niente.** Elvira Palminteri risultava con 15 ordini e
+45.000 €: tutti e quindici `cancelled` o `failed` — tentativi di comprare
+un corso da 3.000 € che non sono mai andati a buon fine. Dei primi otto
+della classifica, **sei avevano incassato zero euro** e gli altri due
+520,13 € e 405,80 €. WooCommerce quegli ordini li conserva come ordini
+veri, e **nessuna delle sei letture guardava `stato`**.
+
+| stato | ordini | importo | |
+|---|---|---|---|
+| `completed` | 3.564 | **646.706,45 €** | gli unici incassati |
+| `cancelled` | 469 | 507.710,51 € | |
+| `failed` | 156 | 91.588,97 € | |
+| `on-hold` | 34 | 87.797,40 € | |
+| `pending` | 20 | 23.656,00 € | |
+| `refunded` | 49 | 6.959,30 € | entrati e restituiti |
+
+**717.712,18 € mai entrati, contati come fatturato.** Il danno peggiore
+non è il numero sbagliato, è che sembrava giusto: nessuno mette in dubbio
+una classifica dei migliori clienti.
+
+**La regola sta in `venditaIncassata`, un posto solo.** Di WooCommerce
+contano `completed` e `processing` — il secondo in archivio non c'è, ma è
+lo stato normale di un ordine pagato e non ancora evaso, e il giorno che
+compare deve contare da sé. `refunded` sta fuori, e si legge a parte.
+**Per le altre origini vale il contrario**: al banco si registra solo
+quello che si è incassato, e dal 23/10/2026 il database pretende la prova
+del pagamento — quindi una riga del POS conta sempre, anche senza stato.
+Pretendere `completed` anche lì vorrebbe dire far sparire dalla
+contabilità una vendita vera per una colonna vuota.
+
+**Sei letture, non una.** Era la stessa dimenticanza ripetuta: l'elenco
+dei clienti, la classifica dei prodotti, le **statistiche globali**, le
+**statistiche per canale** (`src/App.jsx`), più la vista
+`vendite_shop_reparti` e la funzione `crm_sincronizza_clienti_shop`
+(migrazione `20261118170000`). Le ultime due alimentano i filtri delle
+campagne: **«ha speso almeno tanto» selezionava gente che non ha mai
+pagato un euro**. Rifatta la sincronizzazione: `speso_shop` passa da
+1.364.418,63 € a **646.706,45 €**, i clienti da 1.888 a **1.756**, e
+**132 persone che risultavano clienti vanno a zero** — restano in lista,
+perché sono contatti, non vendite.
+
+**E DENTRO QUELLO CHE RESTA, I CORSI NON SONO PRODOTTI** (chiesto dal
+titolare lo stesso giorno: «devi vedere che siano prodotti acquistati, ho
+il dubbio che stai calcolando anche gli acconti dei corsi che prima
+passavano sotto la voce kit»). Il dubbio era fondato e la misura è
+grossa: dei 646.706,45 € incassati, **242.435,70 € sono righe di corso**
+(acconti e saldi comprati dal sito) e **372.997,92 €** prodotti veri.
+Chi ha versato l'acconto di un corso da 3.000 € stava davanti a tutti in
+una classifica di compratori dello shop senza aver preso niente dal
+magazzino.
+
+La classificazione esisteva già (`voci_shop_classificazione`, 453 voci
+prodotto e 66 corso) e la usava **solo** la classifica dei prodotti.
+Adesso la regola sta in `classificatoreVociShop`, in un posto solo, e la
+usano tutte e due: due idee di «questa riga è un corso» darebbero due
+numeri diversi sullo stesso ordine. Il nome storico di un prodotto si
+impara però da **tutti** gli ordini, anche quelli non pagati — sapere
+come si chiamava non dipende dal fatto che quell'ordine sia andato a buon
+fine.
+
+**Come si legge la lista adesso.** Le colonne nominano ciò che
+contengono: **Ordini pagati**, **Prodotti**, **Corsi**, **Totale
+incassato**, e i tentativi hanno una colonna loro, **Non riusciti**, con
+quanti e quanto. Nella scheda del cliente i tre numeri **tornano** —
+prodotti + corsi + spedizione e altro fa esattamente il totale incassato
+(il «resto» sono spedizione e differenze di sconto, 31.177,26 € su tutto
+l'archivio): un totale che non torna con i suoi pezzi è un totale che
+nessuno sa più leggere. Si parte ordinati per **Prodotti**, che è la
+domanda per cui quella pagina esiste.
+
+Tre decisioni, e ognuna è un modo di sbagliare:
+
+- **I tentativi non si cancellano.** Che una persona abbia provato tre
+  volte a comprare un corso da 3.000 € senza riuscirci è l'informazione
+  commerciale più interessante di quell'elenco. Solo, non è fatturato:
+  ha una colonna sua, e chi ha **solo** tentativi resta in elenco con
+  zero euro invece di sparire.
+- **Quello che non è entrato si scrive sopra la tabella**, non dentro
+  una colonna: è la cifra che per anni è stata contata come fatturato, e
+  va letta prima dei numeri, non cercata.
+- **Un account con più intestatari si dichiara.** Il raggruppamento è per
+  `customer_id` di WooCommerce e il nome mostrato è quello dell'ordine
+  più recente: sui soli ordini pagati **49 gruppi su 2.043** portano più
+  di un nome, e adesso lo dicono con una pastiglia. È anche il motivo per
+  cui lo stesso Vincenzo Curatola compariva due volte con la stessa email
+  — due account, due righe.
+
+**La guardia è la parte che dura** (`prove/ordini-non-pagati.test.js`,
+24): oltre alle regole, rilegge `src/App.jsx` e pretende che **ogni**
+punto che raccoglie gli ordini del sito passi da `venditaIncassata`,
+oppure dichiari per iscritto perché no (sono due: la scheda del cliente,
+che deve mostrare anche i tentativi, e la mappa dei nomi storici). Se un
+giorno nasce la settima lettura senza quel filtro, la prova diventa rossa
+invece di farci scoprire il guasto fra due anni guardando una classifica.
+
+**Il rovescio della medaglia, e come si chiude.** Se adesso un ordine
+del sito arrivasse **senza stato**, sparirebbe dai conti in silenzio —
+lo stesso guasto all'incontrario, e altrettanto invisibile. Oggi non
+capita (tutte e 4.292 le righe ne portano uno valido, misurato), e la
+migrazione `20261118180000` lo pretende dal database con un vincolo.
+**Non è ancora applicata**: è una modifica di schema su produzione e
+aspetta il via libera del titolare. Al banco il vincolo non vale — lì si
+registra solo quello che si è incassato, e una riga del POS senza stato
+continua a contare.
+
+**Resta da decidere:** se `refunded` debba comparire come voce a sé anche
+nelle statistiche (oggi è semplicemente fuori dall'incasso); se gli stati
+`on-hold` e `pending` (111.453,40 €, ordini in attesa di un bonifico che
+non risulta arrivato) vadano guardati uno per uno prima di darli per
+persi; e se il filtro «ha speso almeno tanto» delle campagne debba
+guardare i soli **prodotti** invece del totale incassato — oggi guarda il
+totale, che è giusto ma mette insieme chi ha comprato merce e chi ha
+pagato un corso.
 ### La raccolta del materiale, a tutta pagina (30/10/2026)
 
 In Logistica → Spedizioni corsi, in alto a destra nella scheda di
