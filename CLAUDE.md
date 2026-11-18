@@ -5593,6 +5593,19 @@ toglie anche quelli. Se una delle due letture fallisce non si scrive
 niente, come per la lista. Prove in
 `prove/carrelli-sospesi-non-si-perdono.test.js`.
 
+**E i carrelli buttati vanno in un cestino** (18/11/2026, chiesto dal
+titolare: «le cancellazioni da parte degli amministratori hanno priorità
+su tutti»). Chi preme il cestino su un carrello sospeso — nel POS o in
+Magazzino e shop — prima ne scrive la copia intera in
+`pos_carrelliSospesi_cestino` (con chi, quando e se amministra), e solo
+se quella arriva al server il carrello si toglie; per sei mesi si rimette
+col tasto «Cestino (N)» in fondo ai due pannelli. Rimettere toglie la
+lapide e riscrive il carrello con l'ora di adesso. Venduti e ripresi non
+ci vanno: hanno finito il loro lavoro. **La priorità di chi amministra**:
+una cancellazione vince su qualunque copia o salvataggio arrivi dopo, e
+un carrello buttato da chi amministra lo rimette solo chi amministra.
+Prove nello stesso file.
+
 ### Si iscrive anche chi vive in Svizzera (7/11/2026, sera)
 
 Il titolare: «estendi la possibilità di iscrivere clienti dalla

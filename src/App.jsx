@@ -337,6 +337,88 @@ export function aggiungiLapidi(lapidi, rimossi, adesso) {
   (rimossi || new Set()).forEach((id) => { if (id) fuori[id] = adesso.toISOString(); });
   return fuori;
 }
+// IL CESTINO DEI CARRELLI SOSPESI (18/11/2026, chiesto dal titolare:
+// «i carrelli cancellati è meglio che finiscano in un cestino, le
+// cancellazioni da parte degli amministratori hanno priorità su tutti»).
+//
+// Un carrello buttato col cestino non sparisce più: la sua copia intera
+// va in una riga a parte (`pos_carrelliSospesi_cestino`), con chi l'ha
+// buttato, quando, e se era qualcuno che amministra. Da lì si rimette fra
+// i sospesi per sei mesi, come le vendite e i clienti.
+//
+// Ci finiscono SOLO i carrelli buttati a mano. Uno venduto o ripreso non
+// è stato buttato: ha finito il suo lavoro, e nel cestino sarebbe un
+// carrello da «ripristinare» che rivenderebbe merce già venduta.
+//
+// La priorità di chi amministra sta in due regole: una cancellazione vince
+// sempre su tutto — nessuna copia vecchia di un altro telefono, nessun
+// salvataggio arrivato dopo la riporta indietro, perché la lapide la
+// toglie a ogni fusione — e un carrello buttato da chi amministra lo può
+// rimettere solo chi amministra. Quello buttato da chi vende lo può
+// rimettere anche lui.
+export const CHIAVE_CESTINO_CARRELLI = "pos_carrelliSospesi_cestino";
+const GIORNI_CESTINO_CARRELLI = 180;
+export function leggiCestinoCarrelli(valore) {
+  return (Array.isArray(valore) ? valore : []).filter((v) => v && v.id && v.carrello && typeof v.eliminato_il === "string");
+}
+export function aggiungiAlCestinoCarrelli(lista, carrello, { chi, daAmministratore }, adesso) {
+  const limite = new Date(adesso.getTime() - GIORNI_CESTINO_CARRELLI * 86400000).toISOString();
+  const restano = leggiCestinoCarrelli(lista).filter((v) => v.eliminato_il >= limite && v.id !== carrello.id);
+  return [...restano, {
+    id: carrello.id, carrello,
+    eliminato_il: adesso.toISOString(), eliminato_da: chi || "non registrato",
+    da_amministratore: !!daAmministratore,
+  }];
+}
+export const puoRipristinareCarrello = (voce, chiAmministra) => !!voce && (!voce.da_amministratore || !!chiAmministra);
+async function leggiRigaCondivisa(chiave) {
+  const { data, error } = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle();
+  if (error) throw error;
+  return data?.valore ?? null;
+}
+async function scriviRigaCondivisa(chiave, valore) {
+  const { error } = await supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+  if (error) throw error;
+}
+// Si chiama PRIMA di togliere il carrello dalla lista: se la copia non
+// arriva al server il carrello non si butta, e chi ha premuto lo sa.
+export async function mettiNelCestinoCarrelli(carrello, chi) {
+  try {
+    const lista = await leggiRigaCondivisa(CHIAVE_CESTINO_CARRELLI);
+    await scriviRigaCondivisa(CHIAVE_CESTINO_CARRELLI, aggiungiAlCestinoCarrelli(lista, carrello, chi, new Date()));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, motivo: e?.message || "il server non ha risposto" };
+  }
+}
+export async function elencoCestinoCarrelli() {
+  return leggiCestinoCarrelli(await leggiRigaCondivisa(CHIAVE_CESTINO_CARRELLI));
+}
+// Rimettere un carrello: prima si toglie la sua lapide (o la prossima
+// fusione lo ributterebbe via), poi lo si toglie dal cestino, poi torna
+// nella lista con l'ora di adesso — così vince anche sulle copie vecchie.
+export async function ripristinaCarrelloDalCestino(id, chiAmministra) {
+  const chiave = CHIAVE_CARRELLI_SOSPESI;
+  try {
+    const cestino = leggiCestinoCarrelli(await leggiRigaCondivisa(CHIAVE_CESTINO_CARRELLI));
+    const voce = cestino.find((v) => v.id === id);
+    if (!voce) return { ok: false, motivo: "Il carrello non è più nel cestino: forse l'ha già rimesso qualcun altro." };
+    if (!puoRipristinareCarrello(voce, chiAmministra)) return { ok: false, motivo: "Questo carrello l'ha buttato chi amministra: lo può rimettere solo chi amministra." };
+    const lapidi = leggiLapidi(await leggiRigaCondivisa(chiaveEliminati(chiave)));
+    if (lapidi[id]) {
+      delete lapidi[id];
+      await scriviRigaCondivisa(chiaveEliminati(chiave), lapidi);
+    }
+    await scriviRigaCondivisa(CHIAVE_CESTINO_CARRELLI, cestino.filter((v) => v.id !== id));
+    LAYOUT_RIMOSSI[chiave]?.delete(id);
+    const attuali = Array.isArray(LAYOUT_CACHE[chiave]) ? LAYOUT_CACHE[chiave] : [];
+    salvaImpostazioneCondivisa(chiave, [...attuali.filter((x) => x.id !== id), { ...voce.carrello, aggiornato: new Date().toISOString() }]);
+    const esito = await attendiInvioCondiviso(chiave);
+    return esito?.ok === false ? { ok: false, motivo: `è tornato su questo dispositivo ma non ancora al server (${esito.motivo})` } : { ok: true, carrello: voce.carrello };
+  } catch (e) {
+    return { ok: false, motivo: e?.message || "il server non ha risposto" };
+  }
+}
 function inviaImpostazioneCondivisa(chiave) {
   clearTimeout(LAYOUT_TIMER[chiave]);
   LAYOUT_TIMER[chiave] = null;
@@ -25107,7 +25189,7 @@ function TabellaContoCarrello({ conto, minWidth = 380, grigio = MUTED, stretto =
   );
 }
 
-function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, onEntraNelPos, isMobile, prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onAssociaCorso = null }) {
+function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, onEntraNelPos, isMobile, cestino = null, prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onAssociaCorso = null }) {
   // Un carrello fermo non e' solo una lista della spesa: e' materiale che
   // nessuno puo' vendere, e per decidere se sollecitarlo o buttarlo serve
   // sapere quanto vale davvero — quanto sconto sta promettendo, con che
@@ -25177,6 +25259,7 @@ function PannelloCarrelliSospesiAmministrazione({ lista, onChiudi, onElimina, on
         </div>
         <div style={{ padding: 14, maxHeight: "70vh", overflowY: "auto" }}>
           {ordinati.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 16 }}>Nessun carrello sospeso: tutto il materiale è in vendita.</div>}
+          {cestino}
 
           {onEntraNelPos && perOperatore.length > 0 && (
             <>
@@ -25314,7 +25397,61 @@ function totaleCarrelloSospeso(c) {
 // fuori: la lista dei carrelli sospesi con nome (le note), chi l'ha
 // salvato, quando, e l'importo. Da telefono si apre anche trascinando il
 // dito dal bordo destro verso il centro (il gesto lo ascolta il POS).
-function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, onElimina, idCorrente, isMobile }) {
+// Il cestino dei carrelli sospesi (vedi CHIAVE_CESTINO_CARRELLI). Il tasto
+// compare solo se dentro c'è qualcosa: un cestino vuoto sempre in vista è
+// un tasto che non fa niente. `filtro` decide quali voci vede chi guarda:
+// nel POS i suoi carrelli, in Magazzino e shop tutti.
+function CestinoCarrelliSospesi({ chiAmministra, filtro = null, onRipristinato = null }) {
+  const [voci, setVoci] = useState([]);
+  const [aperto, setAperto] = useState(false);
+  const [lavora, setLavora] = useState(null);
+  const [msg, setMsg] = useState("");
+  // funzione semplice e non useCallback: in questo file non è importato
+  async function rileggi() {
+    try { setVoci(await elencoCestinoCarrelli()); } catch { /* senza risposta il tasto resta com'era */ }
+  }
+  useEffect(() => { rileggi(); }, []);
+  const visibili = voci.filter((v) => !filtro || filtro(v)).sort((a, b) => b.eliminato_il.localeCompare(a.eliminato_il));
+  if (visibili.length === 0 && !msg) return null;
+  async function rimetti(v) {
+    setLavora(v.id); setMsg("");
+    const esito = await ripristinaCarrelloDalCestino(v.id, chiAmministra);
+    setLavora(null);
+    if (!esito.ok) { setMsg(`Non rimesso: ${esito.motivo}`); rileggi(); return; }
+    setMsg(`«${v.carrello.nome || "Carrello senza nome"}» è di nuovo fra i sospesi.`);
+    rileggi();
+    if (onRipristinato) onRipristinato(esito.carrello);
+  }
+  const quando = (iso) => new Date(iso).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div data-cestino-carrelli style={{ marginTop: 10 }}>
+      {visibili.length > 0 && (
+        <button onClick={() => setAperto((x) => !x)} data-niente-ombra style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#F4F1EA", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <IconaCestino size={13} color={NAVY} /> Cestino ({visibili.length}) {aperto ? "▴" : "▾"}
+        </button>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: msg.startsWith("Non") ? "#C0392B" : "#2E7D32", marginTop: 6 }}>{msg}</div>}
+      {aperto && visibili.map((v) => {
+        const consentito = puoRipristinareCarrello(v, chiAmministra);
+        return (
+          <div key={v.id} style={{ border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 10px", marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{v.carrello.nome || "Carrello senza nome"}</div>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>
+                {v.carrello.operatore?.nome ? `di ${toTitleCase(v.carrello.operatore.nome)} · ` : ""}buttato da {toTitleCase(v.eliminato_da)}{v.da_amministratore ? " (amministrazione)" : ""} il {quando(v.eliminato_il)} · {fmtEuroErp2(totaleCarrelloSospeso(v.carrello))}
+              </div>
+              {!consentito && <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", marginTop: 2 }}>L'ha buttato chi amministra: lo può rimettere solo chi amministra.</div>}
+            </div>
+            <button onClick={() => rimetti(v)} disabled={!consentito || lavora === v.id} data-niente-ombra style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: consentito ? "#fff" : MUTED, background: consentito ? NAVY : "#EEE", border: "none", borderRadius: 8, padding: "6px 10px", cursor: consentito ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}>
+              {lavora === v.id ? "…" : "Rimetti"}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, onElimina, idCorrente, isMobile, cestino = null }) {
   const n = lista.length;
   const testoLinguetta = n === 0 ? "Carrelli" : `${n} carrell${n === 1 ? "o" : "i"} sospes${n === 1 ? "o" : "i"}`;
   const ordinati = [...lista].sort((a, b) => String(b.aggiornato || "").localeCompare(String(a.aggiornato || "")));
@@ -25393,6 +25530,7 @@ function PannelloCarrelliSospesi({ lista, aperto, onApri, onChiudi, onScegli, on
                   </div>
                 );
               })}
+              {aperto && cestino}
             </div>
           </div>
         </div>
@@ -42789,8 +42927,18 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
   const [carrelliSospesiTutti, salvaCarrelliSospesiTutti] = useImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
   const sospesiTutti = Array.isArray(carrelliSospesiTutti) ? carrelliSospesiTutti : [];
   const [mostraSospesi, setMostraSospesi] = useState(false);
-  function eliminaSospeso(c) {
-    if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}" di ${c.operatore?.nome ? toTitleCase(c.operatore.nome) : "operatore sconosciuto"}? I suoi pezzi tornano in vendita.`)) return;
+  const chiAmministraSospesi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  const [cestinoVersione, setCestinoVersione] = useState(0);
+  async function eliminaSospeso(c) {
+    if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}" di ${c.operatore?.nome ? toTitleCase(c.operatore.nome) : "operatore sconosciuto"}? I suoi pezzi tornano in vendita, e il carrello va nel cestino: da lì si rimette per sei mesi.`)) return;
+    let chi = ruoloUtente;
+    try { chi = JSON.parse(sessionStorage.getItem("edc_utente") || "null")?.nome || ruoloUtente; } catch { /* navigazione privata */ }
+    const nelCestino = await mettiNelCestinoCarrelli(c, { chi, daAmministratore: chiAmministraSospesi });
+    if (!nelCestino.ok) {
+      window.alert(`Il carrello non è stato eliminato: non sono riuscito a metterne la copia nel cestino (${nelCestino.motivo}). Riprova fra poco.`);
+      return;
+    }
+    setCestinoVersione((n) => n + 1);
     const attuali = Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : [];
     const dopo = attuali.filter((x) => x.id !== c.id);
     segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, attuali, dopo);
@@ -42813,6 +42961,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
           lista={sospesiTutti} isMobile={isMobile} prodottiShop={prodottiShop} coupon={coupon}
           corsi={corsi} corsiDate={corsiDate} location={location} onAssociaCorso={associaCorsoASospeso}
           onChiudi={() => setMostraSospesi(false)} onElimina={eliminaSospeso}
+          cestino={<CestinoCarrelliSospesi key={cestinoVersione} chiAmministra={chiAmministraSospesi} />}
           onEntraNelPos={onEntraNelPosCome ? (operatore, carrelloId) => { setMostraSospesi(false); onEntraNelPosCome(operatore, carrelloId); } : null}
         />
       )}
@@ -73970,6 +74119,8 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   const mieiSospesi = listaSospesi.filter((c) => stessoOperatore(c.operatore, operatore));
   const [carrelloSospesoId, setCarrelloSospesoId] = useState(null);
   const [pannelloSospesiAperto, setPannelloSospesiAperto] = useState(false);
+  // cambia a ogni carrello buttato, così il cestino del pannello si rilegge
+  const [cestinoVersione, setCestinoVersione] = useState(0);
   // si scrive sempre sull'ultima lista arrivata, non su quella chiusa nella
   // funzione: un'altra persona puo' aver salvato un carrello nel frattempo
   const sospesiAttuali = () => (Array.isArray(LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI]) ? LAYOUT_CACHE[CHIAVE_CARRELLI_SOSPESI] : []);
@@ -74366,8 +74517,15 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     setPannelloSospesiAperto(true);
   }, [operatoreImpersonato, carrelloDaAprire, listaSospesi, mieiSospesi.length, isMobile]);
 
-  function eliminaCarrelloSospeso(c) {
-    if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}"? I suoi pezzi tornano in vendita.`)) return;
+  async function eliminaCarrelloSospeso(c) {
+    if (!window.confirm(`Eliminare il carrello "${c.nome || "senza nome"}"? I suoi pezzi tornano in vendita, e il carrello va nel cestino: da lì si rimette per sei mesi.`)) return;
+    // prima la copia nel cestino: se non arriva, il carrello non si butta
+    const nelCestino = await mettiNelCestinoCarrelli(c, { chi: operatore?.nome || utenteLoggato?.nome || ruoloUtente, daAmministratore: chiAmministra });
+    if (!nelCestino.ok) {
+      window.alert(`Il carrello non è stato eliminato: non sono riuscito a metterne la copia nel cestino (${nelCestino.motivo}). Riprova fra poco.`);
+      return;
+    }
+    setCestinoVersione((n) => n + 1);
     const prima = sospesiAttuali();
     const dopo = prima.filter((x) => x.id !== c.id);
     segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, prima, dopo);
@@ -77568,6 +77726,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
           lista={mieiSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
           onApri={() => setPannelloSospesiAperto(true)} onChiudi={() => setPannelloSospesiAperto(false)}
           onScegli={apriCarrelloSospeso} onElimina={eliminaCarrelloSospeso}
+          cestino={<CestinoCarrelliSospesi key={cestinoVersione} chiAmministra={chiAmministra} filtro={(v) => stessoOperatore(v.carrello.operatore, operatore)} />}
         />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -77799,6 +77958,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
         lista={mieiSospesi} aperto={pannelloSospesiAperto} idCorrente={carrelloSospesoId} isMobile={isMobile}
         onApri={() => setPannelloSospesiAperto(true)} onChiudi={() => setPannelloSospesiAperto(false)}
         onScegli={apriCarrelloSospeso} onElimina={eliminaCarrelloSospeso}
+        cestino={<CestinoCarrelliSospesi key={cestinoVersione} chiAmministra={chiAmministra} filtro={(v) => stessoOperatore(v.carrello.operatore, operatore)} />}
       />
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>

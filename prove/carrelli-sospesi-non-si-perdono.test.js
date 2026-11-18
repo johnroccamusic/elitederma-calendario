@@ -31,7 +31,7 @@
 //   dispositivo non ha mai viste.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import "./preparazione.js";
-import { fondiListaCondivisa, segnaVociRimosse, salvaImpostazioneCondivisa, attendiInvioCondiviso, aggiungiLapidi, leggiLapidi, CHIAVE_CARRELLI_SOSPESI } from "../src/App.jsx";
+import { fondiListaCondivisa, segnaVociRimosse, salvaImpostazioneCondivisa, attendiInvioCondiviso, aggiungiLapidi, leggiLapidi, aggiungiAlCestinoCarrelli, puoRipristinareCarrello, mettiNelCestinoCarrelli, ripristinaCarrelloDalCestino, CHIAVE_CARRELLI_SOSPESI, CHIAVE_CESTINO_CARRELLI } from "../src/App.jsx";
 
 const carrello = (id, nome, totale) => ({ id, nome, totale, aggiornato: "2026-11-07T17:00:00.000Z", carrello: [] });
 
@@ -204,5 +204,85 @@ describe("un carrello cancellato da un altro telefono non torna", () => {
     const fuori = aggiungiLapidi({ vecchia: "2026-07-01T00:00:00.000Z", recente: "2026-11-01T00:00:00.000Z" }, new Set(["oggi"]), adesso);
     expect(Object.keys(fuori).sort()).toEqual(["oggi", "recente"]);
     expect(leggiLapidi([1, 2])).toEqual({});
+  });
+});
+
+// IL CESTINO DEI CARRELLI. 18/11/2026, chiesto dal titolare: «i carrelli
+// cancellati è meglio che finiscano in un cestino, le cancellazioni da
+// parte degli amministratori hanno priorità su tutti».
+function databaseConCestino(righe = {}) {
+  const stato = { ...righe };
+  const scritture = [];
+  globalThis.fetch = vi.fn(async (url, opzioni = {}) => {
+    const indirizzo = decodeURIComponent(String(url));
+    const metodo = String(opzioni.method || "GET").toUpperCase();
+    const json = (corpo, status = 200) => new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } });
+    if (!indirizzo.includes("impostazioni_layout_tabelle")) return json([]);
+    const chiave = (indirizzo.match(/chiave=eq\.([^&]+)/) || [])[1];
+    if (metodo === "GET") return chiave in stato ? json({ valore: stato[chiave] }) : json(null);
+    const corpo = opzioni.body ? JSON.parse(opzioni.body) : null;
+    const riga = Array.isArray(corpo) ? corpo[0] : corpo;
+    stato[riga.chiave] = riga.valore;
+    scritture.push(riga);
+    return json([], 201);
+  });
+  globalThis.window.fetch = globalThis.fetch;
+  return { stato, scritture };
+}
+
+describe("il cestino dei carrelli sospesi", () => {
+  beforeEach(() => {
+    databaseConCestino();
+    salvaImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
+    return attendiInvioCondiviso(CHIAVE_CARRELLI_SOSPESI);
+  });
+
+  it("tiene la copia intera, chi l'ha buttato e se amministra; dopo sei mesi se ne va", () => {
+    const adesso = new Date("2026-11-18T12:00:00.000Z");
+    const vecchia = { id: "vecchio", carrello: carrello("vecchio", "Vecchio", 1), eliminato_il: "2026-04-01T00:00:00.000Z", eliminato_da: "X", da_amministratore: false };
+    const lista = aggiungiAlCestinoCarrelli([vecchia], carrello("stella", "stella", 80), { chi: "RAFFAELE", daAmministratore: false }, adesso);
+    expect(lista.map((v) => v.id)).toEqual(["stella"]);
+    expect(lista[0].carrello.nome).toBe("stella");
+    expect(lista[0].eliminato_da).toBe("RAFFAELE");
+    expect(lista[0].da_amministratore).toBe(false);
+  });
+
+  it("chi vende rimette il suo; quello buttato da chi amministra lo rimette solo chi amministra", () => {
+    expect(puoRipristinareCarrello({ da_amministratore: false }, false)).toBe(true);
+    expect(puoRipristinareCarrello({ da_amministratore: true }, false)).toBe(false);
+    expect(puoRipristinareCarrello({ da_amministratore: true }, true)).toBe(true);
+  });
+
+  it("buttato e poi rimesso: torna fra i sospesi, esce dal cestino, e la lapide non lo ributta via", async () => {
+    const stella = carrello("stella", "stella", 80);
+    const { stato } = databaseConCestino({ [CHIAVE_CARRELLI_SOSPESI]: [stella] });
+    expect((await mettiNelCestinoCarrelli(stella, { chi: "RAFFAELE", daAmministratore: false })).ok).toBe(true);
+    segnaVociRimosse(CHIAVE_CARRELLI_SOSPESI, [stella], []);
+    salvaImpostazioneCondivisa(CHIAVE_CARRELLI_SOSPESI, []);
+    await attendiInvioCondiviso(CHIAVE_CARRELLI_SOSPESI);
+    expect(stato[CHIAVE_CARRELLI_SOSPESI]).toEqual([]);
+    expect(Object.keys(stato[`${CHIAVE_CARRELLI_SOSPESI}_eliminati`])).toEqual(["stella"]);
+
+    const esito = await ripristinaCarrelloDalCestino("stella", false);
+    expect(esito.ok).toBe(true);
+    expect(stato[CHIAVE_CARRELLI_SOSPESI].map((c) => c.id)).toEqual(["stella"]);
+    expect(stato[CHIAVE_CESTINO_CARRELLI]).toEqual([]);
+    expect(stato[`${CHIAVE_CARRELLI_SOSPESI}_eliminati`]).toEqual({});
+  });
+
+  it("chi vende non rimette un carrello buttato da chi amministra, e niente si scrive", async () => {
+    const stella = carrello("stella", "stella", 80);
+    const voce = { id: "stella", carrello: stella, eliminato_il: new Date().toISOString(), eliminato_da: "ELENA", da_amministratore: true };
+    const { scritture } = databaseConCestino({ [CHIAVE_CESTINO_CARRELLI]: [voce], [`${CHIAVE_CARRELLI_SOSPESI}_eliminati`]: { stella: voce.eliminato_il } });
+    const esito = await ripristinaCarrelloDalCestino("stella", false);
+    expect(esito.ok).toBe(false);
+    expect(scritture).toHaveLength(0);
+  });
+
+  it("se la copia nel cestino non arriva al server, lo dice", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ message: "rete assente" }), { status: 500, headers: { "Content-Type": "application/json" } }));
+    globalThis.window.fetch = globalThis.fetch;
+    const esito = await mettiNelCestinoCarrelli(carrello("stella", "stella", 80), { chi: "RAFFAELE", daAmministratore: false });
+    expect(esito.ok).toBe(false);
   });
 });
