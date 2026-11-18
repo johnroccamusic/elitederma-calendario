@@ -243,3 +243,33 @@ export async function salvaCategorieEscluse(nomi) {
     .upsert({ chiave: CHIAVE_CATEGORIE_ESCLUSE, valore: nomi, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
   if (error) throw error;
 }
+
+// I PRODOTTI ESCLUSI DAL LISTINO (18/11/2026, chiesto dal titolare:
+// «mettere tutti i flag vicino a tutti i prodotti in modo che se ne
+// deflaggo uno esce dal listino definitivamente»).
+//
+// Stessa forma delle categorie escluse, e per gli stessi motivi: è una
+// scelta di chi prepara il listino, si ricorda alla volta dopo — è il
+// «definitivamente» della richiesta — e si cambia senza pubblicare niente.
+// Si tiene l'elenco degli ESCLUSI: un prodotto nuovo entra nel listino da
+// sé. La chiave qui è l'id del prodotto e non il nome, al contrario delle
+// categorie: un prodotto rinominato resta lo stesso prodotto, e tolto una
+// volta deve restare fuori anche dopo una correzione del nome.
+export const CHIAVE_PRODOTTI_ESCLUSI = "listini_rivenditori_prodotti_esclusi";
+
+export async function leggiProdottiEsclusi() {
+  const { data, error } = await supabase.from("impostazioni_layout_tabelle")
+    .select("valore").eq("chiave", CHIAVE_PRODOTTI_ESCLUSI).maybeSingle();
+  if (error) return [];
+  return Array.isArray(data?.valore) ? data.valore.map(String) : [];
+}
+
+// Qui l'errore NON si inghiotte, a differenza delle altre due spunte: un
+// prodotto tolto che il server non ha ricevuto tornerebbe nel listino alla
+// prossima apertura, cioè esattamente il «definitivamente» che manca. La
+// pagina deve poterlo dire.
+export async function salvaProdottiEsclusi(ids) {
+  const { error } = await supabase.from("impostazioni_layout_tabelle")
+    .upsert({ chiave: CHIAVE_PRODOTTI_ESCLUSI, valore: ids, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+  if (error) throw error;
+}

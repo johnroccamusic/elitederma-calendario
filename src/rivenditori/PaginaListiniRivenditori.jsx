@@ -21,12 +21,12 @@ import {
   leggiListinoDaEsportare, scriviPrezzoECosto, leggiModifiche, leggiRivenditori,
   salvaRivenditore, cancellaRivenditore, leggiOrdini, aggiungiOrdine, cancellaOrdine,
   leggiVerifiche, aggiungiVerifica, leggiRegolamenti, leggiLivelliScelti, salvaLivelliScelti,
-  salvaLivello, leggiCategorieEscluse, salvaCategorieEscluse,
+  salvaLivello, leggiCategorieEscluse, salvaCategorieEscluse, leggiProdottiEsclusi, salvaProdottiEsclusi,
 } from "./dati.js";
 import { livelliAttivi, nominalePct, euroIt } from "./regole.js";
 import {
   creaListinoRivenditoriPdf, csvListinoRivenditori, righeEsportabili, soglia, titoloListino,
-  categorieDelListino, nomeCategoria,
+  categorieDelListino, nomeCategoria, regoleSconti,
 } from "./listinoPdf.js";
 import SchedaRivenditori from "./SchedaRivenditori.jsx";
 import SchedaRegolamento from "./SchedaRegolamento.jsx";
@@ -86,6 +86,8 @@ export default function PaginaListiniRivenditori({
   const [notaScelta, setNotaScelta] = useState("");
   const [scelti, setScelti] = useState(null); // codici dei livelli spuntati
   const [escluse, setEscluse] = useState([]); // categorie fuori dal listino
+  const [prodottiEsclusi, setProdottiEsclusi] = useState([]); // id dei prodotti tolti uno per uno
+  const [regoleAperte, setRegoleAperte] = useState(false);
   const [bozzaPrezzo, setBozzaPrezzo] = useState({});
   const [bozzaCosto, setBozzaCosto] = useState({});
   const [salvando, setSalvando] = useState(null);
@@ -120,6 +122,7 @@ export default function PaginaListiniRivenditori({
     let vivo = true;
     leggiLivelliScelti().then((c) => { if (vivo && scelti == null) setScelti(c); });
     leggiCategorieEscluse().then((c) => { if (vivo) setEscluse(c || []); });
+    leggiProdottiEsclusi().then((c) => { if (vivo) setProdottiEsclusi(c || []); });
     return () => { vivo = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -155,7 +158,17 @@ export default function PaginaListiniRivenditori({
   const fuori = useMemo(() => new Set(escluse), [escluse]);
   const prodottiFuori = useMemo(
     () => categorie.filter((c) => fuori.has(c.nome)).reduce((s, c) => s + c.quanti, 0), [categorie, fuori]);
-  const nelListino = useMemo(() => righeEsportabili(righe, escluse).length, [righe, escluse]);
+  const nelListino = useMemo(() => righeEsportabili(righe, escluse, prodottiEsclusi).length, [righe, escluse, prodottiEsclusi]);
+  // chi PUO' entrare nel listino, prima di ogni esclusione: solo su quelle
+  // righe la spunta del prodotto ha senso. Un prodotto senza prezzo o da
+  // solo banco non entrerebbe comunque, e una spunta che non fa niente è un
+  // dubbio, non una scelta.
+  const esportabiliIds = useMemo(() => new Set(righeEsportabili(righe).map((r) => String(r.id))), [righe]);
+  const tolti = useMemo(() => new Set(prodottiEsclusi), [prodottiEsclusi]);
+  // i tolti che esistono ancora in listino: un id di un prodotto cancellato
+  // dal catalogo resta nell'elenco salvato ma non va contato
+  const quantiTolti = useMemo(() => prodottiEsclusi.filter((id) => esportabiliIds.has(id)).length, [prodottiEsclusi, esportabiliIds]);
+  const regole = useMemo(() => regoleSconti(livelliScelti, tettoPct), [livelliScelti, tettoPct]);
 
   // La tabella si legge per categoria (18/11/2026): una fila di duecento
   // righe non dice a che punto del catalogo si è, e la spunta per
@@ -189,6 +202,23 @@ export default function PaginaListiniRivenditori({
     setEscluse(nomi);
     try { await salvaCategorieEscluse(nomi); }
     catch { /* una spunta che non si ricorda non ferma il listino */ }
+  }
+
+  // Un prodotto tolto esce dal listino «definitivamente»: resta fuori anche
+  // alle prossime generazioni, finché qualcuno non rimette la spunta. Per
+  // questo, se il server non riceve la scelta, la spunta torna com'era e
+  // la pagina lo dice: una spunta tolta che non è arrivata farebbe
+  // ricomparire il prodotto nel listino di domani.
+  async function cambiaProdottiEsclusi(ids, frase) {
+    const prima = prodottiEsclusi;
+    setProdottiEsclusi(ids);
+    try {
+      await salvaProdottiEsclusi(ids);
+      if (frase) setEsito(frase);
+    } catch (e) {
+      setProdottiEsclusi(prima);
+      setErrore(`La scelta non è stata salvata, la spunta è tornata com'era: ${e?.message || e}`);
+    }
   }
 
   async function salvaRicarico() {
@@ -269,7 +299,7 @@ export default function PaginaListiniRivenditori({
       // riceve».
       const daEsportare = await leggiListinoDaEsportare();
       const { bytes, prodotti, pagine } = await creaListinoRivenditoriPdf(daEsportare, livelliScelti, {
-        tettoPct, getPdfLib, righeSocieta, escluse,
+        tettoPct, getPdfLib, righeSocieta, escluse, prodottiEsclusi,
       });
       const nome = unoSolo
         ? `listino-rivenditori-${livelliScelti[0].codice}-${new Date().toISOString().slice(0, 10)}.pdf`
@@ -285,12 +315,12 @@ export default function PaginaListiniRivenditori({
     setFacendo("excel"); setErrore(null); setEsito("");
     try {
       const daEsportare = await leggiListinoDaEsportare();
-      const testo = csvListinoRivenditori(daEsportare, livelliScelti, escluse);
+      const testo = csvListinoRivenditori(daEsportare, livelliScelti, escluse, prodottiEsclusi);
       const nome = unoSolo
         ? `listino-rivenditori-${livelliScelti[0].codice}-${new Date().toISOString().slice(0, 10)}.csv`
         : `listino-rivenditori-${new Date().toISOString().slice(0, 10)}.csv`;
       scaricaCsv(testo, nome);
-      setEsito(`Foglio creato: ${righeEsportabili(daEsportare, escluse).length} prodotti.`);
+      setEsito(`Foglio creato: ${righeEsportabili(daEsportare, escluse, prodottiEsclusi).length} prodotti.`);
     } catch (e) { setErrore(`Non sono riuscito a creare il foglio: ${e?.message || e}`); }
     setFacendo(null);
   }
@@ -452,6 +482,50 @@ export default function PaginaListiniRivenditori({
                   <>Tutte le {categorie.length} categorie entrano nel listino ({nelListino} prodotti). Per escluderne una, togli la spunta sulla sua banda qui sotto.</>
                 )}
               </div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: quantiTolti ? "#8A6D1D" : MUTED, marginTop: 4, lineHeight: 1.5 }}
+                data-prodotti-tolti={quantiTolti}>
+                {quantiTolti ? (
+                  <>
+                    <b>{quantiTolti === 1 ? "Un prodotto tolto" : `${quantiTolti} prodotti tolti`}</b> uno per uno: restano fuori da
+                    ogni listino finché non rimetti la spunta accanto al nome.{" "}
+                    <button onClick={() => cambiaProdottiEsclusi([], "Tutti i prodotti tolti sono tornati nel listino.")} data-rimetti-prodotti
+                      style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent",
+                        border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+                      Rimettili tutti
+                    </button>
+                  </>
+                ) : (
+                  <>Ogni prodotto ha la sua spunta accanto al nome: toglila e quel prodotto esce dal listino, anche le volte dopo.</>
+                )}
+              </div>
+              {/* LE REGOLE CHE APRONO IL LISTINO, da leggere prima di
+                  generarlo: sono le stesse che il PDF stampa in cima, e
+                  seguono la spunta dei livelli. */}
+              {regole.length > 0 && (
+                <>
+                  <button onClick={() => setRegoleAperte((v) => !v)} data-apri-regole
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent",
+                      border: "none", padding: "8px 0 0", cursor: "pointer", display: "block" }}>
+                    {regoleAperte ? "▾" : "▸"} Come funzionano gli sconti (in apertura del listino)
+                  </button>
+                  {regoleAperte && (
+                    <div data-regole style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5, marginTop: 6,
+                      background: "#FAF6EE", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 14px" }}>
+                      {regole.map((b) => (
+                        <div key={b.titolo} style={{ marginBottom: 8 }}>
+                          <b>{b.titolo}</b>
+                          <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                            {b.righe.map((r) => <li key={r}>{r}</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                      <div style={{ color: MUTED, fontSize: 12 }}>
+                        Le soglie si cambiano da «Le soglie dei livelli» qui sotto, e il listino le segue da sé.
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               <button onClick={() => setSoglieAperte((v) => !v)} data-apri-soglie
                 style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent",
                   border: "none", padding: "8px 0 0", cursor: "pointer" }}>
@@ -553,13 +627,39 @@ export default function PaginaListiniRivenditori({
                       </tr>
                       {c.righe.map((r) => {
                       const n = notaDi(r.nota);
+                      const puoEntrare = esportabiliIds.has(String(r.id));
+                      const tolto = tolti.has(String(r.id));
                       return (
-                        <tr key={r.id} data-riga={r.nome} style={{ background: r.nota === "nessuno_sconto" ? "#FFFBFB" : undefined, opacity: esclusa ? 0.55 : 1 }}>
+                        <tr key={r.id} data-riga={r.nome} style={{ background: r.nota === "nessuno_sconto" ? "#FFFBFB" : undefined, opacity: esclusa || tolto ? 0.55 : 1 }}>
                           <td className="lr-nome" style={{ paddingLeft: 10 }}>
-                            {r.nome}
-                            {r.tipo === "bundle" && (
-                              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>kit · costo dalla distinta</div>
-                            )}
+                            <label style={{ display: "flex", gap: 7, alignItems: "flex-start", cursor: puoEntrare ? "pointer" : "default" }}
+                              title={!puoEntrare
+                                ? "Non entra in nessun listino: senza prezzo, o si vende solo al banco"
+                                : tolto
+                                  ? `«${r.nome}» è fuori dal listino. Rimetti la spunta per farlo rientrare.`
+                                  : `«${r.nome}» entra nel listino. Togli la spunta per lasciarlo fuori, anche le volte dopo.`}>
+                              <input type="checkbox" data-prodotto-spunta={r.nome}
+                                checked={puoEntrare && !tolto} disabled={!puoEntrare}
+                                onChange={(e) => cambiaProdottiEsclusi(e.target.checked
+                                  ? prodottiEsclusi.filter((id) => id !== String(r.id))
+                                  : [...prodottiEsclusi, String(r.id)],
+                                e.target.checked
+                                  ? `«${r.nome}» torna nel listino.`
+                                  : `«${r.nome}» esce dal listino, anche dalle prossime generazioni.`)}
+                                style={{ marginTop: 3, flexShrink: 0 }} />
+                              <span>
+                                {r.nome}
+                                {tolto && (
+                                  <span data-tolto={r.nome} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ROSSO,
+                                    background: "#FDECEC", borderRadius: 9, padding: "1px 7px", marginLeft: 6, whiteSpace: "nowrap" }}>
+                                    fuori dal listino
+                                  </span>
+                                )}
+                                {r.tipo === "bundle" && (
+                                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>kit · costo dalla distinta</div>
+                                )}
+                              </span>
+                            </label>
                           </td>
                           <td>
                             <input className="lr-campo" data-prezzo={r.nome}
