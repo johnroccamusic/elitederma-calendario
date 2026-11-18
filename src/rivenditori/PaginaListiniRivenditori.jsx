@@ -21,6 +21,7 @@ import {
   leggiListinoDaEsportare, scriviPrezzoECosto, leggiModifiche, leggiRivenditori,
   salvaRivenditore, cancellaRivenditore, leggiOrdini, aggiungiOrdine, cancellaOrdine,
   leggiVerifiche, aggiungiVerifica, leggiRegolamenti, leggiLivelliScelti, salvaLivelliScelti,
+  salvaLivello,
 } from "./dati.js";
 import { livelliAttivi, nominalePct, euroIt } from "./regole.js";
 import { creaListinoRivenditoriPdf, csvListinoRivenditori, righeEsportabili, soglia, titoloListino } from "./listinoPdf.js";
@@ -39,6 +40,12 @@ export const NOTE = [
   { chiave: "costo_mancante", etichetta: "Costo mancante", colore: "#3B6FA0", fondo: "#EEF4FA" },
 ];
 export const notaDi = (c) => NOTE.find((n) => n.chiave === c) || NOTE[0];
+
+const ETICHETTE_SOGLIA = {
+  ingresso_eur: "la soglia d'ingresso",
+  mantenimento_eur: "gli acquisti annui per mantenerlo",
+  riassortimento_minimo_eur: "il riassortimento minimo",
+};
 
 // Il nome della scheda: quello che si legge in cima, nell'ordine della
 // specifica.
@@ -80,6 +87,8 @@ export default function PaginaListiniRivenditori({
   const [salvando, setSalvando] = useState(null);
   const [esito, setEsito] = useState("");
   const [bozzaRicarico, setBozzaRicarico] = useState(null);
+  const [soglieAperte, setSoglieAperte] = useState(false);
+  const [bozzaSoglia, setBozzaSoglia] = useState({});
 
   useEffect(() => {
     let vivo = true;
@@ -156,6 +165,28 @@ export default function PaginaListiniRivenditori({
       setGiro((g) => g + 1);
       setEsito(`Ricarico minimo portato al ${String(n).replace(".", ",")}%: tutti i prezzi per livello si sono rifatti.`);
     } catch (e) { setErrore(`Il ricarico minimo non è stato salvato: ${e?.message || e}`); }
+  }
+
+  // Le soglie di un livello: ingresso, mantenimento, riassortimento
+  // minimo. Stanno in tabella e non nel codice proprio per essere
+  // cambiate senza pubblicare niente — è la richiesta della specifica.
+  //
+  // Il riassortimento minimo fa due mestieri: è il minimo d'ordine del
+  // livello ED è la fascia della tabella dei riassortimenti. Cambiandolo
+  // si sposta anche quella, e la riga lo dice.
+  async function salvaSoglia(livello, campo) {
+    const chiave = `${livello.id}:${campo}`;
+    const testo = bozzaSoglia[chiave];
+    setBozzaSoglia((b) => { const c = { ...b }; delete c[chiave]; return c; });
+    if (testo == null) return;
+    const n = Number(String(testo).replace(",", ".").trim());
+    if (!Number.isFinite(n) || n < 0) return;
+    if (n === Number(livello[campo])) return;
+    try {
+      await salvaLivello(livello.id, { [campo]: n }, operatore);
+      setGiro((g) => g + 1);
+      setEsito(`${livello.nome}: ${ETICHETTE_SOGLIA[campo]} portat${campo === "mantenimento_eur" ? "i" : "a"} a € ${euroIt(n)}. Il registro lo ha scritto.`);
+    } catch (e) { setErrore(`${livello.nome}: ${e?.message || e}`); }
   }
 
   // Prezzo pubblico e costo, corretti in linea.
@@ -361,6 +392,48 @@ export default function PaginaListiniRivenditori({
               {!livelliScelti.length && (
                 <div style={{ ...fontBody, fontSize: 12.5, color: ROSSO, marginTop: 8 }}>
                   Nessun livello spuntato: non c'è niente da esportare.
+                </div>
+              )}
+              <button onClick={() => setSoglieAperte((v) => !v)} data-apri-soglie
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent",
+                  border: "none", padding: "8px 0 0", cursor: "pointer" }}>
+                {soglieAperte ? "▾" : "▸"} Le soglie dei livelli
+              </button>
+              {soglieAperte && (
+                <div style={{ marginTop: 8 }} data-soglie>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+                    Si cambiano da qui, senza pubblicare niente. Il <b>riassortimento minimo</b> fa due mestieri: è il
+                    minimo d'ordine del livello ed è la sua fascia nella tabella dei riassortimenti — cambiandolo si
+                    sposta anche quella, nel regolamento compreso.
+                  </div>
+                  <div className="lr-scroll">
+                    <table className="lr-tab">
+                      <thead><tr>
+                        <th style={{ textAlign: "left", paddingLeft: 10 }}>Livello</th>
+                        <th>Sconto<br />massimo</th><th>Ingresso</th>
+                        <th>Acquisti annui<br />per mantenerlo</th><th>Riassortimento<br />minimo</th>
+                      </tr></thead>
+                      <tbody>
+                        {attivi.map((l) => (
+                          <tr key={l.codice} data-soglia={l.codice}>
+                            <td className="lr-nome" style={{ paddingLeft: 10 }}>{l.nome}</td>
+                            <td className="lr-liv" title={`${l.frazione} del cedibile, cioè ${String(nominalePct(l, tettoPct)).replace(".", ",")} per cento sui prodotti che reggono il tetto`}>
+                              −{String(nominalePct(l, tettoPct)).replace(".", ",")}%
+                            </td>
+                            {["ingresso_eur", "mantenimento_eur", "riassortimento_minimo_eur"].map((campo) => (
+                              <td key={campo}>
+                                <input className="lr-campo" data-campo-soglia={`${l.codice}:${campo}`}
+                                  value={bozzaSoglia[`${l.id}:${campo}`] ?? cifra(l[campo])}
+                                  onChange={(e) => setBozzaSoglia((b) => ({ ...b, [`${l.id}:${campo}`]: e.target.value }))}
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={() => salvaSoglia(l, campo)} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

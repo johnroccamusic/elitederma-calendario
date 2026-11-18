@@ -38,7 +38,7 @@ src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
                          iscrizione, iscrizioni, magazzino, notifiche, pos,
                          prezzi, progetti, punti, recesso, regole, rientri,
                          salvataggi, spese, stampe, statistiche
-prove/                   128 file, 1.295 prove (Vitest + jsdom), con preparazione e aiuto
+prove/                   128 file, 1.296 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
 supabase/functions/      56 edge function + _shared
@@ -1617,6 +1617,15 @@ registrata con scritto **«non registrato»** — meglio una riga senza nome
 che nessuna riga. Provati tutti e due i casi sul database vero, in
 transazione annullata.
 
+**Le soglie si cambiano dalla pagina, senza pubblicare niente** — è il
+senso di «tieni soglie e percentuali in una tabella di configurazione
+modificabile dall'admin»: il ricarico minimo in testa al listino, e
+sotto la spunta dei livelli il pannello «Le soglie dei livelli» con
+ingresso, acquisti annui e riassortimento minimo di ognuno. Ogni
+scrittura passa dal registro col nome di chi l'ha fatta, e il
+riassortimento minimo sposta anche la tabella del regolamento, che da
+quei numeri si compone.
+
 **La spunta dei livelli vale anche per quello che si vede**, così si
 guarda prima quello che verrà esportato. Con **un livello solo** il file
 si intitola «Listino rivenditori – livello Premium», porta la colonna
@@ -1688,7 +1697,7 @@ l'uguale è una lista. Una prova lo inchioda.
 
 Migrazione `20261118100000_listini_rivenditori.sql` (rollback dentro, e
 le righe che porterebbero via anagrafica, registro e regolamento sono
-marcate ATTENZIONE). Prove in `prove/listini-rivenditori.test.jsx` (56).
+marcate ATTENZIONE). Prove in `prove/listini-rivenditori.test.jsx` (57).
 
 **Resta da fare, e va deciso:** il **testo del regolamento**; se la
 colonna «prezzo rivenditore» di «Prezzi e listini» va rinominata o

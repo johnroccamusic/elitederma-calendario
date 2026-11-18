@@ -30,7 +30,7 @@ import {
   csvListinoRivenditori, colonneListino, titoloListino, righeEsportabili, righeIntestazione,
 } from "../src/rivenditori/listinoPdf.js";
 import { composizioneRegolamento, tabellaRiassortimenti, esempioRientro } from "../src/rivenditori/regolamento-testo.js";
-import { monta, attendi, clicca, scegli } from "./aiuto.js";
+import { monta, attendi, clicca, scegli, scrivi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
 const MIGRAZIONE = fs.readFileSync(
@@ -509,6 +509,26 @@ describe("la pagina, montata per davvero", () => {
     expect(p.tasto("Genera listino").disabled).toBe(true);
     expect(p.tasto("Excel").disabled).toBe(true);
     expect(p.testo()).toContain("Nessun livello spuntato");
+    await p.smonta();
+  });
+
+  it("le soglie dei livelli si cambiano da qui: stanno in tabella, non nel codice", async () => {
+    const chiamate = [];
+    database({ "rivenditori_livelli": (corpo, indirizzo) => { chiamate.push([indirizzo, corpo]); return LIVELLI; } });
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} operatore="Prova" />);
+    await attendi(120);
+    expect(p.nodo.querySelector("[data-soglie]")).toBeFalsy();
+    await clicca(p.nodo.querySelector("[data-apri-soglie]"));
+    expect(p.nodo.querySelectorAll("[data-soglia]")).toHaveLength(5);
+    const casella = p.nodo.querySelector('[data-campo-soglia="distributor:mantenimento_eur"]');
+    expect(casella.value).toBe("7.500,00");
+    await scrivi(casella, "8000");
+    casella.dispatchEvent(new window.FocusEvent("focusout", { bubbles: true }));
+    await attendi(80);
+    const scrittura = chiamate.find(([, corpo]) => corpo && corpo.mantenimento_eur === 8000);
+    expect(scrittura, "la soglia non è stata scritta sul database").toBeTruthy();
+    // e porta il nome di chi ha scritto, che è quello che il registro legge
+    expect(scrittura[1].aggiornato_da).toBe("Prova");
     await p.smonta();
   });
 

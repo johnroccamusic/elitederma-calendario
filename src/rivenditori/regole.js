@@ -257,10 +257,17 @@ export function avvisoFasciaSuperiore(righe, livelloPosseduto, livelli, tettoPct
   };
 }
 
-// una cifra come si scrive in italiano, per le frasi di questo file
+// Una cifra come si scrive in italiano, per le frasi di questo file e per
+// i numeri in pagina.
+//
+// `useGrouping: "always"` perche' in italiano il CLDR non raggruppa i
+// numeri di quattro cifre: senza, una soglia da 7.500 € si leggerebbe
+// «7500,00» e sembrerebbe un errore di battitura. Nel CSV invece il
+// raggruppamento NON si mette (vedi listinoPdf.js): Excel leggerebbe
+// «7.500,00» come testo.
 export function euroIt(n) {
   if (n == null || !Number.isFinite(Number(n))) return "—";
-  return Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: "always" });
 }
 
 // ---------- le master ----------
