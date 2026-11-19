@@ -19387,15 +19387,28 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
       è anche venditore
     </label>
   );
+  // La tendina elenca le righe VERE della tabella `venditori`: la master
+  // flaggata qui accanto una riga non ce l'ha, e infatti non c'e' niente
+  // da collegare. Finche' il suo nome compariva qui dentro (l'elenco unito
+  // la presenta come venditore col proprio id di master) sceglierlo era il
+  // gesto naturale dopo aver acceso il flag — e il database lo rifiutava.
+  // Adesso non c'e' piu', e al suo posto c'e' scritto che non serve.
   const selVenditoreCollegato = (
-    <select
-      value={masterRec.venditore_id || ""}
-      onChange={(e) => salvaVenditoreCollegato(e.target.value)}
-      style={{ ...inputStyle, padding: "6px 8px", fontSize: 11 }}
-    >
-      <option value="">— nessuno —</option>
-      {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
-    </select>
+    <>
+      <select
+        value={masterRec.venditore_id || ""}
+        onChange={(e) => salvaVenditoreCollegato(e.target.value)}
+        style={{ ...inputStyle, padding: "6px 8px", fontSize: 11 }}
+      >
+        <option value="">— nessuno —</option>
+        {(venditori || []).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+      </select>
+      {masterRec.e_venditore && !masterRec.venditore_id && (
+        <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginTop: 4, lineHeight: 1.25 }}>
+          Col flag acceso non serve collegare nessuno: vende con questa password.
+        </div>
+      )}
+    </>
   );
   if (isMobile) {
     return (
@@ -19581,7 +19594,7 @@ function TabellaPasswordAssistenti({ assistente, ricarica }) {
 // creazione/eliminazione qui: si aggiungono/tolgono master da Setting).
 // Chi entra con la password di una master trova già la sua Dashboard
 // master aperta sulla propria scheda, senza scegliere nulla; se ha anche
-function TabellaPasswordMaster({ master, venditori, ricarica }) {
+export function TabellaPasswordMaster({ master, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
   const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || "";
@@ -89434,6 +89447,20 @@ function Gestionale() {
   // Niente doppioni: chi ha gia' una riga in `venditori` — collegata
   // (`venditore_id`) o con lo stesso nome — resta quella riga, che e' la
   // sua storia; il flag non ne aggiunge una seconda.
+  //
+  // CHI SCRIVE SULLA TABELLA DEVE RICEVERE `venditoriTabella`, NON QUESTO.
+  // Una riga che arriva da una master porta il proprio id di MASTER: non
+  // esiste in `venditori`. Quindi ogni pagina che scrive su quella tabella
+  // (password, permessi, cognome) o che ci aggancia una chiave esterna —
+  // `master.venditore_id`, `utenti_app.venditore_id` — va alimentata con
+  // `venditoriTabella`. Dandole questo elenco, la tendina «Venditore
+  // collegato» offriva anche le master flaggate: sceglierne una scriveva
+  // un id di master dentro una chiave esterna verso `venditori`, e il
+  // database la rifiutava (19/11/2026, VALENTINA CALASCIBETTA). Oggi sono
+  // alimentate dalla tabella: «Utenti» (gestione utenti, Password Master,
+  // Password venditori) e «Definisci Master».
+  // Questo elenco resta per chi LEGGE: tendina tutor, Dashboard venditori,
+  // commissioni, obiettivi.
   const [venditoriTabella, setVenditoriTabella] = useState([]);
   const venditori = useMemo(() => {
     const nomi = new Set(venditoriTabella.map((v) => String(v.nome || "").trim().toUpperCase()));
@@ -91877,7 +91904,7 @@ function Gestionale() {
           areaIniziale={areaImpostazioni}
           onChiediAccessoUtenti={chiediAccessoUtenti}
           onBack={() => setView("home")}
-          propsUtenti={{ passwordMenu, utentiApp, master, venditori, assistente, ricarica: fetchDati, onBack: () => setView("home") }}
+          propsUtenti={{ passwordMenu, utentiApp, master, venditori: venditoriTabella, assistente, ricarica: fetchDati, onBack: () => setView("home") }}
           propsSetting={{
             ruoloUtente, utenteLoggato, iscritti, corsiDate, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
             venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,
@@ -92973,7 +93000,7 @@ function Gestionale() {
 
       {view === "gestionemaster" && (
         <PaginaGestioneMaster
-          master={master} venditori={venditori} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
+          master={master} venditori={venditoriTabella} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />

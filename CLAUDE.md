@@ -1434,6 +1434,63 @@ persi; e se il filtro «ha speso almeno tanto» delle campagne debba
 guardare i soli **prodotti** invece del totale incassato — oggi guarda il
 totale, che è giusto ma mette insieme chi ha comprato merce e chi ha
 pagato un corso.
+### «È anche venditore» e «venditore collegato» sono due cose (19/11/2026)
+
+Il titolare, in Impostazioni → Utenti: acceso il flag **«è anche
+venditore»** su VALENTINA CALASCIBETTA e scelto il suo nome dalla tendina
+accanto, l'app rispondeva `insert or update on table "master" violates
+foreign key constraint "master_venditore_id_fkey"`.
+
+**Il database aveva ragione, e il difetto era nel collegamento.** Dal
+22/10/2026 `venditori` — il nome che quasi trecento punti dell'app
+leggono — **non è la tabella**: è la tabella PIÙ le master col flag
+acceso, presentate come venditori **con il loro id di master**. Una riga
+così in `venditori` non esiste, e `master.venditore_id` è una chiave
+esterna verso `venditori.id`. Il pannello «Utenti» riceveva l'elenco
+unito, quindi la tendina «Venditore collegato» offriva anche le master
+flaggate: una scelta impossibile, e **proprio quella che si fa per
+istinto subito dopo aver acceso il flag**.
+
+**Erano tre punti, non uno**, tutti alimentati dall'elenco sbagliato:
+la tendina di **Password Master** (`master.venditore_id`), quella di
+**Gestione utenti** (`utenti_app.venditore_id`) e quella della scheda in
+**Definisci Master**. Al quarto il database non diceva niente: in
+**Password venditori** le master flaggate comparivano come righe, e
+scrivere lì password o permessi faceva un update su `venditori` con un id
+di master — **zero righe cambiate, nessun errore** (è la regola «un
+update senza select mente», e qui nemmeno il select avrebbe aiutato: la
+riga non c'è). Era anche il contrario di quello che questo file prometteva
+dal 22/10: una master flaggata «non compare in Gestione venditori, si
+gestisce da qui».
+
+**La regola, adesso scritta accanto all'elenco:** chi **scrive** sulla
+tabella `venditori`, o ci aggancia una chiave esterna, riceve
+`venditoriTabella`; l'elenco unito resta per chi **legge** — tendina
+tutor, Dashboard venditori, commissioni, obiettivi. Due prop cambiate
+(`propsUtenti` e `PaginaGestioneMaster`); `PaginaGestioneVenditori` la
+tabella la riceveva già, ed è il motivo per cui lì il guasto non si
+vedeva.
+
+**E il pannello dice che non c'è niente da collegare.** Col flag acceso e
+nessun collegamento, sotto la tendina si legge «Col flag acceso non serve
+collegare nessuno: vende con questa password». Togliere la scelta
+sbagliata non basta: chi aveva appena acceso il flag cercava comunque
+cosa fare dopo. La tendina resta, perché le dieci persone che stanno in
+tutte e due le liste un collegamento vero ce l'hanno.
+
+**La guardia è la parte che dura** (`prove/master-anche-venditore-non-si-collega.test.jsx`,
+8): il componente mostra quello che gli danno, quindi **nessuna prova che
+monti una pagina poteva vedere questo guasto** — stava nel collegamento.
+La guardia rilegge `src/App.jsx` e pretende che i tre pannelli che
+scrivono su `venditori` ricevano `venditoriTabella`, e che l'elenco unito
+continui a marcare `da_master` — l'unico segno che quella riga non esiste
+nella tabella.
+
+**Oggi riguarda tre persone**: DEBORA FUMAGALLI, MARTINA TORA e VALENTINA
+CALASCIBETTA hanno il flag e nessuna riga in `venditori` (TOMMASO
+GIUMBINI ce l'ha, collegata). Nessun dato è stato toccato: la scrittura
+non era mai andata a buon fine.
+
 ### La raccolta del materiale, a tutta pagina (30/10/2026)
 
 In Logistica → Spedizioni corsi, in alto a destra nella scheda di
