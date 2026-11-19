@@ -1718,14 +1718,36 @@ sito. Il banco **non si importa** in Code Snippets — ridefinisce `add_filter` 
 `has_term` per girare senza WordPress — e `genera-json.mjs` adesso salta i file
 `prova-*` come già saltava `-ORIGINALE`.
 
-**Resta da fare, e non l'ho fatto:** importare il `.json` dello snippet sul sito
-(**v1.4**; da verificare prima che la v1.3 sia davvero attiva: senza l'innesto
-un coupon al 30% sullo shop è un **30% piatto**, c'è scritto nello snippet
-stesso); **pubblicare** `woo-allinea-margini`, `woo-crea-coupon` e
-`woo-aggiorna-coupon`, che aspettano il «pubblica»; e poi un giro completo di
-allineamento dei margini, che è quello che scrive `_ed_cedibile_riv_pct` sui
-prodotti. Finché quel giro non è passato, sul sito il CASO R non trova il
-cedibile e **non sconta**: al banco invece vale già.
+**PUBBLICATO E ALLINEATO IL 19/11/2026, SERA**, nell'ordine obbligato — prima
+l'allineamento, poi i coupon: invertirli vorrebbe dire un coupon che arriva al
+sito con la frazione e i prodotti senza il cedibile, cioè **zero sconto** su
+tutto quello che copre.
+
+1. `woo-allinea-margini` **v20**, verificata identica al repo;
+2. il **giro di allineamento**: **197 prodotti scritti, zero errori**, 22
+   secondi. Controllato sul sito con `ispeziona-prodotto`: Kit laminazione
+   ciglia `_ed_cedibile_riv_pct: 14.7` e `_ed_cedibile_eur: 28,30` (prima
+   **35,62**, la scala vecchia), Arizona `50` / `18,40`, N2 Fixa **`0` / `0``;
+3. `woo-aggiorna-coupon` **v21** e `woo-crea-coupon` **v25**. Provate con un id
+   inesistente e senza parametri: rispondono 404 e 400 con la loro logica,
+   quindi `_shared/sconto-listino.js` è arrivato nel pacchetto — se mancasse
+   darebbero 500 all'avvio.
+
+**Da quel momento il cedibile sul sito è quello nuovo anche per le master**: il
+loro acquisto personale su N2 Fixa e sugli altri 15 non sconta più. Al banco era
+già così da qualche ora, quindi i due posti sono tornati a dire la stessa cosa —
+ed è il motivo per cui l'allineamento andava fatto subito e non domani.
+
+**Restano due cose non verificate, e vanno dette come tali:** che lo snippet
+v1.4 sia **attivo** (da fuori non lascia nessun segno: lo dice solo Code
+Snippets, o un carrello di prova), e che le **meta del coupon** arrivino
+davvero — per saperlo serve un coupon di prova creato e poi cancellato sul sito
+vero, che è un'azione sullo shop e si fa su richiesta.
+
+**E i 22 codici in vita non sono stati riscritti.** Portano ancora la forma
+vecchia su WooCommerce: la frazione gliela darebbe «Riscrivi sul sito», uno per
+uno, e sono i codici personali delle master. Va deciso quando — e vanno avvisate
+prima.
 
 ### Una fattura a rate ha una spesa per rata (19/11/2026)
 

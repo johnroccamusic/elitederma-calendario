@@ -38,8 +38,7 @@ function dueDecimali(n) { return Math.round((Number(n) || 0) * 100) / 100; }
  *
  * Forzato vuol dire che una persona ha deciso di scontare piatto contro
  * il listino, col motivo scritto: li' il listino non comanda piu'.
- */
-/**
+ *
  * @param {{ valore?: number|string|null, soglia?: number|string|null, forzato?: boolean }} [arg]
  *   La firma e' dichiarata perche' Deno, senza, deduce il tipo dal valore
  *   di default `{}` e vede soltanto `forzato`: le edge function che
