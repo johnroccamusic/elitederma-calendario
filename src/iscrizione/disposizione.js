@@ -29,7 +29,7 @@ import { codiceCatastale } from "../comuni-regioni.js";
 import { avvisoEmail } from "./email.js";
 
 export const AREA_ALLIEVO = {
-  titolo: "Dati dell'allievo",
+  titolo: "Dati anagrafici",
   icona: "persona",
   righe: [
     // nome e cognome non vanno a capo: sono due meta' della stessa riga
@@ -47,6 +47,39 @@ export const AREA_ALLIEVO = {
     // dichiara: resta correggibile, perche' esiste l'omocodia (quando
     // due persone otterrebbero lo stesso codice l'Agenzia ne cambia
     // delle cifre, e il calcolo non puo' saperlo).
+    // I DUE STATI SUBITO DOPO IL NOME, E PRIMA DI TUTTO IL RESTO
+    // (7/11/2026, dettato dal titolare dopo averlo provato: «l'ordine
+    // deve essere nome, cognome, stato di nascita, stato di residenza,
+    // poi i dati della nascita e tutto il resto»).
+    //
+    // NON E' UN GUSTO, ED E' COSTATO UN GUASTO VERO. Lo Stato di
+    // residenza stava sotto i dati di nascita: chi compilava scriveva
+    // nome, sesso, data e comune, e a quel punto il codice fiscale
+    // ITALIANO era gia' stato calcolato e scritto nella casella — la
+    // casella vuota dello Stato vale Italia, ed e' giusto che valga
+    // Italia, perche' 253 schede su 260 sono italiane. Poi si sceglieva
+    // la Svizzera, e quel codice restava li': scritto dall'app, davanti
+    // a chi incassa, e nessuno lo mette in dubbio.
+    //
+    // Questi due campi decidono TUTTO quello che sta sotto — che cosa
+    // chiede la casella fiscale, con quale elenco si sceglie la citta',
+    // se il comune di nascita si chiede — quindi si incontrano per
+    // primi. E il codice che avevamo proposto NOI se ne va quando il
+    // paese cambia (vedi AreeAnagrafiche.jsx): l'ordine toglie
+    // l'occasione di sbagliare, la correzione toglie il danno.
+    //
+    // LO STATO DI NASCITA VIENE PRIMA DEL COMUNE per la stessa ragione:
+    // chi incontrava prima «Comune di nascita» lo cercava nell'elenco
+    // italiano — dove il paese di chi e' nato a Sion non c'e' — e
+    // sceglierlo dopo CANCELLA il comune appena scritto.
+    //
+    // I due si chiamano «Stato di nascita» e «Stato di residenza» per
+    // esteso: affiancati, uno dei due chiamato solo «Stato» non si sa
+    // di che cosa sia lo stato.
+    { campi: [
+      { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "1 1 180px", tipo: "statoNascita", salvaUscendo: true },
+      { chiave: "stato_residenza", etichetta: "Stato di residenza", larghezza: "1 1 180px", tipo: "stato", salvaUscendo: true },
+    ] },
     { campi: [
       // Il sesso sta qui e non altrove perche' serve solo a questo: nel
       // codice fiscale di una donna il giorno di nascita e' il giorno
@@ -62,9 +95,9 @@ export const AREA_ALLIEVO = {
         ] },
       { chiave: "data_nascita", etichetta: "Data di nascita", larghezza: "1 1 140px", tipo: "data", salvaUscendo: true },
       { chiave: "comune_nascita", etichetta: "Comune di nascita", larghezza: "2 1 180px", tipo: "comuneNascita", maiuscolo: true, salvaUscendo: true },
-      { chiave: "stato_nascita", etichetta: "Stato di nascita", larghezza: "2 1 180px", tipo: "statoNascita", salvaUscendo: true },
     ] },
-    // IL CODICE FISCALE VIENE DOPO, E NON E' UN DETTAGLIO DI ORDINE.
+    // L'IDENTIFICATIVO FISCALE VIENE DOPO TUTTI E DUE GLI STATI, E NON
+    // E' UN DETTAGLIO DI ORDINE.
     //
     // Stava sopra, ed era la prima casella vuota che si incontrava: chi
     // compila la trova lampeggiante e lo scrive a mano, prima che
@@ -72,29 +105,56 @@ export const AREA_ALLIEVO = {
     // se' va dopo quelli che lo riempiono, o il calcolo arriva sempre
     // secondo.
     //
+    // E DAL 7/11/2026 STA SUBITO SOTTO LA DATA DI NASCITA, chiesto dal
+    // titolare compilando. Sopra di lei restano tutte e due le
+    // condizioni che contano, ed e' per questo che si puo':
+    //
+    //   - i dati da cui si calcola — sesso, data, comune e Stato di
+    //     nascita — stanno nella riga appena sopra. Il campo che si
+    //     riempie da se' va dopo quelli che lo riempiono, o il calcolo
+    //     arriva sempre secondo;
+    //   - e lo STATO DI RESIDENZA, che decide che cosa questa casella
+    //     chieda — il codice fiscale italiano, con le sue sedici
+    //     lettere e il suo calcolo, oppure l'identificativo fiscale del
+    //     paese di chi si iscrive, che sedici lettere non le ha — sta
+    //     due righe piu' su, subito dopo il nome.
+    //
+    // Quindi e' vicina a quello che la genera e lontana da niente:
+    // l'ordine qui non e' un gusto, e' la lista delle cose che devono
+    // essere gia' state decise.
+    //
     // Sta comunque coi dati di chi si iscrive e non col documento:
     // serve per la fattura e per il diploma, non solo a identificarla.
     { campi: [
-      { chiave: "codice_fiscale", etichetta: "Codice fiscale", larghezza: "0 1 240px", maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, salvaUscendo: true },
+      // «Identificativo fiscale personale (TIN)» e non «Codice fiscale»
+      // (7/11/2026, dicitura dettata dal titolare): da quando si
+      // iscrive anche chi vive in Svizzera, quella casella non chiede
+      // piu' per forza un codice italiano. Le sedici lettere, il filtro
+      // e il calcolo automatico restano, ma solo per chi risiede in
+      // Italia — vedi `campoFiscale` in residenza.js.
+      { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)", larghezza: "0 1 240px",
+        maiuscolo: true, lunghezza: 16, lunghezzaEsatta: 16, nomeAvviso: "codice fiscale",
+        suggerimento: "Inserisci l'identificativo fiscale", salvaUscendo: true },
     ] },
-    { campi: [
-      // La via si scrive, ma mentre si scrive arrivano i suggerimenti
-      // (edge function `cerca-indirizzo`, su Photon/OpenStreetMap). Non
-      // e' un elenco chiuso come il comune: le vie di OSM coprono bene
-      // le citta' e male i paesi, e un elenco incompleto impedirebbe di
-      // registrare chi esiste.
-      { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", tipo: "via", maiuscolo: true, salvaUscendo: true },
-      { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
-      // L'INTERNO NON SI CHIEDE PIU' QUI (20/10/2026). Quasi nessuno lo
-      // riempiva e nessuno lo aspettava: era una casella in piu' da
-      // saltare su una scheda che si compila col cliente davanti.
-      //
-      // La colonna `iscritti.interno_residenza` resta, e resta quello
-      // che c'e' scritto: la scheda lo rilegge e lo riscrive com'era,
-      // non lo cancella. Dove serve davvero — preparare un pacco — il
-      // POS ha il suo campo interno fra i dati di spedizione, ed e'
-      // quello il momento in cui qualcuno lo sa.
-    ] },
+    // UN'INTESTAZIONE DENTRO L'AREA (7/11/2026, chiesta dal titolare).
+    //
+    // «Dati anagrafici» raccoglie due cose diverse — chi e' quella
+    // persona e dove vive — e da qui in giu' comincia la seconda. Una
+    // riga senza campi e con un `titolo` e' un'intestazione: la
+    // disegnano tutti e due i posti che leggono questa disposizione,
+    // la scheda del venditore e il modulo dell'allieva, perche' la
+    // disposizione e' una sola.
+    //
+    // `campi: []` non e' una svista: tutto quello che legge queste
+    // righe le scorre con `r.campi`, e una riga senza quella lista
+    // farebbe cadere la pagina invece di saltare l'intestazione.
+    //
+    // `dipendeDa` serve al modulo: li' le caselle sono solo quelle che
+    // Impostazioni ha acceso, e un'intestazione sopra il nulla e'
+    // peggio di un'intestazione che manca.
+    { titolo: "Dati residenza:", campi: [],
+      dipendeDa: ["prov_residenza", "citta_residenza", "cap_residenza",
+                  "indirizzo_residenza", "civico_residenza"] },
     // LA RESIDENZA SI SCEGLIE, NON SI SCRIVE (19/10/2026).
     //
     // Quattro gradini, e ognuno apre il successivo: stato -> regione ->
@@ -112,19 +172,51 @@ export const AREA_ALLIEVO = {
     // «Altro stato» spegne la cascata italiana e apre la scrittura
     // libera, che e' l'unico modo di registrare chi vive a Sion.
     //
-    // Tutti e tre su UNA riga (20/10/2026), e le misure vengono dal
-    // contenuto: la provincia e' un nome e una sigla, la regione al
-    // massimo «Emilia-Romagna», e lo spazio che resta va allo stato, che
-    // e' l'unico a crescere. `aCapo: false` perche' andassero a capo
-    // sarebbero tre righe per una scelta sola.
+    // Lo Stato e' salito in testa all'area (vedi sopra): qui restano i
+    // due gradini che da lui dipendono, su una riga sola — `aCapo:
+    // false` perche' andassero a capo sarebbero due righe per una
+    // scelta sola.
     { aCapo: false, campi: [
-      { chiave: "stato_residenza", etichetta: "Stato", larghezza: "3 1 100px", tipo: "stato", salvaUscendo: true },
-      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "0 1 150px", tipo: "regione" },
-      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "0 1 130px", tipo: "provincia", salvaUscendo: true },
+      { chiave: "regione_residenza", etichetta: "Regione", larghezza: "1 1 150px", tipo: "regione" },
+      { chiave: "prov_residenza", etichetta: "Provincia", larghezza: "1 1 130px", tipo: "provincia", salvaUscendo: true },
     ] },
     { campi: [
       { chiave: "citta_residenza", etichetta: "Comune", larghezza: "3 1 200px", tipo: "comune", salvaUscendo: true },
       { chiave: "cap_residenza", etichetta: "CAP", larghezza: "1 1 120px", tipo: "cap", salvaUscendo: true },
+    ] },
+    // LA VIA VIENE PER ULTIMA, DOPO LA CASCATA (7/11/2026).
+    //
+    // Stava SOPRA lo Stato, ed era la prima casella dell'indirizzo che
+    // si incontrava: si scriveva la via, il suggerimento portava con se'
+    // comune, provincia e CAP presi dall'elenco ITALIANO — e scriveva
+    // «ITALIA» nello Stato — e solo dopo si arrivava alla tendina dello
+    // Stato. Per un allievo svizzero il risultato era sbagliato prima di
+    // cominciare, ed e' il difetto che il titolare ha visto provando a
+    // iscriverne uno.
+    //
+    // Non si perde niente del «un tocco invece di cinque»: la proposta
+    // riempie ancora quello che e' vuoto (vedi `riempiDaVia`), e con il
+    // comune gia' scelto la ricerca si restringe a lui, che da'
+    // risultati migliori. Si guadagna che l'indirizzo si legge dall'alto
+    // in basso come si scrive su una busta: paese, cantone o provincia,
+    // citta', e per ultima la porta.
+    { campi: [
+      // La via si scrive, ma mentre si scrive arrivano i suggerimenti
+      // (edge function `cerca-indirizzo`, su Photon/OpenStreetMap). Non
+      // e' un elenco chiuso come il comune: le vie di OSM coprono bene
+      // le citta' e male i paesi, e un elenco incompleto impedirebbe di
+      // registrare chi esiste. Fuori Italia non si cerca affatto.
+      { chiave: "indirizzo_residenza", etichetta: "Via", larghezza: "3 1 200px", tipo: "via", maiuscolo: true, salvaUscendo: true },
+      { chiave: "civico_residenza", etichetta: "Civico", larghezza: "1 1 90px", maiuscolo: true, salvaUscendo: true },
+      // L'INTERNO NON SI CHIEDE PIU' QUI (20/10/2026). Quasi nessuno lo
+      // riempiva e nessuno lo aspettava: era una casella in piu' da
+      // saltare su una scheda che si compila col cliente davanti.
+      //
+      // La colonna `iscritti.interno_residenza` resta, e resta quello
+      // che c'e' scritto: la scheda lo rilegge e lo riscrive com'era,
+      // non lo cancella. Dove serve davvero — preparare un pacco — il
+      // POS ha il suo campo interno fra i dati di spedizione, ed e'
+      // quello il momento in cui qualcuno lo sa.
     ] },
     // L'email da sola: e' il campo piu' lungo di tutta la scheda
     // (nome.cognome@qualcosa.it) e in mezza riga si legge a meta'.
@@ -134,7 +226,9 @@ export const AREA_ALLIEVO = {
     // Tutor e cellulare insieme (20/10/2026): due campi corti, una riga.
     { campi: [
       { chiave: "tutor", etichetta: "Tutor", larghezza: "2 1 140px", tipo: "venditori", maiuscolo: true },
-      { chiave: "telefono", etichetta: "Cellulare (+39...)", larghezza: "2 1 150px", tipo: "telefono", suggerimento: "+39 333 1234567", salvaUscendo: true },
+      // il prefisso e' la tendina accanto: nell'etichetta e nel
+      // suggerimento non ci va piu', e la casella e' larga per due
+      { chiave: "telefono", etichetta: "Cellulare", larghezza: "2 1 220px", tipo: "telefono", suggerimento: "333 1234567", salvaUscendo: true },
     ] },
     // L'intestazione resta per se': non e' un dato, e' la scelta che
     // apre o chiude tutto il riquadro della fatturazione qui sotto.
@@ -288,6 +382,11 @@ export function avvisoCampo(campo, valore, valori = null) {
     return avvisoEmail(valore) || null;
   }
   if (campo?.chiave === "codice_fiscale" || campo?.tipo === "codice_fiscale") {
+    // CHI NON RISIEDE IN ITALIA HA UN IDENTIFICATIVO DEL SUO PAESE, e
+    // non si misura col metro italiano: l'AHV svizzero non ha sedici
+    // caratteri e non ha una lettera di controllo. Dirgli che e'
+    // sbagliato sarebbe dare torto a chi ha scritto il numero giusto.
+    if (campo?.formatoItaliano === false) return null;
     // prima la forma, poi il contenuto: un codice malfatto non ha senso
     // confrontarlo con la data di nascita
     const perForma = avvisoCodiceFiscale(valore);
@@ -308,7 +407,12 @@ export function avvisoLunghezza(campo, valore) {
   if (!attesa) return null;
   const quanti = String(valore ?? "").trim().length;
   if (quanti === 0 || quanti === attesa) return null;
-  const nome = (campo.etichetta || "Questo campo").toLowerCase();
+  // L'ETICHETTA NON SEMPRE STA IN UNA FRASE. «Identificativo fiscale
+  // personale (TIN)» dentro «il ... ne ha 16» diventa lungo e storto
+  // («il identificativo»), e quell'avviso esce solo per chi risiede in
+  // Italia, dove quella cosa si chiama codice fiscale. Quindi un campo
+  // puo' dire con che nome vuole essere nominato.
+  const nome = (campo.nomeAvviso || campo.etichetta || "Questo campo").toLowerCase();
   return quanti < attesa
     ? `Manca${attesa - quanti === 1 ? "" : "no"} ${attesa - quanti} caratter${attesa - quanti === 1 ? "e" : "i"}: il ${nome} ne ha ${attesa}.`
     : `Sono ${quanti} caratteri: il ${nome} ne ha ${attesa}.`;

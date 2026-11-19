@@ -15,7 +15,7 @@
 // pagina la mostra solo a loro. Non esce nessun dato personale: le viste
 // non ne contengono.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { CATALOGO_ANALISI, controllaSql, estraiJson } from "../_shared/analisi.js";
+import { VISTE_ANALISI, catalogoPer, controllaSql, estraiJson, leggiCopertura } from "../_shared/analisi.js";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const MODELLO = "claude-sonnet-5-5";
@@ -43,16 +43,17 @@ function oggiRoma(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" }).format(new Date());
 }
 
-const SISTEMA_SQL = (oggi: string) => `Sei l'analista dei dati di Elitederma, un'accademia di formazione estetica che vende corsi e prodotti (al banco durante i corsi, in fiera e sullo shop online).
+const SISTEMA_SQL = (oggi: string, catalogo: string) => `Sei l'analista dei dati di Elitederma, un'accademia di formazione estetica che vende corsi e prodotti (al banco durante i corsi, in fiera e sullo shop online).
 Oggi e' ${oggi}. Ti viene fatta una domanda in italiano: traduci la domanda in UNA sola query SQL Postgres di sola lettura sulle viste qui sotto, e rispondi SOLO con un JSON {"sql": "...", "nota": "..."} dove "nota" e' una riga che spiega cosa hai contato e con quali filtri.
 Se la domanda non si puo' rispondere con queste viste, rispondi {"sql": null, "nota": "perche' no"}.
 Regole: usa solo le viste elencate; niente punto e virgola; limita a 50 righe salvo richiesta diversa; arrotonda gli importi a 2 decimali con round(); ordina come chiede la domanda; per «ricavi/incassi» usa analisi_incassi; per i prodotti usa analisi_vendite_righe con stato in ('completed','processing') e tipo_movimento = 'vendita'; «da settembre a oggi» vuol dire dal 1° settembre dell'anno in corso a oggi; «a maggio» senza anno vuol dire maggio dell'anno in corso; i nomi di prodotti, corsi e persone vanno confrontati con ilike.
 
-${CATALOGO_ANALISI}`;
+${catalogo}`;
 
 const SISTEMA_RISPOSTA = (oggi: string) => `Sei l'analista dei dati di Elitederma. Oggi e' ${oggi}. Ti vengono dati: la domanda di chi amministra l'accademia, la query SQL che e' stata eseguita e le righe che il database ha restituito.
 Scrivi la risposta in italiano, chiara e breve, come la direbbe un collega che ha i numeri davanti: prima il dato che risponde alla domanda, poi se serve un elenco puntato con i numeri (formato italiano: 1.234,56 €), poi al massimo due osservazioni.
-Regole ferree: usa SOLO i numeri che stanno nelle righe; non inventare cifre, percentuali o cause; se le righe sono vuote dillo; se i dati hanno un limite (per esempio i costi mancano su alcuni prodotti, o le spese non sono classificate) dillo in una riga. Per domande di giudizio («quale spesa si puo' abbassare») ragiona sui numeri che hai e proponi, senza presentare l'ipotesi come un fatto. Niente markdown complesso: solo testo, elenchi con «- » e grassetto con **.`;
+Regole ferree: usa SOLO i numeri che stanno nelle righe; non inventare cifre, percentuali o cause; se le righe sono vuote dillo; se i dati hanno un limite (per esempio i costi mancano su alcuni prodotti, o le spese non sono classificate) dillo in una riga.
+DICHIARA SEMPRE IL PERIODO su cui e' stato contato, con le date, anche se nessuno l'ha chiesto: una cifra senza il suo periodo non si puo' controllare, e un conto giusto sul periodo sbagliato e' il modo peggiore di sbagliare perche' sembra giusto. Se la query filtrava per data, scrivi quelle date; se non filtrava niente, scrivilo («su tutto l'archivio»). Per domande di giudizio («quale spesa si puo' abbassare») ragiona sui numeri che hai e proponi, senza presentare l'ipotesi come un fatto. Niente markdown complesso: solo testo, elenchi con «- » e grassetto con **.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
@@ -74,6 +75,12 @@ Deno.serve(async (req) => {
   const chiave = Deno.env.get("ANTHROPIC_API_KEY");
   if (!chiave) return json({ ok: false, errore: "Analisi non disponibile: manca la chiave." }, 503);
   const oggi = oggiRoma();
+  // IL CATALOGO SI COMPONE A OGNI DOMANDA, perche' dentro ci vanno le date
+  // di copertura misurate adesso: le fonti non cominciano insieme (lo shop
+  // dal 2022, il banco da settembre 2026) e una risposta su un periodo che
+  // i dati non hanno sembra completa senza esserlo. Prima era una costante
+  // di modulo, calcolata una volta all'avvio.
+  const catalogo = catalogoPer(VISTE_ANALISI, await leggiCopertura(admin));
 
   // il contesto delle domande precedenti, solo come testo: cosi' «e a giugno?» ha senso
   const prima = cronologia.map((c: any) => `Domanda precedente: ${String(c?.domanda || "").slice(0, 300)}\nRisposta data: ${String(c?.risposta || "").slice(0, 400)}`).join("\n\n");
@@ -84,7 +91,7 @@ Deno.serve(async (req) => {
   for (let tentativo = 0; tentativo < 2; tentativo++) {
     let testo: string;
     try {
-      const r = await chiedi(chiave, SISTEMA_SQL(oggi), messaggi, 800);
+      const r = await chiedi(chiave, SISTEMA_SQL(oggi, catalogo), messaggi, 800);
       testo = r.testo; usoSql = r.uso;
     } catch (e) { return json({ ok: false, errore: String((e as any)?.message || e) }, 502); }
     const piano = estraiJson(testo);

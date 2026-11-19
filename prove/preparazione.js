@@ -18,6 +18,12 @@ export function rispondiCon(mappa) {
         const corpo = typeof risposta === "function"
           ? risposta(opzioni.body ? JSON.parse(opzioni.body) : null, indirizzo)
           : risposta;
+        // una `Response` passa cosi' com'e': serve per provare le
+        // risposte che NON sono 2xx (una edge function che risponde
+        // `{ ok: false, errore }` con 502), dove il motivo sta nel corpo
+        // e il client lo nasconde dietro «non-2xx». Vedi
+        // src/errore-funzione.js
+        if (corpo instanceof Response) return corpo;
         return new Response(JSON.stringify(corpo), {
           status: 200, headers: { "Content-Type": "application/json" },
         });

@@ -100,10 +100,16 @@ async function chiamanteAutorizzato(req: Request): Promise<boolean> {
 // in archivio c'e' "PATERNO", Photon risponde "Paternò", ed e' lo stesso
 // posto. Senza questo il filtro butterebbe via i risultati giusti.
 function chiave(s: string): string {
-  // `\p{Diacritic}` invece dell'intervallo \u0300-\u036f: dice la stessa
-  // cosa e si legge, e soprattutto non si trasforma nei segni veri ogni
-  // volta che questo file passa per uno strumento che interpreta gli
-  // escape — e' appena successo due volte.
+  // `\p{Diacritic}` invece dell'intervallo dei segni combinanti (da
+  // U+0300 a U+036F): dice la stessa cosa e si legge.
+  //
+  // E QUEL NUMERO SI SCRIVE COSI', "U+0300", e non con la barra
+  // rovescia davanti: scritto come escape si trasforma nei segni veri
+  // ogni volta che questo file passa per uno strumento che li
+  // interpreta. E' successo tre volte — l'ultima l'8/11/2026,
+  // pubblicando questa funzione, dentro il commento che avvisava di
+  // non farlo. Un avviso che si fa ignorare tre volte non e' un
+  // avviso: e' la cosa da togliere.
   return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "")
     .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
 }
@@ -143,12 +149,17 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ errore: "Metodo non consentito" }, 405);
   if (!(await chiamanteAutorizzato(req))) return json({ errore: "Serve avere fatto accesso." }, 401);
 
-  let corpo: { cerca?: string; comune?: string; cap?: string };
+  let corpo: { cerca?: string; comune?: string; cap?: string; paese?: string };
   try { corpo = await req.json(); } catch { return json({ errore: "Corpo non leggibile" }, 400); }
 
   const cerca = (corpo.cerca || "").trim();
   const comune = (corpo.comune || "").trim();
   const cap = (corpo.cap || "").trim();
+  // IN QUALE PAESE SI CERCA (8/11/2026). Dal 7/11 si iscrive anche chi
+  // vive in Svizzera, e le sue vie stanno su OpenStreetMap come le
+  // italiane: quello che mancava era dire dove cercarle. Chi non lo
+  // dice cerca in Italia, come ha sempre fatto.
+  const paese = ((corpo.paese || "IT").trim().toUpperCase().slice(0, 2)) || "IT";
   // Sotto le tre lettere non si cerca: i risultati sarebbero inutili e
   // la richiesta sarebbe comunque partita.
   if (cerca.length < MINIMO_LETTERE) return json({ vie: [] });
@@ -160,7 +171,9 @@ Deno.serve(async (req) => {
   // propria leggendo il paese accanto.
   const inTuttaItalia = !comune;
 
-  const ricordo = `${chiave(cerca)}|${chiave(comune)}|${cap}|${inTuttaItalia ? "IT" : ""}`;
+  // il paese entra nel ricordo: senza, la stessa via cercata prima in
+  // Italia e poi in Svizzera risponderebbe con la risposta di prima
+  const ricordo = `${chiave(cerca)}|${chiave(comune)}|${cap}|${paese}|${inTuttaItalia ? "tutto" : ""}`;
   const giaVisto = dalRicordo(ricordo);
   if (giaVisto) return json({ vie: giaVisto });
 
@@ -220,13 +233,17 @@ Deno.serve(async (req) => {
     // e' il caso delle frazioni, dove `city` e' la frazione e non il
     // comune che l'allieva ha scelto.
     if (inTuttaItalia) {
-      // fuori dall'Italia non si spedisce da questa casella, e un
-      // indirizzo straniero in mezzo ai suggerimenti confonde e basta
-      if ((p.countrycode || "").toUpperCase() !== "IT") continue;
+      // un indirizzo di un altro paese in mezzo ai suggerimenti
+      // confonde e basta: si tiene solo quello di chi si sta iscrivendo
+      if ((p.countrycode || "").toUpperCase() !== paese) continue;
       // senza il paese la proposta non si puo' scegliere: due "Via
       // Roma" identiche nell'elenco sono peggio di nessuna proposta
       if (!cittaRisposta) continue;
     } else {
+      // il paese si controlla SOLO SE Photon lo dice: col comune
+      // scelto il filtro vero e' il nome, e scartare le righe senza
+      // `countrycode` toglierebbe risultati buoni che oggi arrivano
+      if (p.countrycode && p.countrycode.toUpperCase() !== paese) continue;
       const perNome = cittaRisposta && chiave(cittaRisposta) === kComune;
       const perCap = !!cap && !!capRisposta && capRisposta === cap;
       if (!perNome && !perCap) continue;

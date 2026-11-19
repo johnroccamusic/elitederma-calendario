@@ -4,7 +4,6 @@
 // ne' una busta da chiudere. Vive nella sua tabella, e queste funzioni
 // sono l'unico punto da cui si tocca.
 import { supabase } from "../supabase.js";
-import { muoviStock } from "../magazzino/stock.js";
 
 export const STATI_EVENTO = [
   { v: "programmato", l: "Programmato" },
@@ -128,23 +127,22 @@ export async function usciteAllEvento(eventoId) {
 // --- il magazzino visto da un evento ---------------------------------------
 
 // Quanti pezzi sono gia' impegnati altrove, e quindi non si possono
-// promettere a questo evento:
-//   - quelli dentro un carrello sospeso del POS. La giacenza li ha
-//     ancora (sono in scatola), ma sono di qualcuno: il banco non li
-//     rivende e il sito non li dichiara;
-//   - quelli che un ALTRO evento ancora da partire ha messo in elenco e
-//     non ha ancora scaricato.
+// promettere a questo evento: quelli dentro un carrello sospeso del POS.
+// La giacenza li ha ancora (sono in scatola), ma sono di qualcuno: il
+// banco non li rivende e il sito non li dichiara.
+//
+// Gli ALTRI eventi non impegnano niente (30/10/2026, deciso dal
+// titolare): il materiale portato a una fiera resta in magazzino e lo
+// puo' vendere chiunque. Dal 08/10 al 30/10 si contava anche quello.
+// L'Advisor continua a dire quanto serve a fiere e corsi, ma informa:
+// non vincola.
 //
 // I pezzi in attesa di spedizione NON entrano in questo conto. Una
 // vendita al banco scarica il magazzino nell'istante in cui si incassa,
 // spedizione o no: dalla giacenza sono gia' usciti, e toglierli di nuovo
 // qui li conterebbe due volte.
 export async function impegniMagazzino() {
-  const [sospesi, materiali, eventi] = await Promise.all([
-    supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", "pos_carrelliSospesi").maybeSingle(),
-    supabase.from("eventi_materiali").select("evento_id, prodotto_id, quantita, quantita_scaricata").not("prodotto_id", "is", null),
-    supabase.from("eventi").select("id, stato"),
-  ]);
+  const sospesi = await supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", "pos_carrelliSospesi").maybeSingle();
 
   const carrelli = {};
   const lista = Array.isArray(sospesi.data?.valore) ? sospesi.data.valore : [];
@@ -153,19 +151,7 @@ export async function impegniMagazzino() {
     if (r?.prodottoId && q > 0) carrelli[r.prodottoId] = (carrelli[r.prodottoId] || 0) + q;
   }));
 
-  // un evento annullato non impegna niente, e uno concluso ha gia' chiuso
-  // il suo giro col magazzino: impegnano solo quelli ancora in programma
-  const vivi = new Set((eventi.data || []).filter((e) => e.stato === "programmato").map((e) => e.id));
-  const perEvento = {};
-  (materiali.data || []).forEach((r) => {
-    if (!vivi.has(r.evento_id)) return;
-    const resta = Math.max(0, (Number(r.quantita) || 0) - (Number(r.quantita_scaricata) || 0));
-    if (resta <= 0) return;
-    const dentro = (perEvento[r.evento_id] = perEvento[r.evento_id] || {});
-    dentro[r.prodotto_id] = (dentro[r.prodotto_id] || 0) + resta;
-  });
-
-  return { carrelli, perEvento };
+  return { carrelli };
 }
 
 // Un prodotto che una giacenza propria ce l'ha davvero: un bundle
@@ -177,89 +163,60 @@ export function tieneGiacenza(p) {
 
 // --- quando il materiale parte, e quando torna ------------------------------
 //
-// Il delta e' SEMPRE la differenza fra quello che si e' deciso e quello
-// che e' gia' uscito (o gia' rientrato), mai il numero scritto nella
-// casella. Cosi' premere due volte lo stesso tasto non scarica due
-// volte, e correggere una quantita' dopo che il pacco e' partito muove
-// soltanto la differenza. E' la stessa lezione dei kit: applicare una
-// differenza fidandosi della memoria della scheda produce doppi
-// scarichi — qui la memoria sta scritta in colonna.
+// Il materiale di una fiera NON esce dal magazzino (regola del titolare,
+// 30/10/2026): e' come se una parte del magazzino si spostasse
+// all'evento. Resta in giacenza, non e' impegnato in niente — lo puo'
+// vendere chiunque, il banco, lo shop, la fiera — e scende SOLO quando
+// qualcuno lo vende: e' la vendita che scarica, come sempre.
+//
+// Dal 08/10 al 30/10/2026 la regola era l'opposta ("Partito" scaricava,
+// "Rimetti in magazzino" ricaricava): quantita_scaricata e
+// quantita_ricaricata restano come storico di quel periodo e non si
+// scrivono piu'. Il giorno del cambio nessuna riga le aveva diverse da
+// zero, quindi non c'era niente da rimettere in pari.
 
-// "Partito": quello che era da portare diventa partito, ed esce dal
-// magazzino. Le righe che hanno gia' un numero scritto a mano nella
-// colonna "Partito" lo tengono — si allinea solo il magazzino a quel
-// numero, non si sovrascrive una correzione di chi c'era.
-export async function segnaPartito({ righe, prodottiPerId, utente = null, nomeEvento = "", onAvanzamento }) {
-  const errori = [];
-  let mosse = 0;
+// "Partito": quello che era da portare diventa partito. E' contabilita'
+// della scatola — serve al conto del rientro — e non tocca le giacenze.
+// Le righe che hanno gia' un numero scritto a mano in "Partito" lo
+// tengono: non si sovrascrive una correzione di chi c'era.
+export async function segnaPartito({ righe, onAvanzamento }) {
+  let segnate = 0;
   let fatte = 0;
-  // una riga alla volta, mai in parallelo: muoviStock rilegge la
-  // giacenza vera prima di applicare il delta, e due scarichi dello
-  // stesso prodotto lanciati insieme leggerebbero lo stesso numero.
-  // Con ottanta righe il giro dura, per questo si dice a che punto e'
   for (const r of righe || []) {
     const obiettivo = r.quantita_portata == null ? (Number(r.quantita) || 0) : (Number(r.quantita_portata) || 0);
-    const gia = Number(r.quantita_scaricata) || 0;
-    const delta = obiettivo - gia;
-    const p = r.prodotto_id ? prodottiPerId.get(r.prodotto_id) : null;
-    const scarica = tieneGiacenza(p);
-    if (scarica && delta !== 0) {
-      // delta positivo = altri pezzi escono; negativo = una correzione
-      // in meno, e quei pezzi tornano sullo scaffale
-      const errore = await muoviStock(p, -delta, {
-        origine: "evento_partenza",
-        nota: `Materiale partito per ${nomeEvento || "un evento"}`,
-        riferimento: r.evento_id, utente,
-      });
-      if (errore) { errori.push(errore); onAvanzamento?.(++fatte, (righe || []).length); continue; }
-      mosse += 1;
-    }
-    // se non e' cambiato niente non si riscrive: premere "Partito" una
-    // seconda volta non deve spostare la data in cui il pacco e' uscito
     const comera = r.quantita_portata == null ? null : Number(r.quantita_portata);
-    if (comera !== obiettivo || delta !== 0) {
-      const campi = { quantita_portata: obiettivo };
-      if (scarica) { campi.quantita_scaricata = obiettivo; campi.scaricato_il = new Date().toISOString(); }
-      await salvaRiga("eventi_materiali", r.id, campi);
+    if (comera !== obiettivo) {
+      await salvaRiga("eventi_materiali", r.id, { quantita_portata: obiettivo });
+      segnate += 1;
     }
     onAvanzamento?.(++fatte, (righe || []).length);
   }
-  return { mosse, errori };
+  return { segnate };
 }
 
-// "Rimetti in magazzino": quello scritto nella colonna "Rientrato"
-// torna nelle giacenze. Non si rimette dentro piu' di quanto e' uscito:
-// se il numero e' piu' alto, o e' un errore di battitura o sono pezzi
-// che non erano partiti da qui, e in tutti e due i casi non si inventa
-// magazzino.
-export async function segnaRientro({ righe, prodottiPerId, utente = null, nomeEvento = "", onAvanzamento }) {
-  const errori = [];
-  let mosse = 0;
-  const daMuovere = (righe || []).filter((r) => r.quantita_rientrata != null
-    && (Number(r.quantita_rientrata) || 0) !== (Number(r.quantita_ricaricata) || 0)).length;
-  for (const r of righe || []) {
-    if (r.quantita_rientrata == null) continue;
-    const p = r.prodotto_id ? prodottiPerId.get(r.prodotto_id) : null;
-    if (!tieneGiacenza(p)) continue;
-    const rientrata = Number(r.quantita_rientrata) || 0;
-    const uscita = Number(r.quantita_scaricata) || 0;
-    if (rientrata > uscita) {
-      errori.push(`"${p.nome}": rientrati ${rientrata} pz ma ne erano usciti ${uscita}. Correggi il numero prima di rimetterli dentro.`);
-      continue;
-    }
-    const delta = rientrata - (Number(r.quantita_ricaricata) || 0);
-    if (delta === 0) continue;
-    const errore = await muoviStock(p, delta, {
-      origine: "evento_rientro",
-      nota: `Materiale rientrato da ${nomeEvento || "un evento"}`,
-      riferimento: r.evento_id, utente,
-    });
-    if (errore) { errori.push(errore); continue; }
-    mosse += 1;
-    await salvaRiga("eventi_materiali", r.id, { quantita_ricaricata: rientrata, ricaricato_il: new Date().toISOString() });
-    onAvanzamento?.(mosse, daMuovere);
-  }
-  return { mosse, errori };
+// Quanti pezzi devono tornare: partiti meno quelli usciti dalla scatola
+// al POS, venduti e omaggiati — un pezzo regalato non porta ricavo ma
+// non e' nemmeno tornato a casa. Se "Partito" non e' stato segnato vale
+// quello che era da portare, che e' il meglio che si sa.
+export function rientroAtteso(riga, uscite) {
+  const portata = riga.quantita_portata == null ? (Number(riga.quantita) || 0) : (Number(riga.quantita_portata) || 0);
+  const venduti = riga.prodotto_id ? (Number(uscite?.venduto?.[riga.prodotto_id]) || 0) : 0;
+  const omaggiati = riga.prodotto_id ? (Number(uscite?.omaggiato?.[riga.prodotto_id]) || 0) : 0;
+  const usciti = venduti + omaggiati;
+  return {
+    portata, venduti, omaggiati, usciti,
+    attesi: Math.max(0, Math.round((portata - usciti) * 100) / 100),
+    // il POS ne ha registrati piu' di quanti ne risultino partiti: o
+    // "Partito" e' scritto basso, o si e' venduto roba non in elenco
+    inEccesso: Math.max(0, Math.round((usciti - portata) * 100) / 100),
+  };
+}
+
+// La spunta del rientro: chi scarica lo scatolone conta i pezzi e
+// conferma che ne sono tornati quanti dovevano. E' una verifica sulle
+// quantita', non un movimento — il magazzino non si muove.
+export async function segnaRientroVerificato(rigaId, verificato) {
+  await salvaRiga("eventi_materiali", rigaId, { rientro_verificato_il: verificato ? new Date().toISOString() : null });
 }
 
 // --- le categorie dei prodotti, per raggruppare l'elenco --------------------
@@ -412,7 +369,7 @@ export async function linkDocumentoEvento(percorso, secondi = 3600) {
 
 export async function leggiVenditeEvento(eventoId) {
   const { data, error } = await supabase.from("vendite_shop")
-    .select("id, numero_ordine, data_ordine, totale, totale_imponibile, metodo_pagamento, tipo_movimento, operatore_nome, cliente_nome, prodotti")
+    .select("id, numero_ordine, data_ordine, totale, totale_imponibile, metodo_pagamento, incasso_contanti_eur, incasso_carta_eur, tipo_movimento, operatore_nome, cliente_nome, prodotti")
     .eq("evento_id", eventoId)
     .order("data_ordine");
   if (error) throw new Error(error.message);
@@ -483,8 +440,15 @@ export function totaliVendite(vendite) {
     quante += 1;
     pezzi += quanti;
     incassato += Number(v.totale) || 0;
-    const m = v.metodo_pagamento || "—";
-    perMetodo.set(m, Math.round(((perMetodo.get(m) || 0) + (Number(v.totale) || 0)) * 100) / 100);
+    // una vendita pagata in due entra nelle DUE voci, ognuna per la sua
+    // parte: «come hanno pagato» e' una domanda sui soldi, non sulle righe
+    const aggiungi = (m, importo) => perMetodo.set(m, Math.round(((perMetodo.get(m) || 0) + importo) * 100) / 100);
+    if (v.metodo_pagamento === "misto") {
+      aggiungi("contanti", Number(v.incasso_contanti_eur) || 0);
+      aggiungi("pos", Number(v.incasso_carta_eur) || 0);
+    } else {
+      aggiungi(v.metodo_pagamento || "—", Number(v.totale) || 0);
+    }
   });
   return {
     quante, omaggi, pezzi, pezziOmaggio,
@@ -494,4 +458,26 @@ export function totaliVendite(vendite) {
     medio: quante ? Math.round((incassato / quante) * 100) / 100 : 0,
     perMetodo: [...perMetodo.entries()].sort((a, b) => b[1] - a[1]),
   };
+}
+
+// --- le iscrizioni chiuse al banco della fiera -----------------------------
+
+/**
+ * Segna (o toglie) un'iscrizione come vendita di questa fiera.
+ *
+ * UNA COLONNA SOLA, con un update mirato: la scheda di un'iscrizione
+ * confermata e' chiusa, e riscriverla per intero da qui vorrebbe dire
+ * toccare prezzi e quote per segnare una provenienza.
+ *
+ * `select("id")` e il conto delle righe perche' PostgREST risponde «va
+ * bene» anche quando non ha aggiornato niente (vedi
+ * update-senza-select-mente): senza, un'iscrizione che non si e'
+ * flaggata sembrerebbe flaggata finche' qualcuno non ricarica.
+ */
+export async function segnaVenditaFiera(iscrittoId, eventoId) {
+  const { data, error } = await supabase.from("iscritti")
+    .update({ vendita_evento_id: eventoId || null })
+    .eq("id", iscrittoId).select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("nessuna riga aggiornata");
 }

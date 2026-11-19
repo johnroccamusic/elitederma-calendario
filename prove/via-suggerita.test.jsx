@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 import React, { useState } from "react";
 import { AreaAnagrafica } from "../src/iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO } from "../src/iscrizione/disposizione.js";
-import { monta, scrivi, attendi, premi } from "./aiuto.js";
+import { monta, scrivi, attendi, premi, campoDi } from "./aiuto.js";
 
 function Scheda({ iniziali = {}, cercaVie }) {
   const [valori, setValori] = useState(iniziali);
@@ -35,7 +35,7 @@ describe("i suggerimenti della via", () => {
     await scrivi(campoVia(p), "VIA CARLO");
     await attendi(700);
     expect(cerca).toHaveBeenCalledTimes(1);
-    expect(cerca).toHaveBeenCalledWith("VIA CARLO", "Roma", "00166");
+    expect(cerca).toHaveBeenCalledWith("VIA CARLO", "Roma", "00166", "IT");
   });
 
   // Fino al 20/10/2026 senza comune non si cercava affatto. Adesso si
@@ -46,7 +46,7 @@ describe("i suggerimenti della via", () => {
     const p = await apri({}, cerca);
     await scrivi(campoVia(p), "VIA CARLO SEVERINI");
     await attendi(700);
-    expect(cerca).toHaveBeenCalledWith("VIA CARLO SEVERINI", "", "");
+    expect(cerca).toHaveBeenCalledWith("VIA CARLO SEVERINI", "", "", "IT");
   });
 
   it("cliccando la proposta si riempiono via e civico", async () => {
@@ -70,7 +70,7 @@ describe("i suggerimenti della via", () => {
     expect(p.testo()).toMatch(/00163/);
     expect(p.testo()).toMatch(/⚠/);
     // il CAP della cascata non si tocca
-    expect(p.tendina("cap_residenza").value).toBe("00166");
+    expect(campoDi(p, "cap_residenza").value).toBe("00166");
   });
 
   it("nessun suggerimento non e' un errore: non si dice niente", async () => {
@@ -129,10 +129,26 @@ describe("i suggerimenti della via", () => {
     expect(p.nodo.querySelector('[data-proposta="0"]')).not.toBe(null);
   });
 
-  it("fuori Italia non si cerca", async () => {
+  // DALL'8/11/2026 IN SVIZZERA SI CERCA, nel suo paese. Le vie
+  // svizzere stanno su OpenStreetMap come le italiane: mancava solo
+  // dire a quale paese chiederle. La prova di prima diceva il
+  // contrario, ed era giusta finche' quel paese non glielo diceva
+  // nessuno.
+  it("in Svizzera si cerca, e si cerca in Svizzera", async () => {
     const cerca = vi.fn(async () => []);
     const p = await apri({ stato_residenza: "SVIZZERA", citta_residenza: "SION" }, cerca);
     await scrivi(campoVia(p), "AVENUE DE TOURBILLON");
+    await attendi(700);
+    expect(cerca).toHaveBeenCalledWith("AVENUE DE TOURBILLON", "Sion", "", "CH");
+  });
+
+  // Degli altri 230 Stati non abbiamo elenchi: li' una proposta
+  // porterebbe un comune e un codice postale che nessuno sa risolvere,
+  // quindi non si cerca e la via si scrive, come prima.
+  it("dove un elenco non c'e', non si cerca", async () => {
+    const cerca = vi.fn(async () => []);
+    const p = await apri({ stato_residenza: "BELGIO", citta_residenza: "LIEGI" }, cerca);
+    await scrivi(campoVia(p), "RUE DES GUILLEMINS");
     await attendi(700);
     expect(cerca).not.toHaveBeenCalled();
   });
@@ -164,8 +180,8 @@ describe("la via scelta porta con se' il resto", () => {
     await attendi(700);
     await premi(p.nodo.querySelector('[data-proposta="1"]'));
     expect(campoVia(p).value).toBe("VIA TERNI");
-    expect(p.tendina("citta_residenza").value).toBe("Roma");
-    expect(p.tendina("cap_residenza").value).toBe("00182");
+    expect(campoDi(p, "citta_residenza").value).toBe("Roma");
+    expect(campoDi(p, "cap_residenza").value).toBe("00182");
     expect(p.tendina("prov_residenza").value).toBe("RM");
     // e la regione, che non si salva, esce dalla provincia
     expect(p.tendina("regione_residenza").value).toBe("Lazio");
@@ -176,7 +192,7 @@ describe("la via scelta porta con se' il resto", () => {
     await scrivi(campoVia(p), "VIA TERNI");
     await attendi(700);
     await premi(p.nodo.querySelector('[data-proposta="2"]'));
-    expect(p.tendina("citta_residenza").value).toBe("Milano");
+    expect(campoDi(p, "citta_residenza").value).toBe("Milano");
     expect(p.tendina("prov_residenza").value).toBe("MI");
     expect(p.tendina("regione_residenza").value).toBe("Lombardia");
   });
@@ -186,7 +202,7 @@ describe("la via scelta porta con se' il resto", () => {
     const p = await apri(A_ROMA, cerca);
     await scrivi(campoVia(p), "VIA TERNI");
     await attendi(700);
-    expect(cerca).toHaveBeenCalledWith("VIA TERNI", "Roma", "00166");
+    expect(cerca).toHaveBeenCalledWith("VIA TERNI", "Roma", "00166", "IT");
   });
 
   it("se la ricerca si rompe lo dice, invece di sembrare vuota", async () => {

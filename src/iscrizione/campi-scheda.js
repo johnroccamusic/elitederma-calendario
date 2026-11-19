@@ -9,6 +9,10 @@
 // le note interne.
 import { TIPI_DOCUMENTO } from "../tipi-documento.js";
 
+// LE TAGLIE DELLA DIVISA. «NO DIVISA» non e' una taglia: e' chi la
+// maglietta non la vuole, e si conta a parte.
+export const TAGLIE = ["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+
 export const CAMPI_MODULO = [
   // Dati dell'allievo
   { chiave: "nome", etichetta: "Nome" },
@@ -21,10 +25,13 @@ export const CAMPI_MODULO = [
   { chiave: "cap_residenza", etichetta: "CAP" },
   { chiave: "citta_residenza", etichetta: "Città" },
   { chiave: "prov_residenza", etichetta: "Provincia" },
-  { chiave: "stato_residenza", etichetta: "Stato" },
+  { chiave: "stato_residenza", etichetta: "Stato di residenza" },
   { chiave: "email", etichetta: "Email" },
-  { chiave: "telefono", etichetta: "Cellulare (+39...)" },
-  { chiave: "codice_fiscale", etichetta: "Codice fiscale" },
+  // «(+39...)» non c'e' piu': il prefisso e' una tendina accanto alla
+  // casella, e scriverlo nell'etichetta sarebbe dire a una svizzera che
+  // il suo numero comincia per 39
+  { chiave: "telefono", etichetta: "Cellulare" },
+  { chiave: "codice_fiscale", etichetta: "Identificativo fiscale personale (TIN)" },
   { chiave: "tutor", etichetta: "Tutor" },
   { chiave: "tipo_cliente", etichetta: "Intestazione" },
   // Dati di fatturazione
@@ -78,7 +85,9 @@ export const CAMPI_MODULO = [
   { chiave: "richiede_modelle", etichetta: "Richiede modelle a pagamento?" },
   { chiave: "numero_modelle", etichetta: "Quante modelle" },
   { chiave: "prezzo_speciale_modelle", etichetta: "Prezzo speciale", predefinito: false },
-  { chiave: "taglia_divisa", etichetta: "Taglia divisa" },
+  // la taglia la sceglie LEI nel modulo (29/10/2026): il venditore puo'
+  // lasciarla vuota, e se l'ha scritta lei la puo' cambiare
+  { chiave: "taglia_divisa", etichetta: "Taglia divisa", opzioni: TAGLIE },
   { chiave: "note", etichetta: "Note", predefinito: false },
   // Quello che mette lei: resta dal modulo del sito
   { chiave: "doc_tipo", etichetta: "Tipo documento", opzioni: TIPI_DOCUMENTO },

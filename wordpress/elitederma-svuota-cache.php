@@ -115,18 +115,45 @@ function elitederma_svuota_cache( $richiesta ) {
 			if ( class_exists( 'Breeze_PurgeVarnish' ) ) {
 				$varnish = new Breeze_PurgeVarnish();
 				$host = wp_parse_url( home_url(), PHP_URL_HOST );
-				// NON si chiama $tutto: quella e' la richiesta di svuotare
-				// tutto, e riusarne il nome qui dentro la cancellerebbe
-				$rispostaVarnish = wp_remote_request( home_url( '/' ), array(
-					'method'  => 'PURGE',
-					'timeout' => 10,
-					'headers' => array(
-						'X-Purge-Method' => 'regex',
-						'Host'           => $host,
-					),
-				) );
-				$codice = is_wp_error( $rispostaVarnish ) ? 0 : (int) wp_remote_retrieve_response_code( $rispostaVarnish );
-				$dati['passi'][] = 'varnish:regex:' . ( $codice ?: 'ko' );
+				// LA PURGE VA MANDATA AL SERVER, NON AL DOMINIO
+				// (10/11/2026). Qui c'era home_url('/'), cioe' l'indirizzo
+				// PUBBLICO: la richiesta usciva su internet, passava da
+				// Cloudflare — che una PURGE non sa cosa sia — e tornava
+				// 400. Varnish, che sta sulla stessa macchina, non la
+				// vedeva nemmeno. E' il motivo per cui lo svuotamento
+				// completo rispondeva "ok" e non cambiava niente, e per
+				// cui le pagine "si sistemavano da sole" dopo qualche ora:
+				// scadevano, non venivano svuotate.
+				//
+				// Si chiama 127.0.0.1 con l'intestazione Host del dominio,
+				// che e' come Varnish riconosce il sito. SU QUALE PORTA
+				// ASCOLTI non si puo' sapere da qui: su Cloudways sta
+				// davanti ad Apache, e secondo lo stack e' la 80 o la
+				// 8080. Quindi si prova in ordine e ci si ferma alla prima
+				// che risponde bene; l'ultimo tentativo e' l'indirizzo
+				// pubblico, cioe' il comportamento di prima, cosi' se un
+				// giorno Cloudflare non ci fosse piu' funzionerebbe
+				// comunque. Quale ha risposto resta scritto nei passi:
+				// senza, al prossimo guasto si ricomincerebbe a indovinare.
+				$codice = 0;
+				$dove   = '';
+				foreach ( array( 'http://127.0.0.1/', 'http://127.0.0.1:8080/', home_url( '/' ) ) as $bersaglio ) {
+					$rispostaVarnish = wp_remote_request( $bersaglio, array(
+						'method'    => 'PURGE',
+						'timeout'   => 10,
+						'sslverify' => false,
+						'headers'   => array(
+							'X-Purge-Method' => 'regex',
+							'Host'           => $host,
+						),
+					) );
+					$codice = is_wp_error( $rispostaVarnish ) ? 0 : (int) wp_remote_retrieve_response_code( $rispostaVarnish );
+					$dove   = $bersaglio;
+					if ( $codice >= 200 && $codice < 400 ) {
+						break;
+					}
+				}
+				$dati['passi'][] = 'varnish:regex:' . ( $codice ?: 'ko' ) . ':' . $dove;
 
 				if ( $codice < 200 || $codice >= 400 ) {
 					if ( method_exists( $varnish, 'purge_cache' ) ) {

@@ -8,7 +8,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import React from "react";
 import PaginaModulo from "../src/iscrizione/PaginaModulo.jsx";
 import { rispondiCon } from "./preparazione.js";
-import { monta, clicca, scrivi, scegli } from "./aiuto.js";
+import { monta, clicca, scrivi, scegli, scegliCercando, cerca, scegliVoce, proposteDi, campoDi } from "./aiuto.js";
 
 const CLAUSOLA = "non ha diritto ad alcun rimborso";
 
@@ -219,7 +219,9 @@ describe("modulo di iscrizione", () => {
   it("scelto uno Stato estero, il comune non si chiede piu'", async () => {
     const p = await apriIlModulo(VISTA_CON_NASCITA);
     const casella = (k) => p.nodo.querySelector(`[data-campo="${k}"]`);
-    await scegli(casella("stato_nascita"), "Romania");
+    // 232 Stati non si scorrono: si scrivono le prime lettere e si
+    // preme la voce (vedi CampoCerca)
+    await scegliCercando(p, "stato_nascita", "Romania");
     expect(casella("comune_nascita").disabled).toBe(true);
     await scegli(casella("sesso"), "F");
     await scrivi(casella("data_nascita"), "1990-03-12");
@@ -237,21 +239,69 @@ describe("modulo di iscrizione", () => {
     // era una casella di testo libero: comune bloccato su «Roma» e CAP
     // da indovinare a memoria, mentre gli ottantadue di Roma li abbiamo
     // qui nel bundle.
+    // e dal 7/11/2026 gli ottantadue NON si scorrono: sopra le venti
+    // voci la casella si cerca, e due cifre bastano
     const p = await apriIlModulo(VISTA_RESIDENZA);
-    const cap = p.nodo.querySelector('[data-campo="cap_residenza"]');
-    expect(cap.tagName).toBe("SELECT");
-    const voci = [...cap.options].map((o) => o.value);
-    expect(voci).toContain("00166");
-    expect(voci).toContain("00184");
-    expect(voci.length).toBeGreaterThan(50);
+    expect(await proposteDi(p, "cap_residenza", "00166")).toContain("00166");
+    expect(await proposteDi(p, "cap_residenza", "00184")).toContain("00184");
+    await scegliVoce(p, "cap_residenza", "00166");
+    expect(campoDi(p, "cap_residenza").value).toBe("00166");
   });
 
-  it("lo Stato di residenza e' una scelta, non una riga da scrivere", async () => {
+  it("lo Stato di residenza si cerca scrivendo, e scegliendo scrive il nome in maiuscolo", async () => {
     const p = await apriIlModulo(VISTA_RESIDENZA);
-    const stato = p.nodo.querySelector('[data-campo="stato_residenza"]');
-    expect(stato.tagName).toBe("SELECT");
-    const voci = [...stato.options].map((o) => o.value);
-    expect(voci).toContain("ITALIA");
-    expect(voci).toContain("Romania");
+    // SI SCRIVE QUALCHE LETTERA invece di scorrere 232 voci
+    await scegliCercando(p, "stato_residenza", "Svizz");
+    expect(p.casella("stato_residenza").value).toBe("Svizzera");
+    // UNA SOLA SCRITTURA IN ARCHIVIO: la lista e' quella della scheda
+    // del venditore, maiuscola come la scrive lei. Due liste
+    // vorrebbero dire «Svizzera» di qua e «SVIZZERA» di la', cioe' due
+    // paesi per chiunque debba contare.
+    const scelto = p.nodo.querySelector('[data-proposta][data-valore]');
+    expect(scelto).toBe(null); // l'elenco si chiude dopo la scelta
+    // e «Altro stato» non c'e': di qua non c'e' una casella accanto in
+    // cui scrivere il nome, e una voce che apre il vuoto e' peggio di
+    // una voce che manca
+    const p2 = await apriIlModulo(VISTA_RESIDENZA);
+    await cerca(p2, "stato_residenza", "Altro");
+    expect(p2.testo()).toMatch(/Nessuna voce con queste lettere/);
+  });
+
+  // LA TAGLIA LA SCEGLIE LEI (29/10/2026). Segnalato dai venditori: le
+  // allieve non potevano selezionarla, perche' la scheda obbligava il
+  // venditore a sceglierne una e un campo pieno arrivava bloccato.
+  it("la taglia della divisa e' una tendina sua, anche se il venditore ne aveva scritta una", async () => {
+    const p = await apriIlModulo({ ...VISTA, campi: [...VISTA.campi,
+      { chiave: "taglia_divisa", valore: "M", bloccato: false, obbligatorio: true }] });
+    expect(p.testo()).toContain("La tua divisa");
+    const tendina = p.nodo.querySelector('select[data-campo="taglia_divisa"]');
+    expect(tendina).toBeTruthy();
+    expect(tendina.value).toBe("M");
+    const voci = [...tendina.options].map((o) => o.value);
+    expect(voci).toContain("NO DIVISA");
+    expect(voci).toContain("XXXL");
+    await scegli(tendina, "XL");
+    expect(tendina.value).toBe("XL");
+    // e non compare una seconda volta fra i dati organizzativi letti
+    expect(p.testo().match(/Taglia divisa/g).length).toBe(1);
+  });
+
+  // deciso dal titolare il 29/10/2026: senza taglia il modulo non parte
+  it("senza la taglia il modulo dice che manca e non si spedisce", async () => {
+    const p = await apriIlModulo({ ...VISTA, campi: [...VISTA.campi,
+      { chiave: "taglia_divisa", valore: null, bloccato: false, obbligatorio: true }] });
+    expect(p.testo()).toContain("Manca ancora");
+    expect(p.testo()).toMatch(/Manca ancora:.*Taglia divisa/);
+    await scegli(p.nodo.querySelector('select[data-campo="taglia_divisa"]'), "S");
+    expect(p.testo()).not.toMatch(/Manca ancora:.*Taglia divisa/);
+  });
+});
+
+describe("un rifiuto di modulo_salva che non chiude l'iscrizione", () => {
+  it("resta un errore sopra il modulo: la pagina non diventa «Iscrizione già confermata»", async () => {
+    const { leggiRifiuto } = await import("../src/iscrizione/rifiuti.js");
+    expect(leggiRifiuto({ ok: false, motivo: "senza_documento", errore: "Manca la foto del documento (fronte)." })).toEqual({ chiude: false, testo: "Manca la foto del documento (fronte)." });
+    expect(leggiRifiuto({ ok: false, motivo: "gia_inviato" })).toEqual({ chiude: true, motivo: "gia_inviato" });
+    expect(leggiRifiuto({ ok: false, motivo: "confermato" })).toEqual({ chiude: true, motivo: "confermato" });
   });
 });

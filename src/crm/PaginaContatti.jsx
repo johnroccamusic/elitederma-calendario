@@ -1,0 +1,800 @@
+// CONTATTI (Fase 4 del CRM, 30/10/2026): tutti quelli che hanno scritto a
+// Elitederma, importati da Vetta — anche gli scartati, chi non ha risposto,
+// chi ha risposto e non ha chiuso. Una persona, molte richieste: il
+// contatto e' uno, e sotto ha la cronologia di quello che ha chiesto.
+//
+// La lista non si carica nel browser: sono 23.757 contatti e 23.847
+// richieste. Ogni cambio di filtro chiede al database UNA pagina e il
+// totale (`crm_cerca_contatti`), e il conteggio in cima e' quello vero.
+// I filtri di periodo e di corso lavorano sulle richieste, non sul
+// contatto: "chi ha chiesto Microblading nel 2025" e' chi ha almeno una
+// richiesta cosi'.
+//
+// Chi si e' disiscritto resta in archivio con la data: di default e' fuori
+// dai risultati, e col filtro «Disiscritti» si vedono solo loro. Dalle
+// campagne e' fuori sempre, qualunque filtro ci sia.
+//
+// LA DATA NON E' SEMPRE VERA. 16.327 record su 23.847 sono nati in Vetta il
+// 9 marzo 2026, il giorno del caricamento in blocco: la loro data e' quella,
+// non quella della richiesta, e Vetta non ne conserva un'altra. Quelle
+// richieste si mostrano come «data non nota», e il filtro per anno le
+// ignora e guarda anche le vendite (che una data vera ce l'hanno):
+// «2024» e' chi ha chiesto nel 2024 con data certa, o ha comprato nel 2024.
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "../supabase.js";
+import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
+import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
+import SelettorePeriodo, { etichettaPeriodo } from "../ui/SelettorePeriodo.jsx";
+import ComponiMail, { ElencoCampagne, STATI_DESTINATARIO, dataOraIt } from "./ComponiMail.jsx";
+
+export const PER_PAGINA = 50;
+
+// le qualifiche di Vetta, come si leggono qui
+export const QUALIFICHE = {
+  CLIENTI: "Cliente",
+  CONTATTI_SCARTATI: "Scartato",
+  CONTATTI_DA_RICHIAMARE: "Da richiamare",
+  NUOVI_CONTATTI: "Nuovo",
+  DA_ASSENGNARE: "Da assegnare",
+};
+export const STATI = {
+  venduto: "Venduto",
+  in_trattativa: "In trattativa",
+  nessuna: "Nessuna trattativa",
+};
+export const COLLEGAMENTI = {
+  certo: "Collegato a Genion",
+  dubbio: "Collegamento dubbio",
+  nessuno: "Non in Genion",
+};
+export const etichettaQualifica = (q) => QUALIFICHE[q] || (q ? q.replace(/_/g, " ").toLowerCase() : "—");
+export const etichettaStato = (s) => STATI[s] || s || "—";
+
+const FILTRI_VUOTI = {
+  cerca: "", anno: "", dal: "", al: "", corso: "", regione: "", provincia: "", comune: "",
+  qualifica: "", stato: "", trattato_da: "", mestiere: "", collegamento: "",
+  disiscritti: false, da_verificare: false, con_email: false, senza_data: false,
+  // I CLIENTI DELLO SHOP (17/11/2026). Stanno nella stessa lista, e si
+  // isolano con questi: le chiavi arrivano a `crm_contatti_filtrati`,
+  // che e' l'unica WHERE — quindi valgono anche per i destinatari che
+  // una campagna congela.
+  cliente_shop: false, non_in_crm: false, reparto: "", acquisto_dal: "", acquisto_al: "", speso_da: "",
+};
+
+// "03/2024 Microblading · 05/2025 Laminazione": la storia di una persona
+// in una riga, in ordine di tempo. Ogni richiesta porta i suoi corsi; una
+// richiesta senza corso riconosciuto dice "richiesta" e basta.
+export function cronologiaRichieste(richieste) {
+  return [...(richieste || [])]
+    .sort((a, b) => String(a.richiesta_il || "").localeCompare(String(b.richiesta_il || "")))
+    .map((r) => `${r.data_certa === false ? "data non nota" : meseAnno(r.richiesta_il)} ${(r.corsi || []).length ? r.corsi.join(", ") : "richiesta"}`)
+    .join(" · ");
+}
+
+export function meseAnno(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", month: "2-digit", year: "numeric" }).formatToParts(d);
+  const prendi = (t) => p.find((x) => x.type === t)?.value || "";
+  return `${prendi("month")}/${prendi("year")}`;
+}
+
+export function dataIt(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+}
+
+// Le frasi che riassumono i filtri accesi: servono in testa alla lista e
+// daranno il nome alla campagna ("Microblading · Lazio · 2025").
+export function riassuntoFiltri(f) {
+  const pezzi = [];
+  if (f.cerca) pezzi.push(`«${f.cerca}»`);
+  if (f.corso) pezzi.push(f.corso);
+  if (f.anno) pezzi.push(String(f.anno));
+  if (f.dal || f.al) pezzi.push(etichettaPeriodo(f.dal, f.al || f.dal));
+  if (f.comune) pezzi.push(f.comune);
+  else if (f.provincia) pezzi.push(f.provincia);
+  else if (f.regione) pezzi.push(f.regione);
+  if (f.qualifica) pezzi.push(etichettaQualifica(f.qualifica));
+  if (f.stato) pezzi.push(etichettaStato(f.stato));
+  if (f.trattato_da) pezzi.push(`trattati da ${f.trattato_da}`);
+  if (f.mestiere) pezzi.push(f.mestiere);
+  if (f.collegamento) pezzi.push(COLLEGAMENTI[f.collegamento] || f.collegamento);
+  if (f.cliente_shop) pezzi.push("clienti shop");
+  if (f.non_in_crm) pezzi.push("non in CRM");
+  if (f.reparto) pezzi.push(`comprato ${f.reparto}`);
+  if (f.acquisto_dal || f.acquisto_al) pezzi.push(`acquisti ${etichettaPeriodo(f.acquisto_dal, f.acquisto_al || f.acquisto_dal)}`);
+  if (f.speso_da) pezzi.push(`da ${f.speso_da} € in su`);
+  if (f.da_verificare) pezzi.push("da verificare");
+  if (f.con_email) pezzi.push("con email");
+  if (f.senza_data) pezzi.push("data non nota");
+  if (f.disiscritti) pezzi.push("disiscritti");
+  return pezzi.join(" · ");
+}
+
+// «, di cui 1.888 clienti dello shop e 12 disiscritti»: il pezzo si
+// compone, non si incolla. Con una delle due cose a zero la frase
+// resterebbe con una virgola che non regge («contatti, , 12
+// disiscritti»), e quella la legge tutto lo staff.
+export function pezziArchivio(v) {
+  const p = [];
+  if (v?.clienti_shop) p.push(`${numero(v.clienti_shop)} clienti dello shop`);
+  if (v?.disiscritti) p.push(`${numero(v.disiscritti)} disiscritti`);
+  return p.length ? `, di cui ${p.join(" e ")}` : "";
+}
+
+// quello che si manda al database: solo le chiavi piene
+export function filtriPerIlDatabase(f) {
+  const out = {};
+  for (const [k, v] of Object.entries(f)) {
+    if (v === "" || v == null || v === false) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function useIsMobile(limite = 700) {
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.innerWidth <= limite);
+  useEffect(() => {
+    const agg = () => setMobile(window.innerWidth <= limite);
+    window.addEventListener("resize", agg);
+    return () => window.removeEventListener("resize", agg);
+  }, [limite]);
+  return mobile;
+}
+
+const numero = (n) => Number(n || 0).toLocaleString("it-IT");
+const euro = (n) => `${Number(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+function Pastiglia({ children, colore = GRAFITE, sfondo = "#F3F0E8", bordo = CREAM_BORDER, titolo }) {
+  return (
+    <span title={titolo} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: colore, background: sfondo, border: `1px solid ${bordo}`, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+function PastigliaStato({ stato }) {
+  if (stato === "venduto") return <Pastiglia colore="#2E7D32" sfondo="#EAF5EA" bordo="#C7E3C7">Venduto</Pastiglia>;
+  if (stato === "in_trattativa") return <Pastiglia colore="#8A6D1D" sfondo="#FDF8EC" bordo="#EBD9AE">In trattativa</Pastiglia>;
+  return null;
+}
+
+function Tendina({ etichetta, valore, onCambia, opzioni, tutto = "Tutti", larghezza = 170, disabilitata = false }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 3, width: larghezza, minWidth: 0 }}>
+      <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{etichetta}</span>
+      <select value={valore} onChange={(e) => onCambia(e.target.value)} disabled={disabilitata} data-filtro={etichetta}
+        style={{ ...inputStyle, padding: "7px 8px", fontSize: 12.5, width: "100%", minWidth: 0, opacity: disabilitata ? 0.6 : 1 }}>
+        <option value="">{tutto}</option>
+        {opzioni.map((o) => <option key={o.valore} value={o.valore}>{o.etichetta || o.valore}{o.quanti != null ? ` (${numero(o.quanti)})` : ""}</option>)}
+      </select>
+    </label>
+  );
+}
+
+// IL TITOLO DI UNA COLONNA, che si preme per ordinare (10/11/2026).
+//
+// Chiesto dal titolare: «metti il titolo delle colonne sull'elenco,
+// cliccando il quale si possono ordinare per nome, per ordine alfabetico o
+// per data». Prima l'elenco non aveva nessuna intestazione: si leggeva un
+// nome, un luogo e una data senza sapere che quelle tre cose erano
+// colonne, ne' che si potevano mettere in fila.
+//
+// A ORDINARE E' IL DATABASE, non questa pagina: quello che si vede e' UNA
+// pagina di 50 su 23.757, e ordinare le 50 che si vedono vorrebbe dire
+// mettere in ordine un campione scelto con un altro ordine — un elenco che
+// sembra alfabetico e non lo e'. Qui si decide solo cosa chiedere; la
+// regola di cosa si puo' ordinare, e per quale valore, sta nella funzione
+// `crm_cerca_contatti` (migrazione 20261110140000).
+//
+// Un titolo senza `campo` non si preme: «Corsi richiesti» e «Qualifica»
+// sono li' per dire cos'e' quella colonna, non per promettere un
+// ordinamento che non c'e'. La qualifica si raccoglie col suo filtro.
+function TitoloColonna({ campo = null, etichetta, ordine, onOrdina, titolo }) {
+  const attiva = !!campo && ordine?.campo === campo;
+  const comune = { ...fontBody, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" };
+  if (!campo) return <span style={{ ...comune, color: MUTED }}>{etichetta}</span>;
+  return (
+    <button type="button" onClick={() => onOrdina(campo)} data-ordina={campo}
+      title={titolo || `Ordina per ${etichetta.toLowerCase()}`}
+      style={{ ...comune, color: attiva ? NAVY : MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", userSelect: "none" }}>
+      {etichetta}{attiva ? (ordine.verso === "asc" ? " \u25B2" : " \u25BC") : ""}
+    </button>
+  );
+}
+
+function Spunta({ etichetta, valore, onCambia }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: NAVY, cursor: "pointer" }}>
+      <input type="checkbox" checked={!!valore} onChange={(e) => onCambia(e.target.checked)} style={{ width: 15, height: 15, margin: 0, accentColor: GOLD }} />
+      {etichetta}
+    </label>
+  );
+}
+
+// ------------------------------------------------------- la scheda aperta
+
+function SchedaContatto({ c, onCambiato }) {
+  const [richieste, setRichieste] = useState(null);
+  const [opportunita, setOpportunita] = useState(null);
+  const [campagne, setCampagne] = useState(null);   // le mail di campagna ricevute, con lo stato
+  const [ordini, setOrdini] = useState(null);       // gli acquisti sullo shop, letti da `vendite_shop`
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    supabase.from("crm_campagne_destinatari").select("id, stato, inviata_il, ultimo_evento_il, crm_campagne(nome, oggetto)")
+      .eq("contatto_id", c.id).order("inviata_il", { ascending: false, nullsFirst: false })
+      .then(({ data }) => { if (vivo) setCampagne(Array.isArray(data) ? data : []); });
+    supabase.from("crm_richieste").select("id, richiesta_il, data_certa, corsi, corsi_vetta, canale, form_origine, trattato_da, qualifica, gestione_chiamata, citta_originale, comune, provincia, regione, preferenza_giorno, preferenza_ora")
+      .eq("contatto_id", c.id).order("richiesta_il")
+      .then(({ data, error }) => { if (vivo) setRichieste(error ? [] : data || []); });
+    supabase.from("crm_contatti").select("opportunita, email_aggiuntive, telefoni_aggiuntivi").eq("id", c.id).maybeSingle()
+      .then(({ data }) => { if (vivo) setOpportunita(data || { opportunita: [] }); });
+    // GLI ORDINI NON SONO COPIATI SULLA RIGA: sulla riga c'e' il
+    // riassunto (quanti, quanto, quando, quali reparti) perche' e'
+    // quello su cui si filtra; i singoli ordini si rileggono da
+    // `vendite_shop`, che e' il loro posto. Copiarli vorrebbe dire due
+    // verita' sullo stesso acquisto.
+    if (Number(c.acquisti_shop) > 0 && c.email) {
+      supabase.from("vendite_shop").select("id, numero_ordine, data_ordine, totale, prodotti")
+        .ilike("cliente_email", c.email).eq("origine", "woocommerce")
+        .order("data_ordine", { ascending: false }).limit(50)
+        .then(({ data }) => { if (vivo) setOrdini(Array.isArray(data) ? data : []); });
+    } else if (vivo) setOrdini([]);
+    return () => { vivo = false; };
+  }, [c.id]);
+
+  async function disiscrivi(riattiva) {
+    // chi si e' disiscritto da solo ha chiesto di non essere piu' contattato:
+    // riattivarlo e' una scelta dello staff, e la frase lo dice chiaro
+    const daSolo = riattiva && c.disiscritto_come && c.disiscritto_come !== "staff";
+    const frase = riattiva
+      ? `Riattivare ${nomeDi(c)}? Tornerà a ricevere le campagne.${daSolo ? `\n\nATTENZIONE: la disiscrizione risulta fatta dalla persona stessa (${c.disiscritto_come === "segnalazione spam" ? "segnalazione di spam" : c.disiscritto_come}). Riattivarla vuol dire scrivere a chi ha chiesto di non essere contattato.` : ""}`
+      : `Segnare ${nomeDi(c)} come disiscritto? Non riceverà più nessuna campagna, finché qualcuno non lo riattiva da qui.`;
+    if (!window.confirm(frase)) return;
+    // per EMAIL, come la disiscrizione dal link: su una scheda sola l'indirizzo
+    // restava bloccato dalle altre con la stessa mail
+    const { error } = await supabase.rpc("crm_disiscrizione_staff", { p_id: c.id, p_riattiva: !!riattiva });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    onCambiato?.();
+  }
+
+  const riga = (etichetta, valore) => valore ? (
+    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, lineHeight: 1.5 }}>
+      <span style={{ color: MUTED, minWidth: 110, flexShrink: 0 }}>{etichetta}</span>
+      <span style={{ color: NAVY, overflowWrap: "anywhere" }}>{valore}</span>
+    </div>
+  ) : null;
+
+  const luogo = [c.comune, c.provincia, c.regione].filter(Boolean).join(" · ");
+  const originale = [c.citta_originale, c.provincia_originale, c.regione_originale].filter(Boolean).join(" · ");
+  const opp = Array.isArray(opportunita?.opportunita) ? opportunita.opportunita : [];
+
+  return (
+    <div style={{ marginTop: 10, padding: 14, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))" }}>
+      <div style={{ display: "grid", gap: 4 }}>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>Chi è</div>
+        {riga("Email", c.email)}
+        {riga("Altre email", (opportunita?.email_aggiuntive || []).join(", "))}
+        {riga("Telefono", c.telefono)}
+        {riga("Altri telefoni", (opportunita?.telefoni_aggiuntivi || []).join(", "))}
+        {riga("Mestiere", c.mestiere)}
+        {riga("Settore", (c.settore || []).join(", "))}
+        {riga("Dove", luogo)}
+        {originale && originale !== luogo && riga("Scritto in Vetta", originale)}
+        {c.luogo_nota && riga("Nota sul luogo", c.luogo_nota)}
+        {riga("Canale", c.canale)}
+        {riga("Origine", c.origine_contatto)}
+        {riga("Trattato da", c.trattato_da)}
+        {riga("Gestione chiamata", c.gestione_chiamata)}
+        {c.nome_nota && riga("Nome", c.nome_nota)}
+        {c.da_verificare && riga("Da verificare", c.da_verificare_motivo)}
+        {c.collegamento_nota && riga("Collegamento", c.collegamento_nota)}
+      </div>
+      <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+          Le richieste {richieste ? `(${richieste.length})` : ""}
+        </div>
+        {richieste === null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Carico…</div>}
+        {richieste && richieste.length > 0 && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 700, marginBottom: 4 }} data-cronologia>{cronologiaRichieste(richieste)}</div>
+        )}
+        {(richieste || []).map((r) => (
+          <div key={r.id} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5, padding: "4px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <b style={{ color: NAVY }}>{r.data_certa === false ? "Data non nota" : dataIt(r.richiesta_il)}</b>
+            {r.data_certa === false && <span style={{ color: MUTED }} title="Caricata in Vetta il 9 marzo 2026 insieme a tutto lo storico: la data della richiesta non c'è"> (in Vetta dal {dataIt(r.richiesta_il)})</span>}
+            {" · "}{(r.corsi || []).length ? r.corsi.join(", ") : (r.corsi_vetta || []).join(", ") || "senza corso"}
+            {r.form_origine ? ` · ${r.form_origine}` : ""}
+            {r.canale ? ` · ${r.canale}` : ""}
+            {r.trattato_da ? ` · ${r.trattato_da}` : ""}
+            {r.qualifica ? ` · ${etichettaQualifica(r.qualifica)}` : ""}
+            {r.citta_originale ? ` · ${r.citta_originale}` : ""}
+          </div>
+        ))}
+        {opp.length > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 10, marginBottom: 2 }}>Opportunità in Vetta ({opp.length})</div>
+            {opp.map((o, i) => (
+              <div key={o.vetta_id || i} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5 }}>
+                <b style={{ color: o.stato === "CLOSED_WON" ? "#2E7D32" : NAVY }}>{o.stato === "CLOSED_WON" ? "Venduto" : "In trattativa"}</b>
+                {o.corso ? ` · ${o.corso}` : ""}
+                {o.importo != null ? ` · ${Number(o.importo).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : ""}
+                {o.chiusa_il ? ` · ${dataIt(o.chiusa_il)}` : ""}
+                {o.agganciata_per === "nome" ? " · agganciata per nome" : ""}
+              </div>
+            ))}
+          </>
+        )}
+        {Number(c.acquisti_shop) > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 10, marginBottom: 2 }} data-acquisti-shop>
+              Acquisti sullo shop ({numero(c.acquisti_shop)})
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 700 }}>
+              {euro(c.speso_shop)} in tutto
+              {c.primo_acquisto_shop_il ? ` · dal ${dataIt(c.primo_acquisto_shop_il)}` : ""}
+              {c.ultimo_acquisto_shop_il && c.ultimo_acquisto_shop_il !== c.primo_acquisto_shop_il ? ` al ${dataIt(c.ultimo_acquisto_shop_il)}` : ""}
+            </div>
+            {(c.reparti_acquistati || []).length > 0 && (
+              <div style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5 }}>{(c.reparti_acquistati || []).join(" · ")}</div>
+            )}
+            {ordini === null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Carico gli ordini…</div>}
+            {(ordini || []).map((o) => (
+              <div key={o.id} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5, padding: "4px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <b style={{ color: NAVY }}>{dataIt(o.data_ordine)}</b>
+                {o.numero_ordine ? ` · ${o.numero_ordine}` : ""}
+                {o.totale != null ? ` · ${euro(o.totale)}` : ""}
+                {(o.prodotti || []).length ? <div style={{ color: MUTED }}>{(o.prodotti || []).map((r) => `${r.quantita || 1}× ${r.nome || "prodotto"}`).join(", ")}</div> : null}
+              </div>
+            ))}
+          </>
+        )}
+        {campagne && campagne.length > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 10, marginBottom: 2 }}>Mail di campagna ({campagne.length})</div>
+            {campagne.map((d) => (
+              <div key={d.id} style={{ ...fontBody, fontSize: 12, color: GRAFITE, lineHeight: 1.5 }} data-campagna-ricevuta>
+                <b style={{ color: d.stato === "aperta" ? "#2E7D32" : d.stato === "rimbalzata" || d.stato === "segnalata" || d.stato === "fallita" ? "#C0392B" : NAVY }}>{(STATI_DESTINATARIO[d.stato] || d.stato)}</b>
+                {" · "}{d.crm_campagne?.nome || "campagna"}
+                {d.ultimo_evento_il ? ` · ${dataOraIt(d.ultimo_evento_il)}` : d.inviata_il ? ` · ${dataOraIt(d.inviata_il)}` : ""}
+              </div>
+            ))}
+          </>
+        )}
+        <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {c.disiscritto_il
+            ? <>
+                <Pastiglia colore="#C0392B" sfondo="#FBEBE9" bordo="#F0C8C2">Disiscritto il {dataIt(c.disiscritto_il)}{c.disiscritto_come ? ` · ${c.disiscritto_come}` : ""}</Pastiglia>
+                <Button variant="ghost" onClick={() => disiscrivi(true)} style={{ padding: "5px 10px", fontSize: 12 }}>Riattiva</Button>
+              </>
+            : <Button variant="ghost" onClick={() => disiscrivi(false)} style={{ padding: "5px 10px", fontSize: 12 }}>Segna come disiscritto</Button>}
+          {msg && <span style={{ ...fontBody, fontSize: 12, color: "#C0392B" }}>{msg}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function nomeDi(c) {
+  const n = [c.nome, c.cognome].filter(Boolean).join(" ").trim();
+  return n || c.nome_originale || c.email || "(senza nome)";
+}
+
+// ----------------------------------------------------------------- la pagina
+
+// DOV'ERAVAMO RIMASTI (10/11/2026).
+//
+// Il titolare: «nei contatti scaricati dal CRM abbiamo messo dei filtri e
+// poi abbiamo provato ad aprire una mail. Quando abbiamo fatto indietro,
+// invece di tornare ai contatti con i filtri che avevamo messo, e' proprio
+// uscito. Deve tornare indietro nel punto in cui eravamo sulla lista con i
+// filtri che avevamo impostato.»
+//
+// Erano due cose insieme. La prima: «Componi mail» e «Campagne» non
+// cambiano la `view` dell'app — sono sotto-viste di questa pagina — quindi
+// l'Indietro in alto (e il gesto di scorrimento, e il tasto fisico di
+// Android) non le vedeva e tornava alla schermata PRIMA dei contatti,
+// saltando la pagina intera. Si rimedia come per il calendario di
+// Gestione corsi e per i modali di Setting: finche' una sotto-vista e'
+// aperta, questa pagina registra cosa vuol dire «indietro» qui dentro.
+//
+// La seconda: i filtri vivevano solo qui, quindi uscire dalla pagina li
+// buttava via — e con «Avanti», o rientrando dal CRM, si ripartiva da
+// 23.757 contatti e dalla ricerca da rifare. Ora la pagina consegna a chi
+// la monta (`onStato`) filtri, pagina, ordine e scheda aperta, e li
+// riprende da li' (`statoIniziale`). Chi non passa quelle due prop si
+// comporta esattamente come prima: la memoria sta nel genitore, non in una
+// variabile di modulo, altrimenti sarebbe una memoria che nessuno puo'
+// spegnere — e due prove della stessa pagina si passerebbero i filtri.
+export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "", registraInterceptaIndietro = null, statoIniziale = null, onStato = null }) {
+  const isMobile = useIsMobile();
+  // le tre viste: la lista, l'elenco delle campagne fatte, una campagna
+  // aperta (nuova dai filtri correnti, o una gia' esistente)
+  const [vista, setVista] = useState({ nome: "lista" });
+  // quando si sta scegliendo a chi mandare una campagna gia' scritta: la
+  // lista e' la stessa, ma il tasto in cima congela i destinatari e torna
+  // alla campagna
+  const perCampagna = vista.nome === "lista" ? vista.perCampagna || null : null;
+  const [congelando, setCongelando] = useState(false);
+  const [filtri, setFiltri] = useState(() => ({ ...FILTRI_VUOTI, ...(statoIniziale?.filtri || {}) }));
+  const [cercaScritto, setCercaScritto] = useState(() => statoIniziale?.filtri?.cerca || "");
+  const [da, setDa] = useState(() => Number(statoIniziale?.da) || 0);
+  // l'ordine della lista: { campo, verso } oppure null = quello naturale
+  // del database (ultimo contatto, dal piu' recente)
+  const [ordine, setOrdine] = useState(() => statoIniziale?.ordine || null);
+  const [valori, setValori] = useState(null);
+  const [esito, setEsito] = useState({ totale: null, righe: [] });
+  const [caricando, setCaricando] = useState(false);
+  const [errore, setErrore] = useState("");
+  const [apertoId, setApertoId] = useState(() => statoIniziale?.apertoId || null);
+  const [giro, setGiro] = useState(0);
+  const [sincronizzando, setSincronizzando] = useState(false);
+  const [esitoShop, setEsitoShop] = useState("");
+  const ultimaRichiesta = useRef(0);
+
+  // quello che si deve ritrovare tornando qui. Si consegna a ogni
+  // cambiamento: chi lo riceve lo mette da parte (un ref, non uno stato,
+  // o l'app intera si ridisegnerebbe a ogni filtro toccato).
+  useEffect(() => { onStato?.({ filtri, da, ordine, apertoId }); }, [filtri, da, ordine, apertoId, onStato]);
+
+  // L'INDIETRO DELL'APP TORNA ALLA LISTA, non fuori dalla pagina. Quando
+  // si stanno scegliendo i destinatari di una campagna gia' aperta,
+  // «indietro» e' la campagna: e' il giro da cui si e' arrivati, ed e'
+  // quello che fa il tasto «Torna alla campagna» qui sopra.
+  useEffect(() => {
+    if (!registraInterceptaIndietro) return undefined;
+    if (vista.nome === "componi" || vista.nome === "campagne") {
+      registraInterceptaIndietro(() => setVista({ nome: "lista" }));
+      return () => registraInterceptaIndietro(null);
+    }
+    if (vista.perCampagna) {
+      registraInterceptaIndietro(() => setVista({ nome: "componi", campagna: vista.perCampagna }));
+      return () => registraInterceptaIndietro(null);
+    }
+    registraInterceptaIndietro(null);
+    return undefined;
+  }, [vista, registraInterceptaIndietro]);
+
+  useEffect(() => {
+    supabase.rpc("crm_filtri_valori").then(({ data, error }) => {
+      if (error) { setErrore("Non riesco a leggere i filtri: " + error.message); return; }
+      setValori(data || {});
+    });
+  }, []);
+
+  // la ricerca libera aspetta che si smetta di scrivere
+  useEffect(() => {
+    const t = setTimeout(() => { setFiltri((f) => (f.cerca === cercaScritto ? f : { ...f, cerca: cercaScritto })); setDa(0); }, 300);
+    return () => clearTimeout(t);
+  }, [cercaScritto]);
+
+  const filtriDb = useMemo(() => filtriPerIlDatabase(filtri), [filtri]);
+  useEffect(() => {
+    const n = ++ultimaRichiesta.current;
+    setCaricando(true); setErrore("");
+    supabase.rpc("crm_cerca_contatti", { filtri: filtriDb, da, quanti: PER_PAGINA, ordina: ordine?.campo || null, verso: ordine?.verso || null }).then(({ data, error }) => {
+      if (n !== ultimaRichiesta.current) return;   // e' arrivata prima una richiesta piu' nuova
+      setCaricando(false);
+      if (error) { setErrore("Non riesco a leggere i contatti: " + error.message); return; }
+      setEsito({ totale: Number(data?.totale) || 0, righe: Array.isArray(data?.righe) ? data.righe : [] });
+    });
+  }, [filtriDb, da, giro, ordine]);
+
+  const cambia = (k, v) => {
+    setDa(0); setApertoId(null);
+    setFiltri((f) => {
+      const n = { ...f, [k]: v };
+      // scegliendo la regione si azzerano provincia e comune, e cosi' via
+      if (k === "regione") { n.provincia = ""; n.comune = ""; }
+      if (k === "provincia") n.comune = "";
+      if (k === "anno" && v) { n.dal = ""; n.al = ""; }
+      if ((k === "dal" || k === "al") && v) n.anno = "";
+      return n;
+    });
+  };
+  const azzera = () => { setFiltri(FILTRI_VUOTI); setCercaScritto(""); setDa(0); setApertoId(null); };
+  // Premendo un titolo: prima crescente, poi decrescente, al terzo tocco si
+  // torna all'ordine naturale. E' lo stesso gesto delle tabelle del
+  // gestionale (`useOrdinamentoTabella`), e si riparte dalla prima pagina:
+  // restare alla 7 vuol dire guardare le righe dalla 301 alla 350 di un
+  // elenco che nel frattempo e' diventato un altro.
+  const cambiaOrdine = (campo) => {
+    if (!campo) return;
+    setDa(0); setApertoId(null);
+    setOrdine((prec) => {
+      if (prec?.campo !== campo) return { campo, verso: "asc" };
+      if (prec.verso === "asc") return { campo, verso: "desc" };
+      return null;
+    });
+  };
+
+  // RIFA' ADESSO IL RIASSUNTO DEI CLIENTI SHOP. Lo fa anche il cron
+  // ogni notte alle 04:50: questo tasto c'e' perche' chi ha appena
+  // venduto non deve aspettare domani per scrivere a quel cliente.
+  // Dopo, si rileggono i valori dei filtri E la lista, o la pagina
+  // mostrerebbe i conti di prima dicendo di aver aggiornato.
+  async function aggiornaClientiShop() {
+    setSincronizzando(true); setErrore("");
+    const { data, error } = await supabase.rpc("crm_sincronizza_clienti_shop");
+    setSincronizzando(false);
+    if (error) { setErrore("Non riesco ad aggiornare i clienti shop: " + error.message); return; }
+    const { data: v } = await supabase.rpc("crm_filtri_valori");
+    if (v) setValori(v);
+    setGiro((g) => g + 1);
+    const creati = Number(data?.creati) || 0;
+    setEsitoShop(creati
+      ? `Aggiornati: ${creati} client${creati === 1 ? "e" : "i"} dello shop ${creati === 1 ? "è entrato" : "sono entrati"} in lista adesso.`
+      : "Aggiornati: nessun cliente nuovo, i conti sono stati rifatti.");
+  }
+
+  const province = useMemo(() => (valori?.province || []).filter((p) => !filtri.regione || p.regione === filtri.regione), [valori, filtri.regione]);
+  const comuni = useMemo(() => (valori?.comuni || []).filter((c) => !filtri.provincia || c.provincia === filtri.provincia).filter((c) => filtri.provincia || !filtri.regione || province.some((p) => p.valore === c.provincia)), [valori, filtri.provincia, filtri.regione, province]);
+  const riassunto = riassuntoFiltri(filtri);
+  const filtriAccesi = Object.keys(filtriDb).length > 0;
+  const totale = esito.totale;
+  const fine = Math.min(da + PER_PAGINA, totale || 0);
+
+  async function usaQuestiContatti() {
+    if (!perCampagna?.id || !totale) return;
+    setCongelando(true); setErrore("");
+    try {
+      const { error } = await supabase.from("crm_campagne")
+        .update({ filtri: filtriDb, riassunto_filtri: riassunto || null, aggiornata_il: new Date().toISOString() }).eq("id", perCampagna.id);
+      if (error) throw new Error(error.message);
+      const { data, error: e2 } = await supabase.rpc("crm_campagna_prepara", { p_campagna: perCampagna.id });
+      if (e2) throw new Error(e2.message);
+      setVista({
+        nome: "componi",
+        campagna: { ...perCampagna, filtri: filtriDb, riassunto_filtri: riassunto || null },
+        messaggio: { tipo: "ok", testo: `Destinatari pronti: ${numero(data?.inseriti || 0)}${data?.senza_email || data?.disiscritti || data?.da_verificare ? ` (fuori: ${[data.senza_email ? `${numero(data.senza_email)} senza email` : "", data.disiscritti ? `${numero(data.disiscritti)} disiscritti` : "", data.da_verificare ? `${numero(data.da_verificare)} da verificare` : ""].filter(Boolean).join(", ")})` : ""}.` },
+      });
+    } catch (e) { setErrore("Non riesco a congelare i destinatari: " + e.message); }
+    setCongelando(false);
+  }
+
+  if (vista.nome === "campagne") {
+    return <ElencoCampagne onChiudi={() => setVista({ nome: "lista" })} onApri={(c) => setVista({ nome: "componi", campagna: c })} />;
+  }
+  if (vista.nome === "componi") {
+    return (
+      <ComponiMail
+        key={vista.campagna?.id || "nuova"}
+        campagnaIniziale={vista.campagna || null}
+        filtri={vista.filtri || {}} riassunto={vista.riassunto || ""} totale={vista.totale || 0} utente={utente}
+        messaggioIniziale={vista.messaggio || null}
+        onChiudi={() => setVista({ nome: "lista" })}
+        onSelezionaDestinatari={(c) => {
+          // si riparte dai filtri che la campagna ha gia', se ne ha
+          const f = { ...FILTRI_VUOTI, ...(c.filtri || {}) };
+          setFiltri(f); setCercaScritto(f.cerca || ""); setDa(0); setApertoId(null);
+          setVista({ nome: "lista", perCampagna: c });
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "24px 16px 80px" : "32px 32px 80px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+          <TastoLivelloPrecedente titolo="CRM" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
+          Chi ha scritto a Elitederma (importati da Vetta) e chi ha comprato sullo shop: una scheda a persona, con le richieste e gli acquisti sotto.
+          {valori?.totale != null && ` In archivio ${numero(valori.totale)} contatti${pezziArchivio(valori)}.`}
+          {valori?.senza_data > 0 && ` Per ${numero(valori.senza_data)} la data della richiesta non è nota: sono stati caricati in Vetta in blocco il 9 marzo 2026, e il filtro per anno li lascia fuori.`}
+        </div>
+
+        {perCampagna && (
+          <div style={{ ...fontBody, fontSize: 13, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "10px 14px", marginBottom: 12, lineHeight: 1.5, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }} data-scelta-destinatari>
+            <span style={{ flex: 1, minWidth: 200 }}>
+              Stai scegliendo i destinatari di <b>«{perCampagna.nome}»</b>: imposta i filtri e poi premi «Usa questi contatti».
+            </span>
+            <Button variant="ghost" onClick={() => setVista({ nome: "componi", campagna: perCampagna })} disabled={congelando}>Torna alla campagna</Button>
+          </div>
+        )}
+
+        {/* I FILTRI. Periodo e corso guardano le richieste; il resto il
+            contatto. Tutti insieme restringono, e il conteggio sotto e'
+            quello del database, non della pagina. */}
+        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 12 : 16, marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 220px", minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cerca</span>
+              <input value={cercaScritto} onChange={(e) => setCercaScritto(e.target.value)} placeholder="nome, email, telefono, comune"
+                style={{ ...inputStyle, padding: "7px 9px", fontSize: 12.5, width: "100%", minWidth: 0 }} />
+            </label>
+            {/* gli anni delle richieste con data certa e delle vendite:
+                2022-2026, non solo l'anno del caricamento in Vetta */}
+            <Tendina etichetta="Anno" larghezza={110} valore={filtri.anno} onCambia={(v) => cambia("anno", v)} opzioni={(valori?.anni || []).map((a) => ({ valore: String(a.valore), quanti: a.quanti }))} tutto="Tutti" />
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Periodo (dal → al)</span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <SelettorePeriodo da={filtri.dal} a={filtri.al || filtri.dal} vuoto="Scegli le date"
+                  onCambia={({ da: d, a }) => { setDa(0); setFiltri((f) => ({ ...f, dal: d, al: a, anno: "" })); }} />
+                {(filtri.dal || filtri.al) && (
+                  <button type="button" onClick={() => { cambia("dal", ""); cambia("al", ""); }} title="Togli il periodo"
+                    style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4 }}>✕</button>
+                )}
+              </div>
+            </label>
+            <Tendina etichetta="Corso richiesto" valore={filtri.corso} onCambia={(v) => cambia("corso", v)} opzioni={valori?.corsi || []} />
+            <Tendina etichetta="Regione" valore={filtri.regione} onCambia={(v) => cambia("regione", v)} opzioni={valori?.regioni || []} tutto="Tutte" />
+            <Tendina etichetta="Provincia" valore={filtri.provincia} onCambia={(v) => cambia("provincia", v)} opzioni={province} tutto="Tutte" />
+            <Tendina etichetta="Comune" valore={filtri.comune} onCambia={(v) => cambia("comune", v)} opzioni={comuni} tutto="Tutti" />
+            <Tendina etichetta="Qualifica" valore={filtri.qualifica} onCambia={(v) => cambia("qualifica", v)} opzioni={(valori?.qualifiche || []).map((q) => ({ ...q, etichetta: etichettaQualifica(q.valore) }))} tutto="Tutte" />
+            <Tendina etichetta="Stato trattativa" valore={filtri.stato} onCambia={(v) => cambia("stato", v)} opzioni={(valori?.stati || []).map((s) => ({ ...s, etichetta: etichettaStato(s.valore) }))} tutto="Tutti" />
+            <Tendina etichetta="Trattato da" valore={filtri.trattato_da} onCambia={(v) => cambia("trattato_da", v)} opzioni={valori?.trattati_da || []} tutto="Chiunque" />
+            <Tendina etichetta="Mestiere" valore={filtri.mestiere} onCambia={(v) => cambia("mestiere", v)} opzioni={valori?.mestieri || []} tutto="Tutti" />
+            <Tendina etichetta="Genion" larghezza={180} valore={filtri.collegamento} onCambia={(v) => cambia("collegamento", v)} opzioni={Object.entries(COLLEGAMENTI).map(([valore, etichetta]) => ({ valore, etichetta }))} tutto="Tutti" />
+          </div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
+            <Spunta etichetta="Solo con email" valore={filtri.con_email} onCambia={(v) => cambia("con_email", v)} />
+            <Spunta etichetta="Solo da verificare" valore={filtri.da_verificare} onCambia={(v) => cambia("da_verificare", v)} />
+            <Spunta etichetta="Data non nota" valore={filtri.senza_data} onCambia={(v) => cambia("senza_data", v)} />
+            <Spunta etichetta="Disiscritti" valore={filtri.disiscritti} onCambia={(v) => cambia("disiscritti", v)} />
+            {filtriAccesi && (
+              <button type="button" onClick={azzera} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: "auto" }}>
+                Azzera i filtri
+              </button>
+            )}
+          </div>
+
+          {/* I CLIENTI DELLO SHOP (17/11/2026). Una banda sua, perche'
+              questi filtri guardano gli ORDINI e non le richieste: chi
+              cerca «chi ha comprato pigmenti» non lo cerca fra i filtri
+              del CRM. Il filo sopra la divide senza aggiungere parole. */}
+          <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 14, paddingTop: 12 }} data-banda-shop>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>
+              I clienti dello shop
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <Tendina etichetta="Reparto comprato" larghezza={200} valore={filtri.reparto} onCambia={(v) => cambia("reparto", v)} opzioni={valori?.reparti || []} tutto="Qualunque" />
+              <label style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Ha comprato (dal → al)</span>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <SelettorePeriodo da={filtri.acquisto_dal} a={filtri.acquisto_al || filtri.acquisto_dal} vuoto="Quando ha comprato"
+                    onCambia={({ da: d, a }) => { setDa(0); setFiltri((f) => ({ ...f, acquisto_dal: d, acquisto_al: a })); }} />
+                  {(filtri.acquisto_dal || filtri.acquisto_al) && (
+                    <button type="button" onClick={() => { cambia("acquisto_dal", ""); cambia("acquisto_al", ""); }} title="Togli il periodo d'acquisto"
+                      style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4 }}>✕</button>
+                  )}
+                </div>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Ha speso almeno (€)</span>
+                <input value={filtri.speso_da} onChange={(e) => cambia("speso_da", e.target.value.replace(/[^0-9.,]/g, "").replace(",", "."))}
+                  inputMode="decimal" placeholder="0" style={{ ...inputStyle, padding: "7px 9px", fontSize: 12.5, width: 100 }} />
+              </label>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", paddingBottom: 6 }}>
+                <Spunta etichetta="Solo clienti shop" valore={filtri.cliente_shop} onCambia={(v) => cambia("cliente_shop", v)} />
+                <Spunta etichetta="Solo quelli che non sono in CRM" valore={filtri.non_in_crm} onCambia={(v) => cambia("non_in_crm", v)} />
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.5 }} data-nota-shop>
+              {valori?.clienti_shop != null && <>In lista ci sono <b>{numero(valori.clienti_shop)}</b> clienti dello shop{valori?.non_in_crm ? <>, e <b>{numero(valori.non_in_crm)}</b> persone che non vengono dal CRM</> : null}. </>}
+              Il reparto si riconosce dal prodotto dell’ordine: sugli ordini più vecchi quel prodotto non è più a catalogo, quindi il filtro per reparto trova chi ha comprato <i>fra quello che si riconosce</i>, non tutti.
+              {valori?.shop_sincronizzato_il && <> Ultimo aggiornamento: {dataIt(valori.shop_sincronizzato_il)}.</>}
+              {" "}
+              <button type="button" onClick={aggiornaClientiShop} disabled={sincronizzando}
+                style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, background: "none", border: "none", cursor: sincronizzando ? "default" : "pointer", padding: 0 }}>
+                {sincronizzando ? "Aggiorno…" : "Aggiorna i clienti shop"}
+              </button>
+              {esitoShop && <span style={{ color: "#2E7D32", fontWeight: 700 }}> {esitoShop}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* IL CONTEGGIO, e il tasto per scrivere a chi e' in lista */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }} data-conteggio>
+            {totale == null ? "…" : `${numero(totale)} contatt${totale === 1 ? "o" : "i"}`}
+            {caricando && <span style={{ ...fontBody, fontSize: 12, color: MUTED, marginLeft: 8 }}>aggiorno…</span>}
+          </div>
+          {riassunto && <span style={{ ...fontBody, fontSize: 12.5, color: GRAFITE }}>{riassunto}</span>}
+          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            {perCampagna ? (
+              <Button onClick={usaQuestiContatti} disabled={!totale || filtri.disiscritti || congelando}>
+                {congelando ? "Congelo…" : `Usa questi ${numero(totale || 0)} contatti`}
+              </Button>
+            ) : <>
+            <Button variant="ghost" onClick={() => setVista({ nome: "campagne" })}>Campagne</Button>
+            {/* a chi e' in lista adesso, con questi filtri: i disiscritti
+                non si possono scegliere, e lo dice il tasto spento */}
+            <Button onClick={() => setVista({ nome: "componi", filtri: filtriDb, riassunto, totale })} disabled={!totale || filtri.disiscritti} title={filtri.disiscritti ? "Ai disiscritti non si scrive" : "Scrivi una mail a chi è in lista"}>
+              Componi mail
+            </Button>
+            </>}
+          </span>
+        </div>
+        {errore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{errore}</div>}
+
+        {/* LA LISTA: una riga per contatto, la scheda si apre premendo */}
+        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "4px 12px" : "6px 16px" }}>
+          {totale === 0 && !caricando && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 0" }}>Nessun contatto con questi filtri.</div>}
+          {/* I TITOLI DELLE COLONNE. Stesse misure delle righe qui sotto
+              (le tre `flex`), o i titoli starebbero sopra un'altra
+              colonna — che e' peggio di non averli.
+
+              SUL TELEFONO non ci sono colonne: la riga si impila, e tre
+              righe di titoli sopra una lista impilata sarebbero titoli
+              che non stanno sopra niente. Li' restano i soli titoli che
+              si premono, in fila dietro «Ordina per» — stesso
+              componente, stessa freccia, stesso gesto. */}
+          {esito.righe.length > 0 && isMobile && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0 7px" }} data-intestazioni>
+              <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Ordina per</span>
+              <TitoloColonna campo="nome" etichetta="Nome" ordine={ordine} onOrdina={cambiaOrdine} />
+              <TitoloColonna campo="dove" etichetta="Dove" ordine={ordine} onOrdina={cambiaOrdine} />
+              <TitoloColonna campo="richieste" etichetta="Richieste" ordine={ordine} onOrdina={cambiaOrdine} />
+              <TitoloColonna campo="ultimo_contatto" etichetta="Ultimo contatto" ordine={ordine} onOrdina={cambiaOrdine} />
+            </div>
+          )}
+          {esito.righe.length > 0 && !isMobile && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0 7px" }} data-intestazioni>
+              <span style={{ flex: "1 1 200px", minWidth: 0, display: "flex", gap: 10, alignItems: "center" }}>
+                <TitoloColonna campo="nome" etichetta="Nome" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per nome, come si legge qui" />
+                <TitoloColonna campo="dove" etichetta="Dove" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per comune, o per quello che c'è al suo posto" />
+              </span>
+              <span style={{ flex: "2 1 240px", minWidth: 0 }}>
+                <TitoloColonna etichetta="Corsi richiesti" ordine={ordine} onOrdina={cambiaOrdine} />
+              </span>
+              <span style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", flex: "1 1 220px", minWidth: 0 }}>
+                <TitoloColonna etichetta="Qualifica" ordine={ordine} onOrdina={cambiaOrdine} />
+                <TitoloColonna campo="richieste" etichetta="Richieste" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per quante richieste ha fatto" />
+                <TitoloColonna campo="ultimo_contatto" etichetta="Ultimo contatto" ordine={ordine} onOrdina={cambiaOrdine} titolo="Ordina per la data che si legge qui: chi non ne ha una va in fondo" />
+              </span>
+            </div>
+          )}
+          {esito.righe.map((c) => {
+            const aperto = apertoId === c.id;
+            const luogo = c.comune || c.provincia || c.regione || (c.citta_originale ? `${c.citta_originale} (?)` : "");
+            return (
+              <div key={c.id} style={{ padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }} data-contatto={c.id}>
+                <div onClick={() => setApertoId(aperto ? null : c.id)} role="button" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", cursor: "pointer" }}>
+                  <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>{nomeDi(c)}</span>
+                    <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>
+                      {[luogo, c.mestiere, c.email].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                  <span style={{ display: "flex", gap: 5, flexWrap: "wrap", flex: "2 1 240px", minWidth: 0 }}>
+                    {(c.corsi_interesse || []).map((k) => <Pastiglia key={k} colore={NAVY} sfondo="#F3F0E8">{k}</Pastiglia>)}
+                  </span>
+                  <span style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-end", flex: "1 1 220px", minWidth: 0 }}>
+                    <Pastiglia>{etichettaQualifica(c.qualifica)}</Pastiglia>
+                    <PastigliaStato stato={c.stato_trattativa} />
+                    {c.collegamento === "certo" && <Pastiglia colore="#2E7D32" sfondo="#EAF5EA" bordo="#C7E3C7" titolo={c.collegamento_nota}>Genion</Pastiglia>}
+                    {c.collegamento === "dubbio" && <Pastiglia colore="#8A6D1D" sfondo="#FDF8EC" bordo="#EBD9AE" titolo={c.collegamento_nota}>Genion?</Pastiglia>}
+                    {c.da_verificare && <Pastiglia colore="#C0392B" sfondo="#FBEBE9" bordo="#F0C8C2" titolo={c.da_verificare_motivo}>da verificare</Pastiglia>}
+                    {c.disiscritto_il && <Pastiglia colore="#C0392B" sfondo="#FBEBE9" bordo="#F0C8C2">disiscritto</Pastiglia>}
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }} title={c.con_data_certa === false ? "La data della richiesta non è nota: caricata in Vetta in blocco il 9 marzo 2026" : "Ultimo contatto"}>
+                      {c.numero_richieste > 1 ? `${c.numero_richieste} richieste · ` : ""}
+                      {c.con_data_certa === false ? (c.ultima_vendita_il ? `venduto ${dataIt(c.ultima_vendita_il)}` : "data non nota") : dataIt(c.ultimo_contatto_il)}
+                      {c.trattato_da ? ` · ${c.trattato_da}` : ""}
+                    </span>
+                  </span>
+                </div>
+                {aperto && <SchedaContatto c={c} onCambiato={() => setGiro((g) => g + 1)} />}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* LE PAGINE */}
+        {totale > PER_PAGINA && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
+            <Button variant="ghost" onClick={() => { setDa(Math.max(0, da - PER_PAGINA)); setApertoId(null); }} disabled={da === 0}>← Precedenti</Button>
+            <span style={{ ...fontBody, fontSize: 12.5, color: GRAFITE }}>{numero(da + 1)}–{numero(fine)} di {numero(totale)}</span>
+            <Button variant="ghost" onClick={() => { setDa(da + PER_PAGINA); setApertoId(null); }} disabled={fine >= totale}>Successivi →</Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

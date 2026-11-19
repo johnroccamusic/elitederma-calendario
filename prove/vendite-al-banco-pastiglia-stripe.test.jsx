@@ -53,7 +53,7 @@ describe("la correzione del metodo di pagamento", () => {
 });
 
 describe("cambiare il metodo sistema anche la busta", () => {
-  it("da contanti a POS su una busta già in cassa: la vendita esce e la busta si riapre", async () => {
+  it("da contanti a POS su una busta già chiusa: la vendita esce e la busta torna aperta", async () => {
     const scritture = [];
     rispondiCon({
       "pagamenti_pos": [],
@@ -61,7 +61,7 @@ describe("cambiare il metodo sistema anche la busta", () => {
       "rest/v1/corsi_date_buste": [],
       "rest/v1/corsi_date": (corpo, url) => { if (corpo) scritture.push(["corsi_date", corpo, url]); return []; },
     });
-    const cd = { id: "cd1", busta_rientrata_il: "2026-10-20", busta_importo: 20 };
+    const cd = { id: "cd1", busta_spedita_il: "2026-10-19", busta_rientrata_il: "2026-10-20", busta_depositata_il: "2026-10-20", busta_importo: 20 };
     const vendite = [{ ...base, id: "v-cash", numero_ordine: "POS-3", totale: 20, metodo_pagamento: "contanti", corso_data_id: "cd1", busta_numero: 1 }];
     const p = await monta(<PaginaVenditeShop venditeShop={vendite} corsiDate={[cd]} origine="pos" ricarica={async () => {}} onBack={() => {}} ruoloUtente="amministratore" />);
     await attendi(150);
@@ -69,12 +69,15 @@ describe("cambiare il metodo sistema anche la busta", () => {
     await (async () => { const { act } = await import("react"); await act(async () => { const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set; setter.call(sel, "pos"); sel.dispatchEvent(new Event("change", { bubbles: true })); }); })();
     await attendi(60);
     // prima di confermare si dice cosa succede alla busta
-    expect(p.testo()).toContain("busta del corso già in cassa");
+    expect(p.testo()).toContain("busta del corso già chiusa");
     await clicca(p.tasto("Conferma")); await attendi(200);
     expect(scritture.find((x) => x[0] === "vendite_shop" && x[1].metodo_pagamento === "pos")).toBeTruthy();
-    expect(scritture.find((x) => x[0] === "corsi_date" && x[1].busta_rientrata_il === null)).toBeTruthy();
+    // la busta torna APERTA, non solo fuori dalla cassa: si azzerano tutte
+    // e tre le date, o resterebbe «in viaggio» o «ricevuta» una busta che
+    // e' sul tavolo
+    expect(scritture.find((x) => x[0] === "corsi_date" && x[1].busta_rientrata_il === null && x[1].busta_spedita_il === null && x[1].busta_depositata_il === null)).toBeTruthy();
     expect(p.testo()).toContain("Incasso cambiato da Contanti a POS");
-    expect(p.testo()).toContain("busta del corso è uscita dalla cassa");
+    expect(p.testo()).toContain("busta del corso torna aperta sul tavolo");
     await p.smonta();
   });
 });

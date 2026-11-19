@@ -19,16 +19,25 @@
 // altezza, cosi' i due disegni si possono sovrapporre e combaciano.
 import React, { useState, useEffect } from "react";
 import { Field } from "../ui/base.jsx";
+// l'elenco italiano non si nomina piu' qui dentro: la cascata e la
+// ricerca delle vie passano dall'elenco del paese scelto (residenza.js)
+import { codiceCatastale, nomiStati, normalizzaLuogo } from "../comuni-regioni.js";
+// GLI ELENCHI DELLA RESIDENZA STANNO FUORI DA QUI, uno per Stato: la
+// cascata disegnata qui sotto e' una sola e non sa di che paese sia.
+// Vedi residenza.js — con la Svizzera dentro dal 7/11/2026.
 import {
-  REGIONI, provinceDiRegione, comuniDiProvincia, capDiComune, regioneDiProvincia,
-  provinciaDiComune, codiceCatastale, nomiStati,
-} from "../comuni-regioni.js";
-import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea } from "../ui/scheda.jsx";
+  ITALIA, ALTRO_STATO, elencoResidenza, vociStatoResidenza, vocePerStato,
+  etichettaResidenza, campoFiscale, formattaFiscale,
+} from "./residenza.js";
+import { areaSchedaIscritto, campoAreaScheda, IntestazioneArea, titoloAreaScheda } from "../ui/scheda.jsx";
 import { campoDataStyle } from "../ui/stile.js";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 import { OBBLIGATORI_VENDITORE, NOTA_VENDITORE, avvisoCampo } from "./disposizione.js";
-import { filtraCodiceFiscale, calcolaCodiceFiscale } from "./codice-fiscale.js";
+import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
+// un elenco di 232 voci non e' una tendina: si cerca (vedi CampoCerca)
+import CampoCerca from "./CampoCerca.jsx";
+import CampoTelefono from "./CampoTelefono.jsx";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -48,10 +57,11 @@ const SMORZATO = { opacity: 0.45 };
 // Il valore in archivio resta citta' + CAP + sigla provincia: la
 // regione non si salva, si ricava dalla provincia. Una colonna in meno
 // che puo' contraddire le altre.
-export function normalizzaNome(s) {
-  return (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase().replace(/\([^)]*\)/g, " ").replace(/[^A-Z0-9]+/g, " ").trim();
-}
+// Era scritto due volte, qui e in comuni-regioni.js, identico. Adesso
+// e' uno: due idee di «stesso nome» un giorno si staccano, e quel
+// giorno un comune che in archivio c'e' non si riconosce piu'
+// nell'elenco.
+export const normalizzaNome = normalizzaLuogo;
 
 // Un valore che in archivio c'e' ma nell'elenco non esiste NON si butta:
 // compare in coda marcato, cosi' chi guarda la scheda lo vede e lo
@@ -65,7 +75,29 @@ function conFuoriElenco(opzioni, valore) {
   return [...opzioni, { valore: v, testo: `${v} — fuori elenco` }];
 }
 
+// QUANTE VOCI SI SCORRONO CON UN DITO.
+//
+// Venti: le regioni italiane sono venti e si scorrono benissimo, le
+// province di una regione non arrivano a dodici. Sopra, no: i comuni di
+// Torino sono 312, le localita' del Vallese 303, i CAP di Roma 82 —
+// e sul telefono una tendina cosi' e' un rullo che gira. Da li' in su
+// la stessa casella che si cerca degli Stati (CampoCerca): si scrivono
+// due lettere e l'elenco si accorcia.
+//
+// La soglia sta qui e non in ogni chiamata: e' una regola sola, e vale
+// per qualunque tendina di questa scheda — anche per quelle che
+// nasceranno domani.
+const QUANTE_SI_SCORRONO = 20;
+
 function Tendina({ valore, opzioni, onCambia, spenta, stile, vuoto, campo }) {
+  if ((opzioni || []).length > QUANTE_SI_SCORRONO) {
+    return (
+      <CampoCerca
+        chiave={campo} valore={valore} voci={opzioni} onScegli={onCambia}
+        spenta={spenta} stile={stile} vuoto={vuoto}
+      />
+    );
+  }
   return (
     // `data-campo` e' l'unico aggancio stabile per ritrovare questa
     // tendina: cercarla per la forma del DOM si rompe appena una riga si
@@ -114,8 +146,12 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
     // resto. Col comune gia' scelto la ricerca si restringe a lui, che
     // da' risultati migliori: e' lo stesso campo, due comportamenti.
     //
-    // Fuori Italia non si cerca affatto: li' questa ricerca non copre.
-    if (!digitando || spenta || !cercaVie || cascata?.fuoriItalia || scritto.trim().length < 3) {
+    // DOVE SI CERCA. Dall'8/11/2026 anche in Svizzera: le vie di
+    // OpenStreetMap ci sono come quelle italiane, mancava solo dire a
+    // quale paese chiederle (`paese`, dall'elenco della residenza).
+    // Dove un elenco non c'e' — gli altri 230 Stati — non si cerca: la
+    // proposta porterebbe un comune e un CAP che nessuno sa risolvere.
+    if (!digitando || spenta || !cercaVie || !cascata?.elenco?.paese || scritto.trim().length < 3) {
       setProposte([]); setGuasto(""); return;
     }
     let vivo = true;
@@ -132,7 +168,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
       // di prova) oppure l'elenco col motivo: si accettano tutte e due
       let esito = { vie: [] };
       try {
-        const r = await cercaVie(scritto, comune, cap);
+        const r = await cercaVie(scritto, comune, cap, cascata?.elenco?.paese);
         esito = Array.isArray(r) ? { vie: r } : (r || { vie: [] });
       } catch (e) { esito = { vie: [], errore: `La ricerca degli indirizzi si è rotta: ${e?.message || e}` }; }
       if (vivo) {
@@ -142,7 +178,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
       }
     }, 500);
     return () => { vivo = false; clearTimeout(t); };
-  }, [scritto, comune, cap, spenta, cascata?.fuoriItalia, cercaVie, digitando]);
+  }, [scritto, comune, cap, spenta, cascata?.elenco?.paese, cercaVie, digitando]);
 
   // UNA PROPOSTA CHE NON AGGIUNGE NIENTE NON SI MOSTRA.
   //
@@ -218,7 +254,7 @@ function CampoVia({ valore, scrivi, esceDalCampo, campo, stile, cascata, cercaVi
                     della ricerca: li' la provincia di Roma si chiama
                     "Roma Capitale", e una sigla inventata e' peggio di
                     nessuna sigla */}
-                {provinciaDiComune(x.comune, x.cap) ? ` (${provinciaDiComune(x.comune, x.cap)})` : ""}
+                {cascata?.elenco?.provinciaDi(x.comune, x.cap) ? ` (${cascata.elenco.provinciaDi(x.comune, x.cap)})` : ""}
                 {x.cap ? ` ${x.cap}` : ""}
                 {/* un CAP diverso da quello scelto si dice: non si
                     riscrive la scheda, si fa vedere che non torna */}
@@ -239,6 +275,21 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     ...(maiuscolo ? { textTransform: "uppercase" } : {}),
     ...(spenta ? { background: "#F1EEE7" } : {}),
   };
+
+  // IL PREFISSO INTERNAZIONALE SI SCEGLIE, E PARTE DALLA RESIDENZA.
+  // Era una scritta fissa «+39»: a una svizzera chiedeva un numero che
+  // non ha. Il paese arriva dalla cascata — e' la stessa scheda, due
+  // righe piu' su — e resta sempre cambiabile.
+  if (tipo === "telefono") {
+    return (
+      <CampoTelefono
+        chiave={chiave} valore={valore} statoResidenza={cascata?.statoResidenza}
+        spenta={spenta} stile={stile} suggerimento={suggerimento}
+        onCambia={(v) => scrivi(chiave, v)}
+        onEsce={() => esceDalCampo(campo)}
+      />
+    );
+  }
 
   // --- data e luogo di nascita --------------------------------------
   if (tipo === "data") {
@@ -261,12 +312,17 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     // otto. Il genere qui non serve a niente, e nemmeno i trattini: il
     // campo si chiama «Stato di nascita» e la voce vuota deve dire solo
     // quale Stato.
+    //
+    // E SI CERCA, NON SI SCORRE (7/11/2026): duecentotrentadue voci in
+    // una tendina sola, sul telefono, sono duecento righe da far
+    // scorrere col dito. La casella vuota vale Italia e lo dice.
     return (
-      <Tendina
+      <CampoCerca
+        chiave="stato_nascita"
         valore={spenta ? "" : (valore || "")}
-        opzioni={nomiStati().map((x) => ({ valore: x, testo: x }))}
-        onCambia={(v) => { scrivi("stato_nascita", v); if (v) scrivi("comune_nascita", ""); }}
-        spenta={spenta} stile={stile} vuoto="Italia" campo="stato_nascita"
+        voci={[{ valore: "", testo: "Italia" }, ...nomiStati().map((x) => ({ valore: x, testo: x }))]}
+        onScegli={(v) => { scrivi("stato_nascita", v); if (v) scrivi("comune_nascita", ""); }}
+        spenta={spenta} stile={stile} vuoto="Italia"
       />
     );
   }
@@ -297,21 +353,26 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
 
   // --- i gradini della residenza -------------------------------------
   if (tipo === "stato") {
-    const fuori = cascata?.fuoriItalia;
+    // ITALIA e SVIZZERA portano con se' il loro elenco; gli altri 230
+    // Stati si scelgono comunque dalla tendina — «SVIZERA» battuto a
+    // mano e «Svizzera» sono due paesi diversi per chiunque debba
+    // contare — e sotto restano le caselle libere. «Altro stato» e'
+    // l'ultima voce, per quello che in quella lista non c'e'.
     return (
       <>
-        <Tendina
-          valore={spenta ? "" : (fuori ? "ALTRO" : "ITALIA")}
-          opzioni={[{ valore: "ITALIA", testo: "Italia" }, { valore: "ALTRO", testo: "Altro stato" }]}
-          onCambia={(v) => cascata.scegliStato(v)}
-          spenta={spenta} stile={stile} vuoto="— scegli —" campo="stato_residenza"
+        <CampoCerca
+          chiave="stato_residenza"
+          valore={spenta ? "" : (cascata?.voceStato || "")}
+          voci={vociStatoResidenza()}
+          onScegli={(v) => cascata.scegliStato(v)}
+          spenta={spenta} stile={stile} vuoto="— scegli lo Stato —"
         />
-        {/* Fuori Italia la regione e la provincia non esistono: il nome
-            dello stato si scrive, ed e' l'unica cosa che si scrive. */}
-        {fuori && !spenta && (
+        {/* Solo «Altro stato»: li' il nome si scrive, ed e' l'unica cosa
+            che si scrive. */}
+        {cascata?.voceStato === ALTRO_STATO && !spenta && (
           <input
             value={valore || ""}
-            placeholder="Svizzera, Francia…"
+            placeholder="Il nome dello Stato"
             onChange={(e) => scrivi("stato_residenza", e.target.value.toUpperCase())}
             onBlur={() => esceDalCampo(campo)}
             style={{ ...stile, marginTop: 6 }}
@@ -321,8 +382,12 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
     );
   }
   if (tipo === "regione" || tipo === "provincia" || tipo === "comune" || tipo === "cap") {
-    if (cascata?.fuoriItalia) {
-      // la regione italiana di un indirizzo estero non vuol dire niente
+    const c = cascata || {};
+    const elenco = c.elenco;
+    // DI 230 STATI SU 232 NON ABBIAMO NE' LOCALITA' NE' CODICI POSTALI:
+    // la' le caselle restano libere, com'erano. Un elenco chiuso
+    // incompleto impedirebbe di registrare chi esiste.
+    if (!elenco) {
       if (tipo === "regione") return <div style={{ ...stile, color: MUTED }}>—</div>;
       return (
         <input
@@ -333,32 +398,38 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         />
       );
     }
-    const c = cascata || {};
+    const frasi = elenco.frasi;
     if (tipo === "regione") {
+      // SOPRA IL CANTONE NON C'E' NIENTE: in Svizzera questa casella
+      // chiederebbe una cosa che non esiste, e si limita a dirlo.
+      if (!elenco.conRegione) return <div style={{ ...stile, color: MUTED }}>—</div>;
       return <Tendina
         valore={spenta ? "" : c.regione}
-        opzioni={REGIONI.map((r) => ({ valore: r, testo: r }))}
+        opzioni={elenco.regioni().map((r) => ({ valore: r, testo: r }))}
         onCambia={c.scegliRegione} spenta={spenta} stile={stile}
         vuoto="— scegli la regione —" campo="regione_residenza" />;
     }
     if (tipo === "provincia") {
-      const opz = (c.regione ? provinceDiRegione(c.regione) : []).map((p) => ({ valore: p.sigla, testo: `${p.nome} (${p.sigla})` }));
+      // in Italia le province di una regione; in Svizzera i ventisei
+      // cantoni, che non hanno niente sopra di loro
+      const sotto = elenco.conRegione ? c.regione : true;
+      const opz = (sotto ? elenco.provinceDi(c.regione) : []).map((p) => ({ valore: p.sigla, testo: `${p.nome} (${p.sigla})` }));
       // la provincia mostrata e' quella della cascata, non solo quella
       // in archivio: su una scheda vecchia e' ricavata dal comune, e se
       // qui si guardasse solo l'archivio resterebbe vuota
       return <Tendina
         valore={spenta ? "" : (c.provincia || "")}
         opzioni={conFuoriElenco(opz, spenta ? "" : c.provincia)}
-        onCambia={c.scegliProvincia} spenta={spenta || !c.regione} stile={stile}
-        vuoto={c.regione ? "— scegli la provincia —" : "prima la regione"} campo="prov_residenza" />;
+        onCambia={c.scegliProvincia} spenta={spenta || !sotto} stile={stile}
+        vuoto={sotto ? frasi.scegliProvincia : frasi.primaProvincia} campo="prov_residenza" />;
     }
     if (tipo === "comune") {
-      const opz = (valore || c.provincia ? comuniDiProvincia(c.provincia) : []).map((x) => ({ valore: x, testo: x }));
+      const opz = (valore || c.provincia ? elenco.comuniDi(c.provincia) : []).map((x) => ({ valore: x, testo: x }));
       return <Tendina
         valore={spenta ? "" : (c.comuneScelto || "")}
         opzioni={conFuoriElenco(opz, spenta ? "" : valore)}
         onCambia={c.scegliComune} spenta={spenta || !c.provincia} stile={stile}
-        vuoto={c.provincia ? "— scegli il comune —" : "prima la provincia"} campo="citta_residenza" />;
+        vuoto={c.provincia ? frasi.scegliComune : frasi.primaComune} campo="citta_residenza" />;
     }
     const opz = (c.capDisponibili || []).map((x) => ({ valore: x, testo: x }));
     return <Tendina
@@ -366,7 +437,7 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
       opzioni={conFuoriElenco(opz, spenta ? "" : valore)}
       onCambia={(v) => scrivi("cap_residenza", v)}
       spenta={spenta || !c.comuneScelto} stile={stile}
-      vuoto={c.comuneScelto ? "— scegli il CAP —" : "prima il comune"} campo="cap_residenza" />;
+      vuoto={c.comuneScelto ? frasi.scegliCap : frasi.primaCap} campo="cap_residenza" />;
   }
 
   if (tipo === "scelta") {
@@ -402,7 +473,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         onChange={(e) => scrivi(chiave, e.target.value)}
         style={stile}
       >
-        <option value="">— scegli venditore —</option>
+        {/* «— scegli —» e basta: l'etichetta sopra dice gia' TUTOR, e
+            ripetere «venditore» dentro la casella la allungava fino a
+            farla tagliare sul telefono — si leggeva «SCEGLI VENDITOI». */}
+        <option value="">— scegli —</option>
         {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
         {/* valore già presente ma non (più) in elenco: resta visibile
             invece di sparire silenziosamente */}
@@ -420,7 +494,9 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
       placeholder={suggerimento}
       // il suggerimento in grigio chiaro: vedi la regola in index.html
       className="suggerimento-chiaro"
-      inputMode={tipo === "telefono" ? "tel" : undefined}
+      // tredici cifre sul telefono si battono col tastierino: i punti
+      // li mette la casella, quindi di lettere non ce n'e' bisogno
+      inputMode={tipo === "telefono" ? "tel" : campo.paeseFiscale === "CH" ? "numeric" : undefined}
       // IL RIEMPIMENTO AUTOMATICO DEL BROWSER STA FUORI DA QUI.
       //
       // Questi campi non sono i dati di chi usa l'app: sono quelli
@@ -445,7 +521,10 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
         // IL CODICE FISCALE HA UNA FORMA, E LA CASELLA LA FA RISPETTARE.
         // Vale anche sull'incollatura, che e' come la maggioranza lo
         // scrive: `onChange` scatta anche li'.
-        if (chiave === "codice_fiscale") t = filtraCodiceFiscale(t);
+        // ...e la forma dipende dal paese: in Italia il codice fiscale,
+        // in Svizzera i punti dell'AVS che compaiono da se', altrove
+        // quello che c'e' sul documento e nessuno lo corregge
+        if (chiave === "codice_fiscale") t = formattaFiscale(t, campo);
         if (lunghezza) t = t.slice(0, lunghezza);
         scrivi(chiave, t);
       }}
@@ -502,6 +581,24 @@ export function AreaAnagrafica({
   const nostro = !!codiceProposto && codiceScritto === codiceProposto;
   useEffect(() => {
     if (configurazione) return;
+    // IL CODICE CHE ABBIAMO SCRITTO NOI SE NE VA COL PAESE.
+    //
+    // Non basta smettere di calcolarlo: la casella vuota dello Stato
+    // vale Italia — ed e' giusto, 253 schede su 260 sono italiane —
+    // quindi mentre si scrivono nome, sesso, data e comune il codice
+    // italiano e' GIA' stato scritto. Scegliendo la Svizzera dopo,
+    // quel codice restava li': scritto dall'app, davanti a chi
+    // incassa, e nessuno lo mette in dubbio. Vale la regola di sempre:
+    // quello che abbiamo proposto noi lo riprendiamo, quello che ha
+    // scritto una persona non si tocca.
+    if (elencoResidenza(valori.stato_residenza)?.stato !== ITALIA) {
+      if (nostro) {
+        setCodiceProposto("");
+        scrivi("codice_fiscale", "");
+        autosalva();
+      }
+      return;
+    }
     if (codiceScritto && !nostro) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: valori.cognome, nome: valori.nome, sesso: valori.sesso,
@@ -516,7 +613,8 @@ export function AreaAnagrafica({
     autosalva();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configurazione, codiceScritto, nostro, valori.cognome, valori.nome, valori.sesso,
-      valori.data_nascita, valori.comune_nascita, valori.stato_nascita]);
+      valori.data_nascita, valori.comune_nascita, valori.stato_nascita,
+      valori.stato_residenza]);
 
   function esceDalCampo(campo) {
     if (configurazione) return;
@@ -541,32 +639,53 @@ export function AreaAnagrafica({
   // quella residenza non si vedrebbe piu' niente. Qui si ricava per
   // mostrarla; in archivio ci finisce solo quando qualcuno conferma il
   // comune, non di nascosto.
+  const statoScritto = (valori.stato_residenza || "").trim();
+  // L'ELENCO DELLO STATO DECIDE LA CASCATA, e la casella vuota vale
+  // Italia: 253 schede su 260 in archivio hanno la residenza italiana e
+  // lo Stato mai scritto, e se il vuoto non valesse Italia aprirebbero
+  // tutte in scrittura libera.
+  const elenco = altroStato ? null : elencoResidenza(statoScritto);
   const provScritta = (valori.prov_residenza || "").trim().toUpperCase();
   const provincia = provScritta
-    || provinciaDiComune(valori.citta_residenza, valori.cap_residenza);
-  const statoScritto = (valori.stato_residenza || "").trim();
-  const fuoriItalia = altroStato || (statoScritto !== "" && normalizzaNome(statoScritto) !== "ITALIA");
-  const regione = regioneDiProvincia(provincia) || regioneScelta;
-  const comuni = provincia ? comuniDiProvincia(provincia) : [];
+    || (elenco ? elenco.provinciaDi(valori.citta_residenza, valori.cap_residenza) : "");
+  const regione = elenco?.conRegione ? (elenco.regioneDi(provincia) || regioneScelta) : "";
+  const comuni = elenco && provincia ? elenco.comuniDi(provincia) : [];
   const comuneInArchivio = (valori.citta_residenza || "").trim();
   // il comune si riconosce senza badare ad accenti e maiuscole: in
   // archivio c'e' "PATERNO", nell'elenco "Paternò", ed e' lo stesso posto
   const comuneScelto = comuni.find((x) => normalizzaNome(x) === normalizzaNome(comuneInArchivio)) || comuneInArchivio;
-  const capDisponibili = comuneScelto ? capDiComune(provincia, comuneScelto) : [];
+  const capDisponibili = elenco && comuneScelto ? elenco.capDi(provincia, comuneScelto) : [];
 
   const cascata = {
-    regione, provincia, comuneScelto, capDisponibili, fuoriItalia,
+    regione, provincia, comuneScelto, capDisponibili, elenco,
+    voceStato: vocePerStato(statoScritto, altroStato),
+    // il nome dello Stato, non il suo elenco: il prefisso telefonico
+    // ce l'hanno tutti e 232, gli elenchi di citta' e CAP solo due
+    statoResidenza: statoScritto,
+    // La ricerca delle vie copre l'Italia e basta (vedi
+    // cerca-indirizzo): fuori si scrive, come prima.
+    fuoriItalia: elenco?.stato !== ITALIA,
     statoNascita: (valori.stato_nascita || "").trim(),
     cap: (valori.cap_residenza || "").trim(),
     civico: (valori.civico_residenza || "").trim(),
     scegliStato(v) {
-      if (v === "ALTRO") {
-        setAltroStato(true); setRegioneScelta("");
-        // una sigla italiana sotto un indirizzo svizzero non vuol dire
-        // niente: va via con la scelta, non dopo
-        scrivi("prov_residenza", ""); scrivi("stato_residenza", "");
-      } else {
-        setAltroStato(false); scrivi("stato_residenza", v ? "ITALIA" : "");
+      const prima = elenco?.stato || "";
+      const dopo = v === ALTRO_STATO ? "" : (elencoResidenza(v)?.stato || "");
+      setAltroStato(v === ALTRO_STATO);
+      scrivi("stato_residenza", v === ALTRO_STATO ? "" : v);
+      // CAMBIATO PAESE, QUELLO CHE STAVA SOTTO NON VALE PIU': una sigla
+      // italiana sotto un indirizzo svizzero non vuol dire niente, e un
+      // NPA sotto un indirizzo italiano nemmeno. La citta' invece
+      // RESTA: un nome e' un nome, e se di la' non esiste si vede
+      // marcato «fuori elenco» invece di sparire senza dirlo.
+      //
+      // Si guarda l'elenco e non il nome dello Stato: passare dalla
+      // casella vuota a «Italia» non cambia paese, e cancellare la
+      // residenza di chi non ha fatto altro che dichiararla sarebbe
+      // il peggiore dei modi di aiutarlo.
+      if (prima !== dopo) {
+        setRegioneScelta("");
+        scrivi("prov_residenza", ""); scrivi("cap_residenza", "");
       }
       autosalva();
     },
@@ -589,9 +708,14 @@ export function AreaAnagrafica({
     // "fuori elenco", e la provincia e' quella vera e non "Roma
     // Capitale".
     riempiDaVia(proposta) {
-      const sigla = provinciaDiComune(proposta?.comune, proposta?.cap);
+      // si risolve contro l'elenco DEL PAESE SCELTO: in Italia la
+      // provincia e il nome ufficiale del comune, in Svizzera il
+      // cantone e il nome della localita'. Senza, una proposta
+      // svizzera arriverebbe con una sigla italiana o con nessuna.
+      if (!elenco) return;
+      const sigla = elenco.provinciaDi(proposta?.comune, proposta?.cap);
       const ufficiale = sigla
-        ? comuniDiProvincia(sigla).find((x) => normalizzaNome(x) === normalizzaNome(proposta?.comune))
+        ? elenco.comuniDi(sigla).find((x) => normalizzaNome(x) === normalizzaNome(proposta?.comune))
         : null;
       if (sigla) scrivi("prov_residenza", sigla);
       scrivi("citta_residenza", ufficiale || (proposta?.comune || ""));
@@ -608,7 +732,7 @@ export function AreaAnagrafica({
       // Un comune su 7904 ne ha uno solo in 7860 casi: scriverlo da se'
       // risparmia un gesto che non ha alternative. Dove i CAP sono
       // tanti — Roma ne ha 82 — la scelta resta.
-      const caps = v ? capDiComune(provincia, v) : [];
+      const caps = v && elenco ? elenco.capDi(provincia, v) : [];
       scrivi("cap_residenza", caps.length === 1 ? caps[0] : "");
       autosalva();
     },
@@ -618,8 +742,14 @@ export function AreaAnagrafica({
     <div style={stileArea || { ...areaSchedaIscritto, flex: 1 }}>
       <IntestazioneArea Icona={icona}>{area.titolo}</IntestazioneArea>
       {area.righe.map((riga, i) => (
+        <React.Fragment key={i}>
+        {/* una riga con un `titolo` e' un'intestazione dentro l'area:
+            stesso carattere del titolo in cima, con l'aria sopra che
+            la stacca da quello che la precede */}
+        {riga.titolo && (
+          <div style={{ ...titoloAreaScheda, marginTop: 16, marginBottom: 10 }}>{riga.titolo}</div>
+        )}
         <div
-          key={i}
           style={{
             display: "flex", gap: 14,
             ...(riga.aCapo === false ? {} : { flexWrap: "wrap" }),
@@ -642,7 +772,8 @@ export function AreaAnagrafica({
                     />
                   )}
                   <Field
-                    label={configurazione ? campo.etichetta : <EtichettaVenditore campo={campo} />}
+                    label={configurazione ? campo.etichetta
+                      : <EtichettaVenditore campo={etichettaResidenza(campo, cascata.elenco)} />}
                     // LE CASELLE DI UNA RIGA PARTONO TUTTE DALLA STESSA
                     // ALTEZZA. «opzionale» va a capo da se' su «Stato» e
                     // «Provincia» e non su «Regione», che e' piu' corta:
@@ -659,7 +790,7 @@ export function AreaAnagrafica({
                     minLabelHeight={!configurazione && riga.campi.length > 1 ? 28 : undefined}
                   >
                     <Casella
-                      campo={campo}
+                      campo={campoFiscale(campo, cascata.elenco)}
                       valore={configurazione ? "" : valori[campo.chiave]}
                       scrivi={scrivi}
                       esceDalCampo={esceDalCampo}
@@ -671,9 +802,9 @@ export function AreaAnagrafica({
                   </Field>
                   {/* in configurazione le caselle sono vuote per forza:
                       li' un avviso sulla lunghezza non vorrebbe dire niente */}
-                  {!configurazione && avvisoCampo(campo, valori[campo.chiave], valori) && (
+                  {!configurazione && avvisoCampo(campoFiscale(campo, cascata.elenco), valori[campo.chiave], valori) && (
                     <div style={{ ...fontBody, fontSize: 11, color: "#8A6A1B", marginTop: 3, lineHeight: 1.4 }}>
-                      {avvisoCampo(campo, valori[campo.chiave], valori)}
+                      {avvisoCampo(campoFiscale(campo, cascata.elenco), valori[campo.chiave], valori)}
                     </div>
                   )}
                   {/* il codice calcolato lo dice: chi guarda la scheda
@@ -689,6 +820,7 @@ export function AreaAnagrafica({
             );
           })}
         </div>
+        </React.Fragment>
       ))}
     </div>
   );

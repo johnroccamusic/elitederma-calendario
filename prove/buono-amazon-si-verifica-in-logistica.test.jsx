@@ -10,6 +10,8 @@ import React from "react";
 import { PaginaOrdiniInArrivo } from "../src/App.jsx";
 import { monta, clicca, attendi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
+import fs from "node:fs";
+import path from "node:path";
 
 function vendita(extra = {}) {
   return {
@@ -92,4 +94,37 @@ describe("buono Amazon in logistica", () => {
     expect(scritture.find((s) => s.tabella === "spedizioni_pos" && s.corpo?.stato === "spedito")).toBeTruthy();
     await p.smonta();
   });
+});
+
+// LE PROVE QUI SOPRA MONTANO LA PAGINA CON UNA VENDITA CHE IL CAMPO CE
+// L'HA, quindi non hanno mai visto il guasto del 16/11/2026: la vendita
+// vera arrivava SENZA `pagamento_verificato_il`, perche' il caricatore di
+// `vendite_shop` elenca le colonne una per una e quelle due non erano
+// nell'elenco. Una colonna che manca li' non da' nessun errore — arriva
+// `undefined`, e la pagina crede che la verifica non ci sia. Questa prova
+// legge il sorgente perche' il difetto non sta in un componente: sta fra
+// il database e tutti i componenti insieme.
+describe("le colonne che la logistica legge arrivano davvero", () => {
+  const sorgente = fs.readFileSync(path.join(process.cwd(), "src", "App.jsx"), "utf8");
+  const elenco = sorgente.match(/from\("vendite_shop"\)\.select\("([^"]+)"\)\.eq\("simulazione", false\)/);
+
+  it("il caricatore di vendite_shop esiste e chiede colonne per nome", () => {
+    expect(elenco).toBeTruthy();
+  });
+
+  // ognuna e' letta in App.jsx da una riga di `venditeShop`: senza, la
+  // pagina mostra il contrario di quello che dice il database
+  for (const colonna of [
+    "pagamento_verificato_il", // il buono Amazon e' stato verificato
+    "pagamento_verificato_da", // da chi
+    "pagamento_codice",        // la pastiglia «pagato con Stripe» e il dettaglio ordine
+    "metodo_pagamento",
+    "totale",
+    "numero_ordine",
+  ]) {
+    it(`chiede ${colonna}`, () => {
+      const colonne = elenco[1].split(",").map((c) => c.trim());
+      expect(colonne).toContain(colonna);
+    });
+  }
 });

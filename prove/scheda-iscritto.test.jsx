@@ -13,11 +13,18 @@ describe("scheda dell'iscritto", () => {
   // Il suggerimento "ITALIA" non c'e' piu' e non doveva restare: dal
   // 19/10/2026 lo stato si scegle da una tendina, e un suggerimento
   // dentro una tendina non vuol dire niente. Vedi residenza-a-cascata.
+  //
+  // E DALL'8/11/2026 NEMMENO IL «+39» STA PIU' LI'. Il prefisso si
+  // scegli da una tendina accanto alla casella, che parte dal paese di
+  // residenza: scriverlo nel suggerimento direbbe a una svizzera che il
+  // suo numero comincia per 39. Il suggerimento resta, ed e' il numero
+  // senza prefisso.
   it("il suggerimento del telefono c'e' ed e' smorzato", async () => {
     const p = await conValori({});
     const conSuggerimento = p.campi().filter((i) => (i.getAttribute("placeholder") || "").trim() !== "");
     const scritte = conSuggerimento.map((i) => i.getAttribute("placeholder"));
-    expect(scritte.some((s) => s.startsWith("+39"))).toBe(true);
+    expect(scritte).toContain("333 1234567");
+    expect(scritte.some((s) => s.startsWith("+39"))).toBe(false);
     for (const c of conSuggerimento) expect(c.className).toContain("suggerimento-chiaro");
   });
 
@@ -54,8 +61,14 @@ describe("scheda dell'iscritto", () => {
   // una tendina, e che un valore vecchio si veda lo prova
   // residenza-a-cascata. Qui basta sapere che la tendina c'e'.
   it("il comune non si scrive a mano", async () => {
+    // dal 7/11/2026 i comuni di una provincia sono troppi per una
+    // tendina (Torino ne ha 312): la casella si cerca. Resta un elenco
+    // CHIUSO — quello che si scrive e' un filtro, non il valore — e il
+    // nome ufficiale lo mette la scelta, non la battitura.
     const p = await conValori({ citta_residenza: "SORSO" });
-    expect(p.tendina("citta_residenza")).not.toBe(null);
+    const casella = p.nodo.querySelector('[data-campo="citta_residenza"]');
+    expect(casella).not.toBe(null);
+    expect(casella.value).toBe("Sorso");
     expect(p.campi().map((i) => i.value)).not.toContain("SORSO");
   });
 });

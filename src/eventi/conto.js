@@ -58,7 +58,7 @@ export function costoDi(prodotto, prodottiPerId, componentiPerBundle) {
 export async function leggiConto(eventoId) {
   const [vendite, spese, attribuzioni, trasferimenti, gruppi, materiali] = await Promise.all([
     supabase.from("vendite_shop")
-      .select("id, numero_ordine, data_ordine, totale, totale_imponibile, totale_iva, metodo_pagamento, tipo_movimento, prodotti")
+      .select("id, numero_ordine, data_ordine, totale, totale_imponibile, totale_iva, metodo_pagamento, incasso_contanti_eur, incasso_carta_eur, tipo_movimento, prodotti")
       .eq("evento_id", eventoId).then(({ data, error }) => { if (error) throw new Error(error.message); return data || []; }),
     supabase.from("spese").select("*").eq("evento_id", eventoId)
       .then(({ data, error }) => { if (error) throw new Error(error.message); return data || []; }),
@@ -122,6 +122,16 @@ export function calcolaConto(dati, eventoId, { prodottiShop = [], bundleComponen
     perMetodo: {},
   };
   reali.forEach((v) => {
+    // UNA VENDITA PAGATA IN DUE SI DIVIDE FRA LE DUE CASSE (7/11/2026).
+    // «Come hanno pagato» risponde a quanto e' entrato in contanti e
+    // quanto sul conto: contarla tutta sotto una voce sola —  o peggio
+    // sotto «misto», che non e' un modo di pagare — direbbe il falso su
+    // tutte e due.
+    if (v.metodo_pagamento === "misto") {
+      entrate.perMetodo.contanti = r2((entrate.perMetodo.contanti || 0) + (Number(v.incasso_contanti_eur) || 0));
+      entrate.perMetodo.pos = r2((entrate.perMetodo.pos || 0) + (Number(v.incasso_carta_eur) || 0));
+      return;
+    }
     const k = v.metodo_pagamento || "non indicato";
     entrate.perMetodo[k] = r2((entrate.perMetodo[k] || 0) + (Number(v.totale) || 0));
   });
@@ -162,43 +172,41 @@ export function calcolaConto(dati, eventoId, { prodottiShop = [], bundleComponen
   const uscitePerCategoria = {};
   uscite.forEach((v) => { uscitePerCategoria[v.categoria] = r2((uscitePerCategoria[v.categoria] || 0) + v.importo); });
 
-  // ---- merce: quello che è uscito dalla scatola, valorizzato a costo
+  // ---- merce: quello che è uscito dalla scatola, valorizzato a costo.
+  //
+  // Il materiale di una fiera resta in magazzino e scende solo quando il
+  // POS lo vende (30/10/2026): quindi quello che è uscito dalla scatola è
+  // quello che il POS ha registrato, venduto più omaggiato. Il rientro
+  // non si scrive più come numero, si CONTA e si spunta: la riga dice
+  // quanti ne devono tornare e chi scarica lo scatolone conferma.
   const { venduto, omaggiato } = movimentiDaVendite(vendite);
   const righeMerce = (materiali || []).map((m) => {
     const prodotto = m.prodotto_id ? prodottiPerId[m.prodotto_id] : null;
-    const portata = m.quantita_portata == null ? null : Number(m.quantita_portata);
-    const rientrata = m.quantita_rientrata == null ? null : Number(m.quantita_rientrata);
+    const portata = m.quantita_portata == null ? (Number(m.quantita) || 0) : Number(m.quantita_portata);
     const vendutoQta = m.prodotto_id ? (venduto[m.prodotto_id] || 0) : 0;
     const omaggiataQta = m.prodotto_id ? (omaggiato[m.prodotto_id] || 0) : 0;
     const usciteQta = vendutoQta + omaggiataQta;
-    // quanto è davvero sparito dalla scatola, se si è contato il rientro
-    const consumata = portata != null && rientrata != null ? r2(portata - rientrata) : null;
-    // Il quadro: quello che manca all'appello. Positivo = è sparito più
-    // di quanto il POS abbia registrato; negativo = il POS ne ha venduti
-    // più di quanti ne risultino partiti.
-    const scarto = consumata != null ? r2(consumata - usciteQta) : null;
     const costo = costoDi(prodotto, prodottiPerId, componentiPerBundle);
-    // si valorizza quello che è uscito davvero se il rientro è stato
-    // contato, altrimenti ci si fida di quello che il POS ha registrato
-    const qtaDaValorizzare = consumata != null ? consumata : usciteQta;
     return {
       id: m.id, nome: m.nome, prodottoId: m.prodotto_id || null,
-      portata, rientrata, venduto: vendutoQta, omaggiata: omaggiataQta,
-      consumata, scarto, costo,
-      valore: costo != null ? r2(costo * qtaDaValorizzare) : null,
+      portata, venduto: vendutoQta, omaggiata: omaggiataQta,
+      // quanti ne devono tornare sullo scaffale, e se qualcuno l'ha contato
+      daRiportare: r2(Math.max(0, portata - usciteQta)),
+      rientroVerificato: !!m.rientro_verificato_il,
+      costo,
+      valore: costo != null ? r2(costo * usciteQta) : null,
       // la bandiera rossa: c'è merce uscita ma non si sa quanto valga
-      senzaCosto: costo == null && qtaDaValorizzare > 0,
+      senzaCosto: costo == null && usciteQta > 0,
     };
   });
   const costoMerce = r2(righeMerce.reduce((s, r) => s + (r.valore || 0), 0));
   const merceSenzaCosto = righeMerce.filter((r) => r.senzaCosto);
-  const righeScartate = righeMerce.filter((r) => r.scarto != null && r.scarto !== 0);
 
   const risultato = r2(entrate.imponibile - usciteTotale - costoMerce);
   return {
     entrate, omaggi: { quanti: omaggi.length, valore: omaggiValore },
     uscite, usciteTotale, uscitePerCategoria,
-    merce: righeMerce, costoMerce, merceSenzaCosto, righeScartate,
+    merce: righeMerce, costoMerce, merceSenzaCosto,
     risultato,
     // il risultato è attendibile solo se tutta la merce uscita ha un costo
     completo: merceSenzaCosto.length === 0,
@@ -213,13 +221,12 @@ export function calcolaConto(dati, eventoId, { prodottiShop = [], bundleComponen
 // chiusura che si possa sbagliare: così si prova con dati veri invece
 // che guardandola.
 export function problemiDiChiusura(conto) {
-  const rientroNonContato = conto.merce.filter((r) => r.portata != null && r.consumata == null);
+  // il rientro si conta e si spunta riga per riga: una riga partita e
+  // non spuntata è uno scatolone che nessuno ha ancora aperto
+  const rientroNonVerificato = conto.merce.filter((r) => r.portata > 0 && !r.rientroVerificato);
   const speseNonPagate = conto.uscite.filter((v) => v.stato && v.stato !== "pagata");
   return [
-    ...rientroNonContato.map((r) => `${r.nome}: è partito ma non hai segnato quanto è rientrato.`),
-    ...conto.righeScartate.map((r) => r.scarto > 0
-      ? `${r.nome}: ${r.scarto} pz spariti, né rientrati né usciti al POS.`
-      : `${r.nome}: il POS ne ha registrati ${-r.scarto} più di quanti ne risultino partiti.`),
+    ...rientroNonVerificato.map((r) => `${r.nome}: venduti ${r.venduto + r.omaggiata}, ne devono tornare ${r.daRiportare} — nessuno ha ancora spuntato il rientro.`),
     ...conto.merceSenzaCosto.map((r) => `${r.nome}: senza costo di acquisto vale zero, e il risultato esce più bello del vero.`),
     ...speseNonPagate.map((v) => `${v.descrizione}: la spesa è ancora "${v.stato}".`),
   ];

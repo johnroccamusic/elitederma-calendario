@@ -152,6 +152,42 @@ Deno.serve(async (req) => {
     if (erroreScheda) console.error("iscritti.modulo_mail_rimbalzata_il —", erroreScheda.message);
   }
 
+  // LE CAMPAGNE DEL CRM (30/10/2026) hanno il loro registro, una riga a
+  // destinatario: stesso id di Resend, stessi avvisi. Un rimbalzo o una
+  // segnalazione di spam si scrive sulla riga, e da li' «Prepara i
+  // destinatari» non prende piu' quell'indirizzo. Chi ci segnala come spam
+  // ha detto, nel modo piu' chiaro che c'e', di non volere altre mail:
+  // si disiscrive, con il motivo scritto.
+  if (!(data || []).length) {
+    const statoCampagna = tipo === "email.delivered" ? "consegnata"
+      : tipo === "email.opened" ? "aperta"
+      : tipo === "email.bounced" ? "rimbalzata"
+      : tipo === "email.complained" ? "segnalata"
+      : null;
+    // Gli avvisi di Resend arrivano fuori ordine: «consegnata» dopo «aperta»
+    // riportava la riga indietro, e un rimbalzo o una segnalazione, che sono
+    // definitivi, venivano cancellati da un avviso piu' lento. Lo stato si
+    // sposta solo in avanti in questa scala; ultimo_evento si scrive sempre.
+    const SCALA: Record<string, number> = { in_coda: 0, in_spedizione: 0, inviata: 1, consegnata: 2, aperta: 3, rimbalzata: 4, segnalata: 5, fallita: 0 };
+    const { data: attuale } = await admin.from("crm_campagne_destinatari").select("id, stato").eq("resend_id", idMail);
+    const daAvanzare = (attuale || []).filter((x: any) => statoCampagna && (SCALA[statoCampagna] ?? 0) > (SCALA[x.stato] ?? 0)).map((x: any) => x.id);
+    if (daAvanzare.length) {
+      await admin.from("crm_campagne_destinatari").update({ stato: statoCampagna }).in("id", daAvanzare);
+    }
+    const { data: dest, error: errDest } = await admin.from("crm_campagne_destinatari")
+      .update({ ultimo_evento: tipo, ultimo_evento_il: quando })
+      .eq("resend_id", idMail)
+      .select("id, contatto_id, email");
+    if (errDest) return json({ ok: false, errore: errDest.message }, 500);
+    const d = (dest || [])[0];
+    if (d && tipo === "email.complained" && d.email) {
+      await admin.from("crm_contatti")
+        .update({ disiscritto_il: quando, disiscritto_come: "segnalazione spam", aggiornato_il: quando })
+        .ilike("email", d.email.replace(/[\\%_]/g, "\\$&")).is("disiscritto_il", null);
+    }
+    return json({ ok: true, tipo, righe: 0, campagna: dest?.length || 0 });
+  }
+
   // nessuna riga: la mail non e' partita da noi, o e' di prima del
   // registro. Si risponde 200 lo stesso, o Resend continuerebbe a
   // riprovare per sempre un avviso che non ha destinazione.

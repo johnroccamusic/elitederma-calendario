@@ -28,24 +28,34 @@
 // la fotocamera e non lascia scegliere; senza, iPhone e Android offrono
 // galleria, fotocamera e file. E si accettano anche i PDF, perche' da
 // computer un documento scansionato e' quasi sempre un PDF.
+// I MATTONI DI QUESTA PAGINA LI USA ANCHE IL CONTRATTO DELLA MASTER
+// (16/11/2026): `DaRiempire`, `Foto`, `Dichiarazione`, `Letto` e
+// `Avviso` sono esportati. Il contratto e' lo stesso gesto — leggere,
+// compilare, allegare il documento, firmare col dito — e due copie di
+// queste caselle vorrebbero dire due modi di scattare la foto di un
+// documento, due modi di spuntare una dichiarazione e, prima o poi, una
+// delle due che smette di dire quello che l'altra dice. Chi le cambia
+// cambia tutti e due i posti: vedi `src/contratti/FirmaContratto.jsx`.
+import { leggiRifiuto } from "./rifiuti.js";
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
-import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
+import { areaSchedaIscritto, IntestazioneArea, titoloAreaScheda } from "../ui/scheda.jsx";
 import FirmaDito from "../ui/FirmaDito.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, campoDataStyle } from "../ui/stile.js";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE, GRUPPI_LETTURA, avvisoCampo } from "./disposizione.js";
-import { filtraCodiceFiscale } from "./codice-fiscale.js";
 import { PER_CHIAVE, SUOI } from "./campi-scheda.js";
 import { calcolaCodiceFiscale } from "./codice-fiscale.js";
 import CampoComuneNascita from "./CampoComune.jsx";
+import CampoCerca from "./CampoCerca.jsx";
+import CampoTelefono from "./CampoTelefono.jsx";
 import RitaglioFoto, { tipoVero, perchePuoiNonMandarlo, FORMATI, ritaglia } from "./RitaglioFoto.jsx";
 import LetturaDocumento from "./LetturaDocumento.jsx";
 import { CAMPI_DOCUMENTO, scadenzaDocumento } from "./documento.js";
-import { nomiStati, comuniDiProvincia, capDiComune, provinciaDiComune } from "../comuni-regioni.js";
-// lo stesso confronto della cascata della scheda: "PATERNO" e
-// "Paternò" sono lo stesso posto, e due copie di questa regola
-// prima o poi direbbero cose diverse
-import { normalizzaNome } from "./AreeAnagrafiche.jsx";
+import { nomiStati } from "../comuni-regioni.js";
+// gli elenchi della residenza, uno per Stato: gli stessi della scheda
+// del venditore, perche' la cascata e' una sola (vedi residenza.js)
+import { elencoResidenza, formattaFiscale, ITALIA } from "./residenza.js";
+import { cascataResidenza } from "./cascata-residenza.js";
 import { DAL_CODICE } from "./testi.js";
 import { serveAvvioImmediato } from "./regole-recesso.js";
 
@@ -123,7 +133,7 @@ function mostra(chiave, valore) {
   return t;
 }
 
-function Avviso({ titolo, testo, buono = false }) {
+export function Avviso({ titolo, testo, buono = false }) {
   return (
     <div style={{ ...fontBody, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ maxWidth: 440, textAlign: "center" }}>
@@ -137,7 +147,7 @@ function Avviso({ titolo, testo, buono = false }) {
 const etichettaStile = { ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 };
 
 /** Un dato gia' scritto: si legge, non si tocca. */
-function Letto({ etichetta, valore, larghezza = "1 1 180px" }) {
+export function Letto({ etichetta, valore, larghezza = "1 1 180px" }) {
   return (
     <div style={{ flex: larghezza, minWidth: 0, marginBottom: 12 }}>
       <div style={etichettaStile}>{etichetta}</div>
@@ -155,7 +165,7 @@ function perChiaveValore(dati, chiave) {
   return (dati?.campi || []).find((x) => x.chiave === chiave)?.valore || "";
 }
 
-function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tutte = null, nota = null }) {
+export function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tutte = null, nota = null }) {
   const { chiave, maiuscolo, lunghezza, suggerimento, tipo } = campo;
   // un elenco chiuso si sceglie, non si scrive: cosi' "patente",
   // "Patente" e "pat." non diventano tre cose diverse in archivio
@@ -185,7 +195,26 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
         {campo.etichetta || etichettaDi(chiave)}
         {obbligatorio && !spento && <span style={{ color: "#B3261E", fontWeight: 700 }}> *</span>}
       </div>
-      {tipo === "comuneNascita" ? (
+      {/* UN ELENCO LUNGO SI CERCA, NON SI SCORRE: gli Stati sono 232 e
+          di qua li scorre una allieva, sul telefono, da sola. Stessa
+          casella della scheda del venditore. */}
+      {/* la stessa regola della scheda: oltre venti voci si cerca invece
+          di scorrere. Di qua tocca a un telefono in mano a una persona
+          sola, quindi vale ancora di piu'. */}
+      {opzioni && (chiave === "stato_residenza" || tipo === "statoNascita" || opzioni.length > 20) ? (
+        <CampoCerca
+          chiave={chiave}
+          valore={valore || ""}
+          voci={[
+            ...(tipo === "statoNascita" ? [{ valore: "", testo: "Italia" }] : []),
+            ...opzioni.map((o) => ({ valore: o.valore, testo: o.etichetta })),
+          ]}
+          onScegli={(v) => onCambia(chiave, v)}
+          spenta={spento}
+          stile={stileComune}
+          vuoto={tipo === "statoNascita" ? "Italia" : "— scegli —"}
+        />
+      ) : tipo === "comuneNascita" ? (
         // stesso elenco della scheda: il comune si sceglie, non si
         // indovina, e il nome ufficiale e' quello che fa uscire il
         // codice fiscale
@@ -193,6 +222,16 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
           chiave={chiave} valore={valore} spenta={spento}
           scrivi={onCambia} suggerimento={spento ? "" : "Inserisci la tua città"}
           stile={stileComune}
+        />
+      ) : tipo === "telefono" ? (
+        // IL PREFISSO SI SCEGLIE ANCHE QUI, e parte dal paese di
+        // residenza che lei ha appena scelto: stessa casella della
+        // scheda del venditore, perche' due copie vorrebbero dire due
+        // modi di archiviare lo stesso numero.
+        <CampoTelefono
+          chiave={chiave} valore={valore} statoResidenza={campo.statoResidenza}
+          spenta={spento} stile={stileComune} suggerimento={spento ? "" : (suggerimento || "333 1234567")}
+          onCambia={(v) => onCambia(chiave, v)}
         />
       ) : tipo === "data" ? (
         <input
@@ -221,13 +260,18 @@ function DaRiempire({ campo, valore, onCambia, obbligatorio, spento = false, tut
         placeholder={spento ? "" : (suggerimento || "")}
         // il suggerimento in grigio chiaro: vedi la regola in index.html
         className="suggerimento-chiaro"
-        inputMode={tipo === "telefono" ? "tel" : chiave === "email" ? "email" : undefined}
+        inputMode={tipo === "telefono" ? "tel" : chiave === "email" ? "email"
+          // il tastierino per le tredici cifre dell'AVS: i punti li
+          // mette la casella
+          : campo.paeseFiscale === "CH" ? "numeric" : undefined}
         onChange={(e) => {
           let v = e.target.value;
           if (maiuscolo) v = v.toUpperCase();
           // stessa regola della scheda: il codice fiscale ha una forma,
           // e la casella la fa rispettare anche qui
-          if (chiave === "codice_fiscale") v = filtraCodiceFiscale(v);
+          // ...e la forma dipende dal paese, con la stessa funzione
+          // della scheda: in Svizzera i punti dell'AVS compaiono da se'
+          if (chiave === "codice_fiscale") v = formattaFiscale(v, campo);
           if (lunghezza) v = v.slice(0, lunghezza);
           onCambia(chiave, v);
         }}
@@ -306,7 +350,7 @@ function SceltaIntestazione({ valore, onCambia }) {
 // selettore dei file. Quello che non si accetta SI DICE, con il rimedio
 // accanto: scartare in silenzio e' il modo migliore per ricevere moduli
 // senza documento senza che nessuno se ne accorga.
-function Foto({ etichetta, file, onCambia, obbligatorio }) {
+export function Foto({ etichetta, file, onCambia, obbligatorio }) {
   const [daRitagliare, setDaRitagliare] = useState(null);
   const [rifiutato, setRifiutato] = useState("");
 
@@ -400,7 +444,7 @@ function Foto({ etichetta, file, onCambia, obbligatorio }) {
 //
 // Tutta la riga e' cliccabile, etichetta compresa: su un telefono
 // centrare una casella di 18 pixel col pollice non funziona.
-function Dichiarazione({ casella, segnata, onCambia, spenta = false }) {
+export function Dichiarazione({ casella, segnata, onCambia, spenta = false }) {
   return (
     <label
       style={{
@@ -590,6 +634,20 @@ export default function PaginaModulo({ token }) {
     // stessa regola della scheda: si rifa' solo il codice che abbiamo
     // proposto noi. Quello che ha scritto lei non si tocca.
     const scritto = String(risposte.codice_fiscale || "").trim();
+    // A CHI VIVE FUORI NON SI PROPONE UN CODICE ITALIANO, e quello che
+    // avevamo gia' proposto se ne va col paese: la casella vuota dello
+    // Stato vale Italia, quindi scrivendo i dati di nascita il codice
+    // italiano e' gia' stato scritto prima che lei arrivasse allo
+    // Stato.
+    const statoSuo = risposte.stato_residenza
+      ?? (dati.campi || []).find((x) => x.chiave === "stato_residenza")?.valore;
+    if (elencoResidenza(statoSuo)?.stato !== ITALIA) {
+      if (scritto && scritto === cfProposto) {
+        setCfProposto("");
+        setRisposte((r) => ({ ...r, codice_fiscale: "" }));
+      }
+      return;
+    }
     if (scritto && scritto !== cfProposto) return;
     const calcolato = calcolaCodiceFiscale({
       cognome: risposte.cognome || perChiaveValore(dati, "cognome"),
@@ -604,7 +662,8 @@ export default function PaginaModulo({ token }) {
     setRisposte((r) => ({ ...r, codice_fiscale: calcolato }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dati, spedito, risposte.codice_fiscale, risposte.cognome, risposte.nome,
-      risposte.sesso, risposte.data_nascita, risposte.comune_nascita, risposte.stato_nascita]);
+      risposte.sesso, risposte.data_nascita, risposte.comune_nascita, risposte.stato_nascita,
+      risposte.stato_residenza]);
 
   if (caricando) return <Avviso titolo="Un momento" testo="Sto aprendo il tuo modulo." />;
   if (errore) return <Avviso titolo="Qualcosa non ha funzionato" testo={`Riprova fra poco. Se continua, scrivici. (${errore})`} />;
@@ -644,29 +703,11 @@ export default function PaginaModulo({ token }) {
   // la casella resta di testo libero com'era: un elenco chiuso
   // incompleto impedirebbe di registrare chi esiste.
   const valoreDi = (k) => String(risposte[k] ?? c(k)?.valore ?? "").trim();
-  const statoScritto = valoreDi("stato_residenza");
-  const fuoriItaliaModulo = statoScritto !== "" && normalizzaNome(statoScritto) !== "ITALIA";
-  const comuneScritto = valoreDi("citta_residenza");
-  const provinciaModulo = (valoreDi("prov_residenza") || provinciaDiComune(comuneScritto) || "").toUpperCase();
-  // UN ELENCO CHIUSO NON PUO' CANCELLARE QUELLO CHE C'E' GIA'. Se il
-  // valore in casella non e' fra le voci, la tendina lo mostrerebbe
-  // vuoto e basterebbe spedire per perderlo: li' si resta sul testo.
-  const elencoBuono = (voci, valore) => voci.length > 0
-    && (!valore || voci.some((x) => normalizzaNome(x) === normalizzaNome(valore)));
-  const comuniModulo = !fuoriItaliaModulo && provinciaModulo ? comuniDiProvincia(provinciaModulo) : [];
-  const capModulo = !fuoriItaliaModulo && comuneScritto ? capDiComune(provinciaModulo, comuneScritto) : [];
-  function campoConElenco(campo) {
-    if (campo.chiave === "stato_residenza") {
-      return { ...campo, opzioni: [{ valore: "ITALIA", etichetta: "Italia" }, ...nomiStati().map((x) => ({ valore: x, etichetta: x }))] };
-    }
-    if (campo.chiave === "citta_residenza" && elencoBuono(comuniModulo, comuneScritto)) {
-      return { ...campo, opzioni: comuniModulo };
-    }
-    if (campo.chiave === "cap_residenza" && elencoBuono(capModulo, valoreDi("cap_residenza"))) {
-      return { ...campo, opzioni: capModulo };
-    }
-    return campo;
-  }
+  // LA CASCATA DELLA RESIDENZA sta in `cascata-residenza.js`, insieme
+  // agli elenchi per Stato: dal 16/11/2026 la usa anche il contratto
+  // che firma la master, e due copie vorrebbero dire due idee di dove
+  // abita una persona.
+  const { campoConElenco } = cascataResidenza(valoreDi);
   const scrivi = (k, v) => setRisposte((r) => ({ ...r, [k]: v }));
   const testi = {
     intro:       dati.contratto?.intro       || DAL_CODICE.intro,
@@ -691,6 +732,7 @@ export default function PaginaModulo({ token }) {
     serve(campo, campo.chiave === "comune_nascita" && natoFuori);
   }));
   AREA_FATTURAZIONE.righe.forEach((r) => r.campi.forEach((campo) => serve(campo, !eAzienda)));
+  if (c("taglia_divisa")) serve({ chiave: "taglia_divisa", etichetta: "Taglia divisa" }, false);
   if (c("doc_tipo"))   serve({ chiave: "doc_tipo" }, false);
   if (c("doc_numero")) serve({ chiave: "doc_numero" }, false);
   if (c("doc_fronte")?.obbligatorio && !c("doc_fronte")?.bloccato && !docFronte) mancanti.push("Foto del documento — fronte");
@@ -772,7 +814,14 @@ export default function PaginaModulo({ token }) {
       // il modulo risulta gia' arrivato (due dita sul tasto, o la stessa
       // pagina aperta due volte): non e' un errore da mostrare in rosso,
       // e' la stessa risposta che si da' a chi riapre il link
-      if (!data?.ok && data?.motivo) { setChiusoDopo(data.motivo); return; }
+      // SOLO questi due motivi chiudono la pagina. Prima bastava un motivo
+      // qualunque: `senza_firma`, `senza_taglia` e, dal 31/10/2026,
+      // `senza_documento`, `senza_contratto` e `percorso_non_valido`
+      // facevano comparire «Iscrizione già confermata» al posto del
+      // modulo, cioe' l'allieva perdeva la pagina per una cosa che
+      // poteva correggere. Gli altri restano errori sopra il modulo.
+      const rifiuto = leggiRifiuto(data);
+      if (rifiuto?.chiude) { setChiusoDopo(rifiuto.motivo); return; }
       if (!data?.ok) throw new Error(data?.errore || "Non è stato possibile inviare il modulo.");
       // il modulo e' scritto: la bozza non serve piu' e non deve restare
       // su un telefono che magari non e' nemmeno suo
@@ -822,9 +871,17 @@ export default function PaginaModulo({ token }) {
   // tre lettere. Chiamandola, i figli restano `Letto`/`DaRiempire`, che
   // stanno fuori di qui e non cambiano mai identita'.
   const rigaSua = (riga, spenti = false) => (
-    // `aCapo: false` vale anche qui: una riga tenuta insieme nella
-    // scheda e spezzata nel modulo e' la stessa riga disegnata in due
-    // modi, cioe' due disposizioni da mantenere invece di una
+    <>
+    {/* UN'INTESTAZIONE SOPRA IL NULLA E' PEGGIO DI UNA CHE MANCA: di
+        qua le caselle sono solo quelle che Impostazioni ha acceso, e
+        se nessuna di quelle che le stanno sotto e' arrivata, il
+        titoletto non si disegna. */}
+    {riga.titolo && (riga.dipendeDa || []).some((k) => c(k)) && (
+      <div style={{ ...titoloAreaScheda, marginTop: 10, marginBottom: 12 }}>{riga.titolo}</div>
+    )}
+    {/* `aCapo: false` vale anche qui: una riga tenuta insieme nella
+        scheda e spezzata nel modulo e' la stessa riga disegnata in due
+        modi, cioe' due disposizioni da mantenere invece di una */}
     <div style={{ display: "flex", gap: 14, flexWrap: riga.aCapo === false ? "nowrap" : "wrap" }}>
       {riga.campi.map((campo) => {
         const d = c(campo.chiave);
@@ -833,7 +890,8 @@ export default function PaginaModulo({ token }) {
           return <SceltaIntestazione key={campo.chiave} valore={risposte.tipo_cliente || d.valore} onCambia={scrivi} />;
         }
         if (d.bloccato) {
-          return <Letto key={campo.chiave} etichetta={campo.etichetta || etichettaDi(campo.chiave)}
+          return <Letto key={campo.chiave}
+                        etichetta={campoConElenco(campo).etichetta || etichettaDi(campo.chiave)}
                         valore={mostra(campo.chiave, d.valore)} larghezza={campo.larghezza} />;
         }
         // nato all'estero: il comune italiano non si chiede piu'
@@ -848,6 +906,7 @@ export default function PaginaModulo({ token }) {
                              : null} />;
       })}
     </div>
+    </>
   );
 
   // un riquadro commerciale: di sola lettura per intero, e senza le
@@ -914,6 +973,22 @@ export default function PaginaModulo({ token }) {
           {AREA_ALLIEVO.righe.map((r, i) => <React.Fragment key={i}>{rigaSua(r)}</React.Fragment>)}
         </div>
 
+        {/* LA TAGLIA LA SCEGLIE LEI (29/10/2026). Stava nei «Dati
+            organizzativi», di sola lettura per intero, e la scheda
+            obbligava il venditore a sceglierla: arrivava sempre piena e
+            sempre bloccata, cioe' una «M» tirata a indovinare che
+            l'allieva non poteva correggere. Qui e' una tendina sua, e
+            se il venditore aveva scritto qualcosa lo trova gia' scelto. */}
+        {c("taglia_divisa") && (
+          <div style={pannello}>
+            <IntestazioneArea>La tua divisa</IntestazioneArea>
+            <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
+              La taglia della divisa che riceverai al corso. Se non la vuoi, scegli «NO DIVISA».
+            </div>
+            {rigaSua({ campi: [{ chiave: "taglia_divisa", etichetta: "Taglia divisa" }] })}
+          </div>
+        )}
+
         <div style={pannello}>
           <IntestazioneArea>Dati per la fattura</IntestazioneArea>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
@@ -947,7 +1022,8 @@ export default function PaginaModulo({ token }) {
         {GRUPPI_LETTURA.filter((g) => g.titolo !== "Il corso").map((g) => {
           // niente di scritto, niente riquadro: un "Presenza al corso"
           // con dentro un trattino non va mandato a nessuno
-          const presenti = scritte(g.chiavi);
+          // la taglia ha il suo riquadro sopra, dove si sceglie
+          const presenti = scritte(g.chiavi.filter((k) => k !== "taglia_divisa"));
           if (!presenti.length) return null;
           return (
             <div key={g.titolo} style={pannello}>

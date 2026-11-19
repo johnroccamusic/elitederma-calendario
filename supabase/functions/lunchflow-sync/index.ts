@@ -28,6 +28,28 @@
 // Functions -> Secrets). Non sta e non deve stare nel frontend: con
 // quella chiave si leggono i conti dell'azienda.
 //
+// RISALIRE NEL TEMPO, E GUARDARE SENZA SCRIVERE (3/11/2026). Il
+// collegamento e' nato il 13/10/2026 e il primo giro ha preso novanta
+// giorni: sotto il 30/07/2026 la banca, in app, non c'e'. Chiesto dal
+// titolare («risali a tutti i bonifici a MT.DERM fino a oggi»), ora si
+// puo' indicare il periodo:
+//
+//   { dal: "2026-01-01" }                       lo chiede e lo importa
+//   { dal: "2026-01-01", prova: true }          lo chiede e NON scrive
+//   { dal: "...", prova: true, cerca: "mt.derm" }  e dice quali righe
+//                                               corrispondono, col totale
+//
+// La prova va prima dell'importazione, e non e' prudenza di maniera: un
+// consenso PSD2 spesso si ferma a novanta giorni, quindi la prima cosa da
+// sapere e' se la banca quella storia ce l'ha davvero. In prova non si
+// scrive niente — ne' i movimenti, ne' il saldo, ne' l'ora dell'ultimo
+// giro.
+//
+// IL PERIODO LUNGO SI CHIEDE UN MESE ALLA VOLTA, e ogni mese torna col
+// suo conto. Non sappiamo se l'aggregatore tronchi una risposta troppo
+// grande, e una risposta troncata in silenzio e' peggio di un errore:
+// cosi' un mese vuoto si vede, invece di sparire dentro un totale.
+//
 // Chiamata dall'app:   supabase.functions.invoke('lunchflow-sync')
 // Chiamata dal cron:   vedi public.sincronizza_banca_giornaliera()
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -55,6 +77,23 @@ const meno = (dataIso: string, giorni: number) => {
   d.setUTCDate(d.getUTCDate() - giorni);
   return giorno(d);
 };
+
+// Le finestre mensili fra due date, estremi compresi. Un mese per
+// chiamata: vedi la nota in testa al file.
+function finestre(da: string, a: string): [string, string][] {
+  const pezzi: [string, string][] = [];
+  let inizio = da;
+  while (inizio <= a && pezzi.length < 36) {
+    const d = new Date(`${inizio}T00:00:00Z`);
+    const fineMese = giorno(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));
+    const fine = fineMese < a ? fineMese : a;
+    pezzi.push([inizio, fine]);
+    const dopo = new Date(`${fine}T00:00:00Z`);
+    dopo.setUTCDate(dopo.getUTCDate() + 1);
+    inizio = giorno(dopo);
+  }
+  return pezzi;
+}
 
 // Gli errori dell'aggregatore detti in italiano: "401" su una pagina non
 // dice a nessuno cosa fare, e questa funzione la lancia chi amministra,
@@ -138,12 +177,28 @@ Deno.serve(async (req) => {
   try { corpo = await req.json(); } catch { /* chiamata senza corpo: va bene */ }
   // "dal primo giorno": rifa' tutto il periodo, per rimettere in pari
   const daCapo = corpo?.daCapo === true;
+  // il periodo chiesto a mano, la prova che non scrive, il filtro per
+  // cercare una controparte dentro quello che la banca restituisce
+  const dataValida = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  if (corpo?.dal != null && !dataValida(corpo.dal)) return json({ errore: "«dal» va scritto come 2026-01-01." }, 400);
+  if (corpo?.al != null && !dataValida(corpo.al)) return json({ errore: "«al» va scritto come 2026-01-01." }, 400);
+  const dal = dataValida(corpo?.dal) ? String(corpo.dal) : null;
+  const alChiesto = dataValida(corpo?.al) ? String(corpo.al) : null;
+  const prova = corpo?.prova === true;
+  const cerca = typeof corpo?.cerca === "string" ? corpo.cerca.trim().toLowerCase() : "";
 
   const esito: {
+    prova: boolean;
     conti: number; nuovi: number; aggiornati: number; adottati: number;
     saldi: { conto: string; saldo: number | null }[];
+    periodo: { conto: string; dal: string; al: string; righe: number; per_mese: { mese: string; righe: number }[] }[];
+    corrispondenze: { conto: string; data: string; importo: number; descrizione: string }[];
+    corrispondenze_totale: number;
     avvisi: string[];
-  } = { conti: 0, nuovi: 0, aggiornati: 0, adottati: 0, saldi: [], avvisi: [] };
+  } = {
+    prova, conti: 0, nuovi: 0, aggiornati: 0, adottati: 0, saldi: [],
+    periodo: [], corrispondenze: [], corrispondenze_totale: 0, avvisi: [],
+  };
 
   try {
     const elenco = await chiedi("/accounts", chiave);
@@ -193,15 +248,35 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
       const oggi = giorno(new Date());
-      const da = daCapo || !ultimo?.data_operazione
+      const da = dal ?? (daCapo || !ultimo?.data_operazione
         ? meno(oggi, GIORNI_PRIMO_GIRO)
-        : meno(String(ultimo.data_operazione), GIORNI_SOVRAPPOSIZIONE);
+        : meno(String(ultimo.data_operazione), GIORNI_SOVRAPPOSIZIONE));
+      // oltre oggi non si chiede: una data futura e' un errore di chi
+      // scrive, non un periodo
+      const a = alChiesto && alChiesto < oggi ? alChiesto : oggi;
 
-      const risposta = await chiedi(
-        `/accounts/${contoId}/transactions?from=${da}&to=${oggi}&include_pending=false`,
-        chiave,
-      );
-      const movimenti: Record<string, unknown>[] = risposta?.transactions || [];
+      const pezzi = finestre(da, a);
+      const grezzi: Record<string, unknown>[] = [];
+      const perMese: { mese: string; righe: number }[] = [];
+      for (const [inizio, fine] of pezzi) {
+        const risposta = await chiedi(
+          `/accounts/${contoId}/transactions?from=${inizio}&to=${fine}&include_pending=false`,
+          chiave,
+        );
+        const lotto: Record<string, unknown>[] = risposta?.transactions || [];
+        grezzi.push(...lotto);
+        if (pezzi.length > 1) perMese.push({ mese: inizio.slice(0, 7), righe: lotto.length });
+      }
+      // lo stesso movimento puo' tornare in due finestre se la banca gli
+      // sposta la data: si tiene una volta sola
+      const visti = new Set<string>();
+      const movimenti = grezzi.filter((m) => {
+        const id = String(m?.id ?? "");
+        if (!id || visti.has(id)) return false;
+        visti.add(id);
+        return true;
+      });
+      esito.periodo.push({ conto: nomeConto, dal: da, al: a, righe: movimenti.length, per_mese: perMese });
 
       const righe = movimenti
         .filter((m) => m?.id && m?.date)
@@ -225,6 +300,30 @@ Deno.serve(async (req) => {
             raw: m,
           };
         });
+
+      // CHI CERCA UNA CONTROPARTE la cerca in quello che la banca ha
+      // appena detto, non nella tabella: e' il modo di rispondere a
+      // «quanto abbiamo bonificato a X» anche sui mesi che in app non
+      // sono mai entrati.
+      if (cerca) {
+        for (const r of righe) {
+          const dove = `${r.descrizione} ${r.causale || ""}`.toLowerCase();
+          if (!dove.includes(cerca)) continue;
+          esito.corrispondenze_totale += r.importo;
+          if (esito.corrispondenze.length < 300) {
+            esito.corrispondenze.push({ conto: nomeConto, data: r.data_operazione, importo: r.importo, descrizione: r.descrizione });
+          }
+        }
+      }
+
+      // LA PROVA SI FERMA QUI: ha chiesto, ha contato, ha cercato, e non
+      // ha scritto niente — ne' i movimenti, ne' il saldo, ne' l'ora del
+      // giro. Serve a sapere cosa c'e' prima di farlo entrare in prima
+      // nota.
+      if (prova) {
+        esito.saldi.push({ conto: nomeConto, saldo });
+        continue;
+      }
 
       if (righe.length > 0) {
         // PRIMA DI SCRIVERE, L'ABBINAMENTO. Molti di questi movimenti
@@ -291,9 +390,11 @@ Deno.serve(async (req) => {
     const stato = (e as Error & { stato?: number }).stato;
     // si scrive anche il giro fallito: senza, dalla pagina non si
     // distingue "non ho mai provato" da "ho provato e non ci riesco"
-    await supabase.from("lunchflow_conti")
-      .update({ ultimo_sync: new Date().toISOString(), ultimo_esito: messaggio.slice(0, 300) })
-      .neq("id", "");
+    if (!prova) {
+      await supabase.from("lunchflow_conti")
+        .update({ ultimo_sync: new Date().toISOString(), ultimo_esito: messaggio.slice(0, 300) })
+        .neq("id", "");
+    }
     return json({ errore: messaggio, ...esito }, stato === 401 || stato === 403 ? 401 : 502);
   }
 });

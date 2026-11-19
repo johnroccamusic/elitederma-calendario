@@ -5,16 +5,18 @@
 // Setting > Modulo di iscrizione > Il contratto si possono correggere, e
 // la correzione finisce in `modulo_iscrizione_testi`.
 //
-// CHI VINCE: la riga del database, se c'e'. Se non c'e' — tabella vuota,
-// riga cancellata, query fallita perche' la sessione e' scaduta — vale
-// il testo del codice. Non e' un ripiego pigro: quello che una persona
-// firma non puo' dipendere dal fatto che una select sia andata a buon
-// fine, e un modulo che si presenta senza regolamento e' peggio di uno
-// con un regolamento vecchio di un giorno.
+// CHI VINCE: la riga del database. Dal 31/10/2026 le tre righe ci sono
+// sempre (caricate identiche al testo del codice) e il SERVER compone il
+// contratto firmato da quelle: modulo_salva non si fida piu' del testo che
+// manda il browser. Il codice resta come rete per chi VEDE la pagina — se la
+// query fallisce perche' la sessione e' scaduta, il modulo non si presenta
+// vuoto — ma non e' piu' quello che si firma.
 //
-// E' lo stesso patto dei modelli email, e vale la pena ricordarlo:
-// quando si corregge un testo qui, il codice NON si aggiorna da solo.
-// Resta quello di partenza, come rete.
+// Si corregge da Setting come prima, a piacere: la correzione archivia da
+// sola la versione precedente (modulo_iscrizione_testi_archivio, trigger
+// modulo_testi_archivia). Quando si corregge un testo qui, il codice NON si
+// aggiorna da solo: resta il testo di partenza, e «Rimetti com'era» lo
+// riscrive nel database invece di cancellare la riga.
 import { supabase } from "../supabase.js";
 import { INTRO, SEZIONI, CONSENSI } from "./contenuto.js";
 
@@ -28,6 +30,11 @@ export const DAL_CODICE = {
 };
 
 export const CHIAVI_TESTI = ["intro", "regolamento", "consensi"];
+
+// Le righe caricate dal codice (o rimesse com'erano) portano questo inizio in
+// `aggiornato_da`: per l'editor sono «testo di partenza, mai corretto», non
+// una correzione di qualcuno.
+export const PARTENZA = "testo di partenza";
 
 export const NOMI_TESTI = {
   intro: "Intestazione del modulo",
@@ -51,7 +58,9 @@ export async function leggiTesti() {
   for (const r of data || []) {
     if (!CHIAVI_TESTI.includes(r.chiave) || !r.corpo) continue;
     base[r.chiave] = r.corpo;
-    provenienza[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il };
+    if (!String(r.aggiornato_da || "").startsWith(PARTENZA)) {
+      provenienza[r.chiave] = { da: r.aggiornato_da, il: r.aggiornato_il };
+    }
   }
   return { testi: base, provenienza, errore: "" };
 }
@@ -65,12 +74,17 @@ export async function salvaTesto(chiave, corpo, chi) {
   return error ? error.message : "";
 }
 
-// Rimette una chiave com'era nel codice cancellando la riga: e' il modo
-// di tornare indietro senza dover riscrivere a mano nove punti di
-// regolamento.
+// Rimette una chiave com'era nel codice RISCRIVENDO la riga con il testo di
+// partenza: e' il modo di tornare indietro senza dover riscrivere a mano
+// nove punti di regolamento. Non si cancella piu': dal 31/10/2026 la riga
+// serve al server per comporre il contratto, e senza si ricadrebbe sul
+// testo mandato dal browser. La versione che si butta finisce in archivio.
 export async function ripristinaTesto(chiave) {
+  if (!CHIAVI_TESTI.includes(chiave)) return "Chiave sconosciuta: " + chiave;
   const { error } = await supabase
-    .from("modulo_iscrizione_testi").delete().eq("chiave", chiave);
+    .from("modulo_iscrizione_testi")
+    .upsert({ chiave, corpo: JSON.parse(JSON.stringify(DAL_CODICE[chiave])), aggiornato_da: PARTENZA + " (rimesso com'era)", aggiornato_il: new Date().toISOString() },
+            { onConflict: "chiave" });
   return error ? error.message : "";
 }
 

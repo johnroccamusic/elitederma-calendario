@@ -19,6 +19,7 @@ import {
   salvaRiga, eliminaRiga, aggiungiRigaSotto, duplicaStampa, percorsoFile, caricaFile, urlPubblico,
   leggiFileStampe, aggiungiFile, sostituisciFile, salvaFile, eliminaFile,
 } from "./dati.js";
+import { confermaCancellazione } from "../ui/conferma.js";
 
 function IconaPiu({ size = 14 }) {
   return (
@@ -336,7 +337,7 @@ export default function StampePackaging({ onBack, titolo = "Stampe packaging" })
                       </button>
                       <button
                         title="Elimina questa riga"
-                        onClick={() => conErrore(async () => { await eliminaRiga(r.id); await carica(); }, "Riga non eliminata")}
+                        onClick={() => { if (!confermaCancellazione(r.etichetta ? `"${r.etichetta}" da questa scheda` : "questa riga")) return; conErrore(async () => { await eliminaRiga(r.id); await carica(); }, "Riga non eliminata"); }}
                         style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", borderRadius: 8, height: 28, cursor: "pointer", color: "#C0392B", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <IconaCestino />
                       </button>

@@ -1,7 +1,7 @@
 // LA CASSA CONTANTI SI LEGGE UN MESE ALLA VOLTA (28/10/2026): riporto dal
 // mese prima, parziali del mese, saldo a fine mese. Niente totali di
 // entrate e uscite dall'apertura in poi. Il saldo in cassa resta.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
 import { PannelloCassaContanti } from "../src/App.jsx";
 import { monta, clicca, attendi } from "./aiuto.js";
@@ -10,6 +10,10 @@ import { rispondiCon } from "./preparazione.js";
 const vuoti = { corsiDate: [], iscritti: [], corsiDateDocenti: [], master: [], masterCorsi: [], assistente: [], assistenteCorsi: [], leva: [], location: [], hotel: [], quoteVenditoriSplit: [], spese: [], venditeShop: [], corsi: [] };
 
 describe("Cassa contanti per mese", () => {
+  // i dati sono di ottobre 2026: la prova non puo' dipendere dal mese in cui gira
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-31T12:00:00")); });
+  afterEach(() => { vi.useRealTimers(); });
+
   it("mostra riporto, parziali e saldo del mese, e scorrendo indietro il mese prima", async () => {
     rispondiCon({
       "cassa_contanti_impostazioni": { aperta_il: "2026-09-01", saldo_iniziale: 1000 },
@@ -18,7 +22,9 @@ describe("Cassa contanti per mese", () => {
         { id: "m2", data: "2026-09-15", tipo: "prelievo", motivo: "Prelevati", importo: 200 },
       ],
       "corsi_date_buste": [],
-      "corsi_date": [{ id: "cd1", busta_rientrata_il: "2026-09-20", busta_importo: 500 }],
+      // in cassa ci entra con la data del DEPOSITO, non con quella in cui
+      // la busta e' arrivata in amministrazione
+      "corsi_date": [{ id: "cd1", busta_rientrata_il: "2026-09-20", busta_depositata_il: "2026-09-20", busta_importo: 500 }],
       "vendite_shop": [{ totale: 50, evento_id: null, data_ordine: "2026-10-10T10:00:00" }],
       "spese": [{ id: "s1", descrizione: "Cancelleria", totale: 30, metodo_pagamento: "Cassa contanti", stato: "pagata", data_pagamento: "2026-10-12", classe_id: null, evento_id: null, origine: "manuale", origine_scadenziario_chiave: null }],
       "cassa_spese_ricorrenti": [],
@@ -43,6 +49,29 @@ describe("Cassa contanti per mese", () => {
     expect(p.nodo.querySelector('[data-campo="saldo-fine-mese"]').textContent).toContain("1300,00");
     expect(p.testo()).toContain("Prelevati");
     expect(p.testo()).not.toContain("Restituzione");
+    await p.smonta();
+  });
+
+  it("un rimborso in contanti (reso/annullo di una busta chiusa) esce dalla cassa nel giorno in cui si fa", async () => {
+    rispondiCon({
+      "cassa_contanti_impostazioni": { aperta_il: "2026-09-01", saldo_iniziale: 1000 },
+      "cassa_contanti_movimenti": [],
+      "corsi_date_buste": [],
+      "corsi_date": [],
+      "vendite_shop": [
+        { totale: 50, evento_id: null, data_ordine: "2026-10-10T10:00:00" },
+        { totale: -40, evento_id: null, data_ordine: "2026-10-12T09:00:00" },
+      ],
+      "spese": [],
+      "cassa_spese_ricorrenti": [],
+      "eventi": [],
+    });
+    const p = await monta(<PannelloCassaContanti {...vuoti} ricarica={() => {}} />);
+    await attendi(200);
+    const mese = p.nodo.querySelector('[data-campo="cassa-mese"]');
+    expect(mese.textContent).toContain("Resi e annullamenti rimborsati in contanti");
+    // 1000 + 50 − 40: il rimborso toglie, non si somma in valore assoluto
+    expect(p.nodo.querySelector('[data-campo="saldo-fine-mese"]').textContent).toContain("1010,00");
     await p.smonta();
   });
 });

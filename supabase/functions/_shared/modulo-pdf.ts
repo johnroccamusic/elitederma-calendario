@@ -33,7 +33,11 @@ const CHIARO = rgb(0.62, 0.63, 0.66);
 // che arrivano dal testo del contratto non ci stanno e fanno fallire il
 // disegno. Si riportano ai loro equivalenti diritti invece di perdere la
 // riga.
-function soloCaratteriScrivibili(testo: unknown): string {
+// ESPORTATA DAL 16/11/2026: la usa anche il PDF del contratto master.
+// Due idee di «cosa Helvetica sa scrivere» vorrebbero dire una penale
+// senza il simbolo dell'euro su uno dei due documenti, e quello
+// sbagliato sarebbe sempre quello che serve come prova.
+export function soloCaratteriScrivibili(testo: unknown): string {
   return String(testo ?? "")
     .replace(/[‘’ʼ]/g, "'")
     .replace(/[“”]/g, '"')
@@ -198,14 +202,21 @@ export async function creaPdfModulo({ iscritto, corso, societa, firma, fronte, r
   riga("Sede", corso?.indirizzo);
 
   // --------------------------------------------------------------- allieva
-  titolo("Dati dell'allievo/a");
+  // LA COPIA FIRMATA DEVE DIRE LE STESSE PAROLE DELLA SCHERMATA
+  // (7/11/2026). Il titolo e il nome del campo fiscale erano rimasti
+  // «Dati dell'allievo/a» e «Codice fiscale» mentre la scheda e il
+  // modulo dicevano «Dati anagrafici» e «Identificativo fiscale
+  // personale (TIN)»: su una copia firmata non e' una differenza di
+  // stile, perche' chiamare «codice fiscale» un AHV svizzero e' dire
+  // una cosa falsa in un documento che la persona sottoscrive.
+  titolo("Dati anagrafici");
   riga("Nome e cognome", [iscritto.nome, iscritto.cognome].filter(Boolean).join(" "));
   // la nascita sta accanto al codice fiscale perche' e' quello che lo
   // genera: su una copia firmata, un codice e la data da cui esce si
   // leggono insieme o non si controllano
   riga("Nata/o il", giorno(iscritto.data_nascita));
   riga("A", [iscritto.comune_nascita, iscritto.stato_nascita].filter(Boolean).join(" — "));
-  riga("Codice fiscale", iscritto.codice_fiscale);
+  riga("Identificativo fiscale", iscritto.codice_fiscale);
   riga("Residenza", [iscritto.indirizzo_residenza, iscritto.civico_residenza].filter(Boolean).join(" "));
   riga("", [iscritto.cap_residenza, iscritto.citta_residenza, iscritto.prov_residenza ? "(" + iscritto.prov_residenza + ")" : null, iscritto.stato_residenza].filter(Boolean).join(" "));
   riga("Email", iscritto.email);

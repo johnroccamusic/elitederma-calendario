@@ -1,0 +1,129 @@
+// UN IMPEGNO IN CONTANTI RINVIATO DAL CORSO VALE QUELLO CHE IL RIEPILOGO
+// DICE OGGI, NON QUELLO CHE DICEVA IL GIORNO DEL RINVIO.
+//
+// Udine, LAMINAZIONE BASE del 28/10/2026: compenso master 300 €, diviso a
+// metà di default. «Disponi pagamenti» ha rinviato 150 € di contanti allo
+// scadenziario; poi il bonifico è stato portato a 300 e il cash a 0, ma
+// l'impegno dei 150 è rimasto aperto, e lo scadenziario lo mostrava come
+// dovuto accanto ai 300. Trovato dal titolare il 30/10/2026.
+import { describe, it, expect } from "vitest";
+import { calcolaVociScadenziario, vociCashRinviate } from "../src/App.jsx";
+
+const CLASSE = "f74559cf-0000-0000-0000-000000000001";
+const MASTER = { id: "m1", nome: "ANGELICA BURELLI", iban: "IT00X" };
+const base = {
+  // due allieve: la fascia 1-4 vale 300 € al giorno, un giorno di corso
+  iscritti: [{ id: "a1", corso_data_id: CLASSE }, { id: "a2", corso_data_id: CLASSE }], corsiDateDocenti: [], master: [MASTER], assistente: [], assistenteCorsi: [], leva: [],
+  location: [], hotel: [], categorieGruppi: [], spese: [], quoteVenditoriSplit: [], impegnoTabella: [], locationPrezzi: [],
+  masterCorsi: [{ master_id: "m1", corso_id: "c1", fasce_compenso: [{ da: 1, a: 4, compenso: 300 }] }],
+};
+const classe = (split) => ({ id: CLASSE, corso_id: "c1", master_id: "m1", data_inizio: "2026-10-28", data_fine: "2026-10-28", ...split });
+const IMPEGNO = { id: "i1", origine_id: CLASSE, chiave_origine: `cash_master_${CLASSE}`, descrizione: "Costo Master — ANGELICA BURELLI — contanti non coperti", importo_previsto: 150, importo_coperto: 0, stato: "aperto", data_prevista: "2026-10-28" };
+
+describe("il cash rinviato segue il Riepilogo", () => {
+  it("con il compenso tutto a bonifico, i 150 rinviati non sono più dovuti", () => {
+    const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
+    const { cashRicalcolati, daPagareVirtuali } = calcolaVociScadenziario({ ...base, corsiDate });
+    expect(cashRicalcolati.get(`cash_master_${CLASSE}`)).toBe(0);
+    // la parte a bonifico vale 300, una volta sola
+    expect(daPagareVirtuali.filter((r) => r.tipo === "master").map((r) => r.totale)).toEqual([300]);
+    const [riga] = vociCashRinviate({ impegnoTabella: [IMPEGNO], corsiDate, categorieGruppi: [], cashRicalcolati });
+    expect(riga.totale).toBe(0);
+    expect(riga.nonPiuDovuto).toBe(true);
+    expect(riga.importoScritto).toBe(150);
+    expect(riga.oggetto).toContain("non è più dovuto");
+  });
+  it("con il compenso ancora a metà, i 150 restano dovuti", () => {
+    const corsiDate = [classe({ quota_bonifico: null, quota_cash: null })];
+    const { cashRicalcolati } = calcolaVociScadenziario({ ...base, corsiDate });
+    const [riga] = vociCashRinviate({ impegnoTabella: [IMPEGNO], corsiDate, categorieGruppi: [], cashRicalcolati });
+    expect(riga.totale).toBe(150);
+    expect(riga.nonPiuDovuto).toBe(false);
+  });
+  it("se il Riepilogo cambia la cifra, lo scadenziario la segue e lo dice", () => {
+    const corsiDate = [classe({ quota_bonifico: 200, quota_cash: 100 })];
+    const { cashRicalcolati } = calcolaVociScadenziario({ ...base, corsiDate });
+    const [riga] = vociCashRinviate({ impegnoTabella: [IMPEGNO], corsiDate, categorieGruppi: [], cashRicalcolati });
+    expect(riga.totale).toBe(100);
+    expect(riga.oggetto).toContain("rinviata per 150,00 €");
+  });
+  it("la quota venditore a bonifico porta il nome di chi la prende", () => {
+    const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
+    const iscritti = [{ id: "a1", corso_data_id: CLASSE, tutor: "ANGELICA BURELLI", quota_venditore: 50 }, { id: "a2", corso_data_id: CLASSE, tutor: "ANGELICA BURELLI", quota_venditore: 85 }];
+    const quoteVenditoriSplit = [{ corso_data_id: CLASSE, venditore: "ANGELICA BURELLI", modalita: "B" }];
+    const { daPagareVirtuali, cashRicalcolati } = calcolaVociScadenziario({ ...base, corsiDate, iscritti, quoteVenditoriSplit });
+    const quota = daPagareVirtuali.find((r) => r.tipo === "venditore");
+    expect(quota.nome).toBe("Quota venditore — ANGELICA BURELLI");
+    expect(quota.totale).toBe(135);
+    // e la sua parte in contanti, oggi, e' zero
+    expect(cashRicalcolati.get(`cash_venditore_${CLASSE}_ANGELICA BURELLI`)).toBe(0);
+    // rimessa su C (contanti), la riga a bonifico sparisce e il cash torna 135
+    const dopo = calcolaVociScadenziario({ ...base, corsiDate, iscritti, quoteVenditoriSplit: [] });
+    expect(dopo.daPagareVirtuali.find((r) => r.tipo === "venditore")).toBeUndefined();
+    expect(dopo.cashRicalcolati.get(`cash_venditore_${CLASSE}_ANGELICA BURELLI`)).toBe(135);
+  });
+  it("un impegno già coperto in parte tiene la cifra scritta", () => {
+    const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
+    const { cashRicalcolati } = calcolaVociScadenziario({ ...base, corsiDate });
+    const [riga] = vociCashRinviate({ impegnoTabella: [{ ...IMPEGNO, importo_coperto: 50, stato: "parzialmente_coperto" }], corsiDate, categorieGruppi: [], cashRicalcolati });
+    expect(riga.totale).toBe(150);
+    expect(riga.nonPiuDovuto).toBe(false);
+  });
+});
+
+// QUALI CLASSI SONO STATE DAVVERO RICALCOLATE (11/11/2026).
+//
+// Serve a chi allinea gli impegni dallo scadenziario: una chiave che non
+// sta in `cashRicalcolati` può voler dire due cose opposte — la riga non
+// esiste più, oppure quella classe non è stata nemmeno guardata perché è
+// troppo in là nel tempo. Senza questo elenco un impegno di una classe
+// futura verrebbe annullato perché «la riga non c'è più», cioè un debito
+// cancellato che nessuno ha deciso di cancellare.
+describe("le classi ricalcolate si dicono", () => {
+  it("una classe già cominciata c'è, una lontana nel futuro no", () => {
+    const LONTANA = "f74559cf-0000-0000-0000-000000000099";
+    const corsiDate = [
+      classe({ quota_bonifico: 300, quota_cash: 0 }),
+      { id: LONTANA, corso_id: "c1", master_id: "m1", data_inizio: "2099-01-01", data_fine: "2099-01-01" },
+    ];
+    const { classiConsiderate } = calcolaVociScadenziario({ ...base, corsiDate });
+    expect(classiConsiderate.has(CLASSE)).toBe(true);
+    expect(classiConsiderate.has(LONTANA)).toBe(false);
+  });
+});
+
+// NESSUN RIMANDO A UN POSTO CHE NON ESISTE (11/11/2026).
+//
+// Il titolare: «mi continui a dire che c'è un'area che riguarda gli
+// impegni senza riga quando non esiste nessun posto con impegni senza
+// riga». Aveva ragione: la riga a zero diceva «si toglie dal Riepilogo,
+// in «Impegni senza riga»», e quel nome non compare in nessuna pagina —
+// il riquadro del Riepilogo esiste solo per gli impegni già coperti in
+// parte e dice un'altra cosa. Una frase che manda da qualche parte deve
+// nominare un posto che c'è; e da quando queste righe si annullano da sé,
+// non c'è più niente da mandare a fare a nessuno.
+describe("una riga non più dovuta dice la verità su di sé", () => {
+  const corsiDate = [classe({ quota_bonifico: 300, quota_cash: 0 })];
+  const righe = (protette) => vociCashRinviate({
+    impegnoTabella: [IMPEGNO], corsiDate, categorieGruppi: [],
+    cashRicalcolati: calcolaVociScadenziario({ ...base, corsiDate }).cashRicalcolati,
+    protette,
+  });
+
+  it("non nomina «Impegni senza riga» e dice che si toglie da sé", () => {
+    const [riga] = righe(null);
+    expect(riga.nonPiuDovuto).toBe(true);
+    expect(riga.oggetto).not.toContain("Impegni senza riga");
+    expect(riga.oggetto).toContain("si toglie da sé");
+    expect(riga.giaSpesa).toBe(false);
+  });
+
+  it("se quel contante è già una spesa pagata, lo dice — è il solo caso che resta visibile", () => {
+    // è il caso di Casa Manuela: la chiave porta una spesa già pagata,
+    // quindi l'allineamento non la tocca di proposito e la riga resta
+    const [riga] = righe(new Set([IMPEGNO.chiave_origine]));
+    expect(riga.giaSpesa).toBe(true);
+    expect(riga.oggetto).toContain("già registrato come spesa pagata");
+    expect(riga.oggetto).not.toContain("Impegni senza riga");
+  });
+});

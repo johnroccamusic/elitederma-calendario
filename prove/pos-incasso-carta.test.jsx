@@ -1,7 +1,7 @@
 // CHI PUO' INCASSARE COME.
 //
 // Il terminale fisico sta in amministrazione: una master non ce l'ha, e
-// la scelta «POS esterno» le offriva una strada che non puo' percorrere
+// la scelta «POS fisico» le offriva una strada che non puo' percorrere
 // — e che per di piu' non chiede conferma a nessuno, perche' la vendita
 // la si dichiara incassata a mano.
 //
@@ -12,7 +12,7 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import { PaginaPOS } from "../src/App.jsx";
 import { rispondiCon } from "./preparazione.js";
-import { monta } from "./aiuto.js";
+import { monta, clicca, attendi } from "./aiuto.js";
 
 const oggi = new Date().toISOString().slice(0, 10);
 const CORSO = { id: "co1", nome: "PMU BASE" };
@@ -45,26 +45,35 @@ async function apriBanco(ruoloUtente) {
   );
 }
 
-describe("il POS esterno e' solo dell'amministrazione", () => {
+describe("il POS fisico e' solo dell'amministrazione", () => {
   it("al banco di una master non compare", async () => {
     const p = await apriBanco("user");
-    expect(p.testo()).not.toContain("POS esterno");
+    expect(p.testo()).not.toContain("POS fisico");
     expect(p.testo()).not.toContain("Batti tu sul terminale");
-    // e nemmeno il titolo della scelta: un tasto solo non e' una scelta
+    // e le restano i suoi tre modi di incassare, tutti e tre premibili
+    expect(p.testo()).toContain("Stripe");
+    expect(p.testo()).toContain("Contanti");
+    expect(p.testo()).toContain("Buono Amazon");
+  });
+
+  it("al banco dell'amministrazione resta, come tasto suo", async () => {
+    const p = await apriBanco("amministratore");
+    expect(p.testo()).toContain("POS fisico");
+    // e NON dentro la carta: la vecchia forma era "scegli carta, poi
+    // scegli quale carta", e il terminale stava dietro al primo gesto.
+    // Al banco di Napoli nessuno l'ha trovato.
     expect(p.testo()).not.toContain("Tipo di incasso carta");
   });
 
-  it("al banco dell'amministrazione resta", async () => {
-    const p = await apriBanco("amministratore");
-    expect(p.testo()).toContain("POS esterno");
-    expect(p.testo()).toContain("Tipo di incasso carta");
-  });
-
-  it("alla master la carta e' il QR, e si vede subito", async () => {
-    // senza la scelta, il banco deve nascere gia' sul QR: nascere
-    // sull'«esterno» nascosto vorrebbe dire una schermata che non offre
-    // nessun modo di incassare
+  // DAL 9/11/2026 IL BANCO NON NASCE SU NESSUN METODO (il titolare:
+  // «dopo una vendita si resetta ogni tipo di pagamento e l'operatore
+  // deve scegliere ogni volta come chiuderla»). Sostituisce il «si apre
+  // sul QR» del 7/11: una preselezione sul modo di incassare è la cosa
+  // che fa chiudere uno scontrino col metodo del cliente di prima.
+  it("alla master la carta e' il QR, ma solo dopo che l'ha scelta", async () => {
     const p = await apriBanco("user");
+    expect(p.testo(), "niente scelto all'apertura").not.toContain("Mostra il QR");
+    await clicca(p.tasto("Stripe")); await attendi(60);
     expect(p.testo()).toContain("Mostra il QR");
     expect(p.testo()).toContain("Apri link sul tuo telefono per pagare");
   });
@@ -72,9 +81,9 @@ describe("il POS esterno e' solo dell'amministrazione", () => {
   it("il tasto del link chiede prima se serve fattura", async () => {
     // a carrello vuoto il tasto e' spento, e la domanda non e' ancora
     // comparsa: il patto e' quello — prima la fattura, poi il pagamento.
-    // Si guarda dal banco di una master perche' li' la carta nasce gia'
-    // sul QR; in amministrazione il banco nasce sul terminale.
+    // Dal 9/11/2026 la carta si scegli prima: niente nasce acceso.
     const p = await apriBanco("user");
+    await clicca(p.tasto("Stripe")); await attendi(60);
     expect(p.testo()).not.toContain("Il cliente ha bisogno di fattura?");
     const tasto = p.tasto("Apri link sul tuo telefono per pagare");
     expect(tasto).toBeTruthy();
@@ -83,6 +92,7 @@ describe("il POS esterno e' solo dell'amministrazione", () => {
 
   it("il link non si copia piu' di nascosto: si apre", async () => {
     const p = await apriBanco("user");
+    await clicca(p.tasto("Stripe")); await attendi(60);
     expect(p.testo()).not.toContain("Copia il link");
   });
 

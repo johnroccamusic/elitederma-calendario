@@ -30,5 +30,18 @@ Deno.serve(async (req) => {
   if (!r.ok) return json({ errore: `WooCommerce ha risposto ${r.status}`, dettaglio: (await r.text()).slice(0, 300) }, 502);
   const p = await r.json();
   const nostri = (p.meta_data || []).filter((m: any) => String(m.key || "").startsWith("_ed_"));
-  return json({ nome: p.name, menu_order: p.menu_order, campi: nostri });
+  // Dal 2/11/2026 risponde anche alla domanda "perche' il cliente vede
+  // «Leggi tutto» invece del tasto per comprare": WooCommerce mette quel
+  // link quando il prodotto non e' acquistabile o non e' disponibile, e
+  // dall'esterno non si vede PERCHE'. Qui si vedono tutti e tre i motivi
+  // possibili - giacenza, prezzo, stato - senza andare a tentativi.
+  return json({
+    nome: p.name, menu_order: p.menu_order, campi: nostri,
+    acquistabile: p.purchasable, tipo: p.type, stato: p.status,
+    catalogo: p.catalog_visibility,
+    stock_status: p.stock_status, gestisce_stock: p.manage_stock,
+    stock_quantity: p.stock_quantity, backorders: p.backorders,
+    prezzo: p.price, prezzo_regolare: p.regular_price,
+    modificato_il: p.date_modified_gmt,
+  });
 });

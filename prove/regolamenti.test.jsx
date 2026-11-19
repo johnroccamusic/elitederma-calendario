@@ -153,9 +153,28 @@ describe("Conversazione a voce", () => {
     expect(p.testo()).toContain("Ti ascolto");
     const { act } = await import("react");
     await act(async () => { istanze[0].onresult({ resultIndex: 0, results: [Object.assign([{ transcript: "quanto sconto in aula" }], { isFinal: true })] }); });
-    await attendi(120);
-    // la risposta e' stata letta senza asterischi ne' trattini, e si riascolta
-    expect(parlate[1]).toBe("In aula fai 8,5% con carta. e 12% in contanti");
+    // IL SILENZIO LO MISURIAMO NOI, dal 3/11/2026: la frase non si
+    // consegna piu' appena il browser la dichiara «definitiva» — su
+    // iPhone quel momento arriva quando vuole lui — ma dopo 900 ms senza
+    // parole nuove. Questa prova aspettava 120 ms e se ne andava prima
+    // che la domanda fosse partita: trovava `parlate` con dentro solo
+    // «Ti ascolto.» e dava la colpa alla lettura.
+    //
+    // Prima si controlla che il silenzio serva davvero, altrimenti
+    // allungare l'attesa nasconderebbe un ritorno alla consegna
+    // immediata senza che nessuno se ne accorga.
+    await attendi(250);
+    expect(parlate.length).toBe(1);
+    await attendi(1200);
+    // La risposta e' stata letta senza asterischi ne' trattini. Si
+    // guardano i pezzi RIUNITI e non `parlate[1]`, perche' la lettura e'
+    // a frasi: il primo pezzo e' corto di proposito (si inizia a parlare
+    // prima) e quante frasi stiano in un pezzo dipende da una soglia che
+    // puo' cambiare. Quello che non deve cambiare e' che venga letto
+    // tutto, nell'ordine, e pulito.
+    const dettoDopo = parlate.slice(1).join(" ");
+    expect(dettoDopo).toBe("In aula fai 8,5% con carta. e 12% in contanti");
+    expect(parlate.length).toBeGreaterThan(1);
     expect(istanze.length).toBe(2);
     expect(p.nodo.querySelector('[data-campo="scambio"]').textContent).toContain("Sconti d'aula");
     await clicca(p.nodo.querySelector('[data-campo="voce"]'));

@@ -24,9 +24,14 @@ import React, { useState } from "react";
 import { cercaComuni } from "../comuni-regioni.js";
 import { NAVY, MUTED, CREAM_BORDER, fontBody } from "../ui/stile.js";
 
+// `onScegli` (3/11/2026) riceve la proposta scelta INTERA — { nome, sigla }
+// — e non solo il nome. Serve dove il comune non e' il dato finale ma la
+// chiave per gli altri: in Registrazione clienti, scelta la citta' si
+// riempiono da se' provincia, regione e CAP, e la sigla la sa solo
+// l'elenco. Chi non la passa non cambia comportamento.
 export default function CampoComuneNascita({
   valore, scrivi, esceDalCampo = () => {}, chiave = "comune_nascita",
-  stile, spenta = false, suggerimento = "",
+  stile, spenta = false, suggerimento = "", onScegli,
 }) {
   // si cerca solo mentre qualcuno scrive: aprendo una scheda gia'
   // compilata l'elenco non deve comparire a suggerire quello che c'e'
@@ -78,6 +83,7 @@ export default function CampoComuneNascita({
               // prima del clic e chiuderebbe l'elenco a mezz'aria
               onMouseDown={() => {
                 scrivi(chiave, x.nome.toUpperCase());
+                onScegli?.(x);
                 setDigitando(false);
                 esceDalCampo();
               }}

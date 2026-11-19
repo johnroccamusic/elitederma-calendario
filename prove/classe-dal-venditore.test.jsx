@@ -16,7 +16,13 @@ const CORSO = { id: "c1", nome: "LAMINAZIONE BASE", posti_max: 10 };
 const SEDE = { id: "l1", nome: "SEDE ROMA", citta: "ROMA" };
 // una sede piccola: il corso ne prevede dieci, l'aula due
 const SEDE_PICCOLA = { id: "l2", nome: "SEDE UDINE", citta: "UDINE", posti_max: 2 };
-const CD = { id: "cd1", corso_id: "c1", location_id: "l1", data_inizio: "2026-11-14", data_fine: "2026-11-14" };
+// La data di una classe non si scrive a calendario: il 14/11/2026 era
+// «domani» quando questa prova e' nata, e il 15 era gia' ieri — la
+// classe finiva fra i corsi passati e l'elenco dei programmati restava
+// vuoto. Rossa per il passare del tempo, non per un difetto. Una classe
+// «in programma» si dice sempre a partire da oggi.
+const FRA_UN_MESE = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const CD = { id: "cd1", corso_id: "c1", location_id: "l1", data_inizio: FRA_UN_MESE, data_fine: FRA_UN_MESE };
 const CD_PICCOLA = { ...CD, id: "cd2", location_id: "l2" };
 
 const allieva = (n, cdId) => ({
@@ -134,7 +140,7 @@ describe("il venditore iscrive", () => {
     expect(t.disabled).toBe(false);
     await clicca(t);
     expect(p.testo()).toMatch(/Iscrivi allievo/);
-    expect(p.testo()).toMatch(/Dati dell'allievo/);
+    expect(p.testo()).toMatch(/Dati anagrafici/);
   });
 
   // IL VICOLO CIECO: la classe è al completo e il tasto si spegne. Qui

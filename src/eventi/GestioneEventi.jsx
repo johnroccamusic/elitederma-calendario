@@ -7,16 +7,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, CREAM_BORDER, BG, BG_CHIARO, MUTED, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
+import { confermaCancellazione, confermaRimozione } from "../ui/conferma.js";
 import SelettorePeriodo from "../ui/SelettorePeriodo.jsx";
 import {
   STATI_EVENTO, leggiEventi, creaEvento, salvaEvento, eliminaEvento,
   leggiRighe, aggiungiRiga, salvaRiga, eliminaRiga, leggiHotelEvento,
   periodoEvento, quantiGiorni, usciteAllEvento,
-  impegniMagazzino, segnaPartito, segnaRientro, tieneGiacenza,
+  impegniMagazzino, segnaPartito, rientroAtteso, segnaRientroVerificato, tieneGiacenza,
   leggiCategoriePrincipali, leggiImmaginiProdotti,
   leggiDocumentiEvento, creaDocumentoEvento, caricaFileDocumento, eliminaDocumentoEvento, linkDocumentoEvento,
-  leggiVenditeEvento, prodottiPiuVenduti, totaliVendite,
+  leggiVenditeEvento, prodottiPiuVenduti, totaliVendite, segnaVenditaFiera,
 } from "./dati.js";
+import {
+  iscrizioniDellaFiera, candidateDellaFiera, corsiChiusiInFiera, contoIscrizioniFiera, periodoFiera,
+} from "./fiera-iscrizioni.js";
 import { leggiConto, calcolaConto, problemiDiChiusura, incassiSenzaEvento, agganciaIncassi } from "./conto.js";
 import { supabase } from "../supabase.js";
 import BollaEvento from "./BollaEvento.jsx";
@@ -244,7 +248,119 @@ function Vuoto({ children }) {
 
 // --------------------------------------------------------------- 1. il team
 
-function SchedaTeam({ eventoId, persone }) {
+// IL BANCO DELLA FIERA: fino a quando il POS di chi vende qui parte da
+// questo evento.
+//
+// Al banco si parte sempre da «vendita non legata a un evento» e lo
+// sconto fiera nasce spento, perche' fuori da una fiera agganciare una
+// vendita da sola e' il modo di portarsi addosso uno sconto che nessuno
+// ha chiesto. Per i giorni di una fiera vale il contrario: tutte le
+// vendite di chi sta a quel banco sono di quella fiera, e rifare il giro
+// a ogni scontrino vuol dire dimenticarselo — con la vendita fuori dal
+// conto della fiera e il cliente che paga pieno.
+//
+// Si spegne da se'. La data e' un ISTANTE e non un giorno perche' il
+// banco chiude a un'ora: scaduta, il POS torna da solo a partire da
+// «nessun evento» senza che nessuno debba ricordarsene.
+function BancoDellaFiera({ evento, righe, onCambiato }) {
+  const [msg, setMsg] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  if (!evento?.id) return null;
+  const alBanco = (righe || []).filter((r) => r.vende_al_banco && r.persona_id);
+  const acceso = !!evento.pos_banco_fino_al;
+  const scaduto = acceso && new Date(evento.pos_banco_fino_al).getTime() <= Date.now();
+
+  // `datetime-local` parla l'ora del telefono di chi guarda, il database
+  // un istante: si converte nei due versi, invece di tagliare la stringa
+  const perIlCampo = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleString("it-IT", {
+      timeZone: "Europe/Rome", weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  async function scrivi(campi, detto) {
+    setSalvando(true); setMsg("");
+    try { await salvaEvento(evento.id, campi); setMsg(detto); onCambiato?.(); }
+    catch (e) { setMsg("Non sono riuscito a salvare: " + e.message); }
+    finally { setSalvando(false); }
+  }
+
+  return (
+    <div style={{
+      border: `1px solid ${acceso && !scaduto ? "#C7E3C7" : CREAM_BORDER}`,
+      background: acceso && !scaduto ? "#F4FAF4" : "#fff",
+      borderRadius: 14, padding: "12px 14px", marginBottom: 16,
+    }}>
+      <div style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>
+        Il banco della fiera
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.55, marginBottom: 10 }}>
+        Chi ha la spunta verde qui sotto trova il POS già impostato su questa fiera, fino all’ora
+        che scrivi. Passata quell’ora torna da solo a «vendita non legata a un evento». Resta una
+        partenza, non un obbligo: al banco la tendina si cambia carrello per carrello.
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <Field label="Il POS parte da questa fiera fino a">
+            <input
+              type="datetime-local" style={inputStyle} value={perIlCampo(evento.pos_banco_fino_al)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) { scrivi({ pos_banco_fino_al: null }, "Spento: il POS riparte da «nessun evento»."); return; }
+                const d = new Date(v);
+                if (isNaN(d.getTime())) { setMsg("Quella data non la capisco."); return; }
+                scrivi({ pos_banco_fino_al: d.toISOString() }, "Salvato: fino a " + fmt(d.toISOString()) + ".");
+              }}
+            />
+          </Field>
+        </div>
+        {acceso && (
+          <div style={{ marginBottom: 14 }}>
+            <Button variant="ghost" disabled={salvando}
+              onClick={() => scrivi({ pos_banco_fino_al: null }, "Spento: il POS riparte da «nessun evento».")}>
+              Spegni
+            </Button>
+          </div>
+        )}
+      </div>
+      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer", marginTop: 2 }}>
+        <input
+          type="checkbox" checked={!!evento.pos_banco_sconto_fiera} disabled={salvando}
+          onChange={(e) => scrivi({ pos_banco_sconto_fiera: e.target.checked },
+            e.target.checked ? "Lo sconto fiera parte acceso." : "Lo sconto fiera parte spento.")}
+          style={{ width: 20, height: 20, flex: "0 0 auto", marginTop: 1, accentColor: "#2E7D32" }}
+        />
+        <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
+          <b>…e con lo sconto fiera già acceso</b>
+          <span style={{ display: "block", fontSize: 11.5, color: MUTED }}>
+            Le fasce di Genera Coupon → Sconti eventi. Spento, le vendite si agganciano alla fiera
+            ma si pagano a listino.
+          </span>
+        </span>
+      </label>
+      {acceso && (
+        <div style={{ ...fontBody, fontSize: 12, color: scaduto ? "#B3261E" : "#2E7D32", lineHeight: 1.5, marginTop: 10 }}>
+          {scaduto
+            ? `È passata: dal ${fmt(evento.pos_banco_fino_al)} il POS riparte da «nessun evento».`
+            : alBanco.length === 0
+              ? "L’ora c’è, ma nessuno ha la spunta «vende al banco»: così non cambia niente per nessuno."
+              : `Vale per ${alBanco.length === 1 ? "una persona" : alBanco.length + " persone"} — ${alBanco.map((r) => r.nome).join(", ")} — fino a ${fmt(evento.pos_banco_fino_al)}.`}
+        </div>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function SchedaTeam({ eventoId, evento, persone, onCambiato }) {
   const [righe, setRighe] = useState(null);
   const [scelta, setScelta] = useState("");
   const [nomeLibero, setNomeLibero] = useState("");
@@ -270,6 +386,7 @@ function SchedaTeam({ eventoId, persone }) {
   if (righe === null) return <Vuoto>Carico…</Vuoto>;
   return (
     <>
+      <BancoDellaFiera evento={evento} righe={righe} onCambiato={() => { ricarica(); onCambiato?.(); }} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <Field label="Chi viene (dalle anagrafiche)">
@@ -294,12 +411,30 @@ function SchedaTeam({ eventoId, persone }) {
       {righe.length === 0 && <Vuoto>Non c'è ancora nessuno nel team.</Vuoto>}
       {righe.map((r) => (
         <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+          {/* la spunta sta a sinistra del nome, come quella del rientro
+              dei materiali: si cerca un quadrato da toccare, non una riga
+              da leggere. Sulle righe libere non c'è: senza anagrafica non
+              c'è nessun POS da far partire dalla fiera, e una casella
+              spenta che non si può accendere fa solo credere di avere
+              dimenticato qualcosa */}
+          {r.persona_id ? (
+            <label title="Batte gli scontrini al banco: il suo POS parte da questa fiera" style={{
+              width: 40, height: 40, flex: "0 0 auto", display: "flex", alignItems: "center",
+              justifyContent: "center", cursor: "pointer",
+            }}>
+              <input
+                type="checkbox" checked={!!r.vende_al_banco}
+                onChange={(e) => salvaRiga("eventi_team", r.id, { vende_al_banco: e.target.checked }).then(ricarica)}
+                style={{ width: 24, height: 24, accentColor: "#2E7D32", cursor: "pointer" }}
+              />
+            </label>
+          ) : <span style={{ width: 40, flex: "0 0 auto" }} />}
           <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{r.nome}</span>
           <input
             style={{ ...campoRiga, flex: "1 1 140px", minWidth: 0 }} defaultValue={r.ruolo || ""} placeholder="ruolo all'evento"
             onBlur={(e) => { if (e.target.value !== (r.ruolo || "")) salvaRiga("eventi_team", r.id, { ruolo: e.target.value.trim() || null }).then(ricarica); }}
           />
-          <TastoCestino onClick={() => eliminaRiga("eventi_team", r.id).then(ricarica)} />
+          <TastoCestino onClick={() => { if (!confermaCancellazione(`${r.nome || "questa riga"} dal team dell’evento`)) return; eliminaRiga("eventi_team", r.id).then(ricarica); }} />
         </div>
       ))}
     </>
@@ -311,7 +446,7 @@ function SchedaTeam({ eventoId, persone }) {
 export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, fabbisognoCorsi = {} }) {
   const [righe, setRighe] = useState(null);
   const [uscite, setUscite] = useState({ venduto: {}, omaggiato: {} });
-  const [impegni, setImpegni] = useState({ carrelli: {}, perEvento: {} });
+  const [impegni, setImpegni] = useState({ carrelli: {} });
   // la categoria con cui ogni prodotto si raggruppa, e la sua foto
   const [categorie, setCategorie] = useState({ principale: {} });
   const [immagini, setImmagini] = useState({});
@@ -334,7 +469,7 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
   const ricarica = () => {
     leggiRighe("eventi_materiali", eventoId).then(setRighe).catch(() => setRighe([]));
     usciteAllEvento(eventoId).then(setUscite).catch(() => setUscite({ venduto: {}, omaggiato: {} }));
-    impegniMagazzino().then(setImpegni).catch(() => setImpegni({ carrelli: {}, perEvento: {} }));
+    impegniMagazzino().then(setImpegni).catch(() => setImpegni({ carrelli: {} }));
   };
   useEffect(() => { ricarica(); /* eslint-disable-next-line */ }, [eventoId]);
   useEffect(() => {
@@ -368,11 +503,11 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
   // blocca — in elenco si puo' scrivere anche di piu', perche' fra oggi
   // e la fiera puo' arrivare un ordine — ma si vede prima di scrivere,
   // che era tutto il punto.
+  // solo i carrelli sospesi: gli altri eventi non impegnano niente, il
+  // loro materiale resta in magazzino e vendibile (30/10/2026)
   function impegnatoAltrove(prodottoId) {
     const daiCarrelli = impegni.carrelli[prodottoId] || 0;
-    const daAltriEventi = Object.entries(impegni.perEvento)
-      .reduce((s, [id, mappa]) => (id === eventoId ? s : s + (mappa[prodottoId] || 0)), 0);
-    return { daiCarrelli, daAltriEventi, totale: daiCarrelli + daAltriEventi };
+    return { daiCarrelli, totale: daiCarrelli };
   }
   function disponibile(prodottoId) {
     const p = perId.get(prodottoId);
@@ -404,42 +539,29 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
     setNomeLibero(""); ricarica();
   }
 
-  // quanti pezzi stanno ancora fuori: usciti dal magazzino per questo
-  // evento e non ancora rimessi dentro
-  const fuoriAdesso = (righe || []).reduce((s, r) => s + Math.max(0, (Number(r.quantita_scaricata) || 0) - (Number(r.quantita_ricaricata) || 0)), 0);
-  const giaPartito = (righe || []).some((r) => (Number(r.quantita_scaricata) || 0) > 0);
-  const daRimettere = (righe || []).some((r) => r.quantita_rientrata != null && (Number(r.quantita_rientrata) || 0) !== (Number(r.quantita_ricaricata) || 0));
+  // "Partito" e' contabilita' della scatola, non un movimento: scrive in
+  // "Partito" quello che era da portare, dove non c'e' gia' un numero a
+  // mano. Il magazzino non si tocca (regola del 30/10/2026)
+  const daSegnare = (righe || []).filter((r) => r.quantita_portata == null).length;
+  const giaPartito = (righe || []).some((r) => r.quantita_portata != null);
 
   async function premiPartito() {
-    const conto = (righe || []).filter((r) => {
-      const obiettivo = r.quantita_portata == null ? (Number(r.quantita) || 0) : (Number(r.quantita_portata) || 0);
-      return obiettivo !== (Number(r.quantita_scaricata) || 0);
-    }).length;
-    if (conto === 0) { setMsg({ tipo: "ok", testo: "Il magazzino è già allineato a quello che è partito: non c'è niente da muovere." }); return; }
-    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${conto} rig${conto === 1 ? "a" : "he"} da allineare: quello che è da portare diventa partito ed esce dalle giacenze. Le righe dove hai già scritto a mano un numero in "Partito" lo tengono.`)) return;
+    if (daSegnare === 0) { setMsg({ tipo: "ok", testo: "Tutte le righe hanno già un numero in «Partito»: non c'è niente da segnare." }); return; }
+    if (!window.confirm(`Segnare partito il materiale di questo evento?\n\n${daSegnare} rig${daSegnare === 1 ? "a" : "he"} da segnare: quello che è da portare diventa partito. Il magazzino non si muove — i pezzi restano in giacenza e scendono solo quando si vendono al POS. Le righe già segnate partite restano come sono.`)) return;
     setInCorso("partito"); setMsg(null); setAvanzamento([0, righe.length]);
     try {
-      const esito = await segnaPartito({ righe, prodottiPerId: perId, nomeEvento: evento?.nome, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
-      ricarica(); onStockCambiato?.();
-      setMsg(esito.errori.length
-        ? { tipo: "errore", testo: `${esito.mosse} prodott${esito.mosse === 1 ? "o" : "i"} scaricat${esito.mosse === 1 ? "o" : "i"}. Non è riuscito: ${primiErrori(esito.errori)}` }
-        : { tipo: "ok", testo: `Partito. ${esito.mosse} prodott${esito.mosse === 1 ? "o è uscito" : "i sono usciti"} dal magazzino.` });
+      const esito = await segnaPartito({ righe, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
+      ricarica();
+      setMsg({ tipo: "ok", testo: `Partito. ${esito.segnate} rig${esito.segnate === 1 ? "a segnata" : "he segnate"}; il magazzino non è cambiato.` });
     } catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
     setInCorso(""); setAvanzamento(null);
   }
 
-  async function premiRientro() {
-    if (!daRimettere) { setMsg({ tipo: "ok", testo: "Non c'è niente da rimettere dentro: compila prima la colonna «Rientrato»." }); return; }
-    if (!window.confirm("Rimettere in magazzino quello che è scritto nella colonna «Rientrato»?\n\nI pezzi tornano nelle giacenze e tornano vendibili.")) return;
-    setInCorso("rientro"); setMsg(null); setAvanzamento([0, 0]);
-    try {
-      const esito = await segnaRientro({ righe, prodottiPerId: perId, nomeEvento: evento?.nome, onAvanzamento: (f, t) => setAvanzamento([f, t]) });
-      ricarica(); onStockCambiato?.();
-      setMsg(esito.errori.length
-        ? { tipo: "errore", testo: `${esito.mosse} prodott${esito.mosse === 1 ? "o" : "i"} rimess${esito.mosse === 1 ? "o" : "i"} dentro. Non è riuscito: ${primiErrori(esito.errori)}` }
-        : { tipo: "ok", testo: `Rientrati. ${esito.mosse} prodott${esito.mosse === 1 ? "o è tornato" : "i sono tornati"} in magazzino.` });
-    } catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
-    setInCorso(""); setAvanzamento(null);
+  // la spunta del rientro, riga per riga: chi scarica lo scatolone conta
+  // e conferma. Non muove niente, quindi non chiede conferma
+  async function spuntaRientro(r, verificato) {
+    try { await segnaRientroVerificato(r.id, verificato); ricarica(); }
+    catch (e) { setMsg({ tipo: "errore", testo: e?.message || String(e) }); }
   }
 
   // L'ELENCO RAGGRUPPATO PER CATEGORIA.
@@ -493,26 +615,28 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
 
   return (
     <>
-      {/* La regola, scritta dove si lavora. Fino al 08/10/2026 diceva
-          l'opposto — "non esce dal magazzino, resta nostro solo in un
-          altro posto" — ed era comodo da dire e falso da usare: quei
-          pezzi al banco non c'erano, ma il magazzino continuava a
-          prometterli ai corsi e allo shop. */}
+      {/* La regola, scritta dove si lavora. E' cambiata due volte: fino
+          al 08/10/2026 il materiale restava in giacenza, dal 08/10 al
+          30/10 usciva con "Partito" e rientrava con "Rimetti in
+          magazzino". Dal 30/10/2026 il titolare ha deciso: NON si scala
+          e NON si impegna. E' come spostare una parte del magazzino
+          all'evento — resta nostro, lo puo' vendere chiunque, e scende
+          solo quando qualcuno lo vende. Al rientro si conta e si spunta,
+          non si scrive un numero. */}
       <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 10, padding: "9px 11px", marginBottom: 12, lineHeight: 1.55 }}>
-        Quello che metti in elenco è <b>impegnato</b>: resta in giacenza ma non lo promette più nessun altro, e l'Advisor lo conta.
-        Con <b>Partito</b> esce davvero dal magazzino; con <b>Rimetti in magazzino</b> torna dentro quello che è scritto in «Rientrato».
+        Quello che metti in elenco <b>resta in magazzino</b> e resta <b>vendibile da tutti</b>: banco, shop, fiera. Non è impegnato;
+        l'Advisor ti dice quanto serve all'evento e quanto ai corsi, per capire se le quantità bastano, senza nessun vincolo.
+        Scende solo quando qualcuno lo vende. <b>Partito</b> segna quanto è uscito dalla sede, senza toccare le giacenze;
+        al rientro ogni riga dice quanti pezzi devono tornare e tu <b>spunti</b> quando li hai contati.
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
         <Button onClick={premiPartito} disabled={!!inCorso || righe.length === 0}>
-          {inCorso === "partito" ? `Esco dal magazzino… ${avanzamento ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Partito"}
+          {inCorso === "partito" ? `Segno… ${avanzamento ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Partito"}
         </Button>
-        <Button variant="ghost" onClick={premiRientro} disabled={!!inCorso || !giaPartito}>
-          {inCorso === "rientro" ? `Rimetto dentro… ${avanzamento && avanzamento[1] ? `${avanzamento[0]}/${avanzamento[1]}` : ""}` : "Rimetti in magazzino"}
-        </Button>
-        {fuoriAdesso > 0 && (
+        {giaPartito && (
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#8A6D1D" }}>
-            {fuoriAdesso} pz fuori dal magazzino per questo evento
+            Il materiale è all'evento: resta in giacenza e vendibile, scende solo quando si vende
           </span>
         )}
       </div>
@@ -617,21 +741,15 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
             </span>
           </div>
           {g.righe.map((r) => {
-        const portata = r.quantita_portata == null ? null : Number(r.quantita_portata);
-        const rientrata = r.quantita_rientrata == null ? null : Number(r.quantita_rientrata);
-        const vendutoQui = r.prodotto_id ? (uscite.venduto[r.prodotto_id] || 0) : 0;
-        const omaggiatoQui = r.prodotto_id ? (uscite.omaggiato[r.prodotto_id] || 0) : 0;
-        // il conto della consegna: quello che e' partito meno quello che
-        // e' tornato deve fare quello che e' uscito — venduto PIU'
-        // omaggiato, perche' anche un pezzo regalato non e' tornato
-        const mancante = portata != null && rientrata != null ? Math.round((portata - rientrata - vendutoQui - omaggiatoQui) * 100) / 100 : null;
+        // il conto del rientro: partiti meno usciti dalla scatola al POS
+        // (venduti PIU' omaggiati, perche' anche un pezzo regalato non
+        // e' tornato) = quanti ne devono tornare sullo scaffale
+        const rientro = rientroAtteso(r, uscite);
+        const verificato = !!r.rientro_verificato_il;
         const d = r.prodotto_id ? disponibile(r.prodotto_id) : null;
-        const scaricata = Number(r.quantita_scaricata) || 0;
-        // i pezzi che questa riga impegna sono gia' dentro "impegnato
-        // altrove"? No: impegniMagazzino salta l'evento aperto. Quindi
-        // il confronto e' fra quello che si chiede e quello che resta
+        // quello che si chiede contro quello che c'e' sullo scaffale
         const chiesti = Number(r.quantita) || 0;
-        const scoperti = d ? Math.max(0, chiesti - scaricata - d.libera) : 0;
+        const scoperti = d ? Math.max(0, chiesti - d.libera) : 0;
         return (
           /* TUTTO SU UNA RIGA.
              Il nome prende lo spazio che resta, le quantita' ne
@@ -642,12 +760,32 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
              sotto al nome, che e' l'unico modo di tenerle leggibili. */
           <div key={r.id} style={{ padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              {/* LA SPUNTA STA A SINISTRA, GRANDE (3/11/2026, chiesta dal
+                  titolare). Era in fondo alla riga, piccola e attaccata a
+                  una frase: chi gira fra gli scaffali con lo scatolone in
+                  mano cerca un quadrato da toccare, non una riga da
+                  leggere. Il flag e' lo stesso di prima
+                  (`rientro_verificato_il`), e la frase che dice quanti
+                  pezzi devono tornare resta sotto: la spunta si tocca, il
+                  conto si legge. */}
+              <label title={verificato ? "Verificato — tocca per togliere la spunta" : "Spunta quando hai contato i pezzi"}
+                style={{
+                  alignSelf: "center", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, cursor: "pointer", width: 40, height: 40, borderRadius: 11,
+                  background: verificato ? "#EAF5EA" : BG_CHIARO,
+                  border: `1px solid ${verificato ? "#C7E3C7" : CREAM_BORDER}`,
+                }}>
+                <input
+                  type="checkbox" checked={verificato} data-campo="rientro_verificato"
+                  onChange={(e) => spuntaRientro(r, e.target.checked)}
+                  style={{ width: 24, height: 24, margin: 0, cursor: "pointer", accentColor: "#2E7D32" }}
+                />
+              </label>
               <span style={{ alignSelf: "center", display: "inline-flex" }}>{foto(r)}</span>
               <span style={{ flex: "1 1 150px", minWidth: 0 }}>
                 <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
                   {nomeVivo(r)}
                   {r.prodotto_id && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, marginLeft: 7 }}>a catalogo</span>}
-                  {scaricata > 0 && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#2E7D32", marginLeft: 7 }}>{scaricata} fuori</span>}
                 </span>
                 {/* quanto se ne puo' ancora prendere, sulla stessa riga
                     del nome: era un blocco di tre righe sotto */}
@@ -663,39 +801,42 @@ export function SchedaMateriali({ eventoId, evento, prodotti, onStockCambiato, f
                   </span>
                 )}
               </span>
-              {[
-                ["Da portare", "quantita", r.quantita],
-                ["Partito", "quantita_portata", r.quantita_portata],
-                ["Rientrato", "quantita_rientrata", r.quantita_rientrata],
-              ].map(([etichetta, campo, valore]) => (
-                <label key={campo} style={{ flex: "0 0 auto", width: 78 }}>
-                  <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{etichetta}</span>
-                  <input
-                    type="number" min="0" step="1"
-                    style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right", padding: "6px 6px", fontSize: 13 }}
-                    defaultValue={valore ?? ""}
-                    onBlur={(e) => {
-                      const v = e.target.value === "" ? null : Number(e.target.value);
-                      if (v !== (valore == null ? null : Number(valore))) salvaRiga("eventi_materiali", r.id, { [campo]: v }).then(ricarica);
-                    }}
-                  />
-                </label>
-              ))}
-              <span style={{ flex: "0 0 auto", width: 54, textAlign: "right" }} title={omaggiatoQui > 0 ? `${vendutoQui} venduti e ${omaggiatoQui} in omaggio` : "Venduto al POS all'evento"}>
-                <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap" }}>Al POS</span>
-                <span style={{ display: "block", ...fontBody, fontSize: 13.5, fontWeight: 700, color: (vendutoQui + omaggiatoQui) > 0 ? "#2E7D32" : MUTED, padding: "6px 0" }}>
-                  {vendutoQui + omaggiatoQui}
-                </span>
-              </span>
+              {/* UNA CASELLA SOLA (3/11/2026, chiesta dal titolare: «togli
+                  la casella partito che non serve a niente»). Erano due,
+                  «Da portare» e «Partito», e la seconda era il posto per
+                  scrivere a mano una quantita' partita diversa da quella
+                  da portare: nessuno l'ha mai usata, mentre il tasto
+                  «Partito» in cima fa la stessa cosa per tutte le righe
+                  insieme. Il dato (`quantita_portata`) resta e lo scrive
+                  quel tasto — cambia solo che non si corregge piu' riga
+                  per riga. */}
+              <label style={{ flex: "0 0 auto", width: 78 }}>
+                <span style={{ display: "block", ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Da portare</span>
+                <input
+                  type="number" min="0" step="1"
+                  style={{ ...campoRiga, width: "100%", boxSizing: "border-box", textAlign: "right", padding: "6px 6px", fontSize: 13 }}
+                  defaultValue={r.quantita ?? ""}
+                  onBlur={(e) => {
+                    const v = e.target.value === "" ? null : Number(e.target.value);
+                    if (v !== (r.quantita == null ? null : Number(r.quantita))) salvaRiga("eventi_materiali", r.id, { quantita: v }).then(ricarica);
+                  }}
+                />
+              </label>
               <span style={{ flex: "0 0 auto", paddingBottom: 4 }}>
-                <TastoCestino onClick={() => eliminaRiga("eventi_materiali", r.id).then(ricarica)} />
+                <TastoCestino onClick={() => { if (!confermaCancellazione(`${nomeVivo(r) || "questa riga"} dal materiale dell’evento`)) return; eliminaRiga("eventi_materiali", r.id).then(ricarica); }} />
               </span>
             </div>
-            {mancante != null && mancante !== 0 && (
+            {/* Il rientro non si scrive, si conta (30/10/2026): la riga
+                dice quanti ne sono usciti al POS e quanti devono tornare,
+                e chi apre lo scatolone spunta. Solo verifica sulle
+                quantita' — il magazzino non si muove da qui. */}
+            <div style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.4, color: verificato ? "#2E7D32" : MUTED, marginTop: 5, paddingLeft: 48 }}>
+              Venduti all'evento <b>{rientro.usciti}</b>{rientro.omaggiati > 0 && ` (di cui ${rientro.omaggiati} in omaggio)`}, ne riporti in magazzino <b>{rientro.attesi}</b>
+              {verificato ? " · verificato" : " · spunta a sinistra quando li hai contati"}
+            </div>
+            {rientro.inEccesso > 0 && (
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>
-                {mancante > 0
-                  ? `Non torna: ${mancante} pz partiti che non sono né rientrati né usciti al POS.`
-                  : `Non torna: sono rientrati ${-mancante} pz più di quanti ne fossero partiti.`}
+                Non torna: il POS ne ha registrati {rientro.inEccesso} più di quanti ne risultino partiti — o ne è uscito dalla sede più di quanto dice l'elenco, o una vendita non è di questo evento.
               </div>
             )}
           </div>
@@ -758,7 +899,7 @@ function SchedaTrasferimenti({ eventoId, team }) {
                   onBlur={(e) => { if (e.target.value !== (r.chi || "")) salvaRiga("eventi_trasferimenti", r.id, { chi: e.target.value.trim() || null }).then(ricarica); }} />
               </Field>
             </div>
-            <TastoCestino onClick={() => eliminaRiga("eventi_trasferimenti", r.id).then(ricarica)} />
+            <TastoCestino onClick={() => { if (!confermaCancellazione("questo viaggio")) return; eliminaRiga("eventi_trasferimenti", r.id).then(ricarica); }} />
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 140px", minWidth: 0 }}><Field label="Da"><input style={campoRiga} defaultValue={r.da_dove || ""} onBlur={(e) => salvaRiga("eventi_trasferimenti", r.id, { da_dove: e.target.value.trim() || null }).then(ricarica)} /></Field></div>
@@ -872,7 +1013,7 @@ function SchedaHotel({ eventoId, evento, team, hotel }) {
                   <select style={{ ...campoRiga, flex: "0 0 140px" }} defaultValue={s.tipo || "matrimoniale"} onChange={(e) => salvaStanza(s.id, { tipo: e.target.value })}>
                     {TIPI_STANZA_EVENTO.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
-                  <TastoCestino titolo="Elimina la stanza" onClick={() => togliStanza(s.id)} />
+                  <TastoCestino titolo="Elimina la stanza" onClick={() => { if (!confermaCancellazione("questa stanza")) return; togliStanza(s.id); }} />
                 </div>
                 {/* chi ci dorme: si spuntano i nomi del team */}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
@@ -1039,7 +1180,7 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
   if (errore) return <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B" }}>Non riesco a leggere il conto: {errore}</div>;
   if (!conto) return <Vuoto>Sto facendo i conti…</Vuoto>;
 
-  const { entrate, omaggi, uscitePerCategoria, usciteTotale, uscite, merce, costoMerce, merceSenzaCosto, righeScartate, risultato, completo } = conto;
+  const { entrate, omaggi, uscitePerCategoria, usciteTotale, uscite, merce, costoMerce, merceSenzaCosto, risultato, completo } = conto;
 
   const problemi = problemiDiChiusura(conto);
 
@@ -1137,15 +1278,18 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
           <>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
               Il materiale portato a un evento non esce dal magazzino: resta roba nostra, solo in un altro posto.
-              Scende quando si vende o si regala. Qui si valorizza a costo di acquisto quello che non è tornato indietro.
+              Scende quando si vende o si regala al POS. Qui si valorizza a costo di acquisto quello che il POS ha registrato;
+              il rientro si conta e si spunta nella scheda Materiali.
             </div>
             {merce.map((r) => (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
                 <span style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
-                  {r.portata != null ? `${r.portata} portati` : "partenza non contata"}
+                  {`${r.portata} partiti`}
                   {r.venduto > 0 ? ` · ${r.venduto} venduti` : ""}
                   {r.omaggiata > 0 ? ` · ${r.omaggiata} omaggio` : ""}
+                  {` · ${r.daRiportare} da riportare`}
+                  {r.rientroVerificato ? " ✓" : ""}
                 </span>
                 {r.senzaCosto ? (
                   <span title="Senza costo di acquisto questa merce vale zero nel conto: mettilo nella scheda del prodotto."
@@ -1193,7 +1337,7 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
           {problemi.length === 0 ? (
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <span style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
-                Tutto quadra: la merce partita torna col venduto, le spese sono pagate e hanno un importo.
+                Tutto quadra: il rientro del materiale è stato contato, le spese sono pagate e hanno un importo.
               </span>
               <Button onClick={() => cambiaStato("concluso")} disabled={chiudendo}>{chiudendo ? "Chiudo…" : "Chiudi l'evento"}</Button>
             </div>
@@ -1223,21 +1367,6 @@ function SchedaConto({ evento, prodotti, bundleComponenti, categorieNome, onNuov
         </Riquadro>
       )}
 
-      {righeScartate.length > 0 && (
-        <Riquadro titolo="Non torna" sfondo="#FBEBE9" bordo="#F0C8C2">
-          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", lineHeight: 1.5, marginBottom: 6 }}>
-            Quello che è partito meno quello che è tornato deve fare quello che si è venduto o regalato. Qui non torna:
-          </div>
-          {righeScartate.map((r) => (
-            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 12, color: "#C0392B", padding: "3px 0" }}>
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
-              <span style={{ whiteSpace: "nowrap", fontWeight: 700 }}>
-                {r.scarto > 0 ? `${r.scarto} in meno del venduto` : `${-r.scarto} venduti più di quanti ne risultino partiti`}
-              </span>
-            </div>
-          ))}
-        </Riquadro>
-      )}
     </div>
   );
 }
@@ -1557,6 +1686,170 @@ export function SchedaDettaglioVendite({ eventoId, prodotti }) {
   );
 }
 
+// LE ISCRIZIONI CHIUSE AL BANCO DI QUESTA FIERA (8/11/2026).
+//
+// Chiesto dal titolare con la fiera di Napoli aperta: «quelle vendite le
+// mostri in una nuova sezione in fiera di napoli in gestione eventi in
+// cui elenchi i corsi che stiamo chiudendo in fiera».
+//
+// Due elenchi, e sono due cose diverse:
+//
+//   I CORSI CHE STIAMO CHIUDENDO sono le iscrizioni flaggate. Si
+//   raggruppano per classe e non per nome del corso: due edizioni dello
+//   stesso corso in due citta' sono due classi, e sommarle direbbe che a
+//   Napoli si e' venduto un corso che parte a Milano.
+//
+//   LE ISCRIZIONI DI QUESTI GIORNI sono una PROPOSTA, non un conto:
+//   tutte quelle salvate nei giorni della fiera e non ancora attribuite
+//   a nessuna. In quei giorni si iscrive gente da tutta Italia e chi sta
+//   in sede continua a lavorare — l'8/11/2026 nella finestra della
+//   Fiera di Napoli cadevano otto iscrizioni, quasi tutte di classi di
+//   Roma e Milano. Quindi `ts` propone e una persona decide: nessun
+//   flag si accende da solo.
+//
+// E' da qui che si segna un'iscrizione gia' chiusa (la richiesta del
+// titolare: «fai in modo che Elena possa aprire quelle iscrizioni che
+// sono avvenute in questi due giorni per flaggarle»). Si segna senza
+// aprire la scheda, che a iscrizione confermata e' chiusa a chiave:
+// entrarci per dichiarare una provenienza vorrebbe dire sbloccare
+// prezzi e quote per cambiare un'altra cosa.
+export function SchedaIscrizioniFiera({ evento, iscritti = [], corsi = [], corsiDate = [], location = [], onCambiato }) {
+  const [occupato, setOccupato] = useState("");
+  const [guasto, setGuasto] = useState("");
+
+  const mie = useMemo(() => iscrizioniDellaFiera(iscritti, evento?.id), [iscritti, evento?.id]);
+  const gruppi = useMemo(() => corsiChiusiInFiera(mie, { corsi, corsiDate, location }), [mie, corsi, corsiDate, location]);
+  const t = useMemo(() => contoIscrizioniFiera(mie), [mie]);
+  const candidate = useMemo(() => candidateDellaFiera(iscritti, evento), [iscritti, evento]);
+  const p = periodoFiera(evento);
+
+  async function segna(iscritto, eventoId) {
+    // TOGLIERE SI CHIEDE, SEGNARE NO (11/11/2026). Il titolare: «le
+    // iscritte della fiera non puoi poterne cancellare cosi' cliccando
+    // "non iscritta" e sparisce». Non si cancella niente — l'iscrizione
+    // resta dov'e', si stacca l'attribuzione — ma la riga ESCE
+    // dall'elenco che si ha davanti, e in un elenco di venti nomi il
+    // dito prende quello accanto. Segnare invece aggiunge, e un gesto
+    // che aggiunge si disfa col tasto di fianco: chiederlo sarebbe una
+    // domanda a cui si risponde sempre si'.
+    if (!eventoId && !confermaRimozione(
+      `${nomeDi(iscritto)} dalle iscrizioni di questa fiera`,
+      "L'iscrizione non si cancella: resta dov'è, e torna fra le iscrizioni di questi giorni da segnare.",
+    )) return;
+    setOccupato(iscritto.id); setGuasto("");
+    try {
+      await segnaVenditaFiera(iscritto.id, eventoId);
+      await onCambiato?.();
+    } catch (e) {
+      setGuasto(`${nomeDi(iscritto)}: ${e.message}`);
+    }
+    setOccupato("");
+  }
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <Numerino etichetta="Iscrizioni" valore={String(t.quante)} grande />
+        <Numerino etichetta="Pattuito" valore={euro(t.pattuito)} grande nota="quello che pagheranno in tutto" />
+        <Numerino etichetta="Già incassato" valore={euro(t.incassato)} nota="quote segnate pagate" />
+      </div>
+
+      {guasto && (
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", marginBottom: 12 }}>
+          Non riesco a salvare — {guasto}
+        </div>
+      )}
+
+      <Riquadro titolo="I corsi che stiamo chiudendo in fiera">
+        {gruppi.length === 0 && (
+          <Vuoto>
+            Nessuna iscrizione segnata su questa fiera.
+            <div style={{ marginTop: 6 }}>
+              Si segna spuntando <b style={{ color: NAVY }}>Vendita fiera</b> in cima alla scheda di
+              iscrizione, oppure qui sotto, dall'elenco delle iscrizioni di questi giorni.
+            </div>
+          </Vuoto>
+        )}
+        {gruppi.map((g) => (
+          <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0 2px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 180px", minWidth: 0, ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                {g.nome}
+              </span>
+              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>
+                {[g.citta, g.dataInizio ? fmtGiorno(g.dataInizio) : ""].filter(Boolean).join(" · ") || "data da decidere"}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                {g.quante} iscritt{g.quante === 1 ? "a" : "e"} · {euro(g.pattuito)}
+              </span>
+            </div>
+            {g.iscrizioni.map((i) => (
+              <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "5px 0 5px 2px" }}>
+                <span style={{ flex: "1 1 150px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY }}>
+                  {nomeDi(i)}
+                  {i.tutor && <span style={{ color: MUTED }}> · {toTitolo(i.tutor)}</span>}
+                </span>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtQuando(i.ts)}</span>
+                {/* «Non è della fiera» e non un cestino: non si cancella
+                    niente, si toglie un'attribuzione */}
+                <button
+                  type="button" data-togli={i.id} disabled={occupato === i.id}
+                  onClick={() => segna(i, "")}
+                  style={{
+                    ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#fff",
+                    border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "4px 11px",
+                    cursor: occupato === i.id ? "wait" : "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  {occupato === i.id ? "…" : "Non è della fiera"}
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </Riquadro>
+
+      <Riquadro titolo={`Le iscrizioni di questi giorni${p ? ` (${fmtGiorno(p.dal)} – ${fmtGiorno(p.al)})` : ""}`}>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.55 }}>
+          Tutte le iscrizioni salvate nei giorni della fiera e non ancora attribuite a nessuna.
+          <b style={{ color: NAVY }}> Non sono per forza della fiera</b>: in questi giorni si iscrive
+          gente da tutta Italia e in sede si continua a lavorare. Qui si guarda e si segna una per una.
+        </div>
+        {candidate.length === 0 && <Vuoto>Nessun'altra iscrizione in questi giorni.</Vuoto>}
+        {candidate.map((i) => {
+          const cd = (corsiDate || []).find((x) => x.id === i.corso_data_id) || null;
+          const corso = cd ? (corsi || []).find((c) => c.id === cd.corso_id) : null;
+          const luogo = cd ? (location || []).find((l) => l.id === cd.location_id) : null;
+          return (
+            <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY, fontWeight: 700 }}>
+                {nomeDi(i)}
+                {i.tutor && <span style={{ fontWeight: 400, color: MUTED }}> · {toTitolo(i.tutor)}</span>}
+              </span>
+              <span style={{ flex: "1 1 140px", minWidth: 0, ...fontBody, fontSize: 12.5, color: MUTED }}>
+                {corso?.nome || "classe non scelta"}
+                {luogo?.citta ? ` · ${luogo.citta}` : ""}
+              </span>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtQuando(i.ts)}</span>
+              <button
+                type="button" data-segna={i.id} disabled={occupato === i.id}
+                onClick={() => segna(i, evento.id)}
+                style={{
+                  ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY,
+                  border: `1px solid ${NAVY}`, borderRadius: 999, padding: "5px 13px",
+                  cursor: occupato === i.id ? "wait" : "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {occupato === i.id ? "Segno…" : "È della fiera"}
+              </button>
+            </div>
+          );
+        })}
+      </Riquadro>
+    </>
+  );
+}
+
 function Numerino({ etichetta, valore, nota = "", grande = false }) {
   return (
     <div style={{
@@ -1575,6 +1868,8 @@ const etichettaMetodo = (m) => METODI[m] || (m ? String(m) : "—");
 // "ANDREA PAURA" -> "Andrea Paura": in elenco un nome tutto maiuscolo
 // urla, e qui di nomi ce n'e' uno per riga
 const toTitolo = (t) => String(t || "").toLowerCase().replace(/(^|[\s'-])([a-zà-ù])/g, (_, p, c) => p + c.toUpperCase());
+// il nome di un'iscritta, come si legge in un elenco
+const nomeDi = (i) => toTitolo([i?.nome, i?.cognome].filter(Boolean).join(" ")) || "senza nome";
 
 // "184320" -> "180 KB". Senza, in elenco si legge un numero lungo che
 // non dice niente a nessuno.
@@ -1593,10 +1888,11 @@ const SEZIONI = [
   { v: "hotel", l: "Hotel" },
   { v: "documenti", l: "Documenti" },
   { v: "vendite", l: "Dettaglio vendite" },
+  { v: "iscrizioni", l: "Iscrizioni in fiera" },
   { v: "conto", l: "Conto" },
 ];
 
-function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato, fabbisognoCorsi = {} }) {
+function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, categorieNome, hotel, iscritti = [], corsi = [], corsiDate = [], onIscrizioniCambiate, onNuovaSpesa, onIndietro, onCambiato, onStockCambiato, fabbisognoCorsi = {} }) {
   const [sezione, setSezione] = useState("team");
   const [inModifica, setInModifica] = useState(false);
   const [team, setTeam] = useState([]);
@@ -1660,12 +1956,13 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
       </div>
 
       <div style={{ background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 16 }}>
-        {sezione === "team" && <SchedaTeam eventoId={evento.id} persone={persone} />}
+        {sezione === "team" && <SchedaTeam eventoId={evento.id} evento={evento} persone={persone} onCambiato={onCambiato} />}
         {sezione === "materiali" && <SchedaMateriali eventoId={evento.id} evento={evento} prodotti={prodotti} onStockCambiato={onStockCambiato} fabbisognoCorsi={fabbisognoCorsi} />}
         {sezione === "trasferimenti" && <SchedaTrasferimenti eventoId={evento.id} team={team} />}
         {sezione === "hotel" && <SchedaHotel eventoId={evento.id} evento={evento} team={team} hotel={hotel} />}
         {sezione === "documenti" && <SchedaDocumenti eventoId={evento.id} />}
         {sezione === "vendite" && <SchedaDettaglioVendite eventoId={evento.id} prodotti={prodotti} />}
+        {sezione === "iscrizioni" && <SchedaIscrizioniFiera evento={evento} iscritti={iscritti} corsi={corsi} corsiDate={corsiDate} location={location} onCambiato={onIscrizioniCambiate} />}
         {sezione === "conto" && <SchedaConto evento={evento} prodotti={prodotti} bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} onCambiato={onCambiato} />}
       </div>
     </>
@@ -1674,7 +1971,7 @@ function SchedaEvento({ evento, location, persone, prodotti, bundleComponenti, c
 
 // --------------------------------------------------------------- la pagina
 
-export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato, fabbisognoCorsi = {} }) {
+export default function GestioneEventi({ location = [], master = [], assistente = [], venditori = [], prodottiShop = [], bundleComponenti = [], costiCategorie = [], hotel = [], iscritti = [], corsi = [], corsiDate = [], onIscrizioniCambiate, onBack, titolo = "Gestione eventi", eventoIniziale = null, onNuovaSpesa, onStockCambiato, fabbisognoCorsi = {} }) {
   const [eventi, setEventi] = useState(null);
   // `eventoIniziale` arriva da chi ci ha portati qui — oggi la barra
   // dell'evento nel calendario. Non e' uno stato che cambia da solo:
@@ -1729,6 +2026,7 @@ export default function GestioneEventi({ location = [], master = [], assistente 
         {!creando && aperto && (
           <SchedaEvento
             evento={aperto} location={location} persone={persone} prodotti={prodottiShop} hotel={hotel}
+            iscritti={iscritti} corsi={corsi} corsiDate={corsiDate} onIscrizioniCambiate={onIscrizioniCambiate}
             bundleComponenti={bundleComponenti} categorieNome={categorieNome} onNuovaSpesa={onNuovaSpesa} fabbisognoCorsi={fabbisognoCorsi}
             onIndietro={() => setApertoId(null)}
             onCambiato={ricarica}

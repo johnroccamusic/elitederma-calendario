@@ -16,8 +16,8 @@ contabilità. Nessun utente finale anonimo.
 | UI | React 18.3, nessun router, nessuna libreria di stato |
 | Build | Vite 5.4 |
 | Database | Supabase — progetto `Elitederma-Calendario` (`snhvvipszhfllrgemsdu`), eu-west-1, Postgres 17 |
-| Storage | 22 bucket Supabase, quattro privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`) |
-| Backend | 49 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
+| Storage | 22 bucket Supabase, dieci privati (`moduli-iscrizione`, `consensi-documenti`, `slide-corsi`, `eventi-documenti`, `progetti-allegati`, `allegati-iscritti`, `master-documenti`, `venditori-documenti`, `leve-assistenti-documenti`, `spese-allegati`) |
+| Backend | 56 edge function Deno in `supabase/functions/` (WooCommerce, Stripe, Fatture in Cloud, email, modulo di iscrizione, WordPress) |
 | PDF | pdf-lib + pdfjs-dist, generazione e parsing **lato client** |
 | Deploy | Vercel, team `elitederma`, progetto `elitederma-calendario` |
 | Stile | inline style, nessun CSS framework |
@@ -33,15 +33,16 @@ src/main.jsx             entry point
 src/Accesso.jsx          gate Supabase Auth (collegato, vedi § 4)
 src/comuni-regioni.js    dati statici
 src/ui/                  mattoni condivisi: Button, Field, CampoNumero, colori
-src/<modulo>/            fette già uscite dal monolite — consensi, content,
-                         email, eventi, file, iscrizione, iscrizioni, magazzino,
-                         notifiche, pos, prezzi, punti, recesso, rientri,
-                         salvataggi, spese, stampe
-prove/                   67 file, 448 prove (Vitest + jsdom), con preparazione e aiuto
+src/<modulo>/            fette già uscite dal monolite — clienti, consensi,
+                         content, contratti, crm, email, eventi, file,
+                         iscrizione, iscrizioni, magazzino, notifiche, pos,
+                         prezzi, progetti, punti, recesso, regole, rientri,
+                         salvataggi, spese, stampe, statistiche
+prove/                   128 file, 1.315 prove (Vitest + jsdom), con preparazione e aiuto
 eslint.config.js         le regole del controllo
 controlla-funzioni.sh    deno check sulle edge function
-supabase/functions/      45 edge function + _shared
-supabase/migrations/     329 migrazioni versionate
+supabase/functions/      56 edge function + _shared
+supabase/migrations/     migrazioni versionate (+ script cumulativi alla radice)
 supabase-*.sql           130 script di setup storici, cumulativi e idempotenti
 ```
 
@@ -115,7 +116,7 @@ Verificato interrogando il database e Vercel, non leggendo i file:
   |---|---|
   | `?master=` | `master_vista`, `master_segna_incassato` |
   | `?modelle=` | `modelle_vista`, `modelle_leggi_trattamenti`, `modelle_salva_trattamenti` |
-  | `?biglietti=` | `biglietti_vista` |
+  | `?biglietti=` | **tolta il 31/10/2026** |
   | `?ricevuta=` | `ricevuta_pos` |
   | `?modulo=` | `modulo_vista`, `modulo_salva` + caricamento su `moduli-iscrizione` |
   | `?recesso=` | `recesso_vista` + edge function `modulo-recesso` |
@@ -668,7 +669,10 @@ programmatore e amministratore la vedono comunque). Chi amministra
 la riempie lui, scheda per scheda.
 
 L'**icona flottante** in basso a destra (`AssistenteRegole.jsx`) c'è per
-chiunque abbia fatto accesso, tranne il profilo kiosk. La edge function
+chiunque abbia fatto accesso, tranne il profilo kiosk. **Dal 3/11/2026
+risponde anche su come funziona l'app e sui dati delle aree che quella
+persona vede**: vedi «L'assistente risponde anche sull'app e sui dati»
+più avanti. La edge function
 `assistente-regole` (Haiku, `getUser` obbligatorio: senza sessione 401,
 verificato) passa al modello **solo** le schede attive visibili a quel
 ruolo e la domanda — niente dati di allievi né di vendite — e gli impone di
@@ -765,6 +769,19 @@ la vendita **esce dalla busta** con la stessa logica della cancellazione
 appendici il suo importo scende; da carta a contanti **entra nel contante
 atteso**, senza numero di busta, e il Riepilogo la mette nella busta aperta
 o nell'appendice. La riga lo dice **prima** di confermare.
+
+### Iscrivi allievo: il modulo non si carica più, parte dall'app (29/10/2026)
+
+Tolti dalla scheda dell'allievo l'area «Carica modulo di iscrizione», il
+tasto «Leggi dati dal modulo» e le due funzioni che li servivano; dalla
+pagina Iscrizione allievi il vecchio link al modulo del sito
+(`elitederma.eu/modulo-iscrizione-corsi`) e, nelle tappe, le frasi «invia
+il link» e «carica il modulo compilato». La strada è una: dalla scheda
+si preme «Invia il modulo», l'allieva lo firma dal telefono, torna
+firmato nella scheda. Il testo di quella pagina vive in `normative_testi`
+(`iscrizione_allievi`), che comanda sul testo di partenza nel codice:
+corretti tutti e due. Resta, in sola lettura, il link ai moduli cartacei
+caricati in passato (`iscritti.file_iscrizione`).
 
 ### La quota coordinatore, intestata a una persona (28/10/2026)
 
@@ -1047,6 +1064,2875 @@ indicato…, ma la foto sembra una patente»), e «Usa i dati» corregge
 `doc_tipo` con il valore di `TIPI_DOCUMENTO`; `tipoDocumentoCanonico`
 riduce a un nome solo i modi in cui un tipo può essere scritto.
 
+### La taglia della divisa la sceglie l'allieva (29/10/2026)
+
+I venditori segnalavano che le allieve «non possono selezionare la
+taglia» nel modulo. Due regole giuste messe insieme: la scheda
+obbligava il venditore a scegliere una taglia prima di salvare, e
+`modulo_campo_bloccato` blocca al primo invio ogni campo già pieno.
+Risultato: una «M» tirata a indovinare per poter salvare, che l'allieva
+trovava bloccata fra i «Dati organizzativi» in sola lettura. Ora
+`taglia_divisa` è come `tipo_cliente`: **non si blocca mai** e
+`modulo_salva` la riscrive con quello che manda lei (solo valori di
+`TAGLIE`, in `src/iscrizione/campi-scheda.js`). Nel modulo ha il suo
+riquadro «La tua divisa», tendina precompilata se il venditore aveva
+scritto qualcosa; la scheda non la pretende più per salvare. **Ed è
+obbligatoria per spedire** (deciso dal titolare lo stesso giorno): la
+pagina la elenca in «Manca ancora» e `modulo_salva` rifiuta con
+`senza_taglia` se non arriva né dalle risposte né dalla scheda.
+Migrazione `20261029100000_taglia_la_sceglie_l_allieva.sql`, prova in
+`prove/modulo-iscrizione.test.jsx`.
+
+### Il materiale di un evento resta in magazzino (30/10/2026)
+
+Terza versione della regola, e stavolta è una decisione del titolare,
+testuale: «i prodotti impegnati negli eventi non devono essere scalati
+nel magazzino, è come se si spostasse una parte del magazzino
+all'evento; verranno scalati solo una volta venduti». Fino al 08/10 il
+materiale restava in giacenza senza essere impegnato; dal 08/10 al 30/10
+«Partito» scaricava e «Rimetti in magazzino» ricaricava. Da oggi:
+
+- quello che è in elenco **resta in giacenza e non è impegnato in
+  niente** (precisato dal titolare lo stesso giorno: «tutti lo possono
+  vendere»): il banco, lo shop e la fiera lo vendono tutti dalla stessa
+  giacenza. `impegniMagazzino` conta solo i carrelli sospesi. L'Advisor
+  (`simulaScorte`) tiene le fiere in fila con le edizioni, ma come
+  **informazione**: «ti avvisa quanto materiale ci vuole a fare l'evento
+  e quanti prodotti servono per i corsi nel caso in cui i prodotti
+  vengono portati via dal magazzino, ma nessun impegno». I dipendenti
+  devono capire da lì se le quantità bastano per corsi ed evento;
+- **scende solo quando qualcuno lo vende**: alla fiera col POS (tendina
+  «Sei a un evento?»), o altrove. È la vendita che scarica, come sempre;
+- **«Partito»** scrive `quantita_portata` dove non c'è già un numero a
+  mano e **non muove niente**; «Rimetti in magazzino» non esiste più;
+- al rientro **non si scrive un numero, si conta**: la riga dice
+  «Venduti all'evento N (di cui M in omaggio), ne riporti in magazzino P»
+  e chi apre lo scatolone **spunta** (`rientro_verificato_il`). Solo
+  verifica sulle quantità. Se il POS ne ha registrati più dei partiti la
+  riga lo dice in rosso. La chiusura dell'evento chiede la spunta su ogni
+  riga partita (`problemiDiChiusura`), e il conto valorizza a costo
+  quello che il POS ha registrato.
+
+`quantita_scaricata`, `quantita_ricaricata`, `quantita_rientrata` restano
+come **storico del periodo 08/10–30/10** e non si scrivono più; il
+giorno del cambio nessuna riga le aveva diverse da zero (Catania 17
+righe, Napoli 152), quindi niente da rimettere in pari. Migrazione
+`20261030150000_materiale_evento_resta_in_magazzino.sql`, prove in
+`prove/materiale-evento-resta-in-magazzino.test.jsx`.
+
+### CRM Contatti: tutti quelli che hanno scritto, importati da Vetta (30/10/2026)
+
+Vetta (il CRM commerciale, su base Twenty) aveva 23.847 persone: clienti,
+scartati, da richiamare. Ora stanno in Genion, **una persona molte
+richieste**: `crm_contatti` (23.757, i doppioni per email o telefono uniti)
+e `crm_richieste` (23.847, una per record Vetta, con data, corsi, canale,
+form, chi l'ha trattata e la qualifica di quel momento). Il contatto tiene
+`corsi_interesse` come unione, `primo_contatto_il`/`ultimo_contatto_il`,
+la qualifica e lo stato trattativa (`venduto` / `in_trattativa` /
+`nessuna`, dalle opportunità), il luogo normalizzato sul comune ISTAT
+accanto a quello scritto, il collegamento allo Storico allievi o a un
+iscritto (`certo` / `dubbio` / `nessuno`, con la nota del perché) e i flag
+`da_verificare` (nome vuoto, nome di attività, nome senza lettere, senza
+email né telefono, omonimi non uniti) e `nome_nota` («solo il nome, senza
+cognome»: informazione, non motivo di verifica, deciso dal titolare).
+
+**Lo script** è `scripts/importa-vetta.mjs` (REST di Vetta con
+`VETTA_API_KEY`; con una chiave `sb_secret_` di Supabase va messa solo in
+`apikey`, mai in Authorization), con `scripts/vetta-normalizza.mjs` per
+nomi, telefoni, comuni, corsi canonici. È idempotente per `vetta_id`. Le
+826 opportunità che in Vetta non puntano a nessuna persona si agganciano
+per nome solo se una persona sola porta quel nome con nome e cognome (un
+nome solo basta solo se è già CLIENTI): 605 agganciate, 100 ambigue, 118
+senza nessuno. Riepilogo e dubbi in `.importa-vetta/`, fuori da git.
+
+**In Vetta non esiste un consenso al marketing** (verificato su tutti i
+campi). Il titolare ha deciso: si scrive a tutti, il consenso è quello
+raccolto sul sito, e ogni mail porta il link per disiscriversi. **Chi si
+disiscrive resta in archivio** con `disiscritto_il` e `disiscritto_come`:
+di default è fuori dalle liste (filtro «Disiscritti» per vederli), dalle
+campagne è fuori sempre. Il blocco vale per email, così un re-import o una
+richiesta nuova non lo riportano dentro.
+
+**La pagina** è `src/crm/PaginaContatti.jsx`, tessera «Contatti» nel CRM.
+Non carica la tabella: chiede una pagina da 50 a `crm_cerca_contatti`
+(filtri in jsonb, totale vero) e i valori dei filtri a
+`crm_filtri_valori`, entrambe `security invoker` per `authenticated`.
+Periodo (anno o dal/al) e corso filtrano **sulle richieste**; regione,
+provincia, comune, qualifica, stato, trattato da, mestiere, Genion sul
+contatto. La scheda aperta legge le richieste e mostra la cronologia
+(«03/2024 Microblading · 05/2025 Laminazione»), le opportunità e il tasto
+per segnare un disiscritto a mano. Prove in `prove/crm-contatti.test.jsx`.
+**La data della richiesta non è sempre vera.** 16.327 record su 23.847
+sono nati in Vetta il 9 marzo 2026, il giorno del caricamento in blocco:
+`crm_richieste.data_certa = false`. La pagina scrive «data non nota», il
+filtro Anno ignora quelle date e guarda anche le vendite (2022–2026),
+la spunta «Data non nota» isola chi non ha nessuna data vera.
+
+**Componi mail** (`src/crm/ComponiMail.jsx`, stesso giorno). Dalla lista
+filtrata nasce una `crm_campagne` (filtri, oggetto, HTML, stato bozza →
+pronta → in_invio → inviata); l'editor è un `contentEditable` senza
+librerie; l'anteprima usa `componiCampagna` di `_shared/email.js`, **la
+stessa funzione del server**, con il piede fisso (chi siamo, perché
+ricevi questa mail, link di disiscrizione). «Prepara i destinatari» è
+`crm_campagna_prepara`: li congela in `crm_campagne_destinatari` (un
+indirizzo una mail, mai disiscritti, mai da verificare, mai un indirizzo
+già rimbalzato) e dice quanti restano fuori e perché. La lista e le
+campagne usano la stessa `crm_contatti_filtrati`: due copie della WHERE
+darebbero due conteggi diversi. L'invio è la edge function
+`crm-campagna-invia`: cento mail a chiamata con l'API batch di Resend,
+una a testa, con `List-Unsubscribe` e `List-Unsubscribe-Post` (il tasto
+«Disiscriviti» di Gmail e Mail); la pagina richiama finché la coda è
+vuota, e se si chiude a metà da «Campagne» si riprende. «Mandami una
+prova» spedisce a un indirizzo solo con valori finti. Il webhook
+`email-eventi` annota consegna, apertura, rimbalzo e segnalazione spam
+sul destinatario; chi segnala spam viene disiscritto con il motivo.
+
+**Chi ha aperto.** Su Resend il tracciamento di aperture e clic sul
+dominio `elitederma.net` era spento: acceso il 30/10/2026 sera, deciso dal
+titolare. Da lì il webhook segna «aperta» sul destinatario; nella campagna
+il pannello «Destinatari, uno per uno» li elenca per stato (in coda,
+spedita, consegnata, aperta, rimbalzata, segnalata, non riuscita) con
+ricerca per nome, e la scheda del contatto mostra le mail di campagna
+ricevute con lo stato. Va detto a chi legge: «aperta» è un'immagine
+scaricata dal programma di posta, Mail di iPhone la scarica per tutti e
+Gmail solo se mostra le immagini; è una tendenza, non una prova di lettura.
+Il tracciamento dei clic riscrive i link facendoli passare da Resend.
+
+**La disiscrizione** è `crm_disiscrivi(token)`, security definer
+eseguibile da `anon`: scrive `disiscritto_il` su tutte le schede con
+quell'email. Due ingressi: la rotta pubblica `?disiscrizione=<gettone>`
+(`src/crm/PaginaDisiscrizione.jsx`, disiscrive appena si apre) e la edge
+function pubblica `crm-disiscrivi` (POST = one-click dal programma di
+posta, GET = rimanda alla pagina). Prove in `prove/crm-campagna.test.jsx`.
+
+### La mailing list arriva anche ai clienti dello shop (17/11/2026)
+
+Il titolare: «dobbiamo attivare la possibilità di fare mailing list
+anche per i clienti shop, anche lì ci deve essere la possibilità di
+filtrarli e selezionarli comporre una mail come succede per la lista di
+tutti i contatti importati dal CRM». E, sul come: «metti un filtro che
+si chiama "solo quelli che non sono in CRM"», e si scrive a «tutti».
+
+**Misurato prima di toccare niente**: i clienti shop sono **1.888 email
+distinte su 4.291 ordini** WooCommerce dal 15/03/2022. Di quelle, **772
+erano già in `crm_contatti`** e 1.116 no. Le **235 vendite al banco non
+hanno nessuna email** (al POS non si chiede) e restano fuori: non c'è
+niente da spedire. E **in WooCommerce non esiste un consenso al
+marketing**, verificato su tutte le `meta_data` degli ordini: esattamente
+come in Vetta, quindi vale la stessa decisione del 30/10 — si scrive a
+tutti, ogni mail porta il link per disiscriversi.
+
+**UNA LISTA SOLA, e il motivo è la disiscrizione.** I clienti shop
+diventano righe di `crm_contatti` e non una lista a parte, perché
+`crm_disiscrivi` scrive per **email** su tutte le righe e
+`crm_campagna_prepara` esclude per email: con due liste separate, chi si
+è disiscritto dalle mail del CRM continuerebbe a ricevere quelle dello
+shop, e la sua seconda disiscrizione non avrebbe dove essere scritta. Le
+772 in comune non ricevono due copie perché il dedup per email in
+`crm_campagna_prepara` c'era già.
+
+**E non è servito toccare né «Componi mail» né l'invio**:
+`crm_cerca_contatti` e `crm_campagna_prepara` delegano tutto il
+filtraggio a `crm_contatti_filtrati(filtri)`. I filtri nuovi stanno **là
+dentro**, in un posto solo, e valgono insieme per l'elenco, per il
+totale e per i destinatari che una campagna congela — due copie della
+WHERE darebbero due conteggi diversi sulla stessa lista.
+
+| Filtro | Cosa chiede |
+|---|---|
+| `cliente_shop` | ha comprato almeno una volta sullo shop |
+| `non_in_crm` | «solo quelli che non sono in CRM»: nessun record Vetta e nessuna richiesta |
+| `acquisto_dal` / `_al` | ha comprato **in quel periodo** (si guardano gli ordini, non il primo/ultimo acquisto) |
+| `reparto` | ha comprato roba di quel reparto, **nello stesso ordine** che rispetta il periodo |
+| `speso_da` | ha speso almeno tanto, in tutto, sullo shop |
+
+**«Non in CRM» si CALCOLA, non si congela.** È `vetta_id_principale is
+null` più nessuna riga in `crm_richieste`: così il giorno che quel
+cliente scrive e gli nasce una richiesta **esce da sé** da questo filtro,
+che è la risposta giusta — da quel momento è anche in CRM. Leggerlo da
+`fonte_lista` (la colonna che dice dove è nata la riga) l'avrebbe
+lasciato «non in CRM» per sempre. Una prova lo inchioda.
+
+**`vetta_id_principale` non è più NOT NULL**, ed è il punto in cui la
+tabella ha smesso di essere solo-Vetta: il primo cliente shop è stato
+rifiutato con un 23502 sul database vero. Il vincolo UNIQUE resta (in
+Postgres ammette più NULL) e l'importatore di Vetta continua a scriverlo
+sempre; mettere un id inventato avrebbe voluto dire un puntatore a un
+record che non esiste, e il filtro avrebbe risposto il falso.
+
+**Gli ordini non si copiano.** Sulla riga del contatto va il **riassunto**
+— `acquisti_shop`, `speso_shop`, `primo`/`ultimo_acquisto_shop_il`,
+`reparti_acquistati`, `fonte_lista` — perché è quello su cui si filtra; i
+singoli ordini la scheda li rilegge da `vendite_shop`, che è il loro
+posto. Un dato copiato in due posti un giorno dice due cose.
+
+**Quattro regole nella sincronizzazione** (`crm_sincronizza_clienti_shop`,
+idempotente, provata due volte di fila: il secondo giro crea zero):
+
+- **un disiscritto non torna dentro** — la funzione non scrive mai
+  `disiscritto_il`, come l'importazione di Vetta;
+- **i dati di Vetta non si riscrivono**: telefono, città e provincia si
+  riempiono **solo se erano vuoti**;
+- **`da_verificare` solo senza nome**, perché `crm_campagna_prepara`
+  esclude le righe da verificare: marcarle con larghezza vorrebbe dire
+  gente che non riceverà mai niente senza che si veda. Oggi sono **2**;
+- **`numero_richieste = 0`** per chi nasce dallo shop: il default della
+  colonna è 1, e lascerebbe scritto «una richiesta» addosso a chi non ha
+  mai scritto.
+
+**Il comune normalizzato non si inventa.** `crm_contatti.comune` tiene il
+nome ISTAT e da lì nasce la tendina dei comuni: scriverci la città di
+fatturazione così com'è battuta farebbe comparire «ROMA», «roma» e
+«Roma» come tre comuni diversi. La città grezza va in `citta_originale`;
+**provincia e regione invece si scrivono**, perché vengono dalla sigla
+(`billing.state`) tradotta da **`province_regioni`**, 107 righe generate
+da `src/comuni-regioni.js` con `node scripts/genera-province-sql.mjs` —
+una prova confronta la migrazione con quell'elenco. Conseguenza voluta:
+il filtro **Comune** non trova i clienti nati dallo shop, Regione e
+Provincia sì (1.105 su 1.108 hanno la regione).
+
+**Il reparto comprato è la categoria radice**, la stessa regola del
+9/11/2026 per le liste dei kit, e il prodotto di una riga si riconosce
+**per id e poi per nome**: misurato sulle 12.920 righe in archivio, 7.094
+non hanno nemmeno il `woo_product_id` (sono gli ordini dello storico, col
+solo nome) e altre 4.601 ne hanno uno che in anagrafica non c'è più. Per
+solo id si riconoscevano **1.225 righe su 12.920**; col nome si passa a
+5.905, e i clienti con almeno un reparto riconosciuto da 118 a **1.026 su
+1.888**. Non contraddice «raggruppa per prodotto, mai per nome»: quella
+regola vale per i conti delle statistiche, qui il nome è l'unica cosa che
+quelle righe hanno, e un nome che non combacia più non dà un reparto
+sbagliato ma «Senza categoria».
+
+**E il limite lo dice la pagina**, sotto i filtri: su 7.015 righe il
+prodotto non è più a catalogo in nessun modo, quindi il filtro per
+reparto trova chi ha comprato *fra quello che si riconosce*, non tutti.
+Un filtro che tace su ciò che non sa fa credere di aver scritto a tutti.
+
+**Il riassunto si rifà ogni notte alle 04:50** (cron `crm-clienti-shop`,
+che chiama la funzione SQL direttamente) e c'è il tasto **«Aggiorna i
+clienti shop»** in pagina, perché chi ha appena venduto non deve
+aspettare domani. Un ordine cestinato azzera il riassunto di quella
+persona ma **non cancella la sua riga**: una persona non sparisce perché
+un ordine è stato annullato.
+
+**Fatto girare il 17/11/2026**: 1.888 email, **780 righe aggiornate**
+(772 per email principale + 8 che stavano in `email_aggiuntive`, e senza
+quel controllo sarebbero nati 8 doppioni) e **1.108 create**. La lista
+passa da 23.757 a **24.865**, quindi una campagna senza filtri adesso
+raggiunge anche loro — che è la decisione «tutti». Provato in una
+transazione annullata anche il giro completo di una campagna con
+`non_in_crm`: **1.106 destinatari congelati** su 1.108, i 2 esclusi sono
+quelli senza nome di fatturazione.
+
+Migrazione `20261117150000_la_mailing_list_dei_clienti_shop.sql`
+(rollback dentro, e non cancella chi ha già ricevuto una mail). Prove in
+`prove/crm-clienti-shop.test.jsx` (19).
+
+**Resta da sapere**: la sincronizzazione crea una temp table
+`on commit drop`, quindi non si può chiamare due volte nella stessa
+transazione — come `crm_campagna_prepara`, che ha lo stesso limite da
+sempre. In produzione è una chiamata per richiesta e non si vede.
+
+### Un ordine che non è stato pagato non è un incasso (18/11/2026)
+
+Il titolare, davanti a «Clienti shop»: «come è possibile che questi
+clienti dello shop online abbiano totalizzato in pochi mesi dello stesso
+anno cifre che arrivano quasi a 50.000 euro con pochi acquisti?».
+
+**Non avevano speso niente.** Elvira Palminteri risultava con 15 ordini e
+45.000 €: tutti e quindici `cancelled` o `failed` — tentativi di comprare
+un corso da 3.000 € che non sono mai andati a buon fine. Dei primi otto
+della classifica, **sei avevano incassato zero euro** e gli altri due
+520,13 € e 405,80 €. WooCommerce quegli ordini li conserva come ordini
+veri, e **nessuna delle sei letture guardava `stato`**.
+
+| stato | ordini | importo | |
+|---|---|---|---|
+| `completed` | 3.564 | **646.706,45 €** | gli unici incassati |
+| `cancelled` | 469 | 507.710,51 € | |
+| `failed` | 156 | 91.588,97 € | |
+| `on-hold` | 34 | 87.797,40 € | |
+| `pending` | 20 | 23.656,00 € | |
+| `refunded` | 49 | 6.959,30 € | entrati e restituiti |
+
+**717.712,18 € mai entrati, contati come fatturato.** Il danno peggiore
+non è il numero sbagliato, è che sembrava giusto: nessuno mette in dubbio
+una classifica dei migliori clienti.
+
+**La regola sta in `venditaIncassata`, un posto solo.** Di WooCommerce
+contano `completed` e `processing` — il secondo in archivio non c'è, ma è
+lo stato normale di un ordine pagato e non ancora evaso, e il giorno che
+compare deve contare da sé. `refunded` sta fuori, e si legge a parte.
+**Per le altre origini vale il contrario**: al banco si registra solo
+quello che si è incassato, e dal 23/10/2026 il database pretende la prova
+del pagamento — quindi una riga del POS conta sempre, anche senza stato.
+Pretendere `completed` anche lì vorrebbe dire far sparire dalla
+contabilità una vendita vera per una colonna vuota.
+
+**Sei letture, non una.** Era la stessa dimenticanza ripetuta: l'elenco
+dei clienti, la classifica dei prodotti, le **statistiche globali**, le
+**statistiche per canale** (`src/App.jsx`), più la vista
+`vendite_shop_reparti` e la funzione `crm_sincronizza_clienti_shop`
+(migrazione `20261118170000`). Le ultime due alimentano i filtri delle
+campagne: **«ha speso almeno tanto» selezionava gente che non ha mai
+pagato un euro**. Rifatta la sincronizzazione: `speso_shop` passa da
+1.364.418,63 € a **646.706,45 €**, i clienti da 1.888 a **1.756**, e
+**132 persone che risultavano clienti vanno a zero** — restano in lista,
+perché sono contatti, non vendite.
+
+**E DENTRO QUELLO CHE RESTA, I CORSI NON SONO PRODOTTI** (chiesto dal
+titolare lo stesso giorno: «devi vedere che siano prodotti acquistati, ho
+il dubbio che stai calcolando anche gli acconti dei corsi che prima
+passavano sotto la voce kit»). Il dubbio era fondato e la misura è
+grossa: dei 646.706,45 € incassati, **242.435,70 € sono righe di corso**
+(acconti e saldi comprati dal sito) e **372.997,92 €** prodotti veri.
+Chi ha versato l'acconto di un corso da 3.000 € stava davanti a tutti in
+una classifica di compratori dello shop senza aver preso niente dal
+magazzino.
+
+La classificazione esisteva già (`voci_shop_classificazione`, 453 voci
+prodotto e 66 corso) e la usava **solo** la classifica dei prodotti.
+Adesso la regola sta in `classificatoreVociShop`, in un posto solo, e la
+usano tutte e due: due idee di «questa riga è un corso» darebbero due
+numeri diversi sullo stesso ordine. Il nome storico di un prodotto si
+impara però da **tutti** gli ordini, anche quelli non pagati — sapere
+come si chiamava non dipende dal fatto che quell'ordine sia andato a buon
+fine.
+
+**Come si legge la lista adesso.** Le colonne nominano ciò che
+contengono: **Ordini pagati**, **Prodotti**, **Corsi**, **Totale
+incassato**, e i tentativi hanno una colonna loro, **Non riusciti**, con
+quanti e quanto. Nella scheda del cliente i tre numeri **tornano** —
+prodotti + corsi + spedizione e altro fa esattamente il totale incassato
+(il «resto» sono spedizione e differenze di sconto, 31.177,26 € su tutto
+l'archivio): un totale che non torna con i suoi pezzi è un totale che
+nessuno sa più leggere. Si parte ordinati per **Prodotti**, che è la
+domanda per cui quella pagina esiste.
+
+Tre decisioni, e ognuna è un modo di sbagliare:
+
+- **I tentativi non si cancellano.** Che una persona abbia provato tre
+  volte a comprare un corso da 3.000 € senza riuscirci è l'informazione
+  commerciale più interessante di quell'elenco. Solo, non è fatturato:
+  ha una colonna sua, e chi ha **solo** tentativi resta in elenco con
+  zero euro invece di sparire.
+- **Quello che non è entrato si scrive sopra la tabella**, non dentro
+  una colonna: è la cifra che per anni è stata contata come fatturato, e
+  va letta prima dei numeri, non cercata.
+- **Un account con più intestatari si dichiara.** Il raggruppamento è per
+  `customer_id` di WooCommerce e il nome mostrato è quello dell'ordine
+  più recente: sui soli ordini pagati **49 gruppi su 2.043** portano più
+  di un nome, e adesso lo dicono con una pastiglia. È anche il motivo per
+  cui lo stesso Vincenzo Curatola compariva due volte con la stessa email
+  — due account, due righe.
+
+**La guardia è la parte che dura** (`prove/ordini-non-pagati.test.js`,
+24): oltre alle regole, rilegge `src/App.jsx` e pretende che **ogni**
+punto che raccoglie gli ordini del sito passi da `venditaIncassata`,
+oppure dichiari per iscritto perché no (sono due: la scheda del cliente,
+che deve mostrare anche i tentativi, e la mappa dei nomi storici). Se un
+giorno nasce la settima lettura senza quel filtro, la prova diventa rossa
+invece di farci scoprire il guasto fra due anni guardando una classifica.
+
+**Il rovescio della medaglia, e come si chiude.** Se adesso un ordine
+del sito arrivasse **senza stato**, sparirebbe dai conti in silenzio —
+lo stesso guasto all'incontrario, e altrettanto invisibile. Oggi non
+capita (tutte e 4.292 le righe ne portano uno valido, misurato), e la
+migrazione `20261118180000` lo pretende dal database con un vincolo.
+**Non è ancora applicata**: è una modifica di schema su produzione e
+aspetta il via libera del titolare. Al banco il vincolo non vale — lì si
+registra solo quello che si è incassato, e una riga del POS senza stato
+continua a contare.
+
+**Resta da decidere:** se `refunded` debba comparire come voce a sé anche
+nelle statistiche (oggi è semplicemente fuori dall'incasso); se gli stati
+`on-hold` e `pending` (111.453,40 €, ordini in attesa di un bonifico che
+non risulta arrivato) vadano guardati uno per uno prima di darli per
+persi; e se il filtro «ha speso almeno tanto» delle campagne debba
+guardare i soli **prodotti** invece del totale incassato — oggi guarda il
+totale, che è giusto ma mette insieme chi ha comprato merce e chi ha
+pagato un corso.
+### «È anche venditore» e «venditore collegato» sono due cose (19/11/2026)
+
+Il titolare, in Impostazioni → Utenti: acceso il flag **«è anche
+venditore»** su VALENTINA CALASCIBETTA e scelto il suo nome dalla tendina
+accanto, l'app rispondeva `insert or update on table "master" violates
+foreign key constraint "master_venditore_id_fkey"`.
+
+**Il database aveva ragione, e il difetto era nel collegamento.** Dal
+22/10/2026 `venditori` — il nome che quasi trecento punti dell'app
+leggono — **non è la tabella**: è la tabella PIÙ le master col flag
+acceso, presentate come venditori **con il loro id di master**. Una riga
+così in `venditori` non esiste, e `master.venditore_id` è una chiave
+esterna verso `venditori.id`. Il pannello «Utenti» riceveva l'elenco
+unito, quindi la tendina «Venditore collegato» offriva anche le master
+flaggate: una scelta impossibile, e **proprio quella che si fa per
+istinto subito dopo aver acceso il flag**.
+
+**Erano tre punti, non uno**, tutti alimentati dall'elenco sbagliato:
+la tendina di **Password Master** (`master.venditore_id`), quella di
+**Gestione utenti** (`utenti_app.venditore_id`) e quella della scheda in
+**Definisci Master**. Al quarto il database non diceva niente: in
+**Password venditori** le master flaggate comparivano come righe, e
+scrivere lì password o permessi faceva un update su `venditori` con un id
+di master — **zero righe cambiate, nessun errore** (è la regola «un
+update senza select mente», e qui nemmeno il select avrebbe aiutato: la
+riga non c'è). Era anche il contrario di quello che questo file prometteva
+dal 22/10: una master flaggata «non compare in Gestione venditori, si
+gestisce da qui».
+
+**La regola, adesso scritta accanto all'elenco:** chi **scrive** sulla
+tabella `venditori`, o ci aggancia una chiave esterna, riceve
+`venditoriTabella`; l'elenco unito resta per chi **legge** — tendina
+tutor, Dashboard venditori, commissioni, obiettivi. Due prop cambiate
+(`propsUtenti` e `PaginaGestioneMaster`); `PaginaGestioneVenditori` la
+tabella la riceveva già, ed è il motivo per cui lì il guasto non si
+vedeva.
+
+**E il pannello dice che non c'è niente da collegare.** Col flag acceso e
+nessun collegamento, sotto la tendina si legge «Col flag acceso non serve
+collegare nessuno: vende con questa password». Togliere la scelta
+sbagliata non basta: chi aveva appena acceso il flag cercava comunque
+cosa fare dopo. La tendina resta, perché le dieci persone che stanno in
+tutte e due le liste un collegamento vero ce l'hanno.
+
+**La guardia è la parte che dura** (`prove/master-anche-venditore-non-si-collega.test.jsx`,
+8): il componente mostra quello che gli danno, quindi **nessuna prova che
+monti una pagina poteva vedere questo guasto** — stava nel collegamento.
+La guardia rilegge `src/App.jsx` e pretende che i tre pannelli che
+scrivono su `venditori` ricevano `venditoriTabella`, e che l'elenco unito
+continui a marcare `da_master` — l'unico segno che quella riga non esiste
+nella tabella.
+
+**Oggi riguarda tre persone**: DEBORA FUMAGALLI, MARTINA TORA e VALENTINA
+CALASCIBETTA hanno il flag e nessuna riga in `venditori` (TOMMASO
+GIUMBINI ce l'ha, collegata). Nessun dato è stato toccato: la scrittura
+non era mai andata a buon fine.
+
+### La raccolta del materiale, a tutta pagina (30/10/2026)
+
+In Logistica → Spedizioni corsi, in alto a destra nella scheda di
+allestimento di un'edizione, c'è **«Prepara»**: apre a tutta pagina la
+lista di **tutto** quello che serve a quell'edizione, prodotto per
+prodotto, con le quantità già sommate («7 Aghi 1RL», «3 Dermografo
+Horus»), perché chi prepara passa fra gli scaffali una volta sola prima
+di comporre le scatole. La lista la compone `listaRaccoltaMateriale`
+dalla stessa fotografia del pacco di `componiSpedizione`: le distinte
+dei kit per iscritti e di riserva, i dermografi comprati a parte e di
+riserva (quelli dentro un kit stanno già nella sua distinta), gli
+accessori didattica, gli extra, la merce da vendere, le consulenze. Un
+prodotto che arriva da più strade ha una riga sola e dice da dove.
+
+Si spunta col dito o col mouse: la riga diventa verde e la spunta si
+salva in `logistica_kit_edizioni.checklist` (chiave → chi e quando), così
+si riprende da dove si era e un altro turno vede cosa è già stato preso.
+L'ordine delle righe non cambia mentre si spunta. È una lista di
+raccolta, non un movimento: il magazzino scende come prima, a «Materiale
+preparato». Prove in `prove/raccolta-materiale.test.jsx`.
+
+### Il controllo di sicurezza del 31/10/2026, e cosa ha chiuso
+
+Advisor di Supabase, policy, funzioni pubbliche e quattro revisioni del
+codice (CRM, modulo pubblico, POS e logistica, contabilità ed eventi).
+**Fatto, una correzione alla volta:**
+
+- **Viste aperte agli anonimi.** `v_consensi_allievi` dava a chiunque
+  avesse la chiave pubblicabile 273 righe con nome, cognome ed email;
+  `v_prezzi_listini` costi e margini; `v_punti_master(_righe)` i punti di
+  ogni master. Ora `security_invoker` e niente SELECT ad `anon`, anche
+  sulle altre quattro viste del gruppo. Dall'esterno 401.
+- **`recesso_registra` e `modulo_riaperto` solo `service_role`.** Il
+  commento di `modulo-recesso` lo prometteva, ma sul database vivo `anon`
+  aveva EXECUTE: con il gettone del recesso si scioglieva il contratto
+  senza ricevuta né avvisi. **Lezione: i grant di default di Supabase su
+  `public` danno EXECUTE ad `anon`; una funzione riservata va revocata
+  esplicitamente, e la migrazione che lo dichiara non basta, va letto
+  `pg_proc.proacl` sul database vivo.**
+- **`modulo-ricevuto`: `prova` e `soloPdf` solo con sessione di staff.**
+  Con il gettone del modulo la prova restituiva la mail intera, link di
+  recesso compreso, cioè il gettone di un altro diritto.
+- **`modulo_salva`**: i file devono stare nella cartella del gettone e non
+  contenere `..` (prima si poteva indicare il documento di un'altra
+  iscrizione); i documenti obbligatori si controllano anche sul server.
+  **Il contratto firmato lo compone il server** (31/10/2026, richiesta del
+  titolare): vedi il paragrafo qui sotto.
+- La pagina del modulo chiudeva su **qualunque** `motivo` del rifiuto
+  («Iscrizione già confermata» al posto del modulo, anche per una taglia
+  mancante): ora chiudono solo `gia_inviato` e `confermato`.
+
+- **Funzioni di servizio chiuse agli anonimi** (31/10/2026, migrazione
+  `20261031150000`). Lette le definizioni: `recupera_vendite_qr_in_ritardo`
+  e `riprova_vendite_pos_in_attesa` *registravano vendite*,
+  `controlla_saldi_magazzino` scriveva saldi, `fic_avvia_sync` e
+  `sincronizza_*` chiamavano le edge function con la chiave di servizio del
+  vault. Le usa solo pg_cron (come postgres): revocate a `public`, `anon` e
+  `authenticated`. `registra_vendita_pos`, `registra_vendita_da_pagamento`,
+  `apri_confezione`, `aggiorna_quote_coordinatore`, `identita_da_accesso`:
+  via `anon`, restano a `authenticated` (le usa l'app).
+
+- **Upload anonimi con un tetto** (31/10/2026, migrazione `20261031160000`).
+  `consensi-documenti` non aveva limiti: ora 5 MB e solo immagini, e un
+  anonimo scrive solo in `<uuid>/(fronte|retro|firma).(jpg|png|webp)`.
+  `moduli-iscrizione` aveva peso e tipi ma non il percorso: ora l'anonimo
+  scrive solo in `<gettone>/<nome>-<n>.<est>` di un modulo **non ancora
+  tornato** (`modulo_cartella_valida`, security definer). Lo staff resta
+  libero (carica anche in `_azienda/` e i PDF). Provato in transazione
+  annullata: gettone falso, `..` e nomi storti rifiutati; i percorsi veri passano.
+
+- **`leggi-documento` ha un tetto** (31/10/2026): 8 tentativi all'ora e 25 in
+  tutto per modulo, contati prima di chiamare il modello (chiave `limite` in
+  `iscritti.documento_letto`); oltre, 429 e il modulo si invia comunque.
+- **`modulo_vista` serve solo le chiavi di un elenco** (31/10/2026, migrazione
+  `20261031170000`). Leggeva da `iscritti` la colonna nominata da ogni riga di
+  `modulo_iscrizione_campi`: da Setting si poteva accendere `quota_venditore`,
+  `quota_speciale`, `accordi_commerciali` o `note` e finivano nel JSON
+  dell'allieva. Ora quelle quattro (e qualunque chiave fuori elenco) si
+  saltano anche se la riga e' accesa. **Una chiave nuova del modulo va
+  aggiunta all'elenco `consentiti` della funzione**, altrimenti non compare.
+  Impronta del risultato su 273 moduli identica prima e dopo.
+
+- **Campagne CRM: quattro difetti chiusi** (31/10/2026, migrazione
+  `20261031180000`, funzioni `crm-campagna-invia` ed `email-eventi`
+  ripubblicate). (1) **Doppi invii**: il lotto si prende con
+  `crm_campagna_prendi_lotto` (`for update skip locked`, righe in
+  `in_spedizione`; quelle ferme da 15 minuti tornano in coda) e il batch
+  porta una `Idempotency-Key` di Resend; la pagina aspetta se un'altra
+  chiamata sta spedendo (`attesa`). (2) **429 e 5xx di Resend non segnano
+  piu' `fallita`**: le righe tornano in coda, la funzione risponde
+  `temporaneo` con `riprova_tra` e la pagina riprova (cinque volte di fila,
+  poi si ferma e si riprende da Campagne). Solo i rifiuti definitivi (4xx)
+  segnano `fallita`. (3) **Riattiva/Disiscrivi dallo staff agiscono per
+  email** (`crm_disiscrizione_staff`), come la disiscrizione dal link, e
+  riattivare chi si era disiscritto da solo chiede una conferma che lo dice.
+  (4) **La pagina `?disiscrizione=` non disiscrive piu' all'apertura**:
+  serve il tasto «Sì, disiscrivimi», perche' antivirus e programmi di posta
+  aprono i link da soli; il tasto «Disiscriviti» di Gmail/Mail (POST a
+  `crm-disiscrivi`) non cambia. Inoltre `email-eventi` fa avanzare lo stato
+  di un destinatario solo in avanti (inviata < consegnata < aperta <
+  rimbalzata < segnalata): un avviso in ritardo non lo riporta indietro.
+
+- **Lo stock si muove nel database, tutto o niente** (31/10/2026, migrazioni
+  `20261031190000` e `20261031200000`). `stock_muovi(righe, origine, nota,
+  riferimento, utente)` blocca i prodotti in ordine di id, rifiuta l'INTERO
+  blocco se uno solo scenderebbe sotto zero (nessuna scrittura), applica
+  `quantita + delta` nel database e scrive i movimenti nella stessa
+  transazione (nota e riferimento possono stare anche sulla singola riga).
+  `muoviStockInBlocco` (in `stock.js`) la chiama e riallinea WooCommerce
+  DOPO il commit (prima si scriveva sul sito e poi nel database: deciso dal
+  titolare che fa fede l'app); `muoviStock` e' il caso di un prodotto solo.
+  Convertiti a un blocco: cancellazione vendita (se poi `vendita_cestina`
+  fallisce i pezzi si ritolgono), ripristino dal cestino (il magazzino prima,
+  la vendita poi; se la vendita non torna si rimette), scarico kit
+  (rientri e scarichi insieme), rientro del kit, ripristino dichiarato dalla
+  master, inventario di fine corso e suo annullo, rientro dei bundle. **Il
+  database non ha il tetto della soglia di riordino**: quella resta un
+  controllo dell'app (`preparaScarichi`). Prove in `prove/stock-in-blocco.test.js`
+  e `prove/cestino-vendite.test.jsx`.
+
+- **Resi, annullamenti e cambi si compensano** (31/10/2026). La riga
+  negativa che li registra (`tipo_movimento` reso / annullamento / cambio)
+  ora EREDITA dalla vendita originale corso, evento, metodo di pagamento e
+  `richiede_fattura` (`datiEreditatiDallaVendita`). Prima restava senza, e
+  busta, cassa, conto eventi e IVA continuavano a contare la vendita
+  annullata. **Regola del titolare: i soldi di una busta gia' chiusa non si
+  toccano e la contabilita' non si riapre.** Se l'originale sta gia' in una
+  busta chiusa (`busta_numero` valorizzato, contanti, con corso) la riga
+  negativa porta `busta_numero = FUORI_BUSTA` (0): non entra in nessuna busta
+  ne' appendice e la Cassa contanti la conta come uscita («Resi e
+  annullamenti rimborsati in contanti») nel giorno in cui si fa. Con la busta
+  ancora aperta (o la vendita nell'appendice aperta) le due righe si
+  compensano dentro la busta. Statisticamente, conto eventi, vendite del
+  corso e IVA trimestrale la contano sempre. «Fatture da emettere» non
+  prende resi e cambi e salta le vendite annullate; la prima nota mostra le
+  righe negative. Il cambio conta come differenza. Non c'e' ancora nulla in
+  produzione: oggi nessun reso, annullo o cambio in archivio. Prove in
+  `prove/storni-vendite.test.js` e `prove/cassa-contanti-per-mese.test.jsx`.
+
+- **Quota venditore nello Scadenzario passivo: una voce per persona**
+  (31/10/2026). La parte a bonifico non e' piu' una voce di classe («Quota
+  venditore — Katia, Gina») ma una per venditore, «Quota venditore — Katia»,
+  con la sua cifra e la chiave `venditore_<classe>_<NOME>`; una spesa
+  salvata con la vecchia chiave `venditore_<classe>` vale per tutti (in
+  archivio non ce n'era nessuna). **Decisione del titolare sul resto:** la
+  quota venditore non cambia dopo «Disponi pagamenti», perche' la classe si
+  chiude prima del corso e nessuna quota viene aggiunta o scende dopo —
+  quindi il «pagato per classe» di Disponi (una spesa aggregata con i nomi
+  nella nota) non e' un difetto da correggere. Prove in
+  `prove/quota-venditore-nello-scadenziario.test.js`.
+
+- **Allegati riservati: link a scadenza e secchi privati** (31/10/2026,
+  migrazione `20261031210000`). `allegati-iscritti` (moduli cartacei,
+  schermate di bonifici e acconti, biglietti di viaggio), `master-documenti`,
+  `venditori-documenti` e `leve-assistenti-documenti` sono ora PRIVATI.
+  `AllegatoLink` e `scaricaBytesStorage` non costruiscono piu' un indirizzo
+  pubblico: `src/file/allegati.js` (`apriAllegato`, `urlAllegato`,
+  `scaricaBytes`) chiede un link che vale un'ora e apre la finestra subito,
+  nel gesto. Un secchio nuovo con dati riservati si aggiunge a
+  `BUCKET_RISERVATI`. **La pagina pubblica dei biglietti
+  (`?biglietti=corso/sede/data`) e' stata TOLTA**: il link era indovinabile
+  (nome del corso, della sede e data) e restituiva i percorsi dei biglietti;
+  le master li leggono dalla Dashboard (`biglietti_vista` revocata a tutti).
+  **Restano pubblici**, perche' senza dati personali: shop-immagini,
+  locandine-corsi, loghi-*, diploma-*, intestazione-societa, sfondi-app,
+  stampe-packaging, master-foto, venditori-foto, leve-assistenti-foto.
+  **Anche `spese-allegati`** (78 fatture dei fornitori) e' privato: le nuove
+  spese salvano il percorso, le 66 righe vecchie tengono l'URL pubblico intero
+  e `percorsoDaValore` lo legge lo stesso (dati non toccati). Prove in
+  `prove/allegati-riservati.test.jsx`.
+
+- **Punti minori chiusi** (01/11/2026, migrazione `20261101170000`).
+  `search_path` fisso (`public, extensions, pg_temp`) sulle 13 funzioni che non
+  lo avevano (`gettone_sicuro` usa `gen_random_bytes`, che sta in `extensions`);
+  quattro indici doppi di `crm_contatti` tolti (restano quelli col nome nudo; la
+  vecchia migrazione del 30/10 li ricreerebbe con `if not exists`, quindi non
+  rieseguirla); revocato EXECUTE ad `anon` e `authenticated` sulle due funzioni
+  trigger `movimenti_banca_spesa_cancellata` e `riapri_impegno_se_spesa_cancellata`.
+  Le 12 policy doppie (tre tabelle del magazzino con «accesso interno» e
+  «accesso staff» identiche) sono state fuse in una (`20261101180000`, rollback
+  scritto nel file).
+  **Restano, voluti o da decidere:** 128 chiavi esterne senza indice, `pg_net` in
+  `public` (spostarlo puo' rompere i cron), password compromesse spente in Auth
+  (impostazione del pannello Supabase).
+
+**Ancora aperto**: nulla di questo elenco (restano i punti minori: `search_path` su 14 funzioni, indici su chiavi esterne, indici duplicati su `crm_contatti`).
+
+### Il testo del contratto sta nel database, e il server lo congela (31/10/2026)
+
+`modulo_iscrizione_testi` era vuota: regolamento, caselle dei consensi e
+intestazione vivevano solo nel codice (`src/iscrizione/contenuto.js`) e
+`modulo_salva` archiviava come «contratto firmato» il testo che mandava il
+browser, quindi con un gettone si poteva far registrare un regolamento
+alterato. Ora le tre righe (`intro`, `regolamento`, `consensi`) sono nel
+database, **identiche al codice parola per parola** (impronte md5 dei
+valori uguali nei due posti, verificate), e `modulo_salva` compone
+`iscritti.contratto_firmato` da lì: dal browser prende solo l'elenco delle
+caselle che l'allieva ha visto (l'avvio immediato compare solo a ridosso
+del corso). Il contratto salvato dice `origine: 'server'` e
+`uguale_a_quello_mostrato`, che è falso se il testo è stato corretto o
+alterato mentre lei compilava. Se una riga mancasse si ricade sul testo
+del client (`origine: 'client'`): meglio un modulo firmato che bloccato.
+
+**Resta modificabile da app a piacimento**, come prima: Setting → Modulo
+di iscrizione → Il contratto scrive in quella tabella e il prossimo modulo
+firmato congela il testo nuovo; chi ha già firmato tiene il suo (`coalesce`).
+Ogni correzione archivia da sola la versione precedente in
+`modulo_iscrizione_testi_archivio` (trigger `modulo_testi_archivia`). **«Rimetti
+com'era» non cancella più la riga: la riscrive con il testo di partenza**,
+altrimenti il server non avrebbe l'originale. Le righe con `aggiornato_da`
+che inizia per «testo di partenza» si leggono come «mai corretto». Il codice
+resta come rete per far vedere la pagina se la query fallisce, ma non è più
+quello che si firma. Prove in `prove/testi-contratto.test.js`.
+
+### «Listini rivenditori»: il programma a livelli (18/11/2026)
+
+Il titolare, con una specifica scritta: una nuova area in Magazzino/Shop
+che gestisca «il listino a livelli per i rivenditori, il calcolo degli
+sconti in base al costo d'acquisto, la qualifica dei rivenditori e il
+regolamento commerciale». Cinque livelli, cinque pagine, due PDF.
+
+**Il conto, e le tre verifiche che tornano al centesimo.** Dal costo
+d'acquisto si ricava quanto sconto si può cedere senza scendere sotto
+`costo × (1 + ricarico minimo)` — nato a 30%, **portato a 67% il
+18/11/2026**, vedi più sotto — limitato al 50%; i cinque livelli se ne
+prendono un quinto per volta.
+
+| | netto | cedibile | Partner | Premium | Distributor |
+|---|---|---|---|---|---|
+| Arizona (44,90 · costo 10) | 36,80 | 64,7% → **50%** | 33,12 | 22,08 | **18,40** |
+| Kit laminazione ciglia (234,90) | 192,54 | **33,6%** | 179,60 | 140,79 | 127,85 |
+| Ago 5 Magnum (35,00, costo vuoto) | 28,69 | 50% | 25,82 | 17,21 | 14,35 |
+
+(La tabella è la verifica del primo giorno, a ricarico 30: col 67 di oggi
+Arizona non si muove — comanda il tetto — mentre il kit passa a 14,7%.)
+
+I due numeri che la specifica dava per buoni — i cinque prezzi di Arizona
+e il 33,6% del kit — escono identici dal database. Il costo del kit
+(98,34) **non è scritto da nessuna parte**: è la somma della sua distinta,
+e per questo la vista si appoggia a `v_prezzi_listini`, che quella somma
+la fa già.
+
+**Il conto sta in SQL, e non è un gusto.** `listino_cedibile` e
+`listino_prezzo_livello` sono due funzioni immutabili; la vista
+`v_listino_rivenditori` le usa per chi amministra, la funzione
+`listino_rivenditori_export()` per il file da consegnare. Il motivo è il
+punto 6 della specifica — «il listino e l'export per i rivenditori non
+devono mai ricevere costi e margini dal server» — e se il prezzo lo
+calcolasse il browser il costo dovrebbe uscire per forza. **Conseguenza
+voluta:** correggendo un prezzo si salva e si rilegge, invece di
+ricalcolare una seconda volta in pagina. Un secondo conto in JavaScript
+sarebbe la duplicazione che questo progetto ha già pagato due volte (il
+POS del 7/11, la cache del 2/11).
+
+**Quello che la RLS NON può fare oggi, detto per intero.** La specifica
+chiede costi e margini «visibili solo agli admin, protetti dalle RLS».
+Oggi non è esprimibile: l'account Supabase è uno per tutto lo staff
+(§ 4), quindi nel gettone non c'è niente da cui dedurre chi amministra, e
+una policy che dicesse «solo admin» sarebbe teatro. Quello che **è** vero
+già adesso: l'export è una funzione `security definer` che costo, margine
+e cedibile in euro non li restituisce — non li nasconde, non li manda — e
+il giorno in cui i ruoli passeranno dal JWT è la sola cosa da concedere a
+un rivenditore. Una prova legge il corpo della funzione e pretende che
+quelle parole non ci siano.
+
+**Tre decisioni di fondo.**
+
+- **La scala nuova si AFFIANCA, non sostituisce.**
+  `v_prezzi_listini.sconto_max_pct` non serve solo al listino: decide i
+  **punti delle master** (netto × sconto × 2) e la loro **provvigione**
+  (sconto ÷ 3). Rifarlo con la formula nuova avrebbe spostato i punti di
+  tutte le master senza che nessuno lo chieda. `v_prezzi_listini` non è
+  stata toccata di una riga, e «Prezzi e listini» dice quello che diceva
+  ieri — su Arizona 25,21, mentre il programma nuovo dice 18,40 al
+  Distributor. **Resta da decidere** se quella colonna va rinominata o
+  ritirata: oggi mostra un prezzo rivenditore che nessun rivenditore avrà.
+- **L'IVA è quella del prodotto, non 1,22 fisso.** La specifica dice
+  «netto = pubblico / 1,22», ma due prodotti sono a IVA 0 (Consulenza
+  Bianca e Consulenza Rossa): dividerli per 1,22 direbbe 114,75 invece di
+  140,00, venticinque euro di errore su una riga che nessuno metterebbe in
+  dubbio. Si usa `aliquota_iva` di ciascuno, e sui 202 al 22% il risultato
+  è identico.
+- **Si tronca, non si arrotonda.** Il cedibile si taglia al terzo decimale
+  per difetto, perché la regola del titolare è che il prezzo non scenda
+  **mai** sotto costo × (1 + ricarico): arrotondando per eccesso lo sconto
+  cresce di mezzo millesimo e quel pavimento si sfonda.
+
+**La tabella dei riassortimenti non esiste come tabella.** Le sei fasce
+della specifica (da 500 → 50%, 400-499,99 → 40%, …) si ricavano dai
+cinque `riassortimento_minimo_eur` dei livelli: un ordine da 450 € prende
+il tetto del livello più alto il cui minimo ci sta dentro — Premium, 40% —
+e la riga «400-499,99» dice infatti 10/20/30/40/40. Tutte e sei tornano da
+quei cinque numeri, quindi una tabella in più sarebbe la stessa regola
+scritta due volte. Lo stesso per la **revisione annuale**: le sue cinque
+fasce sono le soglie di mantenimento, lette da lì.
+
+**Il registro delle modifiche lo scrive un TRIGGER, non la pagina.** Il
+prezzo di un prodotto si cambia anche dalla scheda in Gestione magazzino,
+dall'elenco a righe e dal sito: un registro scritto dal listino avrebbe
+raccontato solo le modifiche fatte dal listino. Il nome di chi ha premuto
+arriva da `app.operatore`, che `listino_scrivi_prezzo` imposta per la
+durata della transazione; una modifica che arriva da un'altra strada resta
+registrata con scritto **«non registrato»** — meglio una riga senza nome
+che nessuna riga. Provati tutti e due i casi sul database vero, in
+transazione annullata.
+
+**Le soglie si cambiano dalla pagina, senza pubblicare niente** — è il
+senso di «tieni soglie e percentuali in una tabella di configurazione
+modificabile dall'admin»: il ricarico minimo in testa al listino, e
+sotto la spunta dei livelli il pannello «Le soglie dei livelli» con
+ingresso, acquisti annui e riassortimento minimo di ognuno. Ogni
+scrittura passa dal registro col nome di chi l'ha fatta, e il
+riassortimento minimo sposta anche la tabella del regolamento, che da
+quei numeri si compone.
+
+**La spunta dei livelli vale anche per quello che si vede**, così si
+guarda prima quello che verrà esportato. Con **un livello solo** il file
+si intitola «Listino rivenditori – livello Premium», porta la colonna
+«Sconto applicato» al posto di «Sconto max sul prodotto» — che sarebbe lo
+sconto del Distributor — e **non nomina nessun altro livello**: è la
+richiesta «per un rivenditore Professional spunto solo Professional e il
+file non deve rivelare nulla degli altri». Senza nessuna spunta i due
+tasti si spengono e la pagina dice perché. L'ultima scelta si ricorda.
+
+**L'«Excel» è un CSV** con punto e virgola e virgola decimale, come
+l'altro export del listino: si apre con un doppio clic. Un vero `.xlsx`
+vorrebbe dire una libreria per scrivere uno zip, e questo progetto ha sei
+dipendenze per scelta.
+
+**I rivenditori non esistevano come dato.** Nessuna tabella, e nessun
+ordine marcato «di un rivenditore»: fra i 1.888 clienti dello shop
+rivenditori e clienti finali sono mescolati, e attribuire a un
+rivenditore un ordine che non è suo vorrebbe dire fargli salire un
+livello che non ha comprato. Quindi `rivenditori` si cura a mano e gli
+acquisti validi si scrivono in `rivenditori_ordini` uno per uno. Un
+**reso è una riga negativa**, non una riga cancellata: «resi e note di
+credito riducono il volume», e un volume che scende senza lasciare
+traccia non si spiega a nessuno. **Ambassador è un flag e non un
+livello**, senza nessuno sconto in più. La **verifica trimestrale delle
+master** (10% → 20%) la fa una persona con esito e note: i criteri — tag
+della pagina, due post al mese, prodotti usati in aula — non stanno in
+nessun dato che abbiamo, e vale l'**ultima** verifica scritta.
+
+**Il testo del regolamento manca, ed è un segnaposto dichiarato.** La
+specifica dice «se non te lo allego, lascia un segnaposto e
+chiedimelo»: non è stato allegato. Il PDF esce con tutto quello che si
+ricava dalla configurazione — livelli, soglie, come si entra, ciclo,
+verifiche, revisione, rientro con l'esempio numerico, riassortimenti,
+condizioni generali, master — e **al posto degli articoli un riquadro che
+dice che il testo non c'è**, perché un documento che manca di un pezzo non
+deve sembrare completo. Scriverlo io vorrebbe dire inventare clausole
+contrattuali e farle firmare a qualcuno. In fondo ci sono le righe per
+ragione sociale, luogo, data e firma, e **a parte** la doppia firma delle
+clausole degli artt. 1341-1342 c.c. — che è un atto distinto, come sul
+contratto master. Caricato il testo (`rivenditori_regolamento`, con
+versione e data di entrata in vigore), il segnaposto sparisce da sé.
+
+**Cinque prodotti non reggono nessuno sconto**, e la pagina li nomina in
+rosso: Brow Wow espositore 10pz, DragonHawk Mast Pro 2, Dynamic BLKOUT
+Ink, Mascara Kerafill espositore 10pz, N3 Hydra Finish opaco. Il loro
+prezzo al pubblico è **sotto** costo × 1,30, quindi «rivedere prezzo» non
+è un avviso tecnico: è una decisione commerciale da prendere. E **un
+prodotto senza costo vale il tetto** (50%) con la nota «Costo mancante» —
+è la regola scritta nella specifica, ma va saputo: oggi *Ago 5 Magnum
+Universale 0.35 Cheyenne* finirebbe in un listino Distributor a 14,35 €
+senza che nessuno sappia quanto ci guadagniamo.
+
+**Il file del 15/11 era l'export dell'app, e il confronto lo dimostra.**
+Dei 201 prodotti di `new-listino-2026-11-15.xlsx`, **201 su 201 si
+riconoscono per nome**, i costi coincidono tutti, e di diverso c'è **una
+cifra sola**: *Lame 18 punte U - box 20pz*, 39,89 nel file e 39,90 in
+archivio (cambiata dopo l'export). Più un prodotto che in archivio c'è e
+nel file no, *DragonHawk Mast Pro 2 - 3RL 0.18 - 20pz*, aggiunto dopo.
+Quindi il punto 7 era **una verifica, non un'importazione**: reimportare
+quei numeri avrebbe riportato indietro un centesimo e riscritto 201
+prezzi che muovono anche il sito, i punti delle master e i margini.
+
+**Un difetto mio, trovato prima di pubblicare, che vale per tutte le
+migrazioni future:** `set search_path to 'public, pg_temp'` **fra apici è
+UNO schema** con la virgola nel nome, non due. Le due funzioni di calcolo
+non se ne accorgevano (non nominano tabelle), ma `listino_scrivi_prezzo`
+rispondeva «relation "prodotti_shop" does not exist». Senza apici e con
+l'uguale è una lista. Una prova lo inchioda.
+
+Migrazione `20261118100000_listini_rivenditori.sql` (rollback dentro, e
+le righe che porterebbero via anagrafica, registro e regolamento sono
+marcate ATTENZIONE). Prove in `prove/listini-rivenditori.test.jsx` (60), e i due PDF si
+generano per davvero: un carattere fuori WinAnsi o un font non innestato
+fa fallire il documento a meta strada, e nessuna prova sulla struttura lo
+vedrebbe.
+
+**IL RICARICO MINIMO È PASSATO DA 30 A 67 (18/11/2026).** Il titolare,
+davanti al listino: «se una ring lamp la paghiamo 25 euro come è possibile
+che un rivenditore la prenda a 28 lasciandoci 3 euro di margine che per una
+srl è zero?». Due cose, e la prima ribalta il conto.
+
+**I 25 € erano IVA inclusa, i 28 erano netti.** In anagrafica il costo della
+Ring Lamp è 20,49 — il netto — e 20,49 × 1,22 fa 25,00 esatti. Anche il
+28,69 del listino Distributor è un netto: al rivenditore si fatturava 35,00
+lordi. Il margine non era 3 €, era **8,20**. Quando si discute di un margine
+**i due numeri devono stare sulla stessa base**, e il costo d'acquisto in
+`prodotti_shop` è sempre il netto.
+
+**Ma «ricarico 30%» non è «margine 30%», e lì l'obiezione era giusta.** 30%
+sul costo è **23,1% sul ricavo** (30/130), e cinquanta prodotti su 201 stavano
+appoggiati a quel pavimento. Su un ordine Distributor da 500 € — il
+riassortimento minimo — sono 115 €, di cui 60-70 se ne vanno fra corriere,
+imballo, prelievo, commissioni d'incasso, capitale immobilizzato e rischio
+scadenza: restano ~50 € per aver movimentato 500 € di merce e immobilizzato
+il magazzino. Deciso dal titolare dopo la misura: **in casa resta il 40% del
+ricavo**, che è un ricarico del **67%** sul costo. (I costi di movimentazione
+sono una stima: in archivio ci sono 1.050 € di corrieri e le spese partono dal
+02/07/2026, quindi un costo per ordine dai libri non si ricava — servirebbe
+tracciare il corriere sulla singola spedizione.)
+
+**Alzare il pavimento non è costato niente sul catalogo sano**, ed è il senso
+di un pavimento: non si vede dove le cose vanno bene. Sul mix di vendita vero
+degli ultimi 12 mesi, prezzato al Distributor, il margine complessivo *sale*.
+
+| | con 30 | con 67 |
+|---|---|---|
+| margine garantito sul ricavo | 23,1% | **40,0%** |
+| prodotti al 50% pieno di sconto | 146 | 128 |
+| con sconto fra 30 e 50% | 18 | 21 |
+| con sconto fra 15 e 30% | — | 20 |
+| con sconto sotto il 15% | — | 13 |
+| a 0% («rivedere prezzo») | 5 | **19** |
+| margine sul mix venduto | 42,4% | **44,6%** |
+
+Arizona non si muove (18,40 al Distributor): il suo costo è così basso che
+comanda il **tetto** del 50%, non il pavimento. La Ring Lamp passa da 28,69 a
+**34,26** netti (41,80 lordi), 13,77 € di margine, 40,2%.
+
+**I 19 che escono dal programma non sono un danno del programma.** A prezzo
+pieno al pubblico rendono meno del 40% anche vendendoli a un cliente finale:
+*Brow Wow espositore 10pz* lo si paga 77,71 e si vende 89,90 — **13,6% su una
+vendita al dettaglio**. Sono tre famiglie, e ognuna è una decisione diversa:
+i **cinque espositori** (Brow Wow 1,16× il costo, Mascara Kerafill 1,27×,
+Excellentia 10pz 1,31×, Hydrafill 10pz 1,33×, Excellentia 8pz 1,43×), dove il
+prezzo è già quello dei pezzi singoli meno uno sconto quantità — il margine
+è ceduto prima che il rivenditore entri in scena; la **linea laminazione**
+(N1 Wave, N2 Fixa, N3 opaco e lucido, Kerafill bio, Shampoo Ciglia, Medical
+soap, Pennello), coi prezzi al pubblico fermi mentre i costi salivano; e i
+**marchi di terzi** (Cheyenne, DragonHawk, Dynamic Ink, Ago 3 Nano, Batteria
+Horus, Kit combo), dove Elitederma è distributrice e non proprietaria — lì
+25-30% è normale, ma allora un 50% al rivenditore non si può concedere.
+
+**E i tredici che restano con meno del 15% da cedere vanno guardati**, perché
+un 10% non interessa nessun rivenditore: le sette taglie della T-Shirt
+(10,3%), **Kit laminazione ciglia** (da 33,6% a **14,7%**), **Kit laminazione
+essential** (9,8%), Colla laminazione (6,5%), Optibond (4,0%), 3 slope PEAK
+(9,1%), Brow Wow cera gel (10,2%). Sui due kit è il caso più serio — sono
+prodotti di punta — e la causa è strutturale: **il costo di un kit è la somma
+della sua distinta**, cioè di pezzi già marginati, quindi un kit ha sempre
+poco da cedere. Chi vuole dare un kit a un rivenditore deve deciderlo sul
+kit, non sul pavimento.
+
+**Nessuna migrazione, ed è esattamente il senso del lavoro del 18/11**: il
+ricarico è una riga di `rivenditori_parametri`, si cambia dalla pagina, e il
+trigger ha scritto nel registro chi, quando e **30 → 67**. Il seed della
+migrazione resta 30, perché le migrazioni sono la storia e lo stato è il
+database. **I punti e le provvigioni delle master non si sono mossi di un
+centesimo**: controllato che `rivenditori_parametri` lo legge solo
+`v_listino_rivenditori`, mentre quei conti stanno su
+`v_prezzi_listini.sconto_max_pct`, che non è stata toccata.
+
+**LA LISTA È PER CATEGORIE, E UNA CATEGORIA SI ESCLUDE (18/11/2026).** Il
+titolare: «dividi la lista dei prodotti per categorie, con un flag che mi
+consenta di escluderne alcune dalla generazione del listino per il
+rivenditore». In pagina ogni categoria ha la sua **banda** — come nel PDF —
+con dentro la spunta, il nome e quanti prodotti contiene.
+
+Tre decisioni, e ognuna è un modo di sbagliare:
+
+- **La spunta decide che cosa ESCE, non che cosa si vede.** Le righe di una
+  categoria esclusa restano in pagina, smorzate e con la pastiglia «fuori
+  dal listino»: da qui si correggono prezzo e costo, e nasconderle
+  vorrebbe dire non poterle più toccare. È il contrario della spunta dei
+  livelli, che invece filtra anche l'anteprima, perché là si tratta di
+  colonne e qui di righe da lavorare.
+- **Si tiene l'elenco di quelle ESCLUSE, non di quelle incluse.** Una
+  categoria nuova nel catalogo entra nel listino da sé, che è quello che
+  uno si aspetta; al contrario resterebbe fuori in silenzio. La chiave è
+  il **nome** (`blocco` è testo, non un id): una categoria rinominata
+  rientra nel listino, ed è il male minore — l'alternativa è che resti
+  esclusa per sempre senza comparire in nessun elenco.
+- **Il filtro sta in `righeEsportabili`, in un posto solo**, perché da lì
+  passano tutte e tre le uscite — il PDF, il foglio e il conteggio che la
+  pagina scrive. Tre filtri scritti a parte direbbero tre numeri diversi
+  sullo stesso listino. E le categorie si contano sulle righe
+  **esportabili**: una fatta di sola merce da banco non si offre da
+  escludere, sarebbe una spunta che non fa niente.
+
+La scelta sta in `impostazioni_layout_tabelle`
+(`listini_rivenditori_categorie_escluse`), come la spunta dei livelli: si
+cambia senza pubblicare niente e si ricorda alla volta dopo. Sopra ai due
+tasti la pagina scrive che cosa resta fuori e quanti prodotti avrà il file,
+perché chi arriva lì per generare deve leggerlo senza scorrere duecento
+righe.
+
+**LA CARTA INTESTATA È UNA SOLA, E IL MARCHIO È IL FILE VERO (18/11/2026).**
+Il titolare ha chiesto di prendere «l'intestazione dell'altra generazione
+dei listini» e ha mandato il logo. Ora la testata sta in
+`src/prezzi/intestazione.js` e la usano **tutti e tre** i documenti: il
+listino del 15/11, il listino rivenditori e il regolamento. Sono fogli che
+arrivano alla stessa persona nella stessa settimana, e due disegni dello
+stesso marchio si scostano al primo ritocco.
+
+Il marchio non è più «ELITEDERMA» disegnato in Times con le lettere
+distanziate ma `public/logo-elitederma-testata.png` (652×102, il marchio
+orizzontale). Il motivo non è estetico: nel marchio vero la E centrale è il
+simbolo ≈, e **nessun font di serie di pdf-lib lo contiene** — il testo
+disegnato era un'approssimazione. Il file in `public/logo-elitederma.png`
+non è stato toccato: è un altro taglio, e lo usa la schermata d'accesso.
+
+**Il ripiego resta, ed è voluto:** se il file non arriva si scrive il nome
+come prima. Un listino senza marchio è meno grave di un listino che non
+esce — la stessa regola di `datiSocieta()`. Vale anche per un PNG
+illeggibile: `innestaLogo` torna `null` invece di far fallire il documento
+a metà strada.
+
+**E tre difetti che si vedevano solo guardando il documento vero**, trovati
+generandolo e aprendolo (jsdom non impagina: è la stessa lezione del banco
+visivo del 23/10):
+
+- **«EUR 500» invece di «€ 500», ovunque.** `soloWinAnsi` sostituiva il
+  simbolo per prudenza, e la prudenza era di troppo: WinAnsi l'euro ce
+  l'ha (0x80) e i font di serie lo disegnano — provato. Sul regolamento da
+  far firmare ogni soglia diceva «EUR», e le tre lettere in più erano
+  anche la causa del difetto qui sotto. Il simbolo è U+20AC, cioè sopra
+  0xFF: va **escluso a mano** dal filtro finale, o lo butta via la riga che
+  toglie tutto quello che WinAnsi non ha.
+- **Le celle della tabella del regolamento sbordavano nella colonna
+  accanto**: «ordine singolo € 1.000» finiva sopra gli acquisti annui. Lì
+  non c'era nessun taglio. Su un documento che si firma, due colonne
+  sovrapposte si leggono come un numero sbagliato.
+- **I titoli delle colonne del listino si accavallavano** quando sono
+  lunghi: le colonne sono larghe 66 punti e i titoli si scrivono allineati
+  a destra, quindi «PREZZO PROFESSIONAL» (85 punti) finiva stampato sopra
+  «PREZZO NETTO» — e non si capiva più quale numero stesse sotto quale
+  colonna. Adesso `intestazioneACapo` li manda a capo su due righe, misurando
+  col font vero, e quello che non ci sta nemmeno così si taglia coi puntini.
+
+Prove nuove in `prove/listini-rivenditori.test.jsx` (76 in tutto): le
+categorie escluse su tutte e tre le uscite, la pagina con le bande e la
+spunta che scrive davvero, il marchio che finisce **dentro** il PDF
+(`/Subtype /Image`) e il listino che esce lo stesso senza, un PNG rotto che
+non ferma niente, l'euro che passa il filtro, i titoli che vanno a capo, e
+una guardia che pretende che **nessuno dei due listini disegni il nome per
+conto suo**: se un giorno torna un `drawText("ELITEDERMA")` lì dentro, sono
+di nuovo due carte intestate.
+
+**Resta da fare, e va deciso:** il **testo del regolamento**; i **19 prezzi
+al pubblico** che non reggono il 40% (gli espositori, la linea laminazione, i
+marchi di terzi) e i **due kit** scesi sotto il 15% di sconto cedibile; se i
+marchi di terzi meritano un listino separato con un tetto più basso; se la
+colonna «prezzo rivenditore» di «Prezzi e listini» va rinominata o
+ritirata, ora che convive con la scala nuova; se le due consulenze a IVA 0
+devono stare in un listino per rivenditori (oggi ci sono, col netto
+giusto); e il **collegamento fra gli ordini dello shop e un rivenditore**,
+che oggi non esiste e che è l'unico modo per far girare ciclo e verifiche
+senza scrivere gli acquisti a mano.
+
+**E una cosa che manca nella pagina:** il **tetto di sconto** si cambia solo
+in tabella, non c'è un campo accanto al ricarico minimo. Dalla misura del
+18/11 si vede che su 128 prodotti su 201 è **lui** a decidere il margine e
+non il pavimento, quindi è la leva più importante delle due ed è l'unica
+che non si può muovere senza SQL.
+
+### Il listino rivenditore diceva due basi diverse senza dirlo (15/11/2026)
+
+Il titolare: «non mi ricordo più se quando si genera il listino del
+rivenditore il suo prezzo è IVA inclusa o IVA esclusa». Misurato sul
+dato: **il prezzo rivenditore è il NETTO**
+(`prezzo_vendita × (1 − sconto)` in `v_prezzi_listini`), mentre la
+colonna «Prezzo al pubblico» stampava il **lordo**.
+
+Due basi diverse sullo stesso foglio, e nessuna delle due scritta. Sul
+Dermografo Horus: 600,00 contro 290,16 si legge come uno sconto del
+**51,6%**, mentre quello vero sul netto è il **41%**. E in fondo a ogni
+pagina c'era scritto «prezzi IVA inclusa», **falso proprio sulla
+colonna che il rivenditore guarda**: chi leggeva 290,16 come totale si
+vedeva arrivare una fattura da 354,00.
+
+Deciso dal titolare: **quattro colonne pari** — netto e lordo per tutti
+e due i prezzi, con il gruppo scritto sopra e `netto`/`lordo` sotto. Il
+prezzo al pubblico in grigio, quello del rivenditore in navy col netto
+in grassetto, che è la cifra che gli verrà fatturata.
+
+Tre cose decise lì dentro:
+
+- **il lordo si calcola in un posto solo** (`conIva` in
+  `src/prezzi/listinoPdf.js`): due conti diversi sullo stesso prezzo
+  sono il difetto da cui viene tutta questa correzione;
+- **un'aliquota che manca vale 22, non zero.** `Number(null)` fa zero,
+  non «non lo so»: senza questa accortezza la colonna del lordo
+  ripeterebbe il netto, cioè dichiarerebbe che l'IVA non è dovuta;
+- **la nota in fondo si legge dai prodotti stampati**
+  (`notaIvaListino`), non da una costante. Oggi i 187 prodotti del
+  listino sono tutti al 22% e dirlo in cifra vale più di una formula,
+  ma una riga che dicesse «22%» con dentro un prodotto a un'altra
+  aliquota mentirebbe su quello.
+
+Prove in `prove/listino-rivenditore.test.js` (8), sui numeri veri dei
+due dermografi, compreso lo sconto apparente contro quello vero.
+
+### Gli snippet di WordPress si importano, non si incollano (10/11/2026)
+
+Gli snippet stanno in `wordpress/` come file PHP veri — si leggono, si
+correggono, `php -l` li controlla — ma su WordPress si mettono da
+**Snippets → Importa**, che vuole un `.json`. Incollarli nell'editor di
+Code Snippets, su uno lungo, rovina il testo (gia' pagato). Ora
+`node wordpress/genera-json.mjs` scrive `wordpress/json/`: un file per
+snippet, pronto da importare.
+
+Tre cose che il generatore fa apposta: il nome e' il **Plugin Name**
+dell'intestazione, cioe' il nome con cui quello snippet e' gia'
+installato — se non coincide l'importazione ne crea un SECONDO accanto al
+vecchio, e due snippet uguali attivi insieme fanno girare lo stesso
+codice due volte; il `<?php` iniziale si toglie, perche' Code Snippets lo
+mette da se'; e `-ORIGINALE` resta fuori, perche' non e' uno snippet da
+installare ma la copia di com'era prima un altro — importarla vorrebbe
+dire due motori di sconto sullo stesso carrello.
+
+**E la PURGE di Varnish adesso va al SERVER.** Era mandata a
+`home_url('/')`, cioe' all'indirizzo pubblico: usciva su internet,
+passava da Cloudflare — che una PURGE non sa cosa sia — e tornava **400**.
+Varnish, che sta sulla stessa macchina, non la vedeva nemmeno. E' il
+motivo per cui lo svuotamento completo rispondeva «ok» senza cambiare
+niente, e per cui le pagine «si sistemavano da sole» dopo qualche ora:
+scadevano, non venivano svuotate. Ora si chiama `127.0.0.1` con
+l'intestazione `Host` del dominio. **Su quale porta ascolti non si puo'
+sapere da qui** (su Cloudways sta davanti ad Apache: 80 o 8080), quindi
+si prova in ordine — 80, 8080, l'indirizzo pubblico — ci si ferma alla
+prima che risponde, e **quale ha risposto resta scritto nei passi**: senza,
+al prossimo guasto si ricomincerebbe a indovinare. Resta il ripiego
+pagina-per-pagina se nessuna funziona. **Va importato per valere**: nel
+repo e' corretto, sul sito no.
+
+### I contatti del CRM: si torna dov'eravamo, e i titoli ordinano (10/11/2026)
+
+Il titolare: «nei contatti scaricati dal CRM abbiamo messo dei filtri e
+poi abbiamo provato ad aprire una mail. Quando abbiamo fatto indietro,
+invece di tornare ai contatti con i filtri che avevamo messo, è proprio
+uscito». Erano **due** cose, e una sola non bastava.
+
+**«Componi mail» e «Campagne» non cambiano la `view` dell'app**: sono
+sotto-viste della pagina Contatti. Quindi l'Indietro in alto — e con esso
+il gesto di scorrimento e il tasto fisico di Android — non le vedeva e
+tornava alla schermata *prima* dei contatti, saltando la pagina intera.
+Rimediato come per il calendario di Gestione corsi e i modali di Setting:
+finché una sotto-vista è aperta la pagina registra cosa vuol dire
+«indietro» lì dentro (`registraInterceptaIndietro`). Scegliendo i
+destinatari di una campagna già aperta, «indietro» è la campagna — lo
+stesso posto a cui porta «Torna alla campagna».
+
+**E i filtri vivevano solo nella pagina**, quindi uscire li buttava via:
+con «Avanti», o rientrando dal CRM, si ripartiva da 23.757 contatti e
+dalla ricerca da rifare. Ora la pagina consegna a chi la monta filtri,
+pagina, ordine e scheda aperta (`onStato`) e li riprende da lì
+(`statoIniziale`). Due scelte: la memoria sta nel **genitore** e non in
+una variabile di modulo — una memoria che nessuno può spegnere, e due
+prove della stessa pagina si passerebbero i filtri — ed è un **ref**, non
+uno stato: quei valori non disegnano niente, e in uno stato
+ridisegnerebbero App a ogni lettera scritta nella ricerca.
+
+**I titoli delle colonne si premono** (chiesto subito dopo: «metti il
+titolo delle colonne sull'elenco, cliccando il quale si possono ordinare
+per nome, per ordine alfabetico o per data»). Prima l'elenco non aveva
+nessuna intestazione: un nome, un luogo e una data senza sapere che erano
+colonne. Si ordina per **Nome**, **Dove**, **Richieste** e **Ultimo
+contatto**; il gesto è quello delle tabelle del gestionale — crescente,
+decrescente, al terzo tocco l'ordine naturale — e si riparte dalla prima
+pagina.
+
+**A ordinare è il database** (`crm_cerca_contatti`, migrazione
+`20261110140000`): quello che si vede è **una pagina di 50 su 23.757**, e
+ordinare le 50 che si vedono vorrebbe dire mettere in fila un campione
+scelto con un altro ordine — un elenco che sembra alfabetico e non lo è.
+Il nome della colonna non entra mai nella query: entra in un `case` che
+restituisce una delle espressioni scritte nella funzione, e qualunque
+altra cosa vale l'ordine naturale.
+
+**Si ordina per quello che si legge**, mai per una colonna nascosta, e
+sono tre decisioni:
+
+- il **nome** è «nome cognome» (poi `nome_originale`, poi l'email), come
+  lo scrive `nomeDi`. L'ordine naturale di prima era per `cognome`:
+  alfabetico per il database, disordinato per chi guarda, perché la prima
+  parola che si legge è il nome;
+- **dove** è comune, o provincia, o regione, o la città scritta in Vetta:
+  la stessa scaletta della riga;
+- la **data** è quella che la riga mostra: l'ultimo contatto *solo* se la
+  persona ha una richiesta con data certa, altrimenti la data della
+  vendita, altrimenti niente. Ordinare per `ultimo_contatto_il` metterebbe
+  in fila 16.327 persone secondo il 9 marzo 2026 — il giorno del
+  caricamento in blocco da Vetta, una data che la pagina non mostra
+  apposta. Chi non ha niente da mostrare va in fondo in tutti e due i
+  versi.
+
+**Qualifica non si ordina, ed è voluto**: a video si legge l'etichetta
+(«Cliente»), nel database il valore di Vetta («CLIENTI»), e i due ordini
+alfabetici non coincidono. Tradurre le etichette anche in SQL vorrebbe
+dire la stessa tabella scritta in due posti. Per raccogliere i clienti
+c'è già il filtro Qualifica, che è lo strumento giusto.
+
+**E in coda all'ordine c'è sempre l'`id`.** Senza un criterio unico due
+righe uguali escono in ordine diverso a due letture diverse, e con
+`limit/offset` la stessa persona compare in due pagine e un'altra in
+nessuna. Succedeva anche prima con «cognome, nome», ma ordinando per
+numero di richieste i pari sono migliaia. Prove in
+`prove/crm-contatti.test.jsx` (11).
+
+### «Disponibile su ordinazione» non l'avevamo scritta noi (10/11/2026)
+
+Il titolare, davanti alla scheda dell'Espositore del Siero: «puoi
+cambiare Disponibile su ordinazione in "Disponibile in 4 giorni"?».
+
+Quella frase è di **WooCommerce**, e compare ogni volta che il prodotto
+arriva al sito senza la nostra. Succedeva in due casi, e tutti e due
+erano buchi veri: **un bundle** eredita il back order dai componenti, e
+se il componente non aveva una frase scritta il bundle partiva con il
+vuoto; **un prodotto semplice** manda quella meta solo quando qualcuno
+salva la sua scheda, quindi i 20 prodotti ordinabili a scorte zero su cui
+nessuno aveva mai premuto Salva erano al sito senza frase. In archivio le
+frasi erano quattro su ventiquattro prodotti, e in tre versioni diverse.
+
+Adesso la frase sta in **un posto solo** (`BACKORDER_TESTO_PREDEFINITO` in
+`_shared/bundle.js`), la leggono la scheda del gestionale e le due edge
+function che scrivono sul sito, e **il vuoto non arriva mai a
+WooCommerce**: `messaggioBackorder` ci mette quella predefinita. Il giro
+notturno (`woo-riallinea-shop`) la scrive anche sui prodotti semplici che
+hanno il back order acceso — solo su quelli: sugli altri quella meta non
+la guarda nessuno, e una scrittura inutile è solo un rischio.
+
+**Pubblicate e allineate il 10/11/2026** (`woo-gestisci-prodotto` v31,
+`woo-riallinea-shop` v25; un giro completo ha scritto 183 giacenze,
+`falliti: []` per la prima volta). **E la frase ancora non si vede**, per
+una ragione che non e' nostra: lo snippet
+`wordpress/elitederma-backorder-messaggio.php` **non e' mai stato
+installato** sul sito, quindi WooCommerce mette la sua. Verificato sulla
+pagina dell'Espositore del Siero chiesta con un parametro in coda (che
+aggira la cache): classe `available-on-backorder` e non
+`elitederma-backorder`. Il `.json` da importare sta in
+`wordpress/json/elitederma-backorder-messaggio.json`. E restano **quattro prodotti
+con una frase propria** («Disponibile in circa 4 giorni», «…lavorativi»):
+scritte a mano, non si toccano da sé — per allinearle si svuota il campo
+sulla scheda, e vale la predefinita.
+
+### Da cellulare la scheda di un corso si legge in verticale (10/11/2026)
+
+Il titolare: «da cellulare in operativo corsi fai in modo che tutti i dati
+di ciascun corso si leggano nella scheda in verticale senza scorrere
+lateralmente».
+
+La fascia degli incarichi aveva **nove colonne a misura fissa** — 86, 150,
+26, 44, …, 186, 96 — circa novecento pixel, piu' i duecento del pannello
+di sinistra. Su un telefono da trecentonovanta quella fascia scorreva di
+lato **dentro** una pagina che scorre in su e in giu': hotel, camera e
+note hotel non erano scomodi, erano **invisibili** — una striscia che
+scorre dentro qualcosa che scorre non dice di poter essere trascinata.
+
+Adesso, sotto i 700 px (`useIsMobile`), la scheda e' una colonna sola:
+
+- il pannello di sinistra — data, corso, citta', sede — **sta sopra**
+  invece che a fianco, e il filo che lo divide dagli incarichi cambia
+  lato con lui;
+- **ogni dato prende una riga sua con la sua etichetta sopra** (Nome,
+  Nota, Viaggio, Hotel, Camera, Note hotel). «Avvisata» e il tasto che
+  aggiunge o toglie la riga stanno in cima accanto alla pastiglia del
+  ruolo, che e' quello che si guarda per primo;
+- **le intestazioni della fascia si spengono**: servono a dire a cosa
+  corrisponde una colonna, e senza colonne sono una fila di parole da
+  scorrere;
+- il **nome del corso resta grande e va a capo**. Il corpo calcolato
+  (`corpoNome`) esiste per far stare il nome nei duecento pixel del
+  pannello: sul telefono il pannello e' largo quanto la scheda, e
+  rimpicciolire un nome che ha tutta la larghezza lo rende illeggibile
+  per niente;
+- la finestrella **«Aggiungi docente» si apre verso dentro**: il «+» sta
+  all'estremita' destra della riga, e aperta a sinistra del tasto quella
+  finestra da 220 px finirebbe oltre il bordo;
+- «Carico assegnazioni master» passa da **quattro colonne a due**: a 1fr
+  non scorreva niente, ma ogni nome finiva nei puntini.
+
+**Le colonne fisse restano sul computer**, ed e' l'altra meta' del
+lavoro: «niente scorrimento» si otterrebbe anche buttando via la tabella
+di chi lavora al monitor, dove quelle nove colonne sono il motivo per cui
+tre righe si confrontano a colpo d'occhio.
+
+Prove in `prove/operativo-corsi-da-cellulare.test.jsx` (3). Guardano la
+**causa** e non l'effetto: jsdom non impagina, quindi la larghezza vera
+non si misura — si controlla che a 390 px non esistano piu' ne'
+`overflow-x: auto` ne' la colonna da `186px`, che ogni etichetta ci sia,
+e che a 1400 px la griglia e le intestazioni siano ancora al loro posto.
+Il **pollice su un telefono vero** resta l'unica prova del resto.
+
+### La sede occasionale anche su una classe già a calendario (11/11/2026)
+
+Seguito del punto qui sotto, e la **diagnosi giusta era un'altra**. Il
+titolare chiedeva «cliccando sugli hotel» di poter scegliere fra
+registrato e occasionale; il tasto che premeva era invece quello della
+**sede**: «clicco su gestisci, si apre una finestra che si chiama
+gestisci sede e dalla tendina ci sono solo le sedi registrate». Aveva
+ragione — e la prima correzione, fatta sull'alloggio, era nel posto
+sbagliato.
+
+**La lezione, che vale oltre questo caso:** quando qualcuno dice «non
+posso fare X», prima di correggere si fa dire **quale tasto preme**. Due
+celle accanto — Sede e Hotel — e l'una scambiata per l'altra sono una
+pubblicazione buttata. Qui è costata un giro intero.
+
+**Com'era**: la sede occasionale si poteva scrivere **solo creando il
+corso**. Una classe già a calendario che si spostava in uno studio non
+registrato non aveva dove dirlo: «Gestisci sede» offriva la sola tendina
+delle sedi della città. Adesso ha le due strade della creazione corso —
+**Sede registrata** e **Sede occasionale** — con la stessa forma (due
+tasti alti 44, mezza finestra). Salvando nasce una riga di `location`
+marcata `solo_edizione` / `occasionale`, come fa `creaDataCorso`, e se la
+riga del corso non si scrive la sede appena nata si porta via.
+
+Tre cose decise lì dentro, e ognuna è un modo di sbagliare:
+
+- **La città non si scrive, si vede.** Resta quella del calendario: da
+  lei dipendono le statistiche per zona e quello che le allieve hanno
+  letto iscrivendosi. La sede di questa volta nasce in quella città, e
+  per spostare un corso altrove si rifà la data. La regione si ricava
+  dalla città e si chiede solo quando non si sa.
+- **La fotografia sulla classe si riscrive.** `corsi_date` tiene città,
+  regione, indirizzo e telefono di dov'è stato *questo* corso, e quei
+  campi **vincono** sulla riga della sede: li legge la mail di conferma
+  dell'allieva. Scrivere il solo `location_id` avrebbe mandato la classe
+  in un posto e l'indirizzo dell'altro per mail. Vale anche per il
+  cambio fra due sedi **registrate**, che prima non lo faceva: oggi le
+  due cose coincidono su tutte e 115 le classi in archivio (controllato
+  prima di toccare) e devono continuare a coincidere.
+- **La tariffa della sede di prima non segue su un altro posto.** Questa
+  finestra riempie da sé il costo a giorno con la tariffa generale della
+  sede: passando a una sede occasionale quelle cifre sono di un posto in
+  cui non si va, e salvate diventano un costo di classe falso — che
+  nessuno mette in dubbio, perché l'ha scritto l'app. Si svuotano solo
+  se sono ancora *quelle della sede* (cioè non le ha trattate nessuno) e
+  tornano se si torna sulla strada di prima. Per lo stesso motivo il
+  **listino** della sede di prima non vale su una sede occasionale.
+
+E dopo il salvataggio si rilegge anche `location`: una sede nata adesso
+che l'elenco in memoria non conosce farebbe tornare la cella a dire
+«Gestisci» su un corso che una sede ce l'ha.
+
+Prove in `prove/sede-occasionale-da-gestisci.test.jsx` (7), con la
+finestra montata: le due strade, la sede che nasce nella città della
+classe, la fotografia riscritta (anche cambiando fra due sedi
+registrate), nessuna casella per la città, il nome obbligatorio, e la
+tariffa che si svuota e torna.
+
+### L'alloggio di un corso si scegli, e si vede che si scegli (11/11/2026)
+
+Il titolare: «in operativo corsi, quando per un corso non è stato
+assegnato l'hotel, come succede per le sedi, che si può scegliere sede
+occasionale o sede già registrata, deve accadere la stessa cosa
+cliccando sugli hotel, che devi poter scegliere o un hotel alloggio di
+quelli registrati o inserire alloggio occasionale».
+
+**Le due strade c'erano, dal 28/10** (vedi «L'alloggio provvisorio in
+Operativo corsi»), e sono anche in produzione — controllato nel bundle
+servito, non nel repo. Quindi qui non c'era niente da costruire: c'era
+da **farle trovare**, ed è la stessa famiglia del «POS fisico» del
+7/11 e dell'«Importa pacchetto» del 9/11 — **una scelta annidata la
+trova solo chi sa già che esiste.**
+
+Due cose non si vedevano:
+
+- **la cella diceva «Gestisci»**, che è una parola che non promette
+  niente: non dice che lì dentro si scegli un hotel, e meno ancora che
+  si può scriverne uno nuovo. Adesso un corso senza alloggio dice
+  **«Scegli alloggio»**, in rosso come la sede che manca, e il
+  suggerimento nomina tutte e due le strade — sul computer è dove si
+  guarda prima di premere. Il tasto è scritto in **un posto solo**
+  (`cellaAlloggio`): era lo stesso tasto copiato due volte, per la
+  master e per i docenti extra;
+- **dentro la finestra erano due pastiglie da 12,5 px** appoggiate
+  sopra la tendina degli hotel: chi apriva leggeva per prima la tendina
+  e dava per scontato che fosse l'unica via. Adesso hanno la forma che
+  hanno nella creazione corso — due tasti alti 44, mezza finestra
+  ognuno, prima di tutto il resto — perché sono la prima scelta da
+  fare, non una rifinitura.
+
+**E la riga che spiega compare solo dove serve**: «per questo corso un
+alloggio non c'è ancora: scegline uno fra quelli registrati, oppure
+scrivi qui l'alloggio di questa volta» si vede soltanto quando
+l'alloggio manca. Su una riga già a posto sarebbe una frase che si
+impara a saltare, e si porterebbe dietro anche quelle che contano.
+
+**Resta un'asimmetria vera, da decidere:** la sede occasionale si può
+scrivere **solo alla creazione** del corso — «Gestisci sede», su una
+classe già fatta, non la offre, mentre l'alloggio sì. Nessuno l'ha
+chiesta: va ridetta, non indovinata.
+
+Prove in `prove/alloggio-occasionale-da-gestisci.test.jsx` (4): le due
+che c'erano sulla creazione dell'hotel occasionale, più la pagina vera
+montata — la cella che dice il gesto, il suggerimento che nomina le due
+strade, i due tasti alti 44 e non le pastiglie, e la riga di
+spiegazione che su un alloggio già scelto non c'è.
+
+### Cancellare si chiede (11/11/2026)
+
+Il titolare: «ogni cancellazione nell'app che sia di prodotto o di
+iscritto o eliminazione da una lista di iscritti o di prodotti deve
+essere preceduta dall'avviso di "sei sicuro di voler cancellare?"». E,
+davanti alla sezione della fiera: «le iscritte della fiera non puoi
+poterne cancellare così cliccando "non iscritta" e sparisce».
+
+**Misurato prima di toccare niente**: dei 124 gesti che togliavano
+qualcosa, **62 non chiedevano nulla**. Il patto esisteva — 157
+`window.confirm` scritti a mano — ma valeva dove qualcuno si era
+ricordato di scriverlo, e un patto che vale a memoria non è un patto.
+
+**La domanda sta in un posto solo**, `src/ui/conferma.js`:
+`confermaCancellazione(cosa, conseguenza)` e `confermaRimozione(...)`.
+Sessantadue frasi scritte a mano sarebbero sessantadue promesse che un
+giorno si scostano — una dice «Sei sicuro?», un'altra «Confermi?», e la
+terza non dice niente perché chi l'ha aggiunta non sapeva che le altre
+esistessero.
+
+**E chi chiama deve dire COSA.** Non «Sei sicuro?» da solo: davanti a un
+elenco di venti righe quella frase non dice **quale** riga si è premuta,
+e la conferma diventa un tasto da premere a occhi chiusi, cioè una
+conferma che non protegge niente. Per questo `rimuovi(rigaId)` nei
+pacchetti ha preso un secondo parametro, il nome del prodotto, invece di
+chiedere «questo prodotto».
+
+**Togliere e cancellare sono due parole diverse**, e sbagliarla è peggio
+che non dirla. L'iscritta della fiera non si cancella: l'iscrizione
+resta dov'è, si stacca un'attribuzione. Chiamarla «cancellare» fa
+credere a chi legge di distruggere una scheda, e quella persona non
+preme più. Quindi `confermaRimozione` dice «togliere», e nel caso della
+fiera aggiunge *dove va a finire* («torna fra le iscrizioni di questi
+giorni da segnare»).
+
+**Segnare non si chiede.** Nella stessa sezione, «È della fiera»
+aggiunge, e un gesto che aggiunge si disfa col tasto di fianco: una
+domanda a cui si risponde sempre sì insegna a premere a occhi chiusi, e
+allora anche quella del togliere smette di proteggere. Vale anche per
+`svuotaCarrello`, che chiede quando lo preme una persona
+(`chiedi: true`) e tace dopo una vendita registrata, dove non c'è niente
+da chiedere.
+
+**Dove la domanda NON è stata messa, ed è una scelta.** Un avviso su
+tutto è un avviso che nessuno legge. Restano muti i gesti che non fanno
+sparire niente da rimpiangere: svuotare la riga di ricerca, azzerare un
+modulo in composizione, togliere la spunta da una selezione, pulire la
+lavagna della firma — che esiste per essere rifatta —, togliere una
+pastiglia di categoria che si riprende dalla tendina, lo sfondo e la
+tinta di un tasto. E restano muti i due casi in cui **il gesto è il
+pannello**: il progetto e la vendita hanno una finestra che elenca cosa
+sparisce, e la funzione che cancella è il tasto *dentro* quella
+finestra.
+
+**La domanda vive dove c'è una persona, non nel magazzino dei dati.**
+`eventi/dati.js`, `stampe/dati.js`, `progetti/AllegatiProgetto.jsx` e
+`consensi/dati.ts` scrivono e basta: la conferma sta sulla pagina che li
+chiama, e tutte le strade sono state verificate una per una. Dove invece
+la funzione sta **dentro** il componente, la domanda è in cima a lei e
+non sul tasto: così vale per ogni strada che ci arriva, anche quelle di
+domani.
+
+**La guardia è la parte che dura**, in `prove/cancellare-si-chiede.test.jsx`
+(13). Rilegge tutte le funzioni il cui nome dice che togliono qualcosa e
+pretende che ognuna chieda, **oppure** che stia nell'elenco delle
+eccezioni **con scritto il perché**; e controlla che nessuna eccezione
+sia scaduta — se un gesto scusato impara a chiedere, la sua riga lì deve
+sparire, altrimenti il giorno che quel nome torna su un gesto nuovo
+nasce già scusato. Il primo giro ha trovato una mia imprecisione:
+contava come «chiede» anche `set…DaEliminare(`, per riconoscere i
+pannelli — ma `eliminaVendita` chiama quel `set…(null)` in fondo, **per
+chiudere il pannello dopo aver cancellato**, quindi passava senza aver
+chiesto niente. Adesso conta solo una domanda vera.
+
+**Quello che la guardia non può fare**: riconosce i gesti dai verbi con
+cui questo progetto chiama i suoi tasti (elimina, rimuovi, togli,
+cancella, scollega, svuota, cestina). Un tasto nuovo chiamato in un
+altro modo le sfugge — non sostituisce la lettura del codice, la rende
+ripetibile.
+
+### La contabilità aggiuntiva vale anche per il POS (12/11/2026)
+
+Il titolare: «verifica che se la busta è stata spedita, nel caso in cui la
+master riceve un pagamento al corso in contanti **o con POS**, si apre una
+contabilità aggiuntiva e non viene intaccata quella che già è stata
+spedita. La nuova contabilità aggiuntiva avrà un suo percorso e dovrà
+essere chiusa a parte.»
+
+**Verificato, e la risposta era «no» per metà.** Per i contanti funzionava
+(è il lavoro dell'11/11). Per il POS no: una vendita con carta fatta dopo
+la chiusura **finiva dentro la prima contabilità**, quella già chiusa e
+portata via. Misurato con la busta spedita e tre vendite — una dentro, una
+in contanti dopo, una POS dopo: `venditeDellaPrimaBusta` tornava
+`[v1, v3]`, e l'appendice raccoglieva solo `v2`.
+
+**La causa non era la regola, era la marcatura.** `venditaInAppendice`
+chiedeva `incassaContanti`, ma sotto c'era di peggio: alla chiusura si
+scriveva `busta_numero = 1` **solo sulle vendite in contanti**. Per il POS
+non esisteva nessuna marcatura, quindi una vendita con carta fatta prima e
+una fatta dopo erano **indistinguibili in archivio**: il «dopo» non era
+conoscibile, e la regola non si poteva nemmeno scrivere.
+
+**Adesso la chiusura marca TUTTE le vendite della classe**, con qualunque
+metodo, omaggi e righe negative compresi: `busta_numero` non vuol più dire
+«in quale busta stanno questi contanti» ma **«a quale contabilità della
+classe appartiene questa riga»**. Se sta nell'envelope lo dice il metodo di
+pagamento, non il numero.
+
+**Ma il passato non si riscrive, ed è una scelta del titolare**
+(«allinea solo le classi aperte non ancora in cassa, la regola vale da
+adesso in avanti»). Le 41 buste chiuse prima di oggi hanno solo i contanti
+marcati: là una vendita con carta senza numero vuol dire «non marcata», non
+«arrivata dopo». Leggerla come «dopo» avrebbe spostato **3.561 € di 33
+vendite** fuori dalla prima contabilità di **15 classi** di settembre e
+ottobre, riaprendo conti a posto. Per questo esiste
+`corsi_date.busta_vendite_marcate`: dice se quella chiusura ha marcato
+tutto, e **solo dove è true** la regola vale anche per il POS. Misurato
+prima di toccare: le classi con la busta chiusa e non ancora in cassa sono
+**zero**, quindi l'allineamento autorizzato tocca zero righe e l'archivio
+non è stato modificato.
+
+Tre conseguenze, tutte volute:
+
+- **Una contabilità aggiuntiva può non avere contante.** Fatta di sole
+  vendite con carta esiste, ha il suo elenco e va chiusa, ma non c'è niente
+  da spedire né da versare: al posto dei due tasti ce n'è **uno**, «Chiudi
+  contabilità N», che scrive la riga con importo zero ed è lei a far
+  nascere la successiva. In «In arrivo» **non compare**, perché quel
+  riquadro parla di contante che sta per arrivare; il semaforo della classe
+  invece resta arancione, perché c'è una contabilità da chiudere.
+- **Una vendita che esce dalla busta non cambia contabilità.** In
+  `sganciaDallaBusta`, quando la busta ha già delle appendici e non si può
+  riaprire, il numero 1 **non si toglie più**: azzerarlo adesso vorrebbe
+  dire spostare quella vendita nella contabilità aggiuntiva, dove non è mai
+  stata. Quello che scende è il contante dentro la busta.
+- **La correzione di una contabilità chiusa non entra in quella aperta.**
+  `datiEreditatiDallaVendita` non chiede più `incassaContanti`: una vendita
+  con carta che porta un numero sta in una contabilità chiusa esattamente
+  come una in contanti, quindi la sua riga negativa porta `FUORI_BUSTA`.
+  Sulle vendite con carta di prima del 12/11 il numero non c'è, quindi là
+  non cambia niente.
+
+Prove in `prove/contabilita-aggiuntiva-anche-col-pos.test.jsx` (11), che
+inchiodano le due facce: la regola vale per ogni metodo dove la chiusura ha
+marcato tutto, e **non** vale dove non ha marcato.
+
+### Il contratto delle master si firma dall'app (16/11/2026)
+
+Il titolare: «dobbiamo creare una nuova area nella home page che si
+chiama contratti master. La compilazione del contratto deve avvenire
+come quella del modulo di iscrizione. Le master troveranno in ciascuna
+delle loro dashboard una nuova nuvola che si chiama firma del contratto
+(ad esclusione di Tommaso Giumbini le cui condizioni vanno riscritte).»
+
+**Il testo è trascritto, non riscritto, e nemmeno battuto a mano.**
+`Contratto_Elitederma_completo.pdf` — ventun pagine, versione sintetica
+del 14 novembre 2026 — letto con pdfjs e ricomposto in paragrafi dalle
+coordinate delle righe, non dal taglio delle righe stesse. Sono clausole
+contrattuali: un «quasi uguale» qui vuol dire far firmare una cosa
+diversa da quella consegnata, e battere a mano quarantamila caratteri è
+il modo di sbagliarne uno e non accorgersene. Sta in
+`supabase/functions/_shared/contratto-master.js`: premesse (le sei
+lettere), **ventitré articoli**, l'approvazione specifica delle clausole
+degli artt. 1341-1342 c.c. con le **sedici voci**, e l'Allegato A —
+Manifesto, **diciannove blocchi**.
+
+**Cosa sostituisce, e cosa no (17/11/2026).** Il titolare ha chiesto di
+verificare se il contratto dica che sostituisce qualunque accordo
+commerciale firmato prima. Lo dice la **premessa F)** — ed è nel
+cartaceo, verificata sul PDF — ma con un confine: sostituisce i
+precedenti accordi **«di pari oggetto»**, salvi i diritti già maturati,
+le obbligazioni già eseguite e le pattuizioni che le parti indichino per
+iscritto come ancora efficaci; e nessuna penale qui prevista opera per
+fatti anteriori alla firma. Le premesse sono parte integrante del
+contratto, quindi quella riga vincola.
+
+**Confermato dal titolare lo stesso giorno: «sostituisce solo gli
+accordi sulla docenza e sullo stesso argomento».** Quindi quelle tre
+parole restano, e **non si allargano**: un accordo di un'altra materia —
+una quota venditore, una provvigione sui prodotti, un accordo da
+rivenditrice, una partecipazione a un progetto — **resta in piedi**, e
+non è una dimenticanza. Lo dicono anche due articoli: l'**art. 14.1**
+(«il contratto non costituisce né sostituisce l'accordo tra il titolare
+e la Società» sul marchio) e l'**art. 7.6**, che prevede un «accordo
+commerciale scritto con Elitederma» *accanto* a questo contratto. Una
+prova inchioda la premessa F parola per parola: se un giorno si allarga,
+è una decisione del titolare e quella prova deve cadere con il perché
+scritto accanto — togliere «di pari oggetto» vorrebbe dire far firmare
+la cancellazione di accordi che nessuno ha nominato.
+
+**Gli spazi in bianco del cartaceo sono di due specie, e non si
+riempiono nello stesso modo.** Uno solo era testo: l'art. 9.6, «entro il
+giorno [___] del mese successivo», il giorno in cui si pagano le dodici
+rate del patto di non concorrenza — deciso dal titolare, **il giorno 5**,
+e scritto nel testo. Tutti gli altri **non sono testo, sono dati**:
+l'epigrafe del/della Master (nome, codice fiscale, nascita, residenza,
+P. IVA, PEC, email) la compone `epigrafeMaster` dai valori veri, e
+«Luogo e data» dal comune di residenza e dal giorno della firma — «la
+data farà fede quella della compilazione». Lasciarli come trattini su un
+PDF da riempire a penna vorrebbe dire un contratto che si firma senza
+sapere chi lo firma.
+
+**Il gesto è quello del modulo di iscrizione, e i mattoni sono gli
+stessi.** `DaRiempire`, `Foto`, `Dichiarazione`, `Letto` e `Avviso` sono
+stati esportati da `PaginaModulo.jsx`, e la cascata della residenza è
+uscita da dentro quella pagina in `src/iscrizione/cascata-residenza.js`.
+Riscriverli avrebbe voluto dire due modi di scattare la foto di un
+documento e due idee di dove abita una persona — una che offre i cantoni
+svizzeri e una che non li offre, e nessuna delle due che sa di essere
+quella sbagliata. L'estrazione della cascata è un refactor del modulo
+pubblico: le 68 prove della residenza l'hanno verificata.
+
+**Dove è diverso dal modulo, ed è una semplificazione vera:** la master
+NON arriva da un link pubblico. È già dentro il gestionale con la sua
+password, quindi ha una sessione Supabase — le funzioni si aprono ad
+`authenticated` e non ad `anon`, e i file vanno in `master-documenti`,
+che è già privato (31/10/2026). Resta il limite del § 4: con un account
+per tutti, «authenticated» vuol dire «uno dei dispositivi che hanno
+quella password», non «questa persona», e chi firma lo decide ancora il
+Gate interno.
+
+**Le serrature che il database fa rispettare comunque**, perché non
+dipendono dall'identità — provate tutte e nove in una transazione
+annullata: senza firma non si registra (`senza_firma`); un file fuori
+dalla cartella `contratti/<id della master>/`, o con `..` dentro, è
+rifiutato (`percorso_non_valido`); senza le due foto del documento no
+(`senza_documento`); senza le tre dichiarazioni no
+(`senza_dichiarazioni`); un dato obbligatorio mancante è rifiutato e la
+funzione dice **quale** (`dati_incompleti`, con `campo`); un contratto
+già firmato non si rifirma (`gia_firmato`); una master esclusa non firma
+(`escluso`); e un vincolo impedisce che una riga «firmato» esista senza
+firma, senza data e senza testo congelato.
+
+**Il testo che si firma lo compone il server**, come per il modulo
+(31/10/2026): sta in `master_contratti_testi`, sette righe, e
+`contratto_master_salva` congela quelle — dal browser accetta solo
+`p_contratto` per dire se la pagina mostrava la stessa cosa
+(`uguale_a_quello_mostrato`). Se le righe mancassero si ricade sul testo
+del client e lo dice `origine: 'client'`, che «Contratti master» segna
+in rosso: meglio un contratto firmato che un contratto bloccato, ma si
+deve vedere.
+
+**Le due copie del testo nascono identiche, e lo si controlla invece di
+crederlo.** `scripts/genera-testi-contratto.mjs` genera
+`supabase/testi-contratto-master.sql` dal file del codice e stampa
+l'impronta sha256 di ogni chiave; «Contratti master → Il testo del
+contratto» mette accanto l'impronta del database e quella del repo. Una
+prova del banco legge lo script e il codice e pretende che il testo sia
+identico carattere per carattere: se qualcuno corregge il testo e si
+dimentica di rigenerare, il database e il repo farebbero firmare due
+contratti diversi.
+
+**Quello script NON sta in `supabase/migrations/` ed è voluto:** sono 78
+KB di insert, e il canale con cui questo progetto applica le migrazioni
+non li regge. Sta fra gli script cumulativi e idempotenti della radice,
+e si carica in due modi che scrivono le stesse righe — dall'editor SQL,
+oppure dal tasto **«Carica il testo di partenza»** in Contratti master.
+**Al 16/11/2026 le righe nel database sono zero:** va premuto quel tasto
+una volta.
+
+**Tre dichiarazioni, non una**, perché il cartaceo ha **tre righe di
+firma** — in fondo al contratto, in fondo all'approvazione delle
+clausole, in fondo al Manifesto — e tre atti distinti non si provano con
+una spunta sola (è la lezione del 19/10/2026 sui consensi delle
+modelle). Ognuna si salva col suo istante. **La firma col dito è una** e
+si stampa su tutte e tre le righe: disegnarla tre volte non aggiunge
+niente, e quello che distingue i tre atti è la spunta, non il tratto.
+Le tre frasi sopra le caselle sono le sole **NON trascritte** dal
+cartaceo — le ho scritte io, e **vanno lette e approvate dal titolare**
+prima della prima firma vera, come si fece per il consenso del trico e
+dell'areola.
+
+**Il testo va aperto e richiuso prima di firmare**, e si segna alla
+chiusura: aperto e lasciato aperto vuol dire che ci si è scorsi
+attraverso. Vale **a parte** per il contratto e per l'Allegato A — sono
+due documenti, e la terza dichiarazione è la ricevuta del secondo. Fino
+ad allora le spunte sono spente e, al posto della lavagna, un riquadro
+che dice perché.
+
+**Niente è bloccato, ed è la differenza voluta dal modulo.** Lì il
+prezzo e il pacchetto li ha scritti il venditore e l'allieva non li deve
+toccare; qui ogni casella è un dato suo — il suo codice fiscale, la sua
+residenza, la sua partita IVA — e l'unica che li sa per certo è lei.
+Quello che l'anagrafica sa già è precompilato e si corregge tutto; alla
+firma i dati restano **congelati** sul contratto e, in avanti e solo
+dove la colonna era vuota, finiscono sulla sua scheda. **Di 19 master
+nessuna aveva una data di nascita e dodici nemmeno la città**: non che
+non li abbiano, è che nessuno li aveva mai chiesti. Le colonne nuove su
+`master` sono `codice_fiscale`, `sesso`, `data_nascita`,
+`comune_nascita`, `stato_nascita`, `provincia`, `cap`,
+`stato_residenza`.
+
+**Il codice fiscale qui NON si calcola, si controlla.** Nel modulo si
+calcola da sesso, data e comune; qui il nome è **una casella sola**
+(`master.nome` è una colonna sola, e spezzare «MARIA T. NAPOLEONE»
+vorrebbe dire decidere noi dove finisce il nome), e un cognome indovinato
+produce un codice che **passa la lettera di controllo** e appartiene a
+un'altra persona. Resta `avvisoCampo`, che confronta il codice scritto
+con la data e il sesso dichiarati due righe sopra.
+
+**I due Stati subito dopo il nome**, come nel modulo dal 7/11/2026, e
+per lo stesso motivo: una casella di luogo incontrata prima dello Stato
+si riempie col paese sbagliato. Una prova confronta le posizioni.
+
+**La partita IVA è obbligatoria, ed è una conseguenza del contratto**:
+l'art. 2.3 vuole che il/la Master operi con propria posizione fiscale e
+l'art. 12.3 che emetta fattura. Oggi **quattro master in anagrafica non
+ce l'hanno scritta** — Andrea Paura, Chiara Colonnelli, Giulia Tamasi,
+Maurè Acosta — e da qui glielo si chiede. **Se il titolare decide che
+qualcuna firma senza, va cambiato `obbligatorio` in `CAMPI` e detto
+perché:** è una decisione sua, non una casella da allargare di nascosto.
+
+**Chi resta fuori è un dato, non un nome nel codice.**
+`master.contratto_escluso` + `contratto_escluso_motivo`, acceso su
+Tommaso Giumbini con «Condizioni da riscrivere». A chi è dentro quella
+colonna la nuvola **non compare** — una tessera che si apre su una
+pagina che dice solo «non c'è niente da fare» è peggio di una tessera
+che manca — e in Contratti master si legge il motivo e si toglie o si
+rimette senza pubblicare niente. Una prova controlla che nei file
+dell'area non ci sia nessun nome di persona.
+
+**Un contratto firmato non si rifirma.** `contratto_master_riapri`
+**prima archivia** la riga intera in `master_contratti_riaperture` —
+firma, documenti, testo congelato, consensi e date — e solo dopo riporta
+a «da firmare», azzerando `contratto_firmato` apposta: si rifirma il
+testo di adesso, non quello di allora. Il motivo si scrive. Non è una
+cancellazione e la domanda lo dice: «togliere la firma», non
+«cancellare» — chiamarla cancellazione farebbe credere di distruggere un
+documento, e nessuno premerebbe più.
+
+**La copia firmata la compone il server**, ed è la seconda deroga
+dichiarata alla regola «i PDF si fanno nel browser», per la stessa
+ragione della prima: deve **partire allegata** a una mail che manda il
+server — a lei e all'Accademia («una volta confermato io lo riceverò
+firmato»). La fa `contratto-master-firmato` con
+`_shared/contratto-master-pdf.ts`: contratto per intero con l'epigrafe,
+«Luogo e data», le tre firme, l'Allegato A, le dichiarazioni con la loro
+ora, il timbro della società (ritagliato sul CropBox, come nel modulo) e
+le due foto del documento. **Si archivia prima di mandare**: se la mail
+non parte, quel documento deve esistere comunque, e si rimanda da
+«Contratti master». Se la copia non parte **la firma è comunque
+registrata** e la pagina lo dice invece di far rifirmare.
+
+**La funzione è scritta e controllata (`deno check` verde) ma NON
+pubblicata:** le edge function si pubblicano quando lo dice il titolare.
+Finché non lo è, la firma si registra e la pagina dice che la copia
+arriverà — che è esattamente il ramo scritto per quel caso.
+
+Migrazione `20261116120000_contratti_master.sql` (rollback dentro).
+Prove in `prove/contratto-master.test.jsx` (43): il testo per intero, le
+regole pure, **i due elenchi dei campi obbligatori — SQL e JavaScript —
+che devono coincidere**, e le pagine montate per davvero.
+
+**E LA FIRMA NASCE CHIUSA** (16/11/2026, sera, poche ore dopo la
+consegna: «blocca per il momento l'accesso alle master alla firma del
+contratto»).
+
+Un interruttore solo, in cima a «Contratti master»: **«Apri la firma
+alle master» / «Chiudi la firma»**. È un dato
+(`impostazioni_layout_tabelle`, chiave `contratti_master_firma_aperta`,
+con dentro chi l'ha mosso e quando), quindi si riapre senza pubblicare
+niente — che è esattamente quello che serve a un «per il momento».
+
+**Non si spegne master per master, ed è il punto.** La strada corta
+sarebbe accendere `master.contratto_escluso` su tutte e diciannove. Non
+si fa: quella colonna vuol dire «questa persona, per un motivo suo, non
+firma questa versione» — oggi Tommaso Giumbini, «condizioni da
+riscrivere» — e riempirla di diciannove righe identiche farebbe perdere
+la sola che aveva un significato, con nessuno che il giorno della
+riapertura sa più quale esclusione era vera. Sono due cose diverse: una è
+una decisione su una persona, l'altra è una porta chiusa per tutti.
+
+**E non è una tendina tirata.** La nuvola sparisce dalla dashboard, ma la
+serratura sta nel database: `contratto_master_salva` e
+`contratto_master_bozza` controllano la porta **prima di tutto il
+resto** e rifiutano con `motivo: 'chiusa'`. Senza, chi avesse la pagina
+aperta da prima firmerebbe comunque — nascondere un tasto non è chiudere
+una porta.
+
+**Assenza = chiusa**, in tutti e due i posti: se la riga mancasse, o
+avesse dentro qualcosa che non si capisce, non si firma. Una porta che si
+apre perché un'impostazione non è stata trovata è una porta che non è mai
+stata chiusa.
+
+**Aprire si chiede e chiudere no.** La domanda dice **quante** persone
+potranno firmare («sei sicuro?» da solo non dice cosa si sta aprendo), e
+se il testo non è ancora nel database lo avverte prima — aprire in quel
+momento vorrebbe dire congelare alla firma il testo del browser. Chiudere
+non fa sparire niente e si disfa con lo stesso dito: chiederlo
+insegnerebbe a premere a occhi chiusi, e allora anche la domanda
+dell'apertura smetterebbe di proteggere (regola dell'11/11/2026).
+
+**Chiudere non cancella quello che è stato firmato:** un contratto già
+sottoscritto si continua a leggere, con la sua copia. «Per ora non si
+firma» non vuol dire «quello che hai firmato non si vede più».
+
+Migrazione `20261116200000_la_firma_del_contratto_si_apre_con_un_interruttore.sql`,
+provata in una transazione annullata (firma e bozza rifiutate a porta
+chiusa con zero righe scritte, la vista che si apre e lo dice, la firma
+che passa a porta aperta, la riga cancellata che vale «chiusa»). Nove
+prove in più nel banco, fra cui quelle che leggono la migrazione e
+pretendono che il controllo venga **prima** di ogni altra cosa.
+
+**Resta da fare, e va deciso:** una schermata per **correggere** il
+testo dall'app, come Setting → Il contratto per il modulo (oggi si
+corregge nel repo e si ricarica col tasto); e l'invio di un **promemoria**
+a chi non ha ancora firmato, che oggi non esiste — un contratto mai
+aperto resta invisibile finché qualcuno non guarda l'elenco.
+
+### Il buono Amazon verificato risultava non verificato (16/11/2026)
+
+Dalla logistica: «quando clicchiamo il tasto con cui diciamo che abbiamo
+verificato il pagamento con buono Amazon, compare "La verifica non è
+stata scritta: forse qualcun altro l'ha già fatta", ma nessun altro
+l'ha fatta e non possiamo proseguire».
+
+**Misurato prima di toccare niente, e il messaggio diceva il vero a
+metà:** la verifica *era* scritta — `pagamento_verificato_il` su
+POS-1794752606485, alle 10:54 di quel giorno, con il nome di chi aveva
+premuto. **L'aveva scritta lui stesso, al primo tocco.** Il secondo
+tocco non trovava più niente da scrivere (`.is("pagamento_verificato_il",
+null)`, perché una verifica fatta non si riscrive), zero righe, e
+l'avviso dava la colpa a un collega.
+
+**La causa vera è un piano più sotto: il caricatore di `vendite_shop`
+elenca le colonne una per una, e quelle due non erano nell'elenco.** Dal
+12/09/2026 quella lettura non è più `select("*")` — serviva a non
+portarsi dietro 4 MB di storico a ogni apertura — e il lavoro del
+23/10/2026 sul buono Amazon ha aggiunto le colonne al database senza
+aggiungerle lì. **Una colonna che manca in quell'elenco non dà nessun
+errore: arriva `undefined`**, e tre punti dell'app leggono quel vuoto
+come «non verificato» — il tasto che resta «In attesa di verifica
+pagamento», il blocco di «Spedita» in Ordini in arrivo e quello in
+Spedizioni POS. Il pacco non poteva partire da nessuna delle due strade.
+
+**Nello stesso elenco mancava `pagamento_codice`**, trovato di fianco e
+dello stesso giorno: senza, la pastiglia «pagato con Stripe» e il
+dettaglio ordine (23/10/2026) riconoscevano un incasso solo quando il
+pagamento portava `vendita_id`, e non quando lo legava il codice.
+Aggiunte tutte e tre.
+
+**Perché le prove non l'avevano preso, ed è la parte che insegna.**
+`prove/buono-amazon-si-verifica-in-logistica.test.jsx` monta la pagina
+con una vendita *che il campo ce l'ha*: il componente è sempre stato
+giusto. Il difetto non stava in un componente, stava **fra il database e
+tutti i componenti insieme**, e lì non arriva nessuna prova che monti
+una pagina. Ora una prova legge il sorgente, prende l'elenco delle
+colonne di `vendite_shop` e pretende che contenga quelle che la
+logistica legge da una vendita. È la stessa famiglia di «elenco vuoto =
+tabella non chiesta»: **campo assente = colonna non chiesta**, e si
+riconosce dal fatto che la pagina mostra con sicurezza il contrario di
+quello che dice il database.
+
+E l'avviso non accusa più nessuno: dice che l'ordine risulta già
+verificato e che la pagina si ricarica per mostrarlo.
+
+**Una prova rossa trovata per strada, la seconda in due giorni.**
+`prove/vendita-fiera.test.jsx` montava il flag con la Fiera di Napoli
+del 7-9 novembre: il componente il giorno di oggi se lo legge da solo, e
+il 16/11 quella fiera è uscita dalla coda dei sette giorni
+(`GIORNI_DI_CODA`) — la tendina con due fiere non compariva più. Le
+fiere di quelle prove adesso nascono rispetto a oggi. **Una data scritta
+a calendario in una prova è una prova con una scadenza.**
+
+### «Tipologie di kit» sul mockup, e la quantità che mancava (15/11/2026)
+
+Il titolare, con il secondo mockup: «nella pagina "Tipologie di kit"
+applica questo mockup». Stessa famiglia del lavoro sulla lista di
+allestimento, stesse misure (`ALLESTIMENTO`), e una cosa che non è
+grafica.
+
+- **Gli accessori didattica sono bande che si aprono.** Erano trenta
+  righe in fila sotto le loro intestazioni: tre schermate da scorrere
+  per arrivare al tasto sotto. Ora ogni reparto è una banda crema con la
+  sua icona, il nome e una pastiglia che dice **quanti prodotti
+  contiene anche da chiusa** — l'indice si legge in un colpo e si apre
+  quello che serve. Resta aperta **la prima**, così la pagina mostra di
+  che cosa sono fatte le bande invece di presentarsi tutta chiusa.
+- **E dentro c'è la quantità, che da qui non si poteva scrivere.** Ogni
+  accessorio nasceva a 1 e restava a 1; quel numero non è decorativo, è
+  **quello che la logistica si ritrova già scritto nella casella di ogni
+  edizione** (`accessoriDaElencare`), e chi lo voleva diverso lo
+  correggeva a mano su ogni classe. Ora c'è il contatore a freccette,
+  come in Logistica, e la scrittura conta le righe cambiate
+  (`.select("id")`): un update senza select dice «va bene» anche quando
+  non ha toccato niente.
+- **L'icona della banda è decorazione, con un ripiego.** Una mappa su
+  qualche parola del nome (consumabili, hennè, stampe, uncategorized) e
+  la scatola per tutto il resto: i reparti sono un dato che cambia, e
+  una mappa che non li copre tutti deve restare una mappa incompleta,
+  non un buco nella pagina.
+- **Il resto è peso.** Il filo oro fra il tasto «Impostazioni» e il
+  titolo, i tre tasti del corso come pastiglie con **«+ Nuovo
+  pacchetto» pieno** (fra tre tasti affiancati uno solo crea qualcosa, ed
+  è quello che si cerca), il nome del pacchetto da 14,5 a 17, e il
+  **cestino al posto della crocetta**: una ✕ accanto a quattro pastiglie
+  si legge come «chiudi», e quel tasto cancella un pacchetto.
+
+**E dentro ogni reparto i prodotti sono in ordine alfabetico**
+(15/11/2026: «tutti i prodotti nelle varie categorie del materiale
+presente dei kit deve essere in ordine alfabetico sotto ad ogni
+categoria»). Arrivavano nell'ordine in cui le righe erano state
+scritte, cioè in nessun ordine: dentro LAMINAZIONE, con tredici
+boccette che si somigliano, trovare quella che si ha in mano voleva
+dire leggerle tutte. Si ordina dentro `raggruppaPerReparto`, in un
+posto solo, perché le liste sono tre — il contenuto di un kit, gli
+accessori didattica e la raccolta in logistica — e una ordinata accanto
+a due a caso sembra un difetto. Con `numeric: true`, o «N2» verrebbe
+dopo «N10». Il parametro `nomeDi` è facoltativo: chi non lo passa tiene
+l'ordine che gli arriva.
+
+**Il cestino al posto della crocetta, in tutte e due le liste**
+(15/11/2026: «qui sulle liste sostituisci la X rossa con l'iconcina del
+cestino e prima di eliminare il prodotto chiedi conferma»). La domanda
+**c'era già** — `confermaCancellazione`, dall'11/11 — e adesso ci sono
+anche le prove che la premono: finché nessuno preme quel tasto in una
+prova, «chiede» resta una cosa che si crede, non una che si sa.
+
+**E di fianco è saltato fuori un gesto che non chiedeva niente**: la
+crocetta che toglie una consulenza dall'allestimento (Logistica). Il
+guardiano delle cancellazioni dell'11/11 riconosce i gesti dal **nome**
+della funzione, e questa si chiama `impostaQuantitaConsulenza` — un nome
+che non dice che a zero la riga sparisce. Adesso chiede, nominando la
+consulenza, e ha il cestino come le altre.
+
+**«+ Aggiungi accessorio»** (15/11/2026, chiesto subito dopo). La
+casella per cercare un prodotto stava sempre aperta in cima alla scheda:
+chi arrivava per guardare l'elenco si trovava davanti una ricerca, e chi
+voleva aggiungere non aveva un gesto da cercare — doveva **capire** che
+quella casella serviva a quello. Ora c'è un tasto che lo dice, e sotto,
+quando si preme, le due strade per aggiungere: un prodotto per volta dal
+magazzino, o la lista intera di un altro corso.
+
+Prove in `prove/kit-per-reparto.test.jsx` (23): le bande ci sono tutte,
+la prima aperta, la pastiglia conta anche da chiusa, premere la seconda
+mostra le sue righe, la quantità scrive davvero, il cestino chiede e col
+«no» non cancella niente, e la ricerca compare solo dal tasto.
+
+### La lista di allestimento, ridisegnata sul mockup (15/11/2026)
+
+Il titolare, con un mockup in mano: «rifai il design della pagina
+rispettando a perfezione la mia proposta, con particolare attenzione
+alla grandezza delle icone e dei numeri rispetto al testo e al rispetto
+della grandezza dei titoli».
+
+**Quello che è cambiato non è la decorazione, è la gerarchia.** Chi apre
+quella pagina ha una domanda sola — quanta roba preparo — e doveva
+ricavarla da etichette tutte della stessa misura: il nome del corso 19,
+il titolo della lista 12,5 in maiuscoletto, i conti 16, le intestazioni
+di colonna 10,5. Tutto importante vuol dire niente importante. Adesso:
+
+| Cosa | Misura | Perché |
+|---|---|---|
+| i due conti in cima | 30 | sono la risposta alla domanda per cui si apre la pagina |
+| i conti di riga e i totali | 24 | si leggono per primi, prima del nome |
+| «Lista di allestimento» | 26 | è il titolo della pagina, non un'etichetta |
+| «01 KIT DIDATTICI» | 17 | il gradino sotto |
+| il nome di un articolo | 15 | |
+| intestazioni di colonna e note | 11,5–12 | testo di servizio, grigio |
+
+Le misure stanno in **una costante sola** (`ALLESTIMENTO` in App.jsx) e
+le leggono tutte e tre le sezioni: due blocchi che si somigliano al 90%
+ma hanno tre numeri diversi si notano, e si correggono in due posti.
+Stessa cosa per la griglia delle quattro colonne (`grigliaAllestimento`),
+scritta una volta per l'intestazione e per le righe — due copie si
+disallineano al primo nome lungo.
+
+Com'è fatta adesso: **intestazione** (la tessera della data, il filo oro,
+il nome del corso in maiuscolo e la città sotto, i due tasti impilati a
+destra), **i due conti** in una fascia crema con le icone in un tondo
+bianco — Allievi iscritti e Kit da preparare — e poi le **sezioni
+numerate**, ognuna una scheda bianca con la sua banda: `01 Kit
+didattici` (Articolo · Iscritti · Riserva · Totale), `02 Dermografi`
+(Modello · Allievi · Riserva · Totale), `03 Abbigliamento` (Magliette
+totali e le pastiglie delle taglie). In fondo la barra **Specifiche
+degli allievi**, chiusa, che si apre sulla riga per persona.
+
+Quattro decisioni:
+
+- **Il totale è una colonna, e non c'era.** «8 iscritti» e «2 di
+  riserva» erano due numeri da sommare a mente, e quello che parte è la
+  somma. Il conto in cima è lo stesso di `totaleKitPerEdizione`, cioè
+  quello che il magazzino scarica: un secondo calcolo direbbe un altro
+  numero.
+- **La numerazione si conta, non si scrive.** I dermografi hanno la loro
+  sezione solo dove il corso li manda (`prevede_dermografi_sicurezza`):
+  saltare da 01 a 03 farebbe cercare una sezione che non esiste, quindi
+  senza dermografi l'abbigliamento è 02.
+- **Le magliette sono uscite da dentro l'elenco degli iscritti.** Il
+  totale per taglia serve a chi va allo scaffale, e stava in fondo a una
+  lista chiusa dietro un tasto. La riga per persona resta, dove serve a
+  chi riempie una scatola per volta — **dal 15/11/2026 dentro la stessa
+  scheda**, dietro la parola «Dettagli» accanto a «Magliette totali»:
+  la barra «Specifiche degli allievi» che stava sotto era una seconda
+  scheda per la stessa cosa, con la sua icona, il suo bordo e il suo
+  conto di allievi. Una parola e basta, perche' li' accanto c'e' il
+  numero grande, ed e' quello che si guarda.
+- **Il riepilogo «8 KIT KIT COLORI / 8 KIT TOTALI» è stato tolto**
+  (`RiepilogoKitPacchetti`, che lo usava solo questa pagina): quelle
+  stesse quantità adesso si leggono riga per riga nella sezione 01, con
+  il totale accanto. Una colonnina che ripete quello che c'è due
+  centimetri sotto è rumore.
+
+**E la coda della pagina è la sezione 04** (15/11/2026, secondo
+mockup: «prosegui e rifai anche l'ultima parte della pagina»). Erano
+tre blocchi di fila senza niente che li tenesse insieme — accessori
+didattica, consulenze, prodotti extra — con due tasti tratteggiati
+sparsi in mezzo. Per chi prepara sono la stessa cosa: **quello che va
+nella scatola oltre ai kit**. Adesso sono una scheda sola, «04
+Accessori per il corso», con le righe tutte della stessa forma (foto
+incorniciata, nome in grassetto, contatore a freccette a destra) e i
+**due tasti che aggiungono affiancati in fondo**, dove si arriva dopo
+aver guardato cosa c'è già. Consulenze ed extra tengono la loro
+sottointestazione grigia e i loro comandi — «Da vendere», la crocetta —
+e la casella della quantità è diventata lo stesso contatore degli
+accessori: tre modi di scrivere un numero nella stessa scheda erano
+tre, non uno. Quando una delle due ricerche si apre prende il posto del
+suo tasto e basta: chi cerca una consulenza non ha smesso di poter
+aggiungere un extra.
+
+**«Componi kit» sta in un posto solo** (15/11/2026, detto davanti alla
+scheda: «togli il tasto "componi kit": quel tasto si trova solo nella
+sezione prepara, dopo che hai messo da parte tutti i materiali»).
+Comporre le buste è il gesto **dopo** la raccolta, e un tasto che lo
+offre prima invita a cominciare dalla fine. Ora sta in cima alla pagina
+«Prepara», dove arriva chi ha appena finito di raccogliere, dice a che
+punto sono i kit («Componi i kit · 1/2 →») e **si accende in verde
+quando non resta più niente da prendere**. Non si spegne mai, però: un
+prodotto in attesa di ricezione non deve impedire di riempire le buste
+che si possono già riempire.
+
+**E il pannello ha un fondo suo** (15/11/2026): lo stesso crema della
+scheda scelta a sinistra (`FONDO_ALLESTIMENTO` = `#FBF3E4`, letto anche da
+`RigaCorsoLogistica`). Le due metà della pagina parlano dello stesso
+corso: due crema vicini ma diversi si leggono come due cose diverse, e
+nessuno sa quale delle due sia sbagliata. Su una scheda bianca come
+tutto il resto le sezioni bianche non si staccavano da niente; adesso
+il bianco è quello su cui si lavora, e il fondo è solo il foglio sotto.
+La fascia dei due conti resta grigio-crema, o su quel fondo sparirebbe.
+
+**Le bande delle sezioni sono blu scure con il testo bianco**
+(15/11/2026: «il fondo deve essere blu scuro e il testo bianco, a parte
+l'icona del numero che resta uguale»). Erano crema come la scheda che
+le contiene tutte: quattro bande di un colore che c'è già sotto non
+dividevano niente, e la pagina si leggeva come un elenco solo. Il
+numero resta nella sua pastiglia oro — è l'indice, e sul blu si vede
+meglio di prima.
+
+**La lista parte dal corso che si è scelto** (15/11/2026: «quando
+selezioni un corso, la lista di preparazione relativa sia graficamente
+collegata al corso e parta sempre da quel corso a scendere, non
+attaccata in alto»). Il pannello stava incollato in cima, e con otto
+corsi in colonna quello scelto poteva essere il sesto: si premeva una
+scheda a metà pagina e la risposta compariva due schermate più su,
+senza niente che dicesse che le due cose fossero la stessa. Adesso
+scende fino alla riga della sua scheda, e nel vuoto fra le due colonne
+c'è una **striscia dello stesso crema** (`data-ponte-corso`) alta
+quanto la scheda, che le tiene insieme.
+
+**E la scheda scelta ha il bordo oro** (15/11/2026): il solo fondo
+crema non bastava più, perché lo stesso crema sta anche nel pannello
+accanto e nella striscia che li unisce — a colpo d'occhio non si vedeva
+più dove finisce la scheda. Il bordo lo dice senza aggiungere una
+parola, e il pixel in più per lato lo recupera il padding: la misura
+dell'aggancio viene dal DOM, quindi segue da sé.
+
+**La striscia passa DIETRO, e le schede restano tonde.** La prima
+versione squadrava il fianco della scheda scelta per farne una forma
+sola col pannello — un vassoio a elle: il titolare l'ha scartata («gli
+angoli della scheda di sinistra non tornano arrotondati»). Adesso il
+nastro sta sotto (`zIndex: 0`, le due colonne a 1), sborda di dodici
+pixel per lato così nessuno dei due angoli tondi lascia uno spiraglio,
+e si vede solo nel vuoto fra le colonne. Il pannello prende lo stesso
+bordo oro della scheda, e tutti e due restano tondi da quattro parti.
+
+**E la data non si scrive due volte** («avevo fatto delle modifiche al
+contenuto delle schede eliminando la doppia data»). Da quando il
+pannello è attaccato alla scheda del suo corso, quella scheda ha già
+tessera della data, nome e città a cinque centimetri: ripeterli era
+un'intestazione che non diceva niente di nuovo e allontanava la lista.
+Via, e **«PREPARA» sale accanto ai due conti** — si legge quanto c'è da
+fare e lì si preme. L'intestazione resta dove il pannello sta da solo:
+sul telefono, e quando nessuna scheda è agganciata, perché lì non lo
+dice nessun altro.
+
+**La misura si prende dal DOM, non si calcola**: l'altezza di una
+scheda dipende da quante fasi ha, se la lista mancanti è aperta, se c'è
+la gestione rientro — un conto a mano sbaglierebbe al primo corso
+diverso dagli altri. Si rimisura con un `ResizeObserver` sulla griglia e
+sul ridimensionamento della finestra, e lo stato si riscrive solo se i
+numeri sono cambiati, o il pannello che si allunga rifarebbe partire la
+misura all'infinito. Su telefono non vale: le colonne non sono
+affiancate.
+
+**E la tessera della data è una sola** (`TesseraData`, «il numero della
+data della cella di destra deve avere lo stesso stile di quello della
+cella di sinistra»): la usano la cella dell'elenco e il pannello
+accanto. Due tessere disegnate in due punti si scostano al primo
+ritocco, e stanno una accanto all'altra sulla stessa schermata.
+
+**E le righe sono compatte** (15/11/2026: «c'e' troppo spazio bianco
+sopra e sotto a ogni prodotto, gli elenchi diventano troppo lunghi»).
+Una riga alta 60 px per quindici accessori sono tre schermate per una
+lista che si legge in una. L'altezza la decideva **la foto**, 42 px,
+non quello che su quella riga si fa: adesso la foto e' 32, il contatore
+e' il modello compatto (30) come nella sezione dei kit, e sopra e sotto
+restano 4 px. La riga la decide il contatore, perche' e' il pezzo che
+si preme col dito e sotto i 30 px non deve scendere.
+
+**E le tre liste della sezione 04 sono in ordine alfabetico**
+(15/11/2026: «questi accessori vanno in ordine alfabetico»).
+Arrivavano nell'ordine in cui le righe erano state scritte sulla scheda
+del corso, cioè in nessun ordine: con quindici righe fra cui tre tipi di
+guanti che si somigliano, trovare quello che si ha in mano voleva dire
+leggerle tutte. Vale per accessori, consulenze ed extra insieme — una
+lista ordinata accanto a due a caso sembra un difetto.
+
+Prove in `prove/lista-allestimento.test.jsx` (16), con il pannello
+montato: i due conti, le tre sezioni col loro numero e le loro colonne,
+la numerazione che non salta, il totale che è iscritti + riserva, le
+taglie, la barra che si apre — e **due prove sulla gerarchia**: il
+numero di riga più grande del nome che accompagna, e i tre titoli in
+ordine di grandezza. Senza quelle, la prima modifica distratta rimette
+le cose come stavano e non se ne accorge nessuno. Quello che le prove
+**non** vedono è l'impaginazione vera: jsdom non impagina, e il
+confronto col mockup si fa con gli occhi.
+
+### Le fasi di un corso sono una linea, non quattro tasti (15/11/2026)
+
+Il titolare, con un mockup: «in spedizioni corsi ridisegna le celle dei
+corsi con questa grafica e con questo criterio. Come vedi i pulsanti
+rossi esistono solo per le fasi ancora da fare, poi diventano cerchietti
+verdi».
+
+**Una fase fatta non è più una cosa da fare, quindi non merita un
+tasto.** Erano quattro pastiglie affiancate, tutte colorate e tutte
+della stessa misura: tre verdi e una rossa, e per sapere a che punto
+fosse un corso bisognava leggerle tutte. Adesso sono una **linea**: un
+cerchietto per tappa, verde con la spunta dove è fatto, l'etichetta
+grigia sotto; rosso con «!» e la pastiglia rosa dove c'è ancora da
+lavorare. Il rosso si vede da lontano, che è tutto il suo mestiere.
+
+- **Rossa è una sola, ed è una decisione del titolare.** Le fasi più in
+  là restano cerchietti grigi: rosso vuol dire «tocca a questa adesso»,
+  e su un corso appena nato tre pastiglie rosse di fila direbbero tre
+  urgenze dove ce n'è una.
+- **Il filo è fatto di due mezze linee per tappa**, così non esce dal
+  primo cerchietto né oltre l'ultimo, e ogni tratto dice da solo se quel
+  pezzo di strada è stato fatto (verde) o no (grigio).
+- **La freccia «›» della testata apre il corso a destra**, cioè fa
+  quello che fa premere la scheda — che resta premibile, ma un bordo che
+  si preme non lo vede nessuno. **Non** è il passo indietro: quello è
+  scritto, «← Indietro», perché una freccia nuda in una fila di
+  cerchietti non dice che cosa disfa, e **sta in fondo alla riga dei
+  cerchietti**, non sotto la linea: sotto, in mezzo alle etichette,
+  sembra l'etichetta di una quinta tappa (corretto dal titolare lo
+  stesso giorno).
+- **Le etichette sono 13 e vanno a capo su due righe.** A 11 erano
+  troppo piccole.
+- **E dal secondo mockup («rispettando al pixel ogni dettaglio») la
+  linea è fatta di DUE RIGHE incolonnate**: sopra i pallini uniti dal
+  filo, sotto il nome di ogni tappa. Le due righe usano la **stessa
+  griglia** (`repeat(n, 1fr)`): scritte con due misure diverse, il
+  pallino si scollerebbe dalla sua etichetta al primo nome lungo.
+- **La nuvola è SOLO della fase da fare, e nessuna tappa ha un'icona**
+  (corretto due volte dal titolare lo stesso giorno: «elimina le icone e
+  le celle verdi intorno al testo, scrivi solo il testo sotto l'icona di
+  spunta verde», poi «anche in queste nuvole rosse devi togliere l'icona
+  e il testo non deve uscire dalla nuvola»). Una fase fatta è già detta
+  dal pallino verde e una da fare dal pallino rosso: l'icona accanto al
+  nome è la terza volta che si dice la stessa cosa, e in una colonna
+  stretta si prendeva metà riga — il nome restava con due parole per
+  riga e usciva dal riquadro. Sotto il pallino c'è il nome e basta,
+  centrato, con `box-sizing: border-box` e `overflow-wrap: anywhere` che
+  lo tengono dentro la nuvola anche quando è una parola sola più lunga
+  della colonna. `ICONA_FASE` è stata cancellata.
+- **Tutte le date sono blu** (deciso dal titolare: «tutte le date dei
+  corsi avranno lo stesso colore blu»). Era `corso.colore`: sei corsi in
+  colonna erano sei tessere di sei colori, e il colore — che serve a
+  riconoscere un corso nel calendario — qui diventava la cosa più grossa
+  della pagina senza dire niente che il nome, due centimetri a destra,
+  non dicesse già. La tessera è navy con il bordo oro; accanto un filo
+  oro la separa dal nome, scritto **in maiuscolo**; i kit stanno in una
+  pastiglia oro con l'icona della scatola.
+- **La scritta rossa o verde sotto «N KIT» è sparita** («Verifica pacco
+  a destinazione»): la diceva la stessa cosa della linea, e scritta due
+  volte era una da leggere e una da saltare. Resta come suggerimento
+  sulla freccia.
+- **La stessa linea vale per i corsi in sede centrale** (tre tappe) e
+  per il **viaggio di ritorno** della «Gestione rientro»: due disegni
+  per la stessa cosa si leggono come due cose diverse. `PillaFaseLogistica`
+  e `TastoFaseSede` sono state cancellate, non lasciate lì.
+- Restano dov'erano la **lista mancanti**, la spunta «Gestione rientro»
+  e il link «Cosa torna in magazzino →», e resta la banda rossa
+  «Magazzino in movimento» che prende il posto della linea mentre lo
+  scarico lavora (`BandaMagazzinoInMovimento`, scritta una volta per
+  tutte e due le strade).
+
+Prove in `prove/fasi-a-linea.test.jsx` (14): chi è verde, chi è rosso e
+chi è grigio nei tre momenti di un corso, la rossa che si preme e la
+futura che non fa niente, «Indietro» che torna di una fase e che su un
+corso appena nato non c'è, la freccia che apre e non disfa, le tre
+tappe della sede e la banda del magazzino.
+
+### Composizione kit, e il prodotto che non è ancora arrivato (15/11/2026)
+
+Il titolare: «aggiungi la pagina "Composizione kit", che si apre dopo la
+raccolta del materiale […] Ogni blocco ha come titolo la quantità e il
+nome del kit (es. "10 kit PMU Pro") e sotto la lista dei prodotti che Raf
+deve mettere in ciascuna busta». E, nella raccolta: «un nuovo pulsante, a
+destra del flag, "In attesa di ricezione", che colora la riga di
+arancione […] Finché la lista mancanti di un corso non è vuota, il
+pulsante "Pacco preparato" di quel corso resta disattivato».
+
+**Sono due domande diverse sullo stesso materiale.** La raccolta
+(30/10/2026) risponde a «quanti pezzi in tutto prendo dallo scaffale» —
+7 aghi, una riga per prodotto, le quantità già sommate su tutti i kit. La
+composizione risponde a «quanti ne metto in OGNI busta» — 2, il numero
+scritto nella distinta del pacchetto, quello che la mano ripete dieci
+volte. Un numero solo per tutte e due le domande vorrebbe dire sbagliarne
+una delle due.
+
+Le quantità dei kit arrivano da **`componiSpedizione`**, la stessa
+fotografia da cui nasce la raccolta: due conti separati vorrebbero dire
+una lista che manda a prendere sei pelli e un'altra che ne fa mettere
+sette nelle buste. Una prova confronta le due strade sugli stessi pezzi.
+
+**«In attesa di ricezione» è un TERZO stato, non il contrario di
+«preso».** Per questo ha una mappa sua (`logistica_kit_edizioni.in_attesa`,
+migrazione `20261115100000`) e non un valore dentro `checklist`, dove
+qualunque cosa scritta vuol dire «preso». La riga diventa arancione, e il
+flag verde resta dov'è: è con quello che si dice «è arrivato». I due
+gesti si escludono a vicenda, perché una riga verde e arancione insieme
+non vorrebbe dire niente.
+
+Quattro decisioni:
+
+- **Arancione non ferma il lavoro.** Si continua a raccogliere e a
+  comporre le buste: un pezzo in arrivo non blocca le mani, blocca una
+  cosa sola — **dichiarare preparato un pacco a cui manca un pezzo**. È
+  il primo gesto della fila, quello che scarica il magazzino e congela la
+  fotografia della spedizione: dirlo con un buco dentro vuol dire far
+  partire una scatola che qualcuno sapeva già incompleta.
+- **La lista mancanti sta sulla riga del corso**, non dentro il pannello:
+  è lì che si preme il tasto che blocca, e un avviso che vive in un'altra
+  pagina è un avviso che non si legge. Dice quale prodotto, **in quale
+  kit** e in che quantità («7 × Aghi 1RL — 6 per PMU Pro · 1 per PMU
+  Base»), perché la domanda di chi guarda è se aspettare o comporre le
+  buste a metà.
+- **Il divieto non vive solo nel tasto.** Lo ricontrollano
+  `cambiaFaseLogistica` e `preparaMateriale` (il gemello dei corsi in sede
+  centrale, dove «Materiale preparato» vuol dire la stessa cosa con
+  un'altra parola). Chi programma passa comunque, come su ogni altra
+  serratura di questa pagina: quando il dato e la realtà non coincidono
+  qualcuno deve poterli riallineare.
+- **Una chiave in attesa su un prodotto uscito dal pacco non blocca per
+  sempre.** `listaMancanti` guarda sempre la raccolta **di adesso**: se
+  un'iscritta cambia pacchetto e quel prodotto non serve più, la riga
+  sparisce da sola invece di tenere fermo un corso per un pezzo che
+  nessuno aspetta più.
+
+Due note di forma. La riga della raccolta **non è più un tasto**: è una
+riga con due tasti dentro (il flag, che resta largo quanto tutta la riga
+e si prende col pollice senza mirare, e «In attesa» a destra) — un tasto
+dentro un tasto il browser non lo accetta. E un **kit senza distinta
+resta in elenco** e lo dice: farlo sparire vorrebbe dire che chi prepara
+cerca un blocco che non c'è e non sa perché (la stessa regola del bundle
+aperto a vuoto del 6/11).
+
+**E un extra che il pacco sta già portando lo dice prima** (15/11/2026,
+chiesto lo stesso giorno: «se Raf aggiunge "prodotto extra o da
+vendita" e quel prodotto è già elencato tra quelli presenti dei kit, il
+sistema deve avvisare con un popup»). Il rischio non è estetico: un
+extra scarica il magazzino come tutto il resto, quindi lo stesso
+prodotto aggiunto due volte esce due volte — e la seconda nessuno la
+mette in dubbio, perché l'ha scritta qualcuno apposta. «Ruota colori»
+sta nella distinta del Kit Colori **e** fra gli accessori didattica: è
+esattamente il caso. Ora l'elenco della ricerca scrive «già nel pacco: 5
+pezzi · 5 dai kit» sotto il nome, e premendo si apre la domanda —
+quanti pezzi, di quale prodotto, da dove, e «Sei sicuro di aggiungerne
+altri?» con sì e no. Con «no» non si aggiunge niente e la ricerca resta
+aperta dov'era. **Un prodotto che nel pacco non c'è non chiede niente**:
+un avviso che compare sempre si impara a saltare, e si porta dietro
+anche quelli che contano. I pezzi dei kit si contano dai blocchi della
+composizione — lo stesso conto che riempie le buste — e quelli degli
+accessori dalla quantità che partirà davvero, scritta a mano se c'è.
+
+«Terminato», in cima alla composizione, **chiude e basta**: non dichiara
+niente. Quello che è fatto lo dicono i tasti verdi dei blocchi, uno per
+kit (`kit_composti`), che si disfano con lo stesso dito.
+
+Prove in `prove/composizione-kit.test.jsx` (19): il conto e la sua
+coincidenza con la raccolta, le due pagine montate per davvero, e la
+riga del corso — la lista mancanti con i kit e le quantità, la pillola
+che bloccata non avanza, e che vuota la lista il pacco si dichiara
+preparato come sempre.
+
+**Una prova rossa trovata per strada, e non era questa.**
+`prove/classe-dal-venditore.test.jsx` fissava una classe al **14/11/2026**:
+«domani» il giorno in cui è nata, ieri il giorno dopo — e l'elenco dei
+corsi programmati restava vuoto. Una data scritta a calendario in una
+prova scade da sola; adesso è *fra un mese da oggi*, e la prova non ha
+più una data di scadenza.
+
+### Più di una slide per corso (14/11/2026)
+
+Il titolare: «in associa slide al corso avrei bisogno, una volta
+inserita la prima slide del corso, di un segno + che permetta di
+caricare una seconda slide per lo stesso corso».
+
+**Il «+» è la punta; sotto c'era che le slide erano una sola e scritte
+in due posti.** Il PDF in tre colonne di `corsi`
+(`slide_pdf_path/_nome/_caricato_il`), il link in una riga di
+`impostazioni_layout_tabelle` (chiave `slide_link_corsi`, una mappa
+corso → indirizzo). Da lì veniva la regola «o il PDF o il link, mai
+tutti e due», scritta nel browser: non era una scelta, era il fatto che
+il posto fosse **uno solo per tipo**.
+
+Adesso le slide sono **righe** di `corsi_slide` (migrazione
+`20261114110000`): `tipo` pdf|link, `titolo`, `percorso`+`nome` oppure
+`url`, `ordine`. Quante ne servono, dei due tipi insieme, in fila. Un
+vincolo nel database (`corsi_slide_pdf_o_link`) impedisce la riga a
+metà, che esisterebbe senza vedersi da nessuna parte — il modo in cui
+una slide sparisce senza errori.
+
+**I due posti di prima sono stati chiusi nello stesso giro**: le tre
+colonne di `corsi` sono state eliminate e la riga delle impostazioni
+cancellata, dopo aver travasato **4 PDF e 14 link su 18 corsi** — lo
+stesso 18 che la pagina scriveva prima della migrazione. Una colonna che
+sembra viva e non lo è è peggio di una che manca; il rollback, che
+ricostruisce tutti e due i posti dalla prima slide di ogni corso, è
+scritto dentro il file — e dice che tornando indietro **si perdono le
+slide oltre la prima**.
+
+Quattro decisioni:
+
+- **PDF e link stanno nella stessa fila.** Per la master sono la stessa
+  cosa — quello che proietta in aula — e due liste separate vorrebbero
+  dire due ordini che non si parlano. Le slide nuove si **accodano**:
+  l'ordine lo decide chi carica, caricando.
+- **Il titolo è facoltativo, ed è il prezzo di ammissione della
+  richiesta.** Con due link accanto, due tasti «Apri link» identici
+  sulla scheda della master non dicono quale sia quale — e un link, a
+  differenza di un file, un nome suo non ce l'ha. `nomeSlide` sceglie:
+  il titolo, poi il nome del file, poi «Slide 1», «Slide 2». Con **una**
+  sola slide senza titolo si legge quello che si è sempre letto —
+  «Apri link», «Scarica le slide» — perché dare un nome a una cosa sola
+  è un'informazione che non serve.
+- **Un riquadro oro solo, con dentro una riga per link**, e non un
+  riquadro per link: «SLIDE CORSO» scritto tre volte di fila su una
+  scheda che ha già sei tasti è rumore.
+- **Le due finestre non cambiano**: i PDF compaiono una settimana prima
+  dell'inizio e spariscono con l'ultimo giorno; i link ci sono sempre.
+  La regola vive in `SlideDelCorsoMaster`, in un posto solo, perché la
+  scheda la disegnano **due** pagine (dashboard master e dashboard
+  assistente) e due copie vorrebbero dire sette giorni di qua e nessuna
+  di là.
+
+Nella pagina di Setting ogni corso ha le sue slide numerate, con la
+casella del nome che si salva uscendo (come il nome di un pacchetto: non
+c'è niente da confermare, e un tasto «Salva» per una parola facoltativa
+è un tasto che non si preme), e i due tasti in alto a destra che da
+«Carica PDF»/«Carica link» diventano **«+ PDF»/«+ Link»** appena una
+slide c'è. Togliere **chiede**, e la domanda nomina quale: davanti a tre
+righe «sei sicuro» non dice niente. Il file si cancella dal secchio solo
+**dopo** che la riga è sparita davvero, e un upload la cui riga non si
+scrive viene tolto dal secchio: al contrario resterebbe un file che
+nessuno può più collegare a niente.
+
+**`corsi_slide` va chiesta** nella mappa delle viste di `App.jsx` per
+`slidecorsi`, `dashboardmaster` e `dashboardassistente` — la regola di
+sempre: elenco vuoto = tabella non chiesta.
+
+Prove in `prove/piu-slide-per-corso.test.jsx` (16): l'ordine e i nomi, la
+pagina montata (il «+» che compare solo dove una slide c'è già, il
+secondo link che scrive una riga nuova con `ordine` in fondo, il nome
+che si salva, il togliere che chiede e col «no» non scrive), e la scheda
+della master — un link solo che resta «Apri link», due che si
+distinguono per nome, un tasto per PDF, e i PDF che fuori dalla finestra
+spariscono mentre i link restano.
+
+**Una cosa imparata dal banco:** una prova che fa uscire il fuoco da una
+casella deve mandare **`focusout`**, non `blur`. React ascolta alla
+radice e `blur` non bolle: la scrittura non parte mai e la prova sembra
+accusare il codice.
+
+### Un kit si spegne, e resta (14/11/2026)
+
+Il titolare: «metti sulla barra di ogni kit un selettore che spegne il
+kit e non lo renda più selezionabile quando iscrivi gli allievi. Il kit
+continua ad esistere per la logistica e gli allievi già iscritti mentre
+non si vedrà più per gli allievi futuri dal momento che il selettore
+sarà spento.»
+
+**C'era un modo solo di togliere un pacchetto dal listino, e faceva
+troppo.** Il cestino: cancella la riga, e sulle iscrizioni che lo
+avevano scelto resta il solo nome, marcato «non più in elenco» — da lì
+quegli allievi **non portano più nessun prodotto in preparazione**. Un
+pacchetto che si smette di vendere non è un pacchetto che non esiste: le
+classi di dicembre lo preparano ancora, e chi l'ha comprato a ottobre
+l'ha comprato.
+
+**Adesso è una levetta** (`kit_definizioni.attivo`, migrazione
+`20261114100000`), per prima sulla barra del pacchetto perché comanda su
+tutto quello che segue. Spento, il nome si barra e accanto compare «NON
+SI VENDE PIÙ». Cambia **una cosa sola**: non si può più scegliere.
+
+| Cosa | Kit spento | Kit cancellato |
+|---|---|---|
+| la distinta | c'è | non c'è più |
+| la logistica lo prepara | sì | no |
+| il costo della classe lo conta | sì | no |
+| chi l'ha già comprato | ce l'ha, valido | ce l'ha come testo, senza prodotti |
+| chi iscrive lo può scegliere | no | no |
+
+Tre decisioni, e ognuna per un motivo:
+
+- **Si filtra solo dove qualcuno STA SCEGLIENDO**, e sono due posti: la
+  tendina «Pacchetto/Kit» della scheda di iscrizione e il «Kit da
+  assegnare» dell'Advisor. Ogni altra lettura di `kit_definizioni` —
+  fabbisogno, diplomi, costo del kit, messaggi, Assegnazione kit — legge
+  per id o per nome quello che è **già stato scelto**, e filtrare lì
+  vorrebbe dire far sparire del materiale dalla scatola di un'allieva
+  perché qualcuno ha spento una levetta.
+- **Il pacchetto già scritto su una scheda resta nella tendina**, con
+  «— non più in vendita» accanto. Toglierlo vorrebbe dire che aprendo la
+  scheda di un'allieva per tutt'altro il suo kit si svuota, e il primo
+  salvataggio se lo porta via. E non è «non più in elenco»: quella frase
+  dice «non porta nessun prodotto in preparazione», e qui sarebbe falsa
+  — li porta tutti. Sotto la tendina c'è scritto.
+- **Non si chiede conferma**, ed è la regola dell'11/11: spegnere non fa
+  sparire niente e si disfa con lo stesso dito. Una domanda a cui si
+  risponde sempre sì insegna a premere a occhi chiusi, e allora anche
+  quella del cestino smette di proteggere.
+
+**Una colonna mancante vale ACCESA** (`attivo === false`, non
+`!attivo`): le 60 righe in archivio sono nate senza, e se `undefined`
+contasse come spento nessun kit si potrebbe più scegliere. I divisori
+non hanno la levetta: non sono pacchetti, sono righe di separazione, e
+non si sceglie nessuno di loro.
+
+Prove in `prove/kit-si-spegne.test.jsx` (9), con la pagina montata: la
+levetta c'è su ogni pacchetto e non sui divisori, premuta scrive **solo**
+`attivo` e solo su quel pacchetto (nessun prodotto, nessuna iscrizione),
+a zero righe cambiate lo dice invece di far finta, e le due facce della
+tendina — lo spento che sparisce, e quello già scelto che resta senza il
+cartello sbagliato.
+
+### Il tasto della master è un promemoria, non una scrittura contabile (12/11/2026)
+
+Il titolare: «sulla scheda di ciascun corso, nella dashboard della master,
+nel caso in cui questa master abbia incassato dei pagamenti in contanti, ci
+dovrà essere un riepilogo con scritto "devi depositare euro". Dopodiché,
+una volta che la master ha depositato, ci deve essere a fianco un tasto con
+scritto "depositato", e quando la master schiaccia il tasto depositato si
+accende un tasto sul riepilogo amministrativo di Stefano, Elena, John,
+Chiara, con scritto "ricevuto deposito master euro", e la master a sua
+volta nella dashboard il tasto deposita si trasforma in "conferma di
+ricevuta" con vicino la data.»
+
+**La prima versione, della mattina, faceva troppo** — e il titolare l'ha
+corretta lo stesso giorno: «il tasto della master non fa operazioni
+contabili, è solo una funzione di promemoria con cui la master segnala di
+aver lasciato i soldi e l'amministrazione conferma di averli ricevuti», e
+«i soldi non vanno a sommare in cassa, funge da deposito».
+
+Quel tasto chiamava `chiudiContabilitaClasse`: scriveva
+`busta_spedita_il`, **congelava** `busta_importo`, marcava col numero 1
+tutte le vendite della classe e scriveva chi aveva chiuso. Cioè: dalla
+dashboard di una master, dal telefono, si chiudeva la contabilità di una
+classe — e da quel momento ogni vendita del giorno dopo apriva una
+contabilità aggiuntiva. Nessuno l'aveva chiesto: la richiesta diceva
+«segnala», e io avevo letto «chiudi».
+
+**Adesso sono DUE DATE e nient'altro.** `deposito_master_il` (con
+`deposito_master_da_id` e `deposito_master_importo`, quello che lei ha
+dichiarato di aver lasciato) e `deposito_master_ricevuto_il`. Non chiudono
+niente, non marcano nessuna vendita, non mettono niente in cassa:
+
+| Chi | Dove | Gesto | Cosa scrive |
+|---|---|---|---|
+| la master | dashboard, scheda del corso | «Depositato» | `deposito_master_il`, chi e quanto — **un promemoria** |
+| l'amministrazione | Riepilogo, riga sua | «Ricevuto deposito master € X» | `deposito_master_ricevuto_il` |
+| la master | dashboard | legge «Conferma di ricevuta» con la data | niente |
+| **l'amministrazione** | Riepilogo, i due tasti della busta | «Spedisci busta» / «Deposita in cassa» | **tutto il resto: è lei che chiude la contabilità e mette il contante in cassa** |
+
+Cinque decisioni, e ognuna per un motivo:
+
+- **Due colonne nuove, non quelle della busta.** Le date della busta hanno
+  degli effetti: `busta_spedita_il` chiude la contabilità e fa nascere la
+  busta 2, `busta_depositata_il` fa entrare il contante nella cassa
+  contanti. Appoggiare un promemoria su una di loro vuol dire che un
+  promemoria muove una cassa — che è esattamente il guasto da cui questa
+  correzione viene.
+- **I due tasti della busta non si travestono più.** Nella prima versione
+  il tasto arancione, su una busta chiusa da una master, cambiava nome in
+  «Ricevuto deposito master € X». Un tasto che a volte dichiara l'arrivo
+  di una busta e a volte conferma la ricevuta di un promemoria sono due
+  gesti travestiti da uno, e chi preme non può sapere quale sta facendo.
+  Adesso il promemoria ha **una riga sua**, sopra i due tasti, perché è
+  quello che si legge prima di decidere.
+- **L'importo è uno, e lo calcola `contanteDaDepositare`** — la stessa
+  funzione del Riepilogo amministrativo, cioè il «Cash pulito in busta».
+  Sono gli stessi soldi, e due conti li farebbero diventare due cifre.
+  Alla dichiarazione si **congela in `deposito_master_importo`**: è quello
+  che lei ha detto di aver lasciato, e se i conti della classe si muovono
+  domani il suo promemoria non deve cambiare da solo.
+- **La riga c'è solo se c'è davvero del contante**, e nel Riepilogo solo
+  se qualcuno ha dichiarato qualcosa. Una riga che dice «nessun deposito
+  segnalato» su ogni classe si impara a saltare, e si porterebbe dietro
+  anche quelle che contano.
+- **Due passi indietro, uno per parte.** La master può togliere la sua
+  segnalazione finché nessuno l'ha confermata; l'amministrazione può
+  togliere la **sola** conferma, e la dichiarazione della master resta —
+  è una cosa che ha detto lei, e chi si è sbagliato a confermare non
+  cancella quello che ha dichiarato un'altra. Lo dice anche il database
+  (`corsi_date_deposito_master_confermato_dopo`): una conferma non esiste
+  senza la sua dichiarazione.
+
+**E la colonna di stamattina è stata tolta.** `busta_spedita_da_master_id`
+esisteva solo per dire «questa busta l'ha chiusa una master»: da adesso
+nessuna master chiude nessuna busta. Misurato prima di toglierla: **zero
+righe su 116** la avevano valorizzata. Una colonna che sembra viva e non
+lo è è peggio di una che manca, perché chi apre la tabella ci ragiona
+sopra.
+
+**Quello che resta da sapere, ed è una conseguenza voluta:** il promemoria
+e la contabilità possono dire due cose diverse. La master segnala di aver
+lasciato 350 €, e la busta di quella classe può restare aperta per
+giorni; oppure l'amministrazione chiude la busta a 300 € dopo aver
+disposto dei pagamenti in contanti. **Non si allineano da soli**, e non
+devono: uno è un messaggio fra due persone, l'altra è la cassa. Lo
+scostamento fra l'importo dichiarato e quello della busta lo legge una
+persona, che è la stessa regola del riquadro dello scostamento.
+
+**E una cosa che NON è stata fatta:** non si registra **chi**, in
+amministrazione, ha confermato di aver ricevuto il contante — solo la
+data. Scriverlo vuol dire far arrivare l'operatore collegato fino a quel
+pannello attraverso due pagine che oggi non lo conoscono. Su una stretta
+di mano che riguarda del contante è un'informazione che vale: va chiesta,
+non indovinata.
+
+Migrazione `20261112200000_il_deposito_della_master_e_un_promemoria.sql`
+(le quattro colonne, il vincolo, la colonna tolta, rollback dentro).
+Prove in `prove/deposito-master.test.jsx` (19): il numero che coincide con
+quello del Riepilogo, il promemoria che **non** si legge dalle date della
+busta, i tre stati della scheda, i due passi indietro, la riga
+dell'amministrazione separata dal tasto arancione — che su una busta in
+viaggio continua a chiamarsi «Busta in viaggio» — e la dashboard montata
+per davvero: premere «Depositato» scrive **le tre chiavi del promemoria e
+nessun'altra**, e non marca nessuna vendita.
+
+**Una prova rossa trovata strada facendo, e vale la lezione.** Togliendo
+il travestimento ho tolto anche il parametro `etichetta` di `TastoBusta`,
+convinto che fosse morto perché nessuno lo passava più nella prima busta.
+Lo passano le **appendici**: «Spedisci busta 2», «Contabilità 3 chiusa».
+Due prove rosse in un secondo. Prima di cancellare un parametro «che non
+usa nessuno» si guarda chi lo passa, non chi lo passava nel punto che si
+sta guardando.
+
+### «Ricevuta» e «in cassa» sono due cose (12/11/2026)
+
+Il titolare: «il tasto "ricevuta e in cassa" diventa solo "ricevuta", e
+sblocca un nuovo tasto che si chiama "Deposita in cassa" che si trova
+sulla destra. Quindi, quando si preme "spedisci busta", "deposita in
+cassa" si disattiva fintanto che non è su "ricevuta". Mentre se Stefano è
+già a Roma e non ha bisogno di spedire la busta, preme direttamente
+"Deposita in cassa", che disattiva il tasto "spedisci busta".»
+
+**Ieri le tappe erano tre e il giorno dopo erano quattro**, per lo stesso
+motivo per cui ieri da due erano diventate tre: due momenti che sembravano
+uno. La busta arriva in amministrazione, e il contante entra nel cassetto
+quando qualcuno lo mette nel cassetto — e in mezzo passano delle ore o un
+giorno, in cui quei soldi sono su una scrivania e non in cassa.
+
+**Sono DUE tasti**, perché sono due storie della stessa busta: a sinistra
+il **viaggio** (dov'è l'oggetto), a destra la **cassa** (dove sono i
+soldi).
+
+| | Tasto | Cosa scrive | Cosa vuol dire |
+|---|---|---|---|
+| giallo | «Spedisci busta» | `busta_spedita_il`, `busta_importo` congelato, `busta_numero = 1` sulle vendite | la contabilità si chiude: non ci si aggiunge più niente |
+| arancione | «Busta in viaggio» | `busta_rientrata_il` | è arrivata in amministrazione. I soldi **non** sono ancora in cassa |
+| verde chiaro | «Ricevuta» | niente, non si preme | |
+| navy | «Deposita in cassa» | `busta_depositata_il` | **adesso** quel contante è nella cassa contanti |
+| verde pieno | «In cassa» | niente, non si preme | |
+
+**Il verde pieno sta su una cosa sola: i soldi nel cassetto.** Se lo
+portassero tutti e due i tasti, due verdi affiancati direbbero «fatto»
+mentre il contante è ancora in una borsa — che è esattamente il guasto da
+cui vengono queste due giornate.
+
+**E c'è la busta che non viaggia.** Se chi incassa e chi tiene la cassa
+sono nello stesso posto non c'è niente da spedire: «Deposita in cassa» si
+preme da subito, chiude la contabilità e **spegne il tasto giallo**.
+Quella busta resta scritta come **non partita e non ricevuta**, perché è
+quello che è successo: in archivio si riconosce per `busta_depositata_il`
+piena con le altre due vuote, e il pannello lo dice («non è mai partita»).
+
+Quattro decisioni, e ognuna per un motivo:
+
+- **La soglia che chiude la contabilità non è più «è partita», è «è
+  chiusa»** (`bustaChiusa`, che ha sostituito `bustaSpedita` in tutte le
+  letture). Ci portano tre strade — spedita, ricevuta, depositata senza
+  mai partire — e si guardano tutte e tre: una lettura che si fidasse di
+  una colonna sola riaprirebbe la contabilità di una classe chiusa se
+  quella colonna mancasse. **Il deposito diretto chiude la contabilità
+  come la spedizione**, ed è la cosa che conta per le vendite che arrivano
+  dopo: la master che resta in aula apre comunque la busta 2.
+- **Una chiusura, non due.** `chiudiPrimaBusta(modo)` è una funzione sola
+  per i due tasti che chiudono: congela l'importo, marca le vendite col
+  numero 1 e scrive la data giusta. Due funzioni avrebbero voluto dire due
+  idee di cosa chiude una contabilità, e un giorno una delle due si
+  sarebbe dimenticata di marcare le vendite. Per lo stesso motivo il
+  rifiuto coi **pagamenti in contanti ancora da disporre** vale per tutti
+  e due: depositare dei soldi già promessi a qualcuno è lo stesso errore
+  che spedirli.
+- **La cassa contanti legge `busta_depositata_il`**, e le appendici
+  `depositata_il`. È l'unica riga di contabilità che è cambiata, ed è
+  quella che conta: una busta arrivata e appoggiata sulla scrivania non è
+  in cassa, e dirlo sarebbe un saldo che non si trova. La migrazione ha
+  riempito la data del deposito con quella del rientro su **tutte e 41**
+  le buste storiche e sull'unica appendice: senza quel backfill il saldo
+  della cassa avrebbe perso 41 buste in un colpo.
+- **Un passo indietro per tasto, e la cassa viene prima.** Dal viaggio:
+  «non è ancora arrivata» (ricevuta → in viaggio), «non è partita» (in
+  viaggio → aperta). Dalla cassa: «rimettila fuori dalla cassa». Con il
+  contante **già in cassa il viaggio non si corregge** — prima si tira
+  fuori dal cassetto — e il passo indietro sul viaggio non compare
+  nemmeno. E se la busta non era mai partita, rimetterla fuori dalla cassa
+  **riapre tutta la contabilità**: quel deposito era l'unica cosa che la
+  teneva chiusa.
+
+**Il semaforo e «In arrivo» hanno cambiato soglia.** Verde adesso vuol
+dire *tutto depositato*: una busta ricevuta e non depositata è arancione
+quanto una per strada. E in «In arrivo» le due attese si leggono
+separate — «In viaggio: da ricevere» e «Ricevuta: da depositare in cassa»
+— perché sono due attese diverse: una la sblocca il corriere, l'altra un
+gesto in ufficio.
+
+**Le appendici hanno gli stessi due tasti**, deposito diretto compreso.
+Quindi `corsi_date_buste.spedita_il` **non è più obbligatoria** (la riga
+può nascere dal deposito), e al suo posto c'è il vincolo
+`corsi_date_buste_partita_o_depositata`: una riga né partita né
+depositata non vuol dire niente.
+
+Migrazione `20261112120000_la_busta_si_deposita.sql`, con il rollback
+scritto dentro — e il rollback **rimette «ricevuta»** dove c'era solo il
+deposito, o la versione precedente perderebbe quelle buste dalla cassa.
+Prove in `prove/busta-si-spedisce.test.jsx` (15, la regola) e
+`prove/busta-si-spedisce-il-gesto.test.jsx` (18, il pannello montato: i
+cinque stati dei due tasti, cosa scrive ognuno, il deposito diretto che
+spegne il giallo, i passi indietro e i due rifiuti).
+
+### La busta si spedisce, poi arriva (11/11/2026)
+
+Il titolare: «ci deve essere un tasto giallo che si chiama "spedisci
+busta". Lo usa Elena quando è a Milano o in una sede esterna. Dispone i
+pagamenti con i soldi contenuti nella busta o rinvia in scadenziario
+passivo le spese che non ha potuto pagare. Da quel momento chiude la busta
+e la porta via con sé. Non è possibile aggiungere altro alla busta. La
+master che però resta in classe potrebbe fare altre vendite in contanti
+che prima si andavano a sommare erratamente alla busta che era stata
+portata via.»
+
+**Il difetto era che le tappe erano due e i momenti sono tre.** Fino a ieri
+una busta era «aperta» oppure «in cassa», e la soglia che chiudeva la
+contabilità era l'ARRIVO in amministrazione. Ma fra la mano di chi la
+chiude in una sede esterna e il cassetto di chi la riceve passano dei
+giorni, e in quei giorni ogni vendita in contanti della master che resta in
+aula finiva dentro una busta già partita: contante contato di qua e mai
+arrivato di là. Ora la tappa di mezzo esiste e ha una data sua.
+
+**Un tasto solo che cambia faccia**, e non tre tasti affiancati — che
+direbbero che ci sono tre cose da fare, invece di una sola che avanza:
+
+| | Tasto | Cosa scrive | Cosa vuol dire |
+|---|---|---|---|
+| giallo | «Spedisci busta» | `busta_spedita_il`, `busta_importo` congelato, `busta_numero = 1` sulle vendite | la contabilità si chiude: non ci si aggiunge più niente |
+| arancione | «Busta in viaggio» | `busta_rientrata_il` | è arrivata: **adesso** quel contante entra nella cassa contanti |
+| verde | «Ricevuta e in cassa» | niente, non si preme | |
+
+Le stesse tre tappe valgono per ogni **appendice** (buste 2, 3…): la riga
+di `corsi_date_buste` adesso nasce alla **spedizione** (`spedita_il`), non
+all'arrivo, ed è lei a chiudere quella busta e a far nascere quella dopo.
+`rientrata_il` è diventata facoltativa: vuota = è per strada.
+
+Quattro decisioni, e ognuna per un motivo:
+
+- **L'importo si congela alla PARTENZA, non all'arrivo.** È lì che qualcuno
+  ha contato delle banconote e ha chiuso la busta. Chi la riceve conferma
+  quello che gli è stato consegnato, non un numero ricalcolato nel
+  frattempo — e se i conti si sono mossi mentre viaggiava lo dice il
+  riquadro dello scostamento, che lo decide una persona.
+- **Non si spedisce una busta con dentro dei soldi già promessi.** Con dei
+  pagamenti in contanti ancora da disporre il tasto rifiuta e dice le due
+  strade: disporli, oppure rinviare allo scadenziario passivo quello che la
+  busta non copre. È il giro che fa Elena prima di chiuderla, e senza il
+  controllo si spedirebbero soldi che devono uscire.
+- **La soglia di `venditaInAppendice` è `bustaSpedita`, non
+  `busta_rientrata_il`.** È tutta la correzione: una riga sola, e da lì
+  l'appendice si apre nel momento giusto. `bustaSpedita` guarda anche
+  `busta_rientrata_il` perché una busta arrivata è per forza partita — le
+  41 già in cassa sono state allineate dalla migrazione, ma una lettura che
+  si fida di una colonna sola riaprirebbe la contabilità di una classe
+  chiusa se quella colonna mancasse.
+- **Due passi indietro, non uno.** Da «in cassa» si torna **in viaggio**
+  (l'importo esce dalla cassa, la contabilità resta chiusa); da «in viaggio»
+  si torna **aperta**, e le vendite perdono il numero 1 — ma solo se dopo di
+  lei non è già nata un'appendice. Sono tasti per correggere un errore
+  appena fatto, non per rifare i conti.
+
+**Il semaforo e «In arrivo» seguono.** Rosso = non ancora spedita; arancione
+= in viaggio **oppure** con un'appendice da chiudere (in tutti e due i casi
+c'è del contante che non è nel cassetto); verde = tutto arrivato. Una busta
+in viaggio compare in «In arrivo» col suo importo **congelato** e non con un
+conto rifatto adesso, marcata «In viaggio: da ricevere»: chi guarda la cassa
+deve sapere cosa sta per arrivare.
+
+**La cassa contanti non è cambiata di una riga, ed è il punto**: legge solo
+`busta_rientrata_il` e, per le appendici, solo le righe con `rientrata_il`
+valorizzata — esplicitamente, perché un confronto di date con `null`
+passerebbe per caso.
+
+Migrazione `20261111160000_la_busta_si_spedisce.sql`, con rollback scritto
+dentro e il vincolo `corsi_date_busta_arrivata_solo_se_partita`: una busta
+non può essere arrivata senza essere partita. Prove in
+`prove/busta-si-spedisce.test.jsx` (15, la regola) e
+`prove/busta-si-spedisce-il-gesto.test.jsx` (7, il pannello montato per
+davvero: i tre tasti premuti uno per uno, cosa scrive ognuno, i due passi
+indietro e il rifiuto coi pagamenti da disporre).
+
+### «Impegni senza riga» non esiste: via i rimandi a un posto che non c'è (11/11/2026)
+
+Il titolare: «mi continui a dire che c'è un'area che riguarda gli impegni
+senza riga quando non esiste nessun posto con impegni senza riga che li
+genera». **È andato a cercarla e non l'ha trovata, perché non c'è.**
+
+Il riquadro del Riepilogo che una volta si chiamava così oggi compare
+**solo** per gli impegni già coperti in parte, e dice un'altra cosa («una
+voce è rimasta nello scadenziario e non si può allineare da sola»).
+Quel nome sopravviveva in due frasi dello Scadenzario, che mandavano in un
+posto che non esiste. **Una frase che manda da qualche parte deve nominare
+un posto che c'è** — e da quando queste righe si annullano da sé non c'è
+più niente da mandare a fare a nessuno. Tolto anche dai commenti, che
+promettevano lo stesso nome a chi legge il codice.
+
+**E adesso la riga a zero dice perché è ancora lì.** Dall'allineamento
+automatico resta visibile **un caso solo**: la chiave porta già una spesa
+pagata, e lì non si tocca niente di proposito. La riga lo scrive («il
+contante di questa voce risulta già registrato come spesa pagata, quindi
+resta scritto ma non si paga una seconda volta»), invece di dare un
+compito a qualcuno.
+
+**Il caso vero, e il dato storto che c'era sotto.** «Costo Alloggio —
+CASA MANUELA» restava visibile proprio per quel motivo, e la spesa che lo
+proteggeva era **attaccata a un'altra classe**: 180 € pagati il
+21/09/2026 via PayPal, `classe_id` = NEEDLING Roma **20-21 settembre**,
+ma `origine_scadenziario_chiave` = `cash_alloggio_<classe di NOVEMBRE>`.
+Il pagamento era vero e sulla classe giusta; la **chiave** era di
+un'altra. Due effetti: il Riepilogo di novembre credeva che il contante
+del suo alloggio fosse già pagato, e l'impegno nato il 10/11 non si
+annullava perché «protetto».
+
+**Risolto l'11/11/2026 su scelta del titolare**: svuotata la chiave su
+quella spesa, che resta com'era — 180 €, pagata il 21/09, sulla classe di
+settembre — con il perché scritto nella sua nota. Da lì l'impegno di
+novembre non è più protetto e si annulla da sé.
+
+Controllate le altre: in archivio ci sono **quattro** spese la cui chiave
+`cash_…` nomina un id diverso dal loro `classe_id`, e sono **tutte e
+quattro giuste** — la chiave di un assistente o di un master extra porta
+l'id della sua riga in `corsi_date_docenti`, non quello della classe.
+Chi controlla questa cosa deve risolvere l'id dalle due tabelle, non
+confrontarlo col `classe_id`.
+
+**Annullati i tre relitti del 18/08/2026** (due `location_…` e un
+`alloggio_…`, 561,20 + 561,20 + 240 €, classe cancellata), su sua parola:
+«erano prove». Restano scritti come `annullato`, non cancellati.
+
+### Un impegno non più dovuto si toglie da sé anche dallo Scadenzario (11/11/2026)
+
+Il titolare, davanti a «Costo Alloggio — CASA MANUELA» a **zero** in
+fondo allo Scadenzario passivo: «a cosa serve, se ti ho detto che negli
+impegni ci voglio solo spese collegate alla riga che le generano e un
+software che aggiorna in tempo reale queste spese».
+
+**Aveva ragione, e il difetto era mio del giorno prima.** L'allineamento
+del 10/11 funziona, ma lo faceva **solo il Riepilogo della classe**:
+finché nessuno apriva *quella* classe, il relitto restava qui — a zero,
+con scritto «si toglie dal Riepilogo», cioè **un compito dato a una
+persona** proprio dove lui aveva chiesto che non ce ne fossero.
+«Tempo reale» non vuol dire «quando passi da quella pagina».
+
+**Il caso vero, misurato:** NEEDLING Roma 8-9/11, CASA MANUELA (RM), due
+notti, 180 €. Il pagamento dell'alloggio è passato a **bonifico**,
+quindi in contanti oggi non è più dovuto niente: l'impegno
+`cash_alloggio_<classe>` da 180 € era rimasto aperto dal 10/11 alle
+11:54.
+
+**Adesso si allinea anche la pagina in cui si guarda.** Lo Scadenzario
+ha appena rifatto il conto di tutte le classi (`cashRicalcolati`), quindi
+sa già quali impegni non sono più dovuti, e li annulla da sé con la
+stessa funzione pura del Riepilogo. Tre cose decise lì dentro:
+
+- **Da qui si ANNULLA, non si riscrive nessun importo**
+  (`soloAnnullamenti`). Riscrivere l'importo lo fa solo il Riepilogo, che
+  ha in mano anche le scelte che si stanno facendo adesso (lo split di
+  una quota, i giorni di presenza): due pagine che riscrivono lo stesso
+  numero lo rimbalzerebbero avanti e indietro a ogni visita. E non serve,
+  perché la cifra che lo Scadenzario mostra e che si paga è già quella
+  viva.
+- **Si guarda solo dentro le classi davvero ricalcolate**
+  (`classiConsiderate`, nuovo valore di ritorno di
+  `calcolaVociScadenziario`). Una chiave assente da `cashRicalcolati` può
+  voler dire due cose opposte: la riga non esiste più, **oppure** quella
+  classe non è stata nemmeno guardata perché è troppo in là nel tempo.
+  Senza quell'elenco un impegno di una classe futura sarebbe stato
+  annullato perché «la riga non c'è più» — un debito cancellato che
+  nessuno ha deciso di cancellare, che è il guasto peggiore possibile qui.
+- **Quello che si è tolto si dice**, in un riquadro verde in cima
+  all'elenco, con il motivo. Un debito che sparisce in silenzio è la
+  stessa famiglia di guasti da cui veniamo. E resta `annullato`, non
+  cancellato.
+
+Resta a mano **un caso solo**, e sempre lo stesso: l'impegno **coperto
+anche solo in parte**, dove quei soldi sono in parte usciti davvero. Lì
+si mostra col perché e lo toglie una persona.
+
+**Tre relitti veri in archivio, da decidere** (trovati guardando il
+dato): tre impegni del 18/08/2026 — due `location_…` e un
+`alloggio_…`, 561,20 + 561,20 + 240 € — la cui **classe non esiste più**.
+Non sono chiavi `cash_`, quindi non li tocca nessun allineamento e non
+compaiono in nessuna lista: sono righe morte che reggono solo una data.
+Si annullano con un `UPDATE`, che è una decisione del titolare.
+
+Prove: `prove/impegni-seguono-la-riga.test.js` (19, +7 sul giro dallo
+Scadenzario: il caso di Casa Manuela, nessuna riscrittura, la classe non
+ricalcolata che non si tocca, più classi in un colpo, il coperto e la
+chiave protetta) e `prove/cash-rinviato-segue-il-riepilogo.test.js` (6,
++1 su `classiConsiderate`).
+
+### Un impegno è legato alla sua riga, e la segue da sé (10/11/2026)
+
+Il titolare: «devi vincolare sempre gli impegni di spesa
+indissolubilmente alla riga che li ha generati e modificarli in tempo
+reale, mai lasciare relitti». È il passo che mancava a «Il cash rinviato
+segue il Riepilogo» del 30/10: lì l'importo **mostrato** seguiva già la
+riga, ma quello **scritto** restava, e il relitto lo doveva togliere una
+persona da «Impegni senza riga». Decisione ribaltata: adesso si allinea
+l'app.
+
+Il legame è la chiave, `cash_<tipo>_<rigaId>`, e non cambia mai. Il
+Riepilogo della classe mette in fila quanto ogni riga prevede **adesso**
+in contanti e `allineaImpegniAllaClasse` (pura, provata senza database)
+decide; applica la pagina, che poi rilegge. Tre regole:
+
+- **cash a zero, o riga che non c'è più** → `stato = 'annullato'`, **non
+  cancellato**. Sparisce da tutte le liste — scadenziario, Quadro
+  impegni, «Impegni senza riga» filtrano `aperto`/`parzialmente_coperto`
+  — e resta scritto quanto era, da quando e per cosa. Un debito
+  cancellato non lascia niente da controllare, e qualcuno un giorno
+  chiederà dov'erano finiti quei 150 €. I due motivi si dicono
+  **separati** («la riga non c'è più» ≠ «la classe non prevede più
+  contanti»): sono due storie diverse, e chi legge deve capire quale;
+- **cash cambiato** → si riscrive `importo_previsto`;
+- **impegno coperto anche solo in parte** (`importo_coperto > 0`) → **non
+  si tocca**. Quei soldi sono in parte usciti davvero, e riscriverli o
+  annullarli di nascosto vuol dire muovere una cassa da una pagina che
+  sta facendo un'altra cosa. Resta in «Impegni senza riga» con il tasto a
+  mano e il motivo scritto accanto. Stessa cosa per una chiave il cui
+  contante è già una spesa pagata.
+
+Quello che l'allineamento fa **si dice**: un riquadro verde nel Riepilogo
+elenca cosa è stato annullato o riscritto. Un debito che cambia in
+silenzio è la stessa famiglia di guasti da cui veniamo.
+
+**E il rinvio è diventato un upsert**, in tutti e due i punti che lo
+scrivono (`rinviaCashAgliImpegni` e «Disponi pagamenti»).
+`impegno.chiave_origine` è **unica**: da quando un impegno si annulla
+invece di essere cancellato, la sua riga resta a occupare la chiave, e un
+`insert` sarebbe fallito con 23505 — cioè non si sarebbe più potuta
+rimandare nello scadenziario una quota che ci era già stata. Un impegno
+annullato **rinasce** con l'importo di adesso; uno `chiuso` o `coperto`
+no, e si dice perché: quei soldi sono usciti.
+
+**Cosa NON tocca**, ed è voluto: le chiavi senza `cash_`
+(`alloggio_…`, `location_…`, `master_…`) sono la parte a **bonifico**, e
+quella non è un impegno — è una voce virtuale che lo Scadenzario
+ricalcola a ogni lettura (`importiRicalcolati`), quindi i 300 € a
+bonifico di Angelica erano già giusti da soli. Prove in
+`prove/impegni-seguono-la-riga.test.js` (12), compreso il caso di Udine
+per intero.
+
+### Il cash rinviato segue il Riepilogo (30/10/2026)
+
+Udine, LAMINAZIONE BASE del 28/10: lo Scadenzario passivo mostrava per
+Angelica Burelli **300 € a bonifico più 150 € «Costo Master»**, e nessuno
+sapeva da dove venissero i 150. Erano un **impegno** scritto da «Disponi
+pagamenti» alle 9:27 di quel giorno, quando il compenso era ancora diviso
+a metà di default (150 bonifico, 150 cash) e la busta non copriva il
+cash; poi il bonifico è stato portato a 300 e il cash a 0, ma l'impegno
+è rimasto aperto con la cifra del giorno del rinvio. E il Riepilogo non
+lo mostrava fra gli «Impegni senza riga» perché l'impegno teneva viva
+la propria chiave (`cashRinviato`).
+
+Due correzioni, nessuna cancellazione automatica (un impegno è un debito
+scritto: sparire da solo è peggio che restare):
+
+- `calcolaVociScadenziario` restituisce anche **`cashRicalcolati`**,
+  quanto vale oggi la parte in contanti di ogni voce (anche per
+  venditore). `vociCashRinviate` usa quella cifra finché l'impegno non è
+  coperto nemmeno in parte: se oggi è zero la riga resta, **vale 0 €**,
+  dice «non è più dovuto» e non si può pagare; se è cambiata lo dice.
+- Nel Riepilogo della classe una riga con la quota in contanti a zero
+  **non tiene più vivo il suo impegno**: compare fra «Impegni senza
+  riga», con il tasto per toglierlo.
+
+Prove in `prove/cash-rinviato-segue-il-riepilogo.test.js`.
+
 ### Il modulo riaperto si ricompila (24/10/2026)
 
 Riaperto il modulo, l'allieva non riusciva a correggere la data di
@@ -1153,7 +4039,16 @@ sulle 10 vendite col QR in archivio coincidono tutte). Provati tutti e
 quindici i rami in una transazione annullata.
 
 Restano dichiarazioni, non prove: **contanti**, **buono Amazon** e **POS
-esterno** (solo chi amministra).
+esterno** — chi amministra e, dal 7/11/2026, chi sta al banco di una
+fiera (vedi «Il POS fisico al banco»).
+
+E una cosa da sapere per chi controlla: **`terminale_fisico` non si
+salva**. `registra_vendita_pos` lo legge per decidere se accettare la
+vendita e poi lo **toglie** dal corpo (`p_vendita - 'terminale_fisico'`);
+in `vendite_shop` quella colonna non esiste. Quindi una vendita incassata
+sul terminale si riconosce per assenza: `metodo_pagamento = 'pos'` e
+`pagamento_codice` nullo — che è l'unico modo in cui una carta può stare
+in archivio senza un pagamento provato.
 
 **Il buono Amazon si verifica in logistica (23/10/2026, deciso dal
 titolare).** L'ordine pagato con buono arriva in Ordini in arrivo con il
@@ -1309,6 +4204,2946 @@ edge function, e questo è peggio di una colonna morta: sembra viva, e chi apre
 la tabella ci ragiona sopra. Dal 19/10 non si scrivono più. **Non sono ancora
 state cancellate**: prima si guarda per qualche giorno che nessuno le cerchi.
 
+### Gli ordini del sito si sono fermati, e adesso c'è un sorvegliante (2/11/2026)
+
+Dall'**1/11/2026 alle 10:01 UTC** gli ordini dello shop non entravano più
+in app, e non se n'è accorto nessuno per un giorno e mezzo. La catena, che
+vale la pena leggere per intero perché ogni anello ha insegnato una cosa:
+
+1. in `vendite_shop` è comparsa **una riga con `origine = 'woocommerce'` e
+   nient'altro** — nessun numero d'ordine, nessuna data, `payload_raw`
+   nullo, quindi non veniva dal sito. **Chi l'ha scritta non è accertato**;
+2. il cursore della sincronizzazione cercava l'ultimo ordine con
+   `order by data_ordine desc limit 1`, e **in Postgres il decrescente
+   mette i NULL per primi**: «l'ultimo ordine» è diventato `null`;
+3. senza cursore `woo-import-storico` chiedeva a WooCommerce **lo storico
+   intero** (14 pagine, 1.300 ordini col loro JSON) più tutti i 57 ordini
+   aperti in un colpo: usciva con **546 WORKER_RESOURCE_LIMIT**, uccisa a
+   metà;
+4. e il cron diceva `succeeded`, perché `net.http_post` è asincrona:
+   spedisce la richiesta e non aspetta la risposta.
+
+**Le difese, una per anello.** Il database rifiuta righe `woocommerce`
+senza numero e senza data (`vendite_shop_woocommerce_vuole_numero_e_data`,
+convalidato su 4.248 righe); il cursore salta comunque le righe senza
+numero e senza data; senza cursore si guardano **30 giorni** e non tutto
+lo storico (il passato lontano si chiede con `{"dopo": "..."}`); ogni
+chiamata a WooCommerce ha **25 secondi** e il giro un budget di **110**;
+gli ordini aperti si riallineano **quindici a caso per giro** invece di
+tutti; quello che non riesce finisce in `sync_shop_esiti` invece di non
+lasciare traccia; e il cron passa **da un'ora a un quarto d'ora**, così un
+giro fallito costa quindici minuti. La riga vuota è stata cancellata con
+la sua copia nel commento di `20261102190000`.
+
+**Il sorvegliante (`sync-shop-vigilanza`), e perché sta fuori.** Un
+controllo dentro la cosa controllata non vede il caso in cui la cosa
+controllata muore: quel giorno la funzione non arrivava a scrivere il
+proprio esito, e non sarebbe arrivata a mandare un avviso su se stessa.
+Quindi un cron a parte (`vigila_sync_shop`, ai minuti 8/23/38/53) chiama
+una edge function che guarda **il silenzio** da fuori — non «l'ultimo giro
+è andato male», ma «da quanto non ne arriva uno riuscito». Si autentica col
+gettone nato in Postgres, come il lavoro notturno delle email (gettone
+sbagliato: 403, provato).
+
+Manda **notifica push e mail**: guasto nuovo subito, guasto che dura di
+nuovo ogni sei ore (un avviso ripetuto ogni quarto d'ora è un avviso che
+si spegne), e un messaggio solo al rientro. La soglia — **70 minuti** senza
+un giro riuscito, oppure **due giri falliti di fila** — e il testo
+dell'avviso stanno in **`_shared/sync-vigilanza.js`**, condiviso fra il
+browser e Deno come `email.js`: due copie vorrebbero dire riquadro verde e
+telefono che squilla. Il semaforo in app diventa rosso al **primo** giro
+fallito e la notifica aspetta il secondo, e non è un'incoerenza: davanti
+alla pagina c'è una persona che può premere «Recupera ordini mancanti»
+adesso.
+
+Destinatari in **`sync_shop_vigilanza`** (una riga sola, si cambia da
+Vendite shop): mail a `commerciale.elitederma@gmail.com`, notifica a chi
+amministra, scelti dal titolare. I telefoni si nominano **per utente** e
+non per endpoint, che cambia a ogni reinstallazione. **Oggi non
+corrisponde nessun dispositivo**, perché l'iPhone di GianLuca Rocca ha la
+riga delle push spenta (`attiva = false`): va riaccesa da Notifiche push,
+e finché non lo è arriva solo la mail — la pagina lo scrive in rosso
+invece di far credere il contrario. C'è «Mandami una prova» per verificare
+la catena fino al telefono.
+
+E la vigilanza scrive `ultimo_controllo_il` a ogni giro, anche quando non
+avvisa, e l'app lo mostra: **un sorvegliante morto, senza, è
+indistinguibile da tutto a posto** — che è lo stesso guasto, un piano più
+in su. Prove in `prove/vigilanza-sync-shop.test.js`.
+
+**Resta da capire**: a volte la sincronizzazione viene invocata **due
+volte nello stesso minuto** (17:00, 18:00 e 16:01 del 2/11), a pochi
+millisecondi di distanza. Il cron è uno e scatta una volta, quindi è un
+rinvio del runtime: non duplica dati, perché l'importazione è idempotente,
+è lavoro doppio.
+
+### «Leggi tutto» al posto del tasto per comprare (2/11/2026)
+
+Il titolare: «N2 Fixa è presente sul sito e ordinabile ma ai clienti
+appare "Leggi di più" e tutti pensano che è esaurito e non lo comprano».
+
+**«Leggi tutto» vuol dire una cosa sola**: WooCommerce non considera quel
+prodotto acquistabile — niente prezzo, oppure esaurito, oppure un tipo che
+non si compra direttamente (`grouped`). Il prezzo c'era, quindi era la
+disponibilità.
+
+Com'è andata. Il **31/10 alle 02:00** due ordini online hanno preso gli
+ultimi due pezzi: giacenza a zero, «Leggi tutto», ed era giusto. Il **2/11
+alle 18:02** una rettifica in Gestione magazzino ha rimesso 6 pezzi e
+l'app li ha spinti sul sito. Alle **23:06** il cliente leggeva ancora
+«Leggi tutto»: **il dato era giusto da cinque ore, la pagina no**. La
+griglia di `/product-category/laminazione/` veniva da Breeze + Cloudflare,
+che tengono una copia fino a 30 giorni.
+
+**La regola che ne esce**: un giro mirato di `woo-riallinea-shop` (quello
+che parte dopo ogni movimento di magazzino) svuotava **solo le pagine dei
+prodotti toccati**. Giusto per un prezzo o per un numero che scende da 6 a
+5; sbagliato quando un prodotto **attraversa lo zero**, perché lì cambiano
+anche le **griglie** — shop, categorie, correlati, pagina iniziale — e a
+quelle la pulizia mirata non arriva. Ora, prima di scrivere, un giro
+mirato chiede al sito com'era (`stock_status`, `stock_quantity`) e se anche
+un solo prodotto passa lo zero in un verso o nell'altro svuota tutto il
+sito; se il sito non risponde svuota tutto lo stesso, che costa di più e
+non sbaglia. Stessa regola in `woo-aggiorna-prodotto`, che per il «prima»
+usa la giacenza che aveva in archivio.
+
+**Era già successo, ed è la parte che insegna di più.** A settembre la
+stessa pagina `/laminazione/` aveva lo stesso sintomo; la correzione di
+allora — la PURGE regex su Varnish — è finita **solo nel ramo "svuota
+tutto"** dello snippet `wordpress/elitederma-svuota-cache.php`, e il ramo
+mirato è rimasto quello di prima. Una correzione messa su una sola delle
+due strade che portano allo stesso posto non è una correzione.
+
+Trovato strada facendo: **«Kit laminazione combo» era componibile (1
+pezzo) e il sito lo dava esaurito** — rimesso in vendita dallo stesso
+giro, che è anche la prova del ramo nuovo. Restano fuori, e **correttamente**:
+`Mascara Kerafill Espositore 10pz` (ne servono 10, ce ne sono 7),
+`Ring Lamp 14` e `Camice` (zero in app), e `T-Shirt EliteDerma`, che è
+`grouped` — la vetrina delle taglie, non si compra da sé.
+
+`ispeziona-prodotto` ora risponde anche con `acquistabile`, `stock_status`,
+`stock_quantity`, `backorders`, tipo e stato: senza, perché un prodotto non
+sia comprabile non si vede da fuori e si va a tentativi.
+
+**E da qui in avanti: quello che un cliente può vedere svuota tutto**
+(deciso dal titolare la sera stessa). Il salvataggio di un prodotto
+(`woo-gestisci-prodotto`) svuotava tutto solo per stato e categorie, e per
+prezzo, nome e foto si limitava alle pagine del prodotto — «quelli vivono
+sulla scheda e sugli archivi, che il purge mirato copre già». Quella frase
+era sbagliata, ed è costata un cliente che non comprava. Ora quel
+salvataggio svuota sempre tutto, e `woo-aggiorna-prodotto` fa lo stesso
+quando cambia il **prezzo** (che sta scritto sotto ogni riquadro delle
+griglie) oltre che quando la disponibilità attraversa lo zero. Resta
+mirata la sola quantità che non tocca lo zero: quel numero nelle griglie
+non compare.
+
+`woo-allinea-margini` **non** svuota, ed è voluto: scrive solo campi
+nascosti (`_ed_margine_pct`, `_ed_cedibile_eur`, `_ed_blocco`) che servono
+al calcolo delle fasce nel carrello, e nelle pagine in cache non si vede
+niente di loro.
+
+**Il conto di questa scelta, misurato il 2/11/2026**: una pagina di
+categoria servita dalla cache impiega **0,11 s**, costruita da PHP **2,2 s**.
+Svuotare tutto costa quei due secondi al primo visitatore di ogni pagina,
+una volta sola. Mostrare un prezzo o una disponibilità falsi costa un
+cliente. Non è uno scambio alla pari.
+
+**Quello che resta, e non si risolve da qui**: su ogni pagina del sito
+arriva `cache-control: s-maxage=2592000`, trenta giorni, perfino sul
+carrello che WordPress dichiara `no-store` — la mette l'infrastruttura di
+Cloudways, non WordPress, ed è il motivo per cui lo snippet
+`elitederma-cache-breve-prodotti.php` (scritto apposta per accorciarla)
+**non fa effetto**. Si corregge solo dal pannello Cloudways, a cui il
+titolare **non ha accesso**: l'account è di chi ha montato il sito. Finché
+è così, il sito vive di svuotamenti; e, cache a parte, un negozio il cui
+server è in mano a un terzo è un rischio suo. La buona notizia del
+2/11/2026 è che lo svuotamento **arriva fino a Cloudflare**
+(`cloudflare_attivo: true`, `costanti_cdn: true`, passo `cloudflare:sì`):
+la documentazione precedente diceva il contrario, e non è più vero.
+
+### Il bilancio di una classe, kit compresi (2/11/2026)
+
+In cima alla sezione **Costi** del riepilogo di una classe c'è **«Bilancio
+del corso»**: ricavi, spese, guadagno e la pastiglia **ATTIVO / PASSIVO**.
+Serve a sapere se una classe è in pari **prima** che tutti abbiano pagato —
+il riquadro «Incassi» conta solo quello che è entrato, quindi fino alla
+fine del corso ogni classe sembra in perdita.
+
+- **Ricavi**: tutto il pattuito di ogni iscritta — acconto, pre corso,
+  saldo, rate extra, modelle — **anche non incassato**, più altri incassi e
+  vendite al corso. Al netto dell'IVA con gli imponibili **già scritti**
+  sulle schede: non si scorpora niente di nuovo. Dove l'imponibile non c'è
+  quella quota vale zero (oggi 25 acconti su 268), ed è la stessa
+  convenzione del riquadro «Incassi», non una regola nuova.
+- **Spese**: tutto quello che la classe costa, pagato o da pagare;
+  compensi, quote e righe automatiche restano all'importo registrato.
+
+**E i kit** (aggiunti il 2/11/2026, segnalati dal titolare): il materiale
+consegnato all'allieva è merce comprata, ed è un costo del corso — ma non
+ha una riga in `spese`, perché si è comprata prima, a magazzino. Senza, una
+classe risultava più ricca di quanto fosse. Lo conta
+`costoKitDellaClasse`, che per i pezzi chiama **`quantitaInviataPerProdotto`,
+la stessa funzione di «Prodotti usati per i kit»** in Gestione magazzino:
+due conti diversi sullo stesso materiale darebbero due numeri, e quello
+sbagliato sarebbe sempre quello che si guarda. Si usa il **costo netto
+d'acquisto**, e il riquadro dice quanto pesa.
+
+**Un prodotto senza costo d'acquisto resta fuori dal totale e viene
+nominato in rosso**, invece di valere zero: sommare zeri farebbe sembrare
+la classe più redditizia di quello che è — lo stesso errore che «Costo dei
+kit» aveva già imparato a non fare. Oggi riguarda tre prodotti: *Box
+Anellini x i Kit 10 pz* (in 13 kit), *Aftercare post trattamento vit A+D
+25pz* (12 kit), *Strisce colori* (2 kit).
+
+Il numero è lo stesso aprendo la classe dal calendario o da «Prossime
+contabilità»: i tre elenchi (`kitDefinizioni`, `corsiKitProdotti`,
+`logisticaKitEdizioni`) arrivano al pannello da tutte e due le strade.
+Prove in `prove/bilancio-del-corso.test.js`.
+
+### L'assistente risponde anche sull'app e sui dati (3/11/2026)
+
+Il titolare: «il tasto dell'intelligenza artificiale, oltre a rispondere
+sui regolamenti, deve rispondere anche sulle funzionalita' e sui dati
+dell'app, pero' solo limitatamente alle funzioni che ciascun utente
+vede». I registri del tondo con il punto interrogativo diventano
+**quattro**, e la risposta dice sempre quale sta usando (bordo e
+etichetta): **dalle regole** (le schede di `regolamenti`, oro), **come
+funziona l'app** (navy), **dai dati dell'app, adesso** (verde, con «I
+numeri» e «Come l'ho calcolato» da aprire sotto), **un ragionamento**
+(azzurro, e dichiara di non essere una regola).
+
+**Sui dati non risponde a memoria**: usa il motore di «Chiedi ai dati» —
+il modello scrive UNA select, Postgres la esegue, il modello scrive la
+risposta dalle righe tornate. Quindi «che corso c'e' a novembre a Bari»,
+«chi tiene il PMU di Milano», «quanti posti restano», «quanto costa il
+kit laminazione», «cosa c'e' dentro il kit» hanno una risposta vera e
+controllabile, non plausibile.
+
+**Sei viste nuove** (`20261103100000`), nessuna con dati personali di
+allievi: `analisi_calendario` (classi, master, assistenti, posti liberi,
+sede: nessuna cifra di denaro), `analisi_corsi`, `analisi_kit`,
+`analisi_kit_prodotti`, `analisi_prodotti` (prezzi e disponibilita'),
+`analisi_prodotti_costi` (costi e margini, a parte). Due avvertenze sono
+scritte **dentro il catalogo**, perche' sono i due punti su cui
+l'assistente sbaglierebbe da solo: il **prezzo di un corso non esiste nei
+dati** (sta nelle locandine di «Prezzi corsi» e, iscritta per iscritta,
+nel pattuito), e su un **bundle** si guarda `disponibilita` e non
+`giacenza` — altrimenti direbbe «esaurito» su tutti i kit dello shop, che
+hanno giacenza zero e sono in vendita.
+
+**Come si tiene il limite per persona.** Ogni area dichiara con quali
+permessi della Home si apre (`AREE_DATI` in `_shared/analisi.js`,
+`AREE_GUIDA` in `_shared/guida-app.js`): `permessi: []` vuol dire
+«chiunque sia entrato» — il calendario e il catalogo dei corsi, che in app
+li vede chiunque. La pagina manda i permessi, la edge function ricava
+l'elenco delle viste ammesse e lo passa a **`analisi_esegui(p_sql,
+p_viste)`**, che rifiuta qualunque altra vista anche se il modello la
+nominasse. La firma a un argomento resta e delega a quella nuova: «Chiedi
+ai dati» non cambia di una riga.
+
+**Cos'e' e cos'non e' questo limite, detto con precisione**: decide COSA
+L'ASSISTENTE MOSTRA, non cosa la sessione potrebbe leggere. Finche'
+l'account Supabase e' uno per tutti i permessi li sa solo la pagina, e dal
+browser le tabelle si leggono comunque (vedi «UN SOLO ACCOUNT SUPABASE PER
+TUTTI» nel § 4): diventa una serratura il giorno che il ruolo passa dal
+JWT. Quello che invece **e' una serratura gia' oggi** e' il motore: al
+database arriva una sola SELECT su viste di sola lettura, 300 righe, 8
+secondi, qualunque cosa chieda il modello.
+
+**Nessun dato personale, ed e' una decisione, non una dimenticanza.** Non
+ci sono nomi, email, telefoni o residenze di allieve, clienti o modelle.
+Alla domanda «chi e' iscritta al corso di…» l'assistente risponde quante
+sono e dove si leggono i nomi. Il motivo non e' solo il GDPR: domanda e
+risposta passano da un modello di terze parti, e mandargli l'anagrafica di
+un'allieva e' una decisione del titolare — da prendere, non da dare per
+presa.
+
+**La guida alle funzioni dice dove si fa una cosa, mai quanto costa.**
+Nessuna cifra: ne' prezzi, ne' percentuali, ne' soglie. Le cifre vivono in
+due posti soli, e in tutti e due le ha messe qualcuno che le ha decise: le
+schede di «Regolamenti» e i dati. Una percentuale scritta nella guida
+invecchierebbe senza che nessuno se ne accorga, e verrebbe creduta perche'
+detta dall'app. Una prova del banco la impedisce (cerca `€`, `%`, «euro»,
+«per cento» nella guida intera), e altre due controllano che ogni area
+della guida sia un tasto vero della Home **e che nessun tasto resti senza
+guida** — una chiave scritta male e' un'area che nessuno vedra' mai.
+
+**Una domanda sui dati non e' una regola che manca.** La decisione di cosa
+finisce fra «le domande senza risposta» in fondo a Regolamenti e' uscita
+dalla edge function e sta in `_shared/assistente.js` (`senzaRisposta`),
+dove il banco la prova: ci finisce solo una domanda **di regola** che
+nessuna scheda copriva. Un dato, una spiegazione dell'app, una chiacchiera
+e una disposizione che sta diventando scheda no — un elenco che si riempie
+di roba che non c'entra nessuno lo guarda piu'.
+
+Il registro delle domande (`regolamenti_domande`) tiene adesso anche
+`registro`, `sql`, `righe` e `aree`: `aree` dice **cosa quella persona
+poteva vedere** quando ha chiesto, non cosa ha chiesto.
+
+### E lo stesso giorno è diventato un agente (3/11/2026, pomeriggio)
+
+Il titolare, provandolo: «perché non ragiona come un modello Claude un po'
+sveglio e deduttivo?». Aveva ragione, e **la colpa non era del modello**.
+
+Il giro era «una domanda → UNA query → la risposta», e il difetto sta in
+una riga: **un risultato vuoto non è un errore.** Se la query falliva
+l'errore gli tornava indietro e correggeva; se tornava *vuota* doveva
+rispondere da quel vuoto. Nessuna seconda mossa, nessun «strano, fammi
+guardare quali kit esistono».
+
+È successo davvero, e si legge nel registro delle domande: il 3/11 alle
+**9:41** il modello aveva scritto **da solo la query giusta** sul costo
+dei kit — kit, articoli, pezzi, somma dei costi, quanti senza costo — il
+database ha risposto **zero righe**, e lui ha detto l'unica cosa che
+poteva: «per PMU Base non ho trovato nessun kit». Il buco era in
+`analisi_kit_prodotti`: il corso lo leggeva da `corsi_kit_prodotti.corso_id`,
+valorizzato **solo sulle righe degli accessori**, mentre per il contenuto
+dei kit sta sulla definizione del kit. Corso nullo su **957 righe su
+1565**, e «il kit di PMU BASE» tornava 34 righe invece di 270.
+
+**La lezione, che vale oltre questo caso:** quando l'assistente «non
+ragiona», prima di riscrivere il prompt si guarda **la query che ha
+scritto** e si esegue a mano. Qui la query era giusta.
+
+**Com'è adesso.** Il modello ha uno strumento (`interroga_dati`) e lo può
+usare fino a cinque volte: vede le righe e decide se bastano. Tre cose le
+impone il codice, non il prompt:
+
+- **zero righe tornano con l'avviso** «non concludere: guarda prima cosa
+  esiste» (`esitoInterrogazione` in `_shared/assistente.js`) — è il passo
+  che prima non poteva fare;
+- l'errore torna scritto in italiano, così corregge la query;
+- oltre cinque interrogazioni si chiude e si risponde con quello che si ha:
+  un assistente che pensa per un minuto non serve a chi è al banco.
+
+Più il **ragionamento esteso** (1.600 token: corto, perché la risposta
+spesso si ascolta in piedi) e la **cache del prompt** — guida, catalogo e
+schede sono identici a ogni domanda, e ripagarli ogni volta era tempo di
+attesa e soldi.
+
+Due regole del prompt nate dalle risposte vere: **deduci invece di
+chiedere** («quanto costa il kit di PMU base, quello completo Elite» vuol
+dire *KIT ELITE Completo* del corso *PMU BASE*: si va a cercarlo, non si
+chiede quale kit intenda) e **i nomi li scrive chi vende, non chi
+programma** (sempre `ilike`, su pezzi di parola).
+
+**Il registro «dati» lo decide quello che ha fatto**, non quello che
+dichiara di aver fatto (`registroFinale`): se ha interrogato, ha risposto
+dai dati. «Come l'ho calcolato» mostra **tutti** i passi, anche quelli a
+vuoto: è così che si vede dove ha cercato e cosa non ha trovato.
+
+**«Quanto costa il kit X» ha una vista sua** (`analisi_kit_costi`), con lo
+stesso conto di «Costo dei kit» in Gestione magazzino: un articolo senza
+costo d'acquisto resta fuori dal totale, si conta e **si nomina**. Si
+potrebbe comporre unendo due aree, ma sono due permessi diversi e il
+conto andrebbe rifatto a ogni domanda.
+
+### La voce parte dalla prima frase (3/11/2026)
+
+Sempre il titolare: «è ancora lento nell'acquisizione dell'audio». Due
+attese, entrambe tolte:
+
+- **la lettura**: prima si mandava la risposta *intera* alla sintesi e si
+  aspettava tutto l'audio prima di aprire bocca. Ora `spezzaPerVoce` la
+  taglia in frasi — il primo pezzo corto di proposito — e mentre un pezzo
+  suona si sta già scaricando il successivo. Il tempo prima della prima
+  parola non dipende più dalla lunghezza della risposta. Se la sintesi
+  esterna manca al primo pezzo si ripiega sulla voce del telefono; se si
+  rompe a metà, il resto lo legge il telefono — meglio una voce diversa
+  che una frase mangiata.
+- **l'ascolto**: si aspettava che il browser dichiarasse la frase
+  «definitiva», e su iPhone quel momento arriva quando vuole lui. Ora il
+  riconoscimento resta aperto e **il silenzio lo misuriamo noi**: 900 ms
+  senza parole nuove e la frase parte.
+
+Resta una leva non tirata, ed è la più grossa: **la risposta in
+streaming** dal server, per iniziare a parlare prima che il modello abbia
+finito di scrivere. Vuol dire SSE dalla edge function fino al browser, ed
+è un lavoro a parte.
+
+Prove in `prove/assistente-sui-dati.test.js` (36).
+
+### Il materiale dell'evento: la spunta a sinistra, e una casella in meno (3/11/2026)
+
+In Gestione eventi → scheda dell'evento → **Materiali**, la spunta del
+rientro (`rientro_verificato_il`) era in fondo alla riga, 16 px e
+attaccata alla frase che dice quanti pezzi devono tornare. Chi gira fra
+gli scaffali con lo scatolone in mano cerca **un quadrato da toccare**,
+non una riga da leggere: ora è il primo elemento della riga, a sinistra
+della foto, 40×40 di area premibile con la casella da 24, verde quando è
+spuntata. La frase resta sotto, allineata alla foto: la spunta si tocca,
+il conto si legge.
+
+E le caselle numeriche sono **una sola**, «Da portare». «Partito» era il
+posto per scrivere a mano una quantità uscita diversa da quella da
+portare — mai usata, mentre il tasto «Partito» in cima fa la stessa cosa
+per tutte le righe insieme. Il dato (`quantita_portata`) resta e lo
+scrive quel tasto; **cambia che non si corregge più riga per riga**: se
+dalla sede esce una quantità diversa, va corretto il «Da portare» prima
+di premere Partito. Due frasi che mandavano a quella casella sono state
+riscritte.
+
+### La banca si interroga indietro nel tempo, guardando prima (3/11/2026)
+
+Il titolare: «collegandoti al servizio che gestisce la connessione con la
+banca, risali a tutti i bonifici a MT.DERM fino a oggi». Non si poteva: il
+collegamento Lunch Flow è nato il **13/10/2026**, il primo giro ha preso
+novanta giorni e `lunchflow-sync` sapeva chiedere solo «dall'ultimo
+movimento meno cinque giorni» oppure «novanta giorni». Sotto il
+**30/07/2026** l'estratto conto in app non esiste, e metà anno non aveva
+dati su cui rispondere.
+
+Ora la funzione accetta il periodo, e sa **guardare senza scrivere**:
+
+```
+{ dal: "2026-01-01" }                          lo chiede e lo importa
+{ dal: "2026-01-01", prova: true }             lo chiede e NON scrive
+{ dal: "...", prova: true, cerca: "mt.derm" }  e dice quali righe, col totale
+```
+
+La prova viene prima perché **la risposta non è garantita**: un consenso
+PSD2 spesso si ferma a novanta giorni, quindi la prima cosa da sapere è
+se la banca quella storia ce l'ha. In prova non si scrive niente — né
+movimenti, né saldo, né l'ora dell'ultimo giro, nemmeno in caso di
+errore. Il periodo lungo si chiede **un mese alla volta** e ogni mese
+torna col suo conto: non sappiamo se l'aggregatore tronchi una risposta
+troppo grande, e una risposta troncata in silenzio è peggio di un errore.
+
+In Riconciliazione banca, accanto a «Aggiorna ora», c'è **«Risali nel
+tempo»**: la data, un filtro facoltativo sulla controparte, «Guarda cosa
+c'è». Il tasto che importa **compare solo dopo la risposta** e passa da
+una conferma che dice cosa entra in prima nota — mesi di movimenti sono
+una decisione, non l'effetto collaterale di una domanda.
+
+**Pubblicata il 4/11/2026** (versione 15; fino a quel momento in
+produzione c'era ancora quella del 13/10, che `prova` non la leggeva —
+cioè il tasto «Guarda cosa c'è» avrebbe **scritto**. Una funzione non
+pubblicata non è un ramo che non si usa: è un tasto che fa un'altra
+cosa).
+
+**E la domanda ha una risposta, misurata lo stesso giorno in prova.**
+Verso MT.DERM è uscito **un solo bonifico: 2.175,00 €** il 24/09/2026
+(più 1,00 € di commissione), «Invoices RO 5003, RO 5004», riconciliato
+con la spesa «Acquisto pigmenti vecchia fattura»; e 94,50 € il
+07/10/2026, ma via PayPal.
+
+**Da gennaio a luglio non si può sapere, e adesso è un fatto e non
+un'ipotesi**: interrogata mese per mese, la banca ha risposto **zero
+righe** per tutti e sette i mesi, e 93/195/205/17 da agosto a novembre.
+Il consenso PSD2 non arriva sotto **agosto 2026**. In app l'estratto
+conto copre dal 01/07/2026 (645 righe dal file, 128 da Lunch Flow),
+quindi tutto quello che la banca possiede è già dentro e non c'è niente
+da importare. Per gennaio–giugno le strade sono fuori dall'app: il
+portale della banca, o le fatture passive di MT.DERM su Fatture in
+Cloud. Che qualcosa prima ci sia lo suggerisce il bonifico stesso, che
+si chiama «vecchia fattura» e ne salda due insieme.
+
+### Le statistiche di canale si filtrano per categoria (3/11/2026)
+
+Chiesto dal titolare per **Statistiche Vendite al Banco** e **Statistiche
+Vendite Shop Online** (`PaginaStatisticheVenditeCanale`, una pagina per
+tutti e due i canali). La tendina sta accanto alla barra del periodo —
+sono le due domande che si fanno insieme, «come è andata la laminazione a
+ottobre» — e rispecchia l'albero dello shop, coi figli rientrati.
+
+**La regola che decide i numeri:** una categoria non è una proprietà
+dell'ordine, è una proprietà delle **righe** — in uno scontrino ci sono un
+kit di laminazione e un pigmento. Quindi scegliendo un reparto non si
+filtrano gli ordini continuando a sommarne il totale (sarebbe «il
+fatturato degli ordini che contengono laminazione», un altro numero che
+sembra lo stesso): si tengono **le sole righe di quel reparto**, e
+incasso, pezzi e classifica sono quelli. La spedizione resta fuori,
+«Vendite» conta gli ordini con almeno una riga dentro, e una riga che è
+solo una parte dell'ordine lo dice («parte dell'ordine»). **Senza filtro
+non cambia niente**: l'incasso resta il totale dell'ordine, com'era.
+
+Le categorie si leggono **con i padri** (`collegamentiConPadri`): chi
+sceglie un reparto si aspetta dentro le sue sottocategorie. La riga si
+riporta al prodotto con `prodottoDellaRiga` e **mai per nome**. C'è anche
+«Righe senza categoria (e non a catalogo)», che al banco è dove finiscono
+gli acconti e i saldi dei corsi battuti a mano.
+
+Le tre tabelle (`prodotti_shop`, `categorie_prodotti`,
+`prodotti_categorie`) sono state aggiunte alle due viste nella mappa di
+`App.jsx`: senza, la tendina sarebbe vuota e non lo direbbe nessuno.
+Prove in `prove/statistiche-filtro-categoria.test.jsx`, che montano l'app
+vera, navigano fino alle due pagine e controllano i numeri sotto filtro.
+
+### Registrazione clienti, in Home per tutti (3/11/2026)
+
+Chiesta dal titolare: una tessera in Home **visibile da tutti**, master
+comprese, dove chi incontra un cliente lo registra. Due sezioni in una
+pagina (`src/clienti/RegistrazioneClienti.jsx`): **Registra un cliente** e
+**Clienti registrati**, l'elenco di tutti, con ricerca.
+
+**Il permesso nasce acceso per tutti, e resta un permesso vero.**
+`registrazioneclienti` è in `TASTI_HOME` — quindi ha la sua casella in
+Gestione utenti, Password master, Password venditori e Password
+assistenti — e la migrazione `20261103170000` l'ha scritta nei permessi di
+**tutte le 53 righe** esistenti (7 utenti, 17 master, 21 venditori, 8
+assistenti). Un utente creato domani la trova dentro da sé, perché il
+tasto «Genera nuovo utente» ora parte da **`PERMESSI_DI_PARTENZA`** invece
+che da una lista vuota: una tessera «di tutti» che non entra nei default
+sarebbe «di tutti tranne chi arriva dopo», e nessuno se ne accorgerebbe.
+Una tessera sempre visibile a prescindere dalla casella sarebbe stata più
+breve da scrivere, ma la casella avrebbe mentito.
+
+**Il luogo non si scrive, si scegli.** La città si cerca scrivendola — lo
+stesso meccanismo del comune di nascita in Iscrizione allievi
+(`cercaComuni` sull'elenco ISTAT che l'app si porta già dietro, nessuna
+rete) — e scelta dal suggerimento riempie da sé **provincia, regione e
+CAP**. Provincia e regione sono in sola lettura: una regione battuta a mano
+diventa «Puglia», «puglia», «PUGLIA» e «Apulia», e l'elenco dei clienti
+per regione non si fa più. Dove i CAP sono molti (Roma ne ha 82) resta la
+tendina, perché quello non lo può sapere nessuno al posto di chi registra.
+`CampoComune` ha preso un `onScegli` facoltativo che restituisce la
+proposta intera — `{ nome, sigla }` — perché la sigla della provincia la
+sa solo l'elenco; chi non lo passa non cambia comportamento.
+
+**Il telefono è forzato col +39**: il prefisso sta fuori dalla casella e
+non si tocca, e in archivio finisce sempre nella stessa forma
+(`telefonoIta`: «347 123 4567», «+39 3471234567» e «0039 347-1234567»
+diventano `+393471234567`; lo zero davanti a un cellulare si toglie). Un
+numero estero oggi da qui non si registra: è una decisione da prendere,
+non un campo da allargare di nascosto.
+
+**Chi è «già registrato», che è la regola vera.** Parole del titolare: «in
+caso di omonimia l'utente va considerato già registrato se tutto
+corrisponde, anche la mail e il numero di telefono, perché se abbiamo un
+utente con lo stesso nome ma numero di telefono e mail sono diversi, per
+noi è un secondo utente». Quindi l'identità è **nome + cognome + email +
+telefono**, e la città ne resta fuori di proposito: chi trasloca non
+diventa un secondo cliente. Per questo email e telefono sono
+**obbligatori** — sono loro a distinguere due omonimi, e senza di essi la
+seconda persona con lo stesso nome verrebbe respinta come doppione.
+
+La regola sta in un **indice unico** sulla tabella (normalizzato:
+maiuscole indifferenti, spazi ripuliti, del telefono contano le sole
+cifre), non nel browser. Il controllo che la pagina fa prima di salvare
+serve a mostrare **quale** riga è già in archivio — «utente già
+registrato» senza dire chi lascia il dubbio — ma due venditori che premono
+Salva nello stesso istante li ferma solo il database, e il 23505 torna
+come lo stesso messaggio. Provato in transazione annullata: la stessa
+persona scritta in un altro modo rifiutata, l'omonimo con contatti diversi
+accettato.
+
+`chiaveIdentita` e l'indice **devono normalizzare allo stesso modo**, e
+qui il banco di prova ha trovato un difetto vero: la chiave della pagina
+confrontava le cifre grezze, quindi «333 111 2223» appena battuto e
+«+393331112223» in archivio sembravano due persone — la pagina non vedeva
+il doppione e lo fermava solo il database, dando il messaggio giusto per
+il motivo sbagliato. Ora il telefono passa prima dal `+39`.
+
+**La matita e il cestino** (stesso giorno, chiesti subito dopo). Ogni riga
+dell'elenco ha due tastini da 44×44 a destra: **modifica** porta la riga
+dentro lo stesso modulo — un modulo gemello vorrebbe dire due posti dove
+cambiare una regola — e salvando **aggiorna quella scheda**, non ne crea
+una nuova; **cancella** chiede conferma **col nome davanti** e la toglie.
+
+Tre dettagli che sono il punto: la scheda in correzione è esclusa dal
+controllo del doppione (`giaRegistrato(..., esclusoId)`), altrimenti si
+rifiuterebbe da sola — «utente già registrato» sarebbe lei; il `+39` si
+toglie dal valore che si vede, o rientrerebbe due volte; e **chi ha
+registrato la riga non si riscrive**, è la storia di quella riga —
+la correzione aggiunge `modificato_il` / `modificato_da` (migrazione
+`20261103180000`) e l'elenco lo mostra accanto.
+
+**E dal 4/11/2026 la cancellazione ha il suo cestino** (migrazione
+`20261104110000`), chiesto dal titolare. Prima cancellava e basta — era
+scritto nella pagina, «non si recupera», ed era la stessa forma del
+guasto del 26/10 sulle vendite di Elia Cito: nessuna copia e nessun nome
+di chi aveva premuto. Ora `cliente_cestina(id, chi)` copia la riga in
+**`clienti_cestino`** e la cancella **nella stessa transazione**, e
+`cliente_ripristina(id)` la rimette com'era; un cron alle 04:25 svuota
+quello che ha più di sei mesi, come il cestino delle vendite alle 04:20.
+
+Tre cose decise lì dentro, e ognuna per un motivo:
+
+- **la copia è la riga intera in jsonb**, non colonna per colonna: il
+  giorno che `clienti_registrati` prende una colonna nuova, una copia a
+  colonne la perderebbe in silenzio, e un ripristino che restituisce una
+  scheda incompleta è peggio di nessun ripristino. Accanto restano nome,
+  cognome, email e telefono in chiaro, perché il cestino si deve poter
+  leggere senza aprire il jsonb;
+- **il ripristino può essere rifiutato, ed è giusto**: se nel frattempo
+  la stessa persona è stata registrata di nuovo, l'indice unico
+  sull'identità non lo lascia passare. La funzione traduce quel rifiuto
+  in una frase che dice cosa fare, e la pagina mostra **quella** invece
+  di una traduzione propria. Provato in transazione annullata: cestina,
+  ripristina, ripristino rifiutato dopo una nuova registrazione, e
+  cestinare una riga che non esiste;
+- **la linguetta «Cestino (N)» compare solo se c'è qualcosa dentro**, e
+  il conteggio si chiede sugli **id nel corpo** della risposta e non con
+  `head: true`. Con `head` il numero arriva in un'intestazione HTTP
+  (`Content-Range`): dove quella non c'è il numero resta sconosciuto e
+  la linguetta non compare — cioè proprio quando il cestino è pieno.
+
+La conferma col nome davanti resta: un cestino non è una scusa per far
+cancellare le cose con leggerezza.
+
+Prove in `prove/registrazione-clienti.test.jsx` (18): le regole una per
+una, e la pagina montata per davvero — si scrive la città, si preme il
+suggerimento, si controlla che provincia/regione/CAP si siano riempiti, si
+salva, si rilegge il doppione, si cambia il telefono e la seconda persona
+entra; poi la matita (la riga torna nel modulo, il telefono senza prefisso
+doppio, l'update sull'id giusto) e il cestino, con la conferma annullata
+che non cancella niente.
+
+### «Stampe»: l'elenco dei corsi per chi deve solo stampare (3/11/2026)
+
+Chiesta dal titolare per **Raffaele**: una tessera in Home con la lista
+dei corsi **in ordine cronologico** e, accanto a ogni nome, **Diplomi** e
+**Nomi**. Niente altro — non si entra nelle classi, non si modifica, non
+si cancella, non c'è il calendario. È la stessa lista di Gestione corsi
+con gli stessi filtri (corso, città, master), la stessa ricerca e le due
+tab Programmati/Passati, che qui servono più che altrove: i diplomi si
+stampano a corso finito.
+
+**Com'è fatta, e cosa NON è stata duplicata.** La pagina è `GestioneDate`
+in `soloLettura` — la modalità che esisteva già per il profilo kiosk — con
+un solo pezzo nuovo: `azioniRiga(cd)`, una prop facoltativa che arriva
+fino a `DateRaggruppatePerCitta` e mette i tasti del chiamante accanto a
+ogni riga. Chi non la passa non cambia di niente.
+
+**I due PDF li compone un solo posto.** `generaPdfDiplomi` e
+`generaPdfSegnaposti` sono usciti da dentro `SchedaData` e stanno a
+livello di modulo: li chiamano sia la scheda della classe sia «Stampe».
+Non aprono finestre e non scaricano niente — tornano i byte, l'elenco di
+chi è rimasto fuori e un `esito` che dice cosa è successo; a parlare ci
+pensa chi chiama, che sa dov'è l'utente. Due copie avrebbero voluto dire
+due diplomi diversi dallo stesso archivio, e il giorno in cui qualcuno
+sposta il nome di mezzo centimetro in un posto solo non se ne accorge
+nessuno finché il foglio non è in mano all'allieva. Le regole delicate
+non si sono toccate: il diploma viene **solo** dal pacchetto, e il motivo
+per cui non esce si dice allieva per allieva.
+
+**Il permesso è `stampe` e ce l'ha solo lui** (migrazione
+`20261103190000`: la riga `utenti_app` «Raffaele Villanno», la sua riga
+`venditori`, e il profilo Programmatore che serve a verificarla).
+**Nessun bypass per chi amministra**, a differenza di Regolamenti: chi
+amministra entra nelle classi e stampa da lì, questa pagina esiste per
+chi non ci deve entrare.
+
+**Due cose trovate dal banco di prova, e vale la pena ricordarle.** La
+prima è la trappola di questo file: i nuovi `useState` erano accanto alla
+funzione che li usa, cioè **dopo i return anticipati del gate**, e la
+pagina moriva con «Rendered more hooks than during the previous render» —
+ora stanno con gli altri stati, in cima. La seconda: in `soloLettura` la
+riga riceveva `onApriData={() => {}}`, quindi mostrava la freccina e il
+dito del mouse **per non fare niente**; adesso riceve `undefined` e non
+finge (vale anche per il profilo kiosk).
+
+Prove in `prove/stampe.test.jsx` (7): la tessera solo col permesso, i due
+tasti su ogni riga, l'assenza di matita/cestino/calendario/barra di
+Gestione corsi, la riga che premuta non apre la classe, i filtri e la
+ricerca uguali, e i due messaggi che spiegano perché un diploma non esce
+(«non ha nessun pacchetto») o che la classe è vuota — senza generare
+nessun PDF.
+
+### Il bundle eredita il back order dai suoi pezzi (4/11/2026)
+
+Il titolare: «nonostante con il mascara abbia attivato il backorders, il
+relativo bundle del mascara da 10 pezzi, non leggendo disponibili i pezzi
+necessari per comporsi, mi risulta sempre indisponibile». Aveva ragione, e
+il caso era esatto: **Mascara Kerafill 1pz**, 7 pezzi in casa e back order
+acceso, quindi ordinabile a scorte zero; **Espositore 10pz**, bundle
+virtuale, 7 ÷ 10 = **zero componibili** → sul sito indisponibile. Il pezzo
+singolo si ordinava, l'espositore no, senza nessuna ragione perché
+fossero diversi: il conto della disponibilità guardava solo le giacenze,
+e per lui un componente a back order era un componente che non c'è.
+
+**La regola, decisa dal titolare: il bundle lo eredita.** Se ogni
+componente che lo blocca — quello che finisce prima, cioè quello che
+decide il minimo — è a sua volta ordinabile a scorte zero, il bundle va
+sul sito come ordinabile, con la frase del pezzo singolo (o la sua, se
+qualcuno l'ha scritta sull'espositore). Si accende e si spegne da sé
+seguendo i componenti: nessuna casella da ricordare su ogni bundle.
+
+**I limitanti, non tutti.** Un componente che ne ha cinquanta non blocca
+niente, e pretendere il back order anche da lui terrebbe fermo
+l'espositore per colpa di un pezzo che abbonda. Ma **basta uno** che
+manca e non si riordina perché il bundle resti chiuso: prometterlo
+vorrebbe dire prendere un ordine che non si può evadere.
+
+**E la disponibilità resta il numero vero.** Non si gonfia la quantità
+per far comparire il tasto: al sito va **zero** — quanti espositori si
+compongono davvero — e il back order di WooCommerce fa il resto («su
+ordinazione», e si compra). Dichiarare due espositori che non esistono
+vorrebbe dire prometterli a chi paga.
+
+**La regola sta in `_shared/bundle.js`, e il perché è il punto.** Il
+conto dei bundle vive in **due** posti: `sincronizzaDisponibilitaBundle`
+(`_shared/woo.ts`), che gira quando un ordine **online** muove i
+componenti, e `woo-riallinea-shop`, che gira ogni notte e dopo ogni
+movimento di magazzino — cioè dopo le vendite **al banco**. Una regola
+scritta in uno dei due sarebbe giusta per metà delle vendite, e nessuno
+saprebbe quale metà. (Le altre due copie della formula, nella scheda
+prodotto e al POS, rispondono a un'altra domanda — «quanti se ne
+compongono adesso» — e restano come sono: quel numero non cambia.)
+
+In `woo-riallinea-shop` questo è l'unico caso in cui si scrive sul sito
+qualcosa oltre alla quantità, e non contraddice la regola scritta lì
+sopra: su un prodotto normale il back order è **una scelta di chi apre la
+scheda** e resta sua, su un bundle virtuale è un **valore calcolato**,
+come la quantità accanto. Il flag viene riscritto anche in locale
+(`prodotti_shop.backorder_attivo`), dopo la conferma del sito e prodotto
+per prodotto: se restasse spento in app mentre il sito vende a scorte
+zero, la scheda mentirebbe a chi la apre.
+
+Prove in `prove/bundle-backorder.test.js` (18), sui numeri veri del
+mascara e sui casi che la farebbero sbagliare.
+
+**Pubblicata e verificata lo stesso giorno**, su quattro funzioni — i due
+moduli condivisi stanno dentro il pacchetto di ognuna, quindi
+`woo-riallinea-shop`, `woo-webhook`, `woo-import-storico` e
+`assistente-regole` sono state ripubblicate insieme. **Erano tre, non
+uno:** il giro in prova ha trovato da riaprire anche **Kit laminazione
+essential** e **Excellentia Siero ricrescita Ciglia — Espositore 10pz**,
+fermi per lo stesso motivo e senza che nessuno lo sapesse. Dopo il
+riallineamento, sul sito tutti e tre risultano `onbackorder`,
+`backorders: notify`, quantità **0** e acquistabili.
+
+### L'assistente dichiara il periodo, e le date se le misura (4/11/2026)
+
+Nasce dalla risposta che Chiara si è sentita dare: «quanti pigmenti da
+luglio?» → «900 e passa». Il conto era giusto, il **periodo** no — 936
+boccette è gennaio-novembre, da luglio sono 274 — e il periodo non era
+scritto da nessuna parte. **Un conto giusto sul periodo sbagliato è il
+modo peggiore di sbagliare, perché sembra giusto** e nessuno lo mette in
+dubbio.
+
+Sotto, misurato, c'era di peggio: **le fonti non cominciano insieme.**
+
+| Fonte | I dati cominciano |
+|---|---|
+| Shop online, incassi di prodotti | 15/03/2022 |
+| Acconti dei corsi | 30/08/2025 |
+| Spese | 02/07/2026 |
+| Iscrizioni | 29/07/2026 |
+| Classi in calendario | 08/08/2026 |
+| Vendite al banco | 05/09/2026 |
+| Pre corso e saldi | 16/09/2026 |
+
+Quattro anni e mezzo fra la più vecchia e la più giovane. «Com'è andato
+maggio» dà una risposta che **sembra** completa e contiene solo lo shop;
+confrontare il 2024 col 2026 vuol dire confrontare un canale con sette.
+
+**La vista `analisi_copertura`** (migrazione `20261104100000`) misura
+quelle date **sul dato stesso a ogni lettura** — 61 ms — e il catalogo
+che il modello legge finisce col riquadro «DA QUANDO CI SONO I DATI» più
+quattro regole obbligatorie: dichiara sempre il periodo con le date
+anche se nessuno l'ha chiesto; se il periodo chiesto comincia prima dei
+dati di quella fonte, dillo; non confrontare due periodi che la fonte
+non copre allo stesso modo; di' cosa resta fuori (i pigmenti dati dentro
+ai kit dei corsi non sono una vendita, e «quanti ne sono usciti» e
+«quanti ne abbiamo venduti» sono due domande diverse).
+
+**Le date NON stanno nel prompt, e una prova lo impedisce.** Scritte a
+mano invecchierebbero senza che nessuno se ne accorga: il giorno che si
+importa lo storico del banco resterebbero quelle di oggi, e l'assistente
+direbbe una cosa falsa con l'aria di saperla. Se il database non
+risponde il catalogo resta quello di prima — meglio una risposta senza
+l'avvertenza che nessuna risposta.
+
+Vale per **entrambi** i registri, l'assistente flottante e «Chiedi ai
+dati», perché il catalogo è uno: per questo `analisi-domanda` costruisce
+il suo prompt a ogni domanda invece di tenerlo in una costante di
+modulo. `analisi_copertura` è anche interrogabile, con `permessi: []`,
+perché non contiene nessun importo e nessun nome: solo fonti, due date e
+un conteggio. Prove in `prove/assistente-sui-dati.test.js` (46).
+
+### Lo svuotamento di Varnish non funziona, e si sa perché (4/11/2026)
+
+Verificando gli espositori è venuto fuori il guasto che sta **sotto** a
+tre casi già visti. Sull'espositore del mascara: WooCommerce e la Store
+API dicono «su ordinazione, acquistabile»; la **pagina servita a un
+cliente** diceva ancora **«Esaurito», senza tasto per comprare**, ed era
+la copia generata alle 01:21 — prima del riallineamento. La stessa
+pagina chiesta con un parametro qualsiasi in coda (che aggira la cache)
+rispondeva **«Disponibile su ordinazione»** col tasto. Quindi: dato
+giusto, pagina vecchia.
+
+Uno svuotamento completo lanciato a mano risponde `ok` ma non cambia
+niente, e nei passi che restituisce c'è il colpevole:
+
+```
+passi: [..., "varnish:regex:400", "varnish:200 pagine", "cloudflare:si", ...]
+```
+
+**La PURGE «a tappeto» su Varnish torna 400.** L'ipotesi, da verificare
+appena si tocca lo snippet: `wordpress/elitederma-svuota-cache.php`
+manda quella richiesta a `home_url('/')`, cioè all'indirizzo
+**pubblico** del sito — esce su internet, passa da **Cloudflare**, che
+non sa cosa sia una PURGE e risponde 400. Varnish, che sta sul server,
+non la vede nemmeno. Va mandata al server stesso (`127.0.0.1`) con
+l'intestazione `Host` del dominio, che è quello che fa il ripiego
+pagina-per-pagina — l'unico passo che non fallisce, e che però copre
+solo 200 indirizzi e non prende tutto.
+
+Cloudflare si svuota (`cloudflare_attivo: true`, `cloudflare:si`), ma
+non basta: la copia vecchia è **all'origine**. È il motivo per cui le
+pagine «si sistemano da sole» dopo qualche ora — scadono, non vengono
+svuotate.
+
+**Cosa spiega**: le descrizioni e le foto del microblading corrette il
+3/11 e invisibili per sei ore; «N2 Fixa» del 2/11 con «Leggi tutto» per
+cinque ore; gli espositori di oggi. Tre sintomi, una causa.
+
+**Perché non è ancora corretto**: lo snippet vive in Code Snippets su
+WordPress, dove da qui non si scrive — le chiavi WooCommerce sanno
+toccare prodotti e ordini, non codice. La correzione va importata a
+mano (il `.json`, non incollata: su uno snippet lungo l'editor rovina il
+testo). Per renderlo autonomo servirebbe una password per applicazioni
+di un amministratore, cioè la facoltà di **eseguire PHP** sul negozio:
+decisione del titolare, non presa.
+
+### Gli sconti della fiera si copiano anche dalle master (4/11/2026)
+
+Il titolare, guardando «Sconto agli eventi, al banco della fiera»: «in
+questa area dobbiamo mettere anche il pulsante di copia dagli sconti
+master». C'era solo **Copia da corsi**; ora ce n'è uno per fonte, su
+tutte e due le serie (carta e contanti).
+
+**Non è un doppione, ed è il motivo per cui ne servono due.** Il codice
+d'aula è lo sconto che la scuola fa ai **suoi allievi**; il referral
+personale è quello che una master fa a un **cliente qualunque** — e al
+banco di una fiera il cliente è proprio quello. Quale delle due tabelle
+somigli di più alla fiera lo sa chi la fa, non chi programma.
+
+Tre cose decise lì dentro:
+
+- **Si copia qui e basta.** Premere il tasto scrive solo l'impostazione
+  degli eventi: nessun coupon da riallineare, nessuna riga di base da
+  riscrivere — quelle servono ai codici, e una fiera un codice non ce
+  l'ha. Le **soglie di spesa viaggiano con la tabella**, o la fascia
+  copiata finirebbe su un carrello diverso da quello di là.
+- **Da una tabella tutta a zero non si copia** (`serieScontoConPercentuali`).
+  Qui `serieScontoScritta` sarebbe la domanda sbagliata: la serie delle
+  master **nasce già fatta, con sei zeri** (`FASCE_SCONTO_DEFAULT`),
+  quindi «esiste» sempre. Un tasto acceso lì sopra prometterebbe di
+  ricopiare una tabella e invece azzererebbe lo sconto della fiera, in
+  silenzio e con un gesto solo. Niente da copiare = niente tasto.
+- **Una serie senza codici mai scritta mostra la tabella vuota**, non
+  «Caricamento regole…». Per una serie *con* codici quel null vuol dire
+  «la regola non è ancora arrivata» e si aspetta; per gli eventi una
+  regola non esiste proprio, quindi vuol dire «mai scritta». Prima si
+  restava su quella frase per sempre, e con essa **sparivano i tasti
+  Copia da…**: erano invisibili esattamente la prima volta, che è
+  l'unica volta in cui servono.
+
+`SchedaFasceCodiceAula` non ha più una fonte sola (`copiaDa` /
+`onCopiaCarta` / `onCopiaContanti`) ma un **elenco** `fontiCopia` di
+`{ nome, carta, contanti }`; una funzione mancante vuol dire «di là non
+c'è niente da copiare» e il tasto non compare. La serie needling passa
+la sua unica fonte da quel nuovo elenco. Prove in
+`prove/sconti-eventi-copia.test.jsx` (2): il pannello montato per
+davvero, i quattro tasti premuti uno per uno, e il controllo che le due
+fonti scrivano **numeri diversi** — se copiassero la stessa tabella,
+averne due sarebbe peggio che averne uno, perché sembrerebbe una scelta
+e non lo sarebbe.
+
+### Il kit apre il bundle prima di guardare le giacenze (6/11/2026)
+
+Il titolare: «l'app non mi fa andare avanti nel confezionamento dei kit
+perché dice che mancano i box kit da 10 anellini. I box sono formati
+dagli anellini singoli, e di anellini singoli ce ne sono migliaia».
+Aveva ragione, e il caso era esatto: **«Box Anellini x i Kit 10 pz»** è
+un bundle virtuale (10 anellini + 1 astuccio), con 3.000 anellini e 110
+astucci in magazzino, e la preparazione si fermava con «ci sono 0 pezzi,
+non posso scaricarne 8». Quello zero era la giacenza **del bundle**, che
+di suo non esiste.
+
+**Il difetto era l'ORDINE di due controlli giusti.** Lo scarico dei kit
+chiedeva prima «questo prodotto conta a magazzino?» e solo dopo apriva il
+bundle nei suoi pezzi. Su un bundle virtuale `conta_magazzino = false` è
+giusto — è una ricetta, non una scatola sullo scaffale — e lo faceva
+scartare **prima** dell'apertura. Peggio: scartato di lì, finiva nel ramo
+dei rientri, che prendeva «delta positivo **oppure** non conta a
+magazzino» e quindi raccoglieva anche un delta **negativo**. Al database
+arrivava «togli 8 pezzi» su un prodotto che una giacenza non ce l'ha, e
+`stock_muovi` lo rifiutava in blocco: giustamente, ed è l'unico motivo per
+cui il guasto si è fatto sentire.
+
+**Perché il blocco è stata la fortuna.** Lo stesso difetto, su un bundle
+che in quella casella un numero ce l'aveva, non bloccava niente e
+scriveva una cifra falsa. **«Aftercare post trattamento vit A+D 25pz»**
+(bundle virtuale da 25 bustine, `quantita` 2) se l'è vista scalare
+**tredici volte dall'8 settembre al 27 ottobre, in tutto 184**, mentre le
+657 bustine vere non sono mai uscite dal magazzino. Il tasto funzionava,
+quindi nessuno ha controllato. Stesso giro su «Vassoi minitray monouso 25
+pezzi», sette movimenti dal 1° settembre. Quei
+movimenti restano in archivio: **le giacenze storiche non sono state
+corrette**, perché su un bundle virtuale quel numero non vuol dire niente
+e perché cosa sia davvero uscito dagli scaffali lo sa solo chi conta.
+
+**Com'è adesso**: `movimentiKitDaDelta` (in App.jsx, accanto a
+`righeScarico`) prende la mappa «prodotto → di quanto si muove» e
+restituisce scarichi e rientri **dopo** aver aperto i bundle. Tre cose
+decise lì dentro:
+
+- **prima si apre, poi si filtra.** Dopo l'apertura restano solo prodotti
+  veri, e `conta_magazzino = false` torna a voler dire quello che dice in
+  tutto il resto dell'app: niente giacenza, niente movimento — in
+  **nessuno dei due versi**. Il «Microscopio», che ha `1` in quella
+  casella col flag spento, prima scendeva a zero e al kit dopo avrebbe
+  bloccato la preparazione come il box degli anellini.
+- **la stessa porta la usano anche i rientri**, tutti e due
+  (`ripristinaMagazzinoDaScaricoInterno` e `ripristinaKitRientro`, che
+  prende la lista dichiarata dalla master). Correggere solo lo scarico
+  sarebbe stato peggio di non correggere niente: usciti i componenti e
+  rientrato il bundle, il magazzino si sbilanciava a ogni giro, e nel
+  verso che fa comodo — più pezzi di quelli che ci sono.
+- **i versi si sommano dopo l'apertura**, perché lo stesso componente può
+  arrivare da due bundle diversi, uno che esce e uno che rientra: due
+  righe sullo stesso prodotto sarebbero due conti separati, ognuno
+  convinto di essere solo.
+
+**E un bundle aperto a vuoto si nomina** (distinta vuota, o componenti
+fuori anagrafica): niente righe, nessun movimento, e il pacco partirebbe
+senza quei pezzi con il tasto che dice di sì. È il modo in cui questo
+guasto tornerebbe, quindi lo scarico si ferma e dice quale. Oggi non
+capita: i soli due bundle dentro ai kit sono questi due, e la distinta ce
+l'hanno.
+
+Il POS questo difetto non l'ha mai avuto: `righeScarico` lì sta davanti a
+tutto. Prove in `prove/kit-con-bundle-si-apre.test.js` (9), sui numeri
+veri degli anellini.
+
+**Un pacco sigillato e una ricetta si somigliano e sono opposti**
+(6/11/2026, deciso dal titolare guardando i due numeri rimasti). Il
+titolare: «Copriclip sono pacchi da 125 pezzi dalla fabbrica che poi noi
+apriamo per fare il pezzo singolo, quindi è giusto che abbia giacenza
+propria». **«Copri clip box da 125 pz»** era registrato come bundle
+virtuale, cioè come una ricetta che non esiste sullo scaffale: al sito
+andava `floor(24.004 / 125) = 192` disponibili mentre i pacchi chiusi
+sono **199**, e quel 199 non lo leggeva nessuno. Rimesso nella forma che
+hanno già i 18 pacchi veri — aghi, lame, cuffie, microbrush: `semplice`,
+`bundle_con_giacenza_fisica`, `prodotto_sfuso_id` verso «Copri clip 1pz»,
+125 pezzi per confezione, **nessuna riga di distinta** (lì il legame coi
+pezzi passa da «Apri confezione», non da `bundle_componenti`, e tenere
+tutte e due le dichiarazioni vuol dire che un giorno si contraddicono).
+Migrazione `20261106120000`, col rollback scritto dentro.
+
+Il costo è stato **scritto**, 1,25: finché era virtuale glielo calcolava
+`conCostoDeiBundle` dalla distinta (125 × 0,01), e da `semplice` quel
+calcolo non lo tocca più — senza, un prodotto che si vende davvero
+sarebbe rimasto «senza costo di acquisto», cioè senza margine, senza
+fascia di sconto e senza punti alla master. È lo stesso numero di prima,
+non una stima.
+
+**«Confezione Anellini Sterili 30 pz» invece è giusta così** (bundle di
+30 anellini più bustina e adesivo, confermato dal titolare). Si porta
+dietro **983 in `quantita`**, che su un bundle virtuale non legge nessuno
+— né il sito, che la disponibilità la calcola dai componenti, né
+Gestione magazzino, che su `conta_magazzino = false` quel campo non lo
+mostra. Resta scritto qui perché è una trappola per chi apre la tabella
+(ha ingannato me): azzerarlo è un movimento di rettifica, e quel gesto lo
+decide il titolare, non chi legge.
+
+**Il «Microscopio»** è un accessorio didattica di COLORI E CORREZIONI, un
+pezzo solo, non in vendita: `conta_magazzino` spento è giusto e resta
+così. Prima scendeva a zero al primo corso e dal secondo in poi avrebbe
+bloccato la preparazione come il box degli anellini; adesso semplicemente
+non si muove. Accendere quella casella vorrebbe dire sapere che il
+microscopio è in aula e non a magazzino — e bloccare un secondo corso che
+lo chiede nelle stesse date: è un'informazione vera, ma è una scelta sua.
+
+### «Aggiorna lo shop»: la risposta persa non è un lavoro fallito (6/11/2026)
+
+Il titolare preme «Aggiorna lo shop» in Gestione magazzino e legge **«Non
+riuscito: Failed to send a request to the Edge Function»**. Misurato lo
+stesso giorno da riga di comando, il giro **non fallisce**: risponde in
+**23 secondi**, scrive **182 giacenze**, svuota tutta la cache del sito.
+Il tempo si spende quasi tutto in WooCommerce — due blocchi da cento
+prodotti, circa dieci secondi l'uno; lo svuotamento completo della cache
+ne costa 3,3 (misurato tre volte). La prova a vuoto, che legge e basta,
+risponde in 0,8.
+
+Quindi **non era il riallineamento a fallire, era il viaggio di ritorno
+della risposta**. `FunctionsFetchError` vuol dire «il `fetch` non ha mai
+avuto una risposta da leggere»: non è un 500, non è un rifiuto, non c'è
+nessun codice di stato. Ventitré secondi sono tanti per un telefono che
+deve tenere aperta una connessione — basta lo schermo che si spegne, un
+cambio di app, il passaggio dal wi-fi ai dati. Escluse per prova la CORS
+(preflight e risposta portano `access-control-allow-origin: *`, anche sul
+401) e la cache del sito (3,3 secondi, costanti).
+
+**«Non riuscito» su un lavoro riuscito è peggio di un tasto che non
+risponde**: manda a cercare un guasto che non c'è, e intanto il sito è
+già aggiornato. Ora `esitoRiallineaShop` (in App.jsx, fuori dal
+componente per poterla provare) distingue i tre casi — andata bene, il
+sito ha rifiutato, la risposta non è tornata — e sull'ultimo dice quello
+che si sa davvero: che il comando era partito, che quasi sempre il sito è
+stato scritto lo stesso, e che ripremere non fa danni (il riallineamento
+riscrive gli stessi numeri, non li somma). E si rilegge `prodotti_shop`
+**anche** quando la risposta si perde: il giro può aver scritto stato e
+back order dei bundle, e la pagina deve mostrare quello che c'è adesso.
+Prove in `prove/riallinea-shop-risposta-persa.test.js` (6).
+
+**Resta da decidere, e vale la pena saperlo:** ogni giro completo si
+chiude con `ok: false` per un prodotto solo, **«Kit henne business (id
+672): ID non valido»**. In app è `attivo = false` con `stato = 'publish'`,
+quindi il riallineamento prova a metterlo in privato sul sito a ogni
+giro; su WooCommerce il prodotto 672 **non esiste più** (404, verificato).
+È un puntatore morto che continuerà a segnare rosso per sempre. Due
+strade, tutte e due da decidere: togliergli il `woo_product_id` in
+anagrafica, oppure insegnare alla funzione che un 404 mentre si nasconde
+un prodotto **è il risultato voluto** — di là non c'è più — e scrivere
+`private` in locale. La seconda è la correzione vera e vuole una
+pubblicazione.
+
+### L'hennè si paga a totale, comunque lo si paghi (6/11/2026)
+
+Era in sospeso dal 16/10/2026. Il titolare ha dettato la regola: «Costa
+un tot e non è importante se lo paghi con iva o cash senza iva. Devi il
+totale pattuito. Qualsiasi somma pagata con qualsiasi sistema somma per
+raggiungere il totale.»
+
+Nella scheda del corso ci sono **due interruttori vicini che parlano
+tutti e due di IVA**, ed è per questo che si confondono:
+
+- **«Come si pattuisce il prezzo»** (`corsi.prezzo_iva_inclusa`) decide
+  solo da quale forma parte una scheda **nuova**, netto o già lordo. Non
+  converte e non tocca nessun importo.
+- **«Verifica sul totale pagato»** (`corsi.saldo_su_totale_pagato`)
+  decide quanto «Restano da pagare» toglie dal pattuito per ogni quota
+  incassata: l'**imponibile** (spento) o il **totale davvero incassato**
+  (acceso). Questo i soldi li tocca: è la cifra che si chiede a una
+  persona.
+
+Confrontati tutti i corsi: **uno solo** aveva i due in contraddizione, e
+era **HENNE INDIVI** — pattuito lordo, residuo calcolato sull'imponibile.
+Acceso con `20261106180000`, rollback scritto dentro; `HENNE` era già a
+posto. Nessun importo è stato convertito o riscritto.
+
+Non si era ancora visto perché su quel corso c'è **una sola iscrizione**,
+saldata «Cash no iva», dove imponibile e totale coincidono. Sarebbe
+uscito alla prima persona che paga con un metodo che l'IVA ce l'ha: 550
+pattuiti, 550 incassati, e la scheda avrebbe continuato a chiederne
+**99,18** che nessuno deve. **Un residuo sbagliato non lo mette in dubbio
+nessuno**: è scritto dall'app, davanti a chi incassa.
+
+Con l'interruttore acceso il conto è quello dettato dal titolare:
+`quantoTogliere` prende il `totale` di ogni quota segnata pagata —
+acconto, pre corso e le righe aggiunte con «+» — qualunque sia il metodo.
+
+**E dallo stesso giorno la regola la può dire anche la singola scheda.**
+Richiesta del titolare: nei «Dati di vendita» dell'iscrizione, accanto a
+«netto senza IVA» e «finale IVA inclusa», c'è un **terzo modo — «verifica
+sul totale»** (`iscritti.totale_pattuito_modo = 'totale'`). Prima quella
+regola stava solo sul corso, quindi per applicarla a una persona sola
+bisognava cambiare l'impostazione di tutto il corso.
+
+Tre cose decise lì dentro:
+
+- **La scheda può solo accendere la regola, mai spegnerla**
+  (`siVerificaSulTotale`, fuori dal componente per poterla provare). Se
+  bastasse scegliere «netto» su una scheda di un corso che si paga a
+  totale, le due iscrizioni già salvate come `lordo` e le **189 senza
+  niente** cambierebbero di colpo il residuo che mostrano — soldi diversi
+  chiesti alle stesse persone, senza che nessuno abbia toccato quelle
+  schede. **Il corso resta il pavimento.**
+- **Una scheda nuova su un corso che si verifica sul totale parte già da
+  lì**: è la regola scritta di quel corso, e farla riscrivere a mano ogni
+  volta vuol dire che prima o poi qualcuno se ne dimentica. I soldi non
+  cambiano — quel corso sottraeva già il totale incassato; cambia che
+  adesso la scheda lo dice invece di lasciarlo implicito.
+- **Serve una migrazione per quello che sembra un bottone in più**
+  (`20261106190000`): la colonna ha un CHECK che ammetteva due soli
+  valori, e senza allargarlo PostgREST avrebbe rifiutato **l'intera**
+  scrittura della scheda, non il solo campo — lo stesso guasto del 18/10
+  sulle spedizioni POS. Nessuna riga toccata.
+
+Gli altri due modi restano quello che erano: solo la lettura del numero,
+che in archivio ci va **digitato e non convertito**. Prove in
+`prove/verifica-sul-totale-pagato.test.js` (5), compresi i 550
+dell'hennè, che devono fare residuo **zero** e non 99,18.
+
+### Permessi e grado si rileggono all'apertura (7/11/2026)
+
+Due segnalazioni nella stessa ora, dalla fiera, con la stessa causa:
+«Olga non vede più i prezzi dei corsi» (il permesso ce l'aveva, dato
+dopo che era entrata) e «Chiara non può ancora fare gli omaggi» (il
+grado di supervisore acceso mentre lei era dentro — e l'omaggio **è** un
+privilegio del grado, `puoScontare`, non una casella personale).
+
+Permessi e grado erano fotografati all'accesso e messi da parte per
+tutta la sessione. Esisteva già una rilettura all'apertura, ma **solo
+per le utenze d'ufficio**, e il commento diceva che per master e
+venditori «non c'è niente da rileggere»: non era vero — i permessi
+stanno sulla loro riga esattamente come sulle altre. Ora si rilegge da
+**tutte e quattro le porte** (master, venditore, assistente, utenza),
+così basta ricaricare la pagina.
+
+**E il conto dei permessi è uscito dal Gate** (`permessiDiAccesso`).
+Stava scritto là dentro quattro volte, una per ramo, e fuori non si
+poteva rifare — ed è proprio il motivo per cui la rilettura copriva solo
+un caso su quattro. Ricostruirlo a mano nella rilettura avrebbe voluto
+dire due liste che un giorno si staccano, e quel giorno qualcuno perde
+una tessera che ha: i permessi si ereditano in tutte e due le direzioni
+(una master col venditore collegato ha i suoi e i suoi; un venditore
+collegato a una master eredita i suoi, `dashboardmaster` compreso se lei
+ce l'ha).
+
+Tre cose decise lì dentro:
+
+- **`data` deve essere UNA riga con il suo id.** Una finta del banco di
+  prova che non filtra restituisce un elenco, e fidarsi di quello
+  vorrebbe dire azzerare i permessi di chi sta usando l'app. C'è una
+  prova che lo impedisce.
+- **Il grado non si abbassa da qui.** `supervisore` vale programmatore e
+  `amministratore` vale amministratore, ma chi è entrato con la password
+  di sistema resta quello che è: una rilettura non può declassare chi sta
+  lavorando.
+- **Il grado si scrive anche nella sessione**, o a ogni ricarica si
+  ripartirebbe da quello vecchio e la Home lampeggerebbe.
+
+Prove in `prove/supervisore.test.jsx` (7): il grado dato mentre la
+persona è dentro vale al ricarico; una casella nuova su un venditore
+compare al ricarico (il caso di Olga) e il suo grado **non** si alza da
+sé; e se il database non risponde con una riga sola, i permessi non si
+toccano.
+
+### Il supervisore: i privilegi del programmatore a chi non lo è (7/11/2026)
+
+Il titolare: «attiva anche a Chiara Colonnelli le stesse mie funzioni di
+programmatore e accesso, anche se lei non è programmatore: deve venire a
+supervisionare tutte le aree e avere i miei stessi privilegi».
+
+**Il grado, qui, non sta su una riga: lo decide quale password si batte.**
+C'è una riga di sistema `__programmatore` con la sua password, una
+`__admin`, e tutti gli altri entrano con la propria e valgono «user» più
+i permessi scritti. Quindi dare a qualcuno i privilegi del programmatore
+aveva due strade, e la prima è stata scartata:
+
+- **dargli la password del programmatore**: due persone dietro la stessa
+  identità. Ogni vendita, ogni consenso, ogni modifica risulterebbe del
+  programmatore, e per togliere l'accesso a una si dovrebbe cambiare la
+  password all'altro;
+- **una casella sulla sua riga** (`master.supervisore`, e
+  `utenti_app.supervisore` per il giorno in cui servisse a un'utenza
+  d'ufficio). Entra con la **sua** password, resta **sé stessa** — nome,
+  id, attribuzione — e il grado diventa programmatore. Si revoca
+  spegnendo la casella, e quel gesto riguarda lei sola. Migrazione
+  `20261107170000`, accesa su Chiara **per id**.
+
+**E il grado adesso apre anche le tessere.** `apriViewProtetta` e
+`puoAprireVista` aprivano già al programmatore qualunque vista: era solo
+la Home a restare indietro, perché le tessere si leggevano dai permessi
+scritti sulla riga. Funzionava per un motivo che non è una regola — la
+riga `__programmatore` le ha elencate tutte a mano — e si rompeva a ogni
+tessera nuova: `modellefiera` è esistita per mezza giornata senza che
+quella riga la conoscesse. Ora `tastoAbilitato` risponde sì al
+programmatore. **Non** le sono stati copiati i permessi a mano: copiare
+una lista vuol dire ricordarsi di aggiornarla per sempre, e un permesso
+dimenticato non si vede — si vede una tessera che non c'è.
+
+**Cosa le apre, detto per intero**: tutte le aree e ogni vista protetta,
+i conti e gli incassi, Gestione utenti e i permessi degli altri, il
+prezzo a mano sul POS e la cifra «In più €», le impostazioni dei
+consensi, e gli strumenti di impaginazione — rinominare le tessere,
+spostare le sezioni — che valgono **per tutti**.
+
+Prove in `prove/supervisore.test.jsx` (4): entra col suo codice e il
+grado è programmatore mentre nome e id restano i suoi; vede tessere che
+le sue caselle non le darebbero; una master senza la casella resta una
+master; e la colonna si legge davvero dal database — nel Gate le colonne
+si elencano una per una, e `puo_omaggi` era già stato dimenticato una
+volta.
+
+### «Non vede più i prezzi dei corsi»: i permessi si leggono all'accesso (7/11/2026)
+
+Il titolare, dalla fiera: «Olga non vede più i prezzi dei corsi. I
+venditori tutti le devono vedere». Misurato prima di toccare, e sono
+venute fuori **tre** cose diverse.
+
+**Il permesso ce l'aveva già.** `prezzicorsi` era sulla sua riga. Lo
+avevano 18 venditori su 21: i tre senza — Alice Salvitto, Angelica
+Burelli, Tommaso Giumbini — hanno una casella sola in tutto, quindi non
+gliel'ha tolto nessuno, non l'hanno mai avuta. Adesso ce l'hanno tutti e
+21 (migrazione `20261107180000`).
+
+**Allora perché non la vedeva: i permessi si leggevano UNA VOLTA,
+all'accesso**, e restavano scritti nella sessione del browser
+(`sessionStorage.edc_utente`). Una casella data dopo che la persona è
+entrata non compariva finché non usciva e rientrava — e nessuno pensa di
+doverlo fare. **Risolto lo stesso giorno**, dopo che lo stesso difetto è
+costato una seconda segnalazione nella stessa ora («Chiara non può
+ancora fare gli omaggi»: il grado di supervisore acceso mentre lei era
+dentro): vedi «Permessi e grado si rileggono all'apertura» qui sotto.
+
+**E la cosa più grave, trovata di fianco: Olga non poteva aprire il
+POS.** Le quattro master del banco (Chiara, Elia, Stella, Valentina)
+hanno `pos`; le quattro righe **venditore** del banco — Andrea, Elena,
+Olga, Stefano — no. Non si era visto perché entrando con la password
+venditore si eredita anche i permessi della master collegata, e Andrea la
+ha; Elena e Stefano entrano da un'utenza d'ufficio. **Olga non ha
+nessun'altra identità**: con la sua password la tessera POS non c'era —
+cioè la persona per cui il giorno prima si era scritta la preselezione
+del banco non poteva aprire il banco. Acceso sulle quattro righe
+venditore, ricavate dal team della fiera e non da una lista di nomi.
+
+È la stessa lezione del giorno prima, da un'altra parte: **la tessera
+segue la password che si batte**, e la stessa persona ha due o tre
+identità. Un permesso dato all'identità sbagliata è un permesso che non
+c'è.
+
+### Il POS fisico al banco, e la cifra scritta a mano (7/11/2026)
+
+Due richieste dello stesso momento, con la fiera di Napoli aperta.
+
+**«Anche il POS fisico, che non è necessariamente carta Stripe».** La
+scelta fra «POS fisico» e «Stripe» esisteva solo per chi
+amministra, perché il terminale sta in amministrazione. Ma a una fiera il
+terminale lo si porta al banco, e senza quella scelta chi vende aveva una
+strada sola — il QR — che davanti a una cliente che porge la carta non è
+una strada. Ora la vede anche **chi ha la preselezione del banco**: non
+una lista di nomi, ma chi il database dice che vende al banco di quella
+fiera (`eventi_team.vende_al_banco`) e finché l'ora del banco non è
+passata. Si accende e si spegne con la fiera, da sé.
+
+**Resta una dichiarazione, non una prova**, e per questo non diventa la
+scelta di partenza: col terminale la vendita si registra senza che
+nessuno abbia visto i soldi arrivare — il database la accetta solo perché
+quel segno c'è (`terminale_fisico`), e resta scritto sulla vendita. Il
+banco si apre sul QR, che è l'unica carta che si prova, e si passa al
+terminale quando lo si usa.
+
+**E dal 7/11/2026 sera sono QUATTRO TASTI, non due e poi altri due.** Il
+titolare, dalla fiera: «non è necessario selezionare prima pagamento con
+carta e poi il tasto Stripe o POS esterno. Ci vogliono 4 tasti separati, 2
+sopra e 2 sotto: sopra «Stripe» e «POS fisico», sotto «Contanti» e
+«Buono Amazon».» Era la seconda segnalazione sullo stesso tasto in
+mezza giornata — «non vedo il tasto POS fisico» — e la prima volta la
+risposta era stata sbagliata: il tasto c'era, ma **stava dentro il
+riquadro che si apre scegliendo la carta**, cioè dietro a un gesto che
+non fa chi non sa che dietro c'è qualcosa. Una scelta annidata la trova
+solo chi già sa che esiste.
+
+Ora i quattro stanno in una griglia 2×2 (`gridTemplateColumns: "1fr 1fr"`)
+e ognuno si preme una volta sola. **Dove il terminale non c'è il tasto non
+c'è**, e gli altri tre scorrono a riempire la griglia: un tasto che non
+si può premere è un dubbio, non una scelta. Due cose da sapere:
+
+- **Stripe e POS fisico restano tutti e due «POS»** per la vendita, per
+  l'IVA e per i punti: `metodoPagamento` resta `pos` e `modoIncassoPos`
+  dice quale dei due. Sono due tasti perché al banco sono due gesti
+  diversi, non due metodi di pagamento — e cambia una cosa sola, che il
+  QR il pagamento lo **prova** e il terminale lo **dichiara**.
+- **Il carrello sospeso adesso porta anche QUALE carta** (`modoIncassoPos`
+  nella fotografia). Prima non serviva, perché era un dettaglio dentro
+  «carta»; da quando è un tasto, un carrello ripreso che tornasse sul QR
+  farebbe ricominciare da capo un incasso già battuto sul terminale. Si
+  ripristina **solo a chi il terminale ce l'ha**: ripreso dall'ufficio,
+  un carrello della fiera mostrerebbe quattro tasti e nessuno scelto, e
+  manderebbe `terminale_fisico` su una vendita che nessuno ha battuto.
+
+Il nome a video è **«POS fisico»** — quello che dice il titolare — e con
+esso i due messaggi del QR fallito. Dentro, `terminale_fisico` e
+`modoIncassoPos === "esterno"` non sono stati rinominati: li guarda il
+database, e un rinominare cosmetico su una serratura non si fa.
+
+**«È meglio che scrivo una cifra io da scontare: se vedo che il prezzo fa
+7,56 e voglio fare 6,90, scrivo a mano meno 60 euro».** Serve ad
+arrotondare il totale, e per questo è una casella **a parte** — «In più
+€», nel riquadro degli sconti, solo per il programmatore — e non lo
+«Sconto vendita» che c'era già: quello è *alternativo* allo sconto fiera
+e ai codici (uno o l'altro, mai sommati, e con la fiera accesa è spento).
+Questa invece **si somma** a quello che sta valendo, che è esattamente
+la cosa che le altre caselle hanno il divieto di fare. Appena si scrive
+la cifra, accanto compare quanto si incassa: cercare una cifra tonda
+contando a mente davanti al cliente è il modo di sbagliarla.
+
+Tre cose decise lì dentro:
+
+- **Il tetto al subtotale resta.** Un carrello non si sconta più di
+  quanto vale: oltre, il totale si ferma a zero e la riga lo dice.
+- **Resta scritta sulla vendita** (`vendite_shop.sconto_a_mano_eur`,
+  migrazione `20261107160000`). Senza, in archivio resterebbe solo un
+  totale più basso di quello che le tabelle dicono, e nessuno saprebbe
+  che un pezzo di quello sconto non viene da nessuna tabella ma da una
+  decisione presa al banco. Chi ha battuto è già scritto; questo dice
+  quanto ha tolto di suo. Nota tecnica: `registra_vendita_pos` costruisce
+  la riga con `jsonb_populate_record`, che **ignora** le chiavi che non
+  sono colonne — senza la migrazione il numero non avrebbe fatto fallire
+  niente, si sarebbe perso in silenzio.
+- **Le percentuali attribuite non la contano.** Le frasi «Codice valido:
+  −x%», «Fasce degli eventi: x% su questo carrello», «Sconto del corso
+  applicato: −x%» dicono quanto ha fatto *quella* cosa, e ora leggono
+  `percentualeDaTabelle` (sconto **meno** la cifra a mano). Sommandoci gli
+  euro tolti da una persona, una fascia del 12% comparirebbe come 13,8 e
+  un codice al 30% come 34: vero sul carrello, falso sul cartellino — lo
+  stesso guasto del «−4,81%» su un carrello che ne riceveva 8,55. Le
+  righe del carrello invece la contano, perché lì il numero è quello che
+  la cliente paga: con 0,66 a mano la riga passa da 32,21 a 31,55 e il
+  totale torna.
+
+La cifra **si azzera a ogni vendita nuova** (un arrotondamento che resta
+acceso si ripete sullo scontrino dopo, e nessuno lo vede) e **sta nella
+fotografia del carrello sospeso**, come lo sconto fiera: ripreso il
+carrello, il totale concordato col cliente deve essere ancora quello.
+
+**E il prezzo scritto a mano su una riga è il prezzo FINALE** (deciso lo
+stesso giorno: «il prezzo che posso correggere è anche il prezzo finale,
+quello dopo un eventuale sconto»). Prima quella cifra era il nuovo *punto
+di partenza* e lo sconto si applicava sopra: scritto 30,00, con il 12%
+della fiera si incassavano 26,40 — e chi aveva concordato trenta euro al
+banco ne incassava ventisei senza averlo deciso. Misurato, c'era di
+peggio: la fascia si scegli sul margine dell'**anagrafica** (listino meno
+costo), non sul prezzo scritto, quindi la percentuale non si abbassava
+mai. Su un pigmento che costa 10, scritto 13,00, la cliente pagava 11,44
+— **9,38 netti, sotto costo**, e niente lo diceva.
+
+Ora una riga con un prezzo concordato esce dallo sconto delle tabelle e
+lo dice («prezzo concordato, non si sconta»); il resto del carrello
+continua a scontarsi, e il tasto ↺ rimette il listino e con esso lo
+sconto. Si riconosce da `prezzoListino`, che la correzione scrive sulla
+riga, e sulla vendita resta `prezzo_corretto_a_mano`.
+
+**La terza copia dello stesso conto, e come si è fatta sentire.** Il
+totale del carrello lo calcolavano tre funzioni «di carrello»
+(`scontoAFasceCarrello`, `scontoCouponCarrello`,
+`scontoAcquistoMasterCarrello`) con la stessa formula che
+`scontiPerRigaCarrello` applica riga per riga. Finché le due dicevano lo
+stesso numero non si vedeva; appena una riga ha smesso di scontarsi, il
+totale ha continuato a scontarla e **il riproporzionamento le ha
+ributtato addosso la differenza** — cioè il prezzo «finale» tornava a non
+essere finale. L'ha preso il banco di prova al primo giro, non l'uso.
+Adesso **il totale è la somma delle righe**: `scontiPerRigaCarrello` con
+`scontoApplicato: null` restituisce il conto naturale, e da lì esce il
+totale. Le tre funzioni restano, usate una riga alla volta.
+
+E i centesimi di resto dell'arrotondamento **non vanno su una riga
+concordata**: vanno sull'ultima riga che può prenderseli. Se sono
+concordate tutte restano sull'ultima, perché l'alternativa è che le righe
+non sommino quello che si incassa — e un totale che non torna con le sue
+righe è peggio.
+
+**La quarta copia, e una che resta.** `contoCarrello` — l'elenco dei
+carrelli sospesi, e il dettaglio che chi amministra legge mentre chiude
+il carrello di un altro — rifà il conto per conto suo: lì la riga col
+prezzo concordato è stata allineata, altrimenti mostrava uno sconto che
+quella riga non prenderà. **Resta però fuori la cifra «In più €»**: un
+carrello sospeso la porta nella sua fotografia, ma quella tabella non la
+conosce, quindi per quel carrello mostra un totale più alto di quello che
+si incasserà. È informativa e non registra niente, ma va saputo — e va
+sistemato.
+
+**Controllate le vendite al banco in archivio** (7/11/2026): le righe
+sommano il totale su tutte, comprese le sette della fiera di oggi.
+L'unico scarto è POS-1793740596726 del 3/11 — righe per 382,01 e totale
+348,12 — ed è giusto: era un **acquisto personale** di una master che ha
+speso 33,89 di provvigioni maturate. La merce vale 382,01, in cassa sono
+entrati 348,12, il resto l'hanno pagato le provvigioni. Il riquadro dei
+conti ha la sua riga «Provvigioni usate» apposta; sulla vendita però quel
+numero **non è scritto**, e si ricava solo dalla differenza: è una cosa
+da sapere quando si controlla un totale.
+
+Prove in `prove/pos-fiera-terminale-e-sconto-a-mano.test.jsx` (11): il
+terminale c'è per chi sta al banco e non per gli altri, si spegne passata
+l'ora, il banco si apre sul QR, **si scegli con un tocco e non con due**
+(e quel tocco toglie di mezzo il QR); la cifra a mano la vede solo il
+programmatore, si somma allo sconto fiera, trascina le righe del
+carrello e non sfonda il subtotale. In
+`prove/pos-incasso-carta.test.jsx` c'è anche il guardiano della forma
+vecchia: «Tipo di incasso carta» non deve ricomparire.
+
+### Il pagamento splittato: contanti più carta, con due sconti (7/11/2026)
+
+Il titolare, dalla fiera: «sotto al totale ci devono essere due tasti,
+modalità di pagamento in unica soluzione o splittato. Se scrivi splittato
+ti dà due caselle: nella prima ci scrivi quanto paga in contanti, e in
+quella sotto, in base a quanto hai scritto, viene riportato l'importo
+rimanente con lo sconto aggiornato per la parte residua con POS fisico o
+Stripe.» E, subito dopo: «per ora questa funzionalità la aggiorni solo
+sul POS programmatore e sul POS Chiara.»
+
+**Perché non è una sottrazione, ed è tutto il punto.** In contanti e a
+carta lo sconto non è lo stesso: alla fiera di Napoli le due serie dicono
+**4/6/10/13/14/15% la carta** e **6/8/12/14/16/20% il contante**, secondo
+il margine del prodotto. Quindi un carrello pagato metà e metà non ha un
+prezzo solo da spezzare: ha due prezzi, e bisogna decidere quale vale su
+quale parte. Sui tre conti possibili ha scelto il titolare:
+
+> **Il contante compra merce.** I 40 € in contanti comprano 50 € di merce
+> allo sconto dei contanti; i 50 € di merce che restano si pagano a carta
+> con lo sconto della carta. Su 100 € di merce (80 tutto contanti, 85
+> tutto carta) si incassano **82,50**.
+
+Le due prove che è il conto giusto, e sono anche due prove del banco:
+dando **tutto** in contanti si torna esattamente al totale «tutto
+contanti», dando **zero** a quello «tutto carta». Nessun salto, e nessun
+vantaggio inventato in mezzo. Gli altri due conti li ha scartati: scontare
+tutto come contanti vorrebbe dire che un euro in contanti vale come darli
+tutti; scontare tutto come carta vorrebbe dire che pagare in contanti non
+serve a niente.
+
+**Il conto sta in `contoSplittato`, e le righe in
+`scontiPerRigaSplittati`.** Ogni riga prende la sua fetta di sconto
+contanti e la sua fetta di sconto carta, nella stessa proporzione in cui
+il carrello è stato pagato: così la somma delle righe fa lo sconto del
+totale senza che nessuno debba fidarsi, e il **margine per prodotto**
+resta vero nelle statistiche. Il riproporzionamento dei centesimi è
+uscito da `scontiPerRigaCarrello` (`riproporzionaSconti`) ed è lo stesso
+per tutti e due i conti: due copie si staccherebbero il giorno che una
+impara qualcosa, e le righe smetterebbero di sommare quello che si
+incassa. Per la stessa ragione le **tabelle** sono una funzione del metodo
+(`fasceDelPagamento(inContanti)`) e non due costanti: lo stesso conto
+letto due volte.
+
+**In archivio è una vendita sola con due importi** (deciso dal titolare
+fra le due strade). `metodo_pagamento = 'misto'`, più
+`incasso_contanti_eur` e `incasso_carta_eur` (migrazione
+`20261107200000`). Lo scontrino è uno, il numero d'ordine è uno, il
+magazzino si scarica una volta; spezzarla in due vendite avrebbe voluto
+dire spezzare le righe dei prodotti — mezzo pigmento su una e mezzo
+sull'altra — e due scontrini per un acquisto solo.
+
+Due vincoli nel database, perché qui una bugia non si vedrebbe:
+**una vendita mista deve portare i due importi** (una chiave sbagliata nel
+payload e `jsonb_populate_record` la ignora in silenzio: resterebbero zero
+in tutte e due le casse) e **i due importi devono fare il totale**. E la
+**prova del pagamento** vale adesso anche sulla parte a carta: senza,
+lo splittato sarebbe diventato la strada per registrare una carta non
+provata — bastava scrivere un euro di contanti. Il pagamento col QR deve
+corrispondere al **resto**, non al totale, ed è il resto che il QR chiede.
+Provati in transazione annullata tutti e sette i casi: misto senza prova
+rifiutato, misto sul terminale registrato, somma sbagliata rifiutata,
+misto senza i due importi rifiutato, misto con la carta a zero registrato,
+e le vendite normali a carta e in contanti esattamente come prima.
+
+**Chi legge quei due numeri.** `incassoContantiDi(v)` e
+`incassoCartaDi(v)` (più `incassaContanti(metodo)`) stanno in un posto
+solo, e su ogni vendita che non è mista tornano **esattamente** il numero
+che l'app leggeva prima: è il modo di insegnare lo splittato alla
+contabilità senza rimettere mano a 4.398 vendite in archivio. Da lì
+passano la busta della classe (ci entra la parte in contanti, e la vendita
+prende il suo numero di busta), le appendici, la cassa contanti, le
+vendite del corso divise per cassa, l'avviso prima di cestinare, lo
+sgancio dalla busta, e il «come hanno pagato» del conto evento e del
+Dettaglio vendite — dove una vendita mista si **divide fra le due voci**,
+perché «misto» non è un modo di pagare.
+
+**I punti di una vendita mista si contano come carta**, ed è voluto: la
+vista `v_punti_master_righe` decide `e_cash` con
+`metodo_pagamento in ('contanti','buono_amazon')`, quindi «misto» per lei
+è carta — e il POS mostra lo stesso numero. La master prende qualche punto
+in meno di quanti le darebbe la fetta in contanti; vale la regola di
+sempre, **la vista comanda**, e due conti diversi sugli stessi punti
+sarebbero peggio. Il riquadro dei totali e la dashboard dicono la stessa
+cifra.
+
+**E in splittato le due righe del «netto scontato» non si mostrano**: con
+un codice sul netto quei due pezzi facevano la riga «Imponibile», che in
+una vendita mista si calcola in un altro modo — due numeri veri che
+insieme direbbero una cosa falsa.
+
+**L'IVA sta solo sulla parte a carta.** Il contante senza fattura non
+genera imposta: è la convenzione di tutta l'app, non una regola nuova.
+Quindi su una vendita mista l'imponibile è il contante per intero più il
+netto del resto; scorporarla su tutto dichiarerebbe un'imposta che nessuno
+verserà.
+
+**Dove lo splittato NON si può fare, e non è una dimenticanza:** con la
+**fattura** (una fattura si emette su un incasso solo, e cosa ci va dentro
+di una vendita mista è una decisione, non un calcolo), con l'**omaggio**
+(non incassa niente) e con l'**acquisto personale** (lì una parte la
+pagano le provvigioni maturate e i soldi in gioco sono tre). Al posto del
+tasto spento c'è la ragione scritta. E una vendita mista **non si
+rietichetta** dalla colonna Incasso di Vendite al banco, come una pagata
+con Stripe: i due importi resterebbero a dire un'altra cosa.
+
+**Chi ce l'ha:** `ruoloUtente === "programmatore"`, che vuol dire il
+titolare e **Chiara** — il grado di supervisore la porta a programmatore,
+quindi non è servito nessun permesso nuovo. La cifra in contanti **si
+azzera a ogni vendita nuova** (un contante rimasto scritto finirebbe sulla
+cliente dopo) e **sta nella fotografia del carrello sospeso**: ripreso il
+carrello, al cliente si chiede lo stesso resto che gli era stato detto.
+
+Prove in `prove/pagamento-splittato.test.jsx` (16): il conto e i suoi due
+estremi, il tetto, la cifra a mano che si toglie dal resto, le righe che
+sommano **esattamente** lo sconto del carrello con percentuali in mezzo
+alle due, le due casse in archivio (compreso un reso che esce da tutte e
+due in proporzione), e il gesto col POS vero montato — i due tasti solo al
+programmatore, le due caselle, il resto che compare, il QR che chiede
+21,73 invece di 32,21, e il contante che copre tutto.
+
+### «Non vedo più i prezzi corso»: era una cartella (7/11/2026, sera)
+
+Terza volta nello stesso giorno che torna la stessa frase, e le prime due
+risposte — giuste entrambe — non erano **la** risposta:
+
+1. al mattino «Olga non vede più i prezzi dei corsi» → il permesso ce
+   l'aveva; `prezzicorsi` è stato acceso su tutti e 21 i venditori
+   (`20261107180000`);
+2. subito dopo → i permessi si leggevano una volta sola, all'accesso: una
+   casella data a chi è già dentro non compariva. Corretto («Permessi e
+   grado si rileggono all'apertura»);
+3. la sera, ancora. **E il motivo era in Home**: `prezzicorsi` non è una
+   tessera di primo livello, sta **dentro la cartella «Storico allievi»**
+   (`impostazioni_layout_tasti`, pagina `home`, creata il 2/10/2026) con
+   `crmallievi` e `storicoallievi`. Chi vende al banco — Olga, Andrea,
+   Stefano, Elena, Elia — ha il permesso **solo** di quella: in Home
+   vedevano una cartella chiamata «Storico allievi» che conteneva una cosa
+   sola, i prezzi dei corsi. Nessuno la apre cercando un prezzo.
+
+**La regola che ne resta: una tessera dentro una cartella il cui nome dice
+un'altra cosa è una tessera che non esiste.** La cartella funzionava come
+scritto — si nasconde solo se dentro non ha niente di visibile, e mostra il
+conto delle tessere visibili — quindi non c'era nessun difetto da trovare
+nel codice, e cercarlo lì è costato due diagnosi. Quando qualcuno dice «non
+vedo più X» e il permesso c'è, **si guarda l'ordine dei tasti di quella
+pagina prima del codice**: `impostazioni_layout_tasti` può averlo infilato
+in una cartella, e la cartella la vede diversa ogni persona, perché dentro
+ci resta solo quello a cui ha diritto.
+
+Deciso dal titolare la sera stessa: `prezzicorsi` **tirata fuori in Home**,
+subito dopo la cartella, che resta con CRM e Storico allievi. È un dato
+(nessuna pubblicazione), e si vede al ricarico della pagina.
+
+### I carrelli sospesi sparivano, e nessuno poteva saperlo (7/11/2026, sera)
+
+Dalla fiera, col banco aperto: «stanno sparendo i carrelli memorizzati, tra
+cui uno molto importante di Ingrid che superava i 1200 euro». Vero, e la
+causa non era una cancellazione.
+
+**Com'è fatta quella lista, che è l'origine di tutto.** I carrelli sospesi
+non hanno una tabella: stanno tutti dentro **una riga** di
+`impostazioni_layout_tabelle` (chiave `pos_carrelliSospesi`), riscritta per
+intero a ogni salvataggio da qualunque dispositivo. Per questo esiste la
+fusione (`LISTE_DA_FONDERE`): prima di scrivere si rilegge il database e si
+uniscono le due liste per id, così nessuno cancella il carrello di un
+altro. Due difetti la scavalcavano, e si sommavano:
+
+- **una rilettura fallita cancellava i carrelli degli altri.** Era scritta
+  `try { const { data } = await … } catch { … }`, ma **il client di Supabase
+  non lancia niente** quando una richiesta va storta: restituisce
+  `{ data: null, error }`. Quindi il `catch` non è mai scattato, e un errore
+  di lettura — la rete di una fiera, un 401, il server che tossisce —
+  arrivava alla fusione come «di là non c'è niente»: si scriveva la copia di
+  quel dispositivo, e i carrelli salvati dagli altri telefoni sparivano.
+  Ora una lettura che non riesce **ferma la scrittura** e la rimette in coda
+  (`riprovaInvioCondiviso`, cinque tentativi a passo crescente): meglio un
+  carrello che arriva al server in ritardo che quelli degli altri cancellati
+  subito;
+- **«salvato» si diceva prima di saperlo.** Il messaggio compariva
+  all'istante, la scrittura partiva 600 ms dopo e, se non riusciva, finiva in
+  un `console.warn`. Al banco si svuotava il carrello fidandosi di quella
+  riga, e il carrello viveva **solo su quel telefono**: alla prima ricarica
+  della pagina non c'era più — e il 7/11 ce ne sono state tre, una per
+  pubblicazione. Ora `sorvegliaSalvataggioSospeso` aspetta l'esito, dice
+  «è salvato su QUESTO dispositivo ma non è arrivato al server, non
+  ricaricare la pagina», e quando la riprova riesce lo dice anche: un avviso
+  rosso che resta acceso dopo che il problema è passato si impara a ignorare.
+
+E la rilettura automatica non si prende più indietro la copia locale
+**mentre una scrittura di quella copia è in viaggio** (`LAYOUT_INVII`
+accanto a `LAYOUT_TIMER`): la risposta del database è vecchia per
+definizione, e sovrascrivere vorrebbe dire cancellare dal telefono l'unica
+copia che esiste.
+
+**Perché non si è potuto ripescare quello di Ingrid.** Quella riga non ha
+mai avuto storico, e un carrello sospeso **non muove il magazzino** (i pezzi
+sono promessi, non scaricati): nessuna riga cancellata, nessun movimento,
+nessun log. Non restava niente da cui risalire — l'unica copia era nel
+telefono di chi l'aveva salvato, e si distrugge appena l'app torna in
+primo piano e rilegge il database. Da oggi c'è
+**`carrelli_sospesi_storico`** (migrazione `20261107213000`, trigger su
+`impostazioni_layout_tabelle`): ogni versione della lista, con quanti
+carrelli aveva prima e dopo e **gli id spariti** in una colonna sua. Si
+archivia solo quella chiave — le altre sono impaginazioni, e perderne una
+non costa niente. Il trigger nomina `old` **solo dentro un ramo che gira
+per forza su un UPDATE**: su un INSERT quella variabile non è assegnata e
+nominarla farebbe fallire la scrittura, cioè rifiutare una chiave nuova di
+quella tabella per colpa di un archivio.
+
+**Resta da fare, e va deciso:** i carrelli sospesi meritano una tabella
+propria, una riga per carrello. Finché sono un unico JSON riscritto per
+intero, ogni salvataggio è l'occasione di cancellare il lavoro di un altro
+— adesso ci sono tre difese e uno storico, ma la forma è quella sbagliata.
+E nell'app non c'è ancora un posto da cui **ripescare** un carrello dallo
+storico: oggi si fa con una query.
+
+Prove in `prove/carrelli-sospesi-non-si-perdono.test.js` (8): la fusione
+tiene il carrello di un altro telefono, toglie solo quello che questo
+dispositivo ha davvero buttato, e la lettura fallita **non scrive niente** —
+era esattamente così che sparivano.
+
+### Si iscrive anche chi vive in Svizzera (7/11/2026, sera)
+
+Il titolare: «estendi la possibilità di iscrivere clienti dalla
+Svizzera, quindi il modulo di iscrizione deve recuperare anche città,
+province e cap svizzeri, e anche lo Stato deve essere selezionabile».
+
+**Com'era.** La cascata della residenza — stato → regione → provincia →
+comune → CAP — valeva per l'Italia e basta. Fuori Italia si premeva
+«Altro stato» e si tornava a **tre caselle di scrittura libera**, cioè
+esattamente la cosa da cui quella cascata esisteva per scappare: dai
+moduli a mano libera erano arrivati «Vollw» per Volla, «Rome» e il CAP
+«148» senza lo zero davanti. Chi vive a Sion rientrava lì.
+
+**Gli elenchi stanno per Stato, e la cascata è una sola.** Il pezzo
+nuovo è `src/iscrizione/residenza.js`: `elencoResidenza(stato)`
+restituisce chi fornisce regioni, province, comuni e codici postali di
+quel paese, e i due posti che scendono per gradini — la scheda del
+venditore (`AreeAnagrafiche.jsx`) e il modulo dell'allieva
+(`PaginaModulo.jsx`) — non sanno di che paese stiano disegnando. Un
+`if (svizzera)` avrebbe voluto dire due rami per paese in due file, e
+il giorno della Francia sei rami con la certezza che uno si dimentica.
+
+**I dati svizzeri** sono in `src/comuni-svizzera.js`: **26 cantoni e
+4.141 località con i loro NPA**, 85 KB nel bundle come i 7.904 comuni
+italiani — la residenza si compila senza chiamate di rete, anche col
+telefono senza campo. Si rigenera con
+`node genera-comuni-svizzera.mjs`, che interroga **OpenPLZ API**
+(openplzapi.org), la quale pubblica l'«Amtliches
+Ortschaftenverzeichnis» di swisstopo. Non si legge swisstopo
+direttamente perché il suo file ufficiale è uno zip, e Node non apre
+uno zip senza una dipendenza.
+
+Tre cose decise lì dentro, e ognuna per un motivo:
+
+- **sopra il cantone non c'è niente.** In Italia la regione serve a
+  tagliare 107 province in gruppi scorribili; i cantoni sono ventisei e
+  stanno in una tendina sola. Quindi l'elenco dichiara `conRegione`, e
+  in Svizzera la casella «Regione» dice «—» invece di chiedere una cosa
+  che non esiste;
+- **le etichette dicono il vero**: Cantone, Località e **NPA**, che è il
+  nome del codice postale svizzero ed è quello scritto sulla busta.
+  Valgono anche sulle righe bloccate del modulo, o un cantone
+  comparirebbe sotto l'etichetta «Provincia». Le frasi delle tendine
+  stanno **scritte** e non composte dall'etichetta: «— scegli l'NPA —»
+  non si ricava senza indovinare un articolo, e un articolo indovinato
+  si vede;
+- **i nomi dei cantoni restano quelli della fonte**, bilingui dove lo
+  sono («Valais / Wallis», «Graubünden / Grigioni / Grischun»), con la
+  sigla accanto. «Svitto» e «Sciaffusa» sono italiano corretto e non li
+  riconosce nessuno, e sulla busta c'è scritto l'altro: tradurli
+  vorrebbe dire inventare un dato che la fonte non ha.
+
+**Lo Stato ADESSO SI SCEGLIE, in tutti e due i posti.** Nella scheda
+erano due voci — Italia e «Altro stato» — e il nome del paese si
+batteva a mano: «SVIZERA» e «Svizzera» sono due paesi diversi per
+chiunque debba contare. Ora la tendina porta Italia e Svizzera (quelle
+con l'elenco), poi gli altri 230 Stati della lista ISTAT — la stessa
+dello stato di nascita — e in coda «Altro stato», che apre la scrittura
+libera **solo** per quello che in quella lista non c'è. Il modulo usa
+la stessa lista e **la stessa scrittura in maiuscolo**: prima scriveva
+«Svizzera» e la scheda «SVIZZERA», cioè due forme della stessa cosa in
+archivio. Nel modulo la voce «Altro stato» non c'è, perché di là non
+esiste una casella accanto in cui scrivere il nome, e una voce che apre
+il vuoto è peggio di una voce che manca. Uno Stato che in archivio c'è
+e nella lista non c'è **resta in coda marcato**: una tendina che mostra
+il vuoto si spedisce senza accorgersene.
+
+**E nel modulo l'allieva scegli anche il cantone.** Di qua la provincia
+era una casella libera e la cascata partiva dal comune già scritto dal
+venditore; per una svizzera che compila da zero non ci sarebbe stato
+modo di arrivare alla propria località. Ora **dove sopra la provincia
+non c'è niente** quella casella diventa una tendina — i ventisei
+cantoni — e da lì scendono località e NPA. In Italia resta com'era: 107
+province senza il gradino della regione sarebbero un elenco da scorrere
+a vuoto, e quella casella la riempie quasi sempre il venditore.
+
+**Cambiare paese cancella la sigla e il codice postale, non la città.**
+Una sigla italiana sotto un indirizzo svizzero non vuol dire niente, e
+un NPA sotto un indirizzo italiano nemmeno; un nome di città invece è
+un nome, e se di là non esiste si vede marcato «fuori elenco» invece di
+sparire senza dirlo. E **si guarda l'elenco, non il nome dello Stato**:
+253 schede su 260 hanno la residenza italiana e lo Stato mai scritto,
+quindi la casella vuota vale Italia — se passare dal vuoto a «Italia»
+contasse come un cambio di paese, chi non ha fatto altro che dichiarare
+l'ovvio cancellerebbe la residenza di quella persona.
+
+**Un normalizzatore solo.** `normalizzaNome` era scritto due volte,
+identico, in `AreeAnagrafiche.jsx` e in `comuni-regioni.js`: adesso è
+uno (`normalizzaLuogo`, esportato di là e riesportato di qua). Due idee
+di «stesso nome» un giorno si staccano, e quel giorno un comune che in
+archivio c'è non si riconosce più nell'elenco.
+
+**E LO STATO E' LA PRIMA CASELLA DI LUOGO CHE SI INCONTRA** (7/11/2026,
+provando a iscrivere un allievo: «la selezione dello stato deve essere
+la prima cosa che trovi in lista, altrimenti, trovando per prima la riga
+della città, il risultato sarà sempre sbagliato»). Era una regola
+mancante in due punti, e in entrambi il danno era lo stesso: chi compila
+riempie dall'alto in basso, e una casella di luogo incontrata prima
+dello Stato si riempie col paese sbagliato.
+
+- nella **nascita** il «Comune» stava prima dello «Stato»: lo si cercava
+  nell'elenco italiano — dove il paese di chi è nato a Sion non c'è — e
+  solo dopo si trovava lo Stato. Che, scelto estero, **cancella il
+  comune appena scritto**, perché un comune italiano sotto una nascita
+  svizzera non vuol dire niente. Ora lo Stato viene prima e la casella
+  del comune si spegne da sé — e il codice fiscale, che da quel comune
+  si calcola, non nasce più da un dato da rifare;
+- nella **residenza** la «Via» stava sopra lo Stato: si scriveva la via,
+  il suggerimento portava con sé comune, provincia e CAP presi
+  dall'elenco italiano **e scriveva «ITALIA» nello Stato**, e solo dopo
+  si arrivava alla tendina. Per un allievo svizzero il risultato era
+  sbagliato prima di cominciare. Ora la cascata è intera e in ordine —
+  Stato → Regione/Cantone → Provincia → Comune/Località → CAP/NPA — e
+  **la via viene per ultima**: l'indirizzo si legge dall'alto in basso
+  come si scrive su una busta, e non si perde il «un tocco invece di
+  cinque», perché la proposta riempie ancora quello che è vuoto e con il
+  comune già scelto la ricerca si restringe a lui.
+
+L'ordine è una riga di `disposizione.js`, quindi vale **insieme** nella
+scheda del venditore, nel modulo dell'allieva e in Impostazioni → Modulo
+di iscrizione. Una prova lo blocca confrontando la posizione delle
+caselle nella pagina: senza, il giorno che qualcuno rimette la città
+davanti non se ne accorge nessuno finché non arriva un altro allievo
+straniero.
+
+**UN ELENCO LUNGO SI CERCA, NON SI SCORRE** (7/11/2026, provandola:
+«metti la barra di ricerca dove posso scrivere almeno qualche lettera,
+per non farmi scorrere tutta la lista»). Gli Stati sono 232 e stavano in
+una tendina sola: sul telefono, per arrivare al Portogallo si scorreva
+fino in fondo. `CampoCerca.jsx` e' la stessa casella del comune di
+nascita con una differenza che e' tutta: **li' quello che si scrive e'
+il valore, qui e' solo un filtro**. L'elenco resta CHIUSO — finche' non
+si tocca una voce non si e' scelto niente, e «SVIZERA» battuto a mano
+non diventa un paese. Si cerca come si scrive (ogni parola e' l'inizio
+di una parola del nome: «arab sa» trova Arabia Saudita), si mostrano
+dodici voci e **si dice che ce ne sono altre** — dodici righe su
+duecentotrentadue sembrano l'elenco intero, e chi non trova il suo paese
+crede che non ci sia. Vale per lo Stato di residenza e per quello di
+nascita, nella scheda e nel modulo.
+
+**«Identificativo fiscale personale (TIN)»** (7/11/2026, dicitura
+dettata dal titolare). Da quando si iscrive anche chi vive in Svizzera,
+«Codice fiscale» era il nome di una cosa sola fra le tante che quella
+casella puo' contenere. Ma la dicitura da sola sarebbe stata una
+bugia: sotto c'erano i **sedici caratteri obbligati**, il filtro che
+tiene solo lettere e numeri — e quindi mangia i punti dell'AHV svizzero,
+che si scrive `756.1234.5678.97` — l'avviso «mancano quattro caratteri»
+addosso a chi aveva scritto il numero giusto, e il **calcolo automatico**
+che avrebbe proposto un codice italiano a una svizzera. Ora tutte e
+quattro quelle regole valgono **solo per chi risiede in Italia**
+(`campoFiscale` in residenza.js, un posto solo per scheda e modulo);
+fuori si scrive quello che c'e' sul documento e nessuno lo corregge.
+L'avviso dei sedici caratteri nomina «il codice fiscale» e non
+l'etichetta intera (`nomeAvviso`): esce solo per chi risiede in Italia,
+dove quella cosa si chiama cosi'.
+
+**E I PUNTI DELL'AVS LI METTE LA CASELLA** (8/11/2026, chiesto dal
+titolare provando l'inserimento: «mentre scrivi non appaiono i punti
+automaticamente, che sarebbe perfetto»). Si battono le sole cifre e
+`756.1234.5678.97` si compone da se', cifra dopo cifra; sul telefono
+esce il tastierino numerico.
+
+**Quel numero non si puo' CALCOLARE, e non e' una mancanza**: dal 1°
+luglio 2008 l'AVS e' *non significativo* — `756` (la Svizzera) + nove
+cifre **estratte a caso** + una cifra di controllo EAN-13 — e dentro non
+c'e' niente della persona, apposta, perche' il vecchio numero conteneva
+data di nascita e sesso. Il codice fiscale italiano si calcola perche'
+*contiene* nome, sesso, data e comune; l'AVS lo assegna la Centrale di
+compensazione e si copia dalla tessera. L'unica automazione possibile su
+di lui e' il **controllo** della cifra finale, che prenderebbe una cifra
+invertita o saltata: offerta al titolare, **non ancora chiesta**.
+
+La formattazione sta in `formattaFiscale(testo, campo)` (residenza.js),
+che e' l'unico posto in cui si decide cosa fa quella casella mentre si
+scrive: la chiamano sia la scheda del venditore sia il modulo
+dell'allieva, perche' due copie vorrebbero dire un numero accettato di
+qua e rifiutato di la', sullo stesso documento. Il paese viaggia col
+campo (`paeseFiscale`, scritto da `campoFiscale`). Due regole, e sono
+tutte e due protezioni: **se c'e' una lettera non si tocca niente** (un
+italiano che vive a Lugano in quella casella ci scrive il suo codice
+fiscale, e levargli le lettere per fare spazio ai punti sarebbe, al
+contrario, il guasto da cui veniamo) e **si raggruppa solo cio' che sta
+diventando un AVS**, cioe' le cifre che cominciano per 756. Un punto non
+si appiccica mai in coda a un gruppo finito: con «756.» gia' scritto il
+tasto cancella toglierebbe il punto, la formattazione lo rimetterebbe, e
+la casella sembrerebbe inchiodata. Prove in
+`prove/residenza-svizzera.test.jsx`, dove si batte una cifra alla volta.
+
+### Il prefisso telefonico si sceglie, e parte dalla residenza (8/11/2026)
+
+Il titolare, subito dopo la residenza svizzera: «il prefisso telefonico
+internazionale adesso e' scritto sulla casella nel testo +39, e in
+futuro va selezionato da una tendina che ti propone come priorita'
+quelli dello stato di residenza che hai appena inserito, e che in ogni
+modo ti da' l'opportunita' di cambiarlo».
+
+Era una scritta fissa in due posti — l'etichetta «Cellulare (+39...)» e
+il suggerimento dentro la casella — e a chi vive fuori chiedeva un
+numero che non ha. Ora accanto alla casella c'e' una tendina che si
+cerca (per nome o per cifre), **gia' puntata sul paese di residenza**,
+con l'Italia subito sotto e gli altri 231 in ordine.
+
+**In archivio non cambia niente, ed e' il punto.** `iscritti.telefono`
+resta UNA colonna di testo con prefisso e numero attaccati
+(`+41791234567`), che e' la forma in cui l'app scrive i numeri italiani
+da sempre. La tendina non e' un campo nuovo: e' un modo di leggere e
+riscrivere quella stringa (`separaPrefisso` / `componiTelefono` in
+`src/prefissi-telefonici.js`). Nessuna migrazione, e i numeri gia'
+scritti si riaprono spezzati senza essere toccati.
+
+**I dati si generano, non si scrivono a mano** (`genera-prefissi.mjs` →
+`src/prefissi-telefonici-dati.js`, chiave = il codice catastale dello
+Stato, non il nome). Fonte: il dataset `mledoze/countries` su GitHub,
+letto direttamente perche' l'API restcountries l'8/11/2026 risponde
+«versione dismessa» su ogni versione, v5 compresa. **L'Italia non e' in
+quell'elenco** e non e' una dimenticanza: l'elenco ISTAT e' quello degli
+Stati *esteri*, e la riga dell'Italia e' l'unica scritta a mano.
+
+Tre cose che il generatore stampa a ogni giro, e che vanno rilette:
+
+- **gli Stati senza prefisso** (oggi zero su 232). Una tendina che non
+  propone il paese di chi si ha davanti e' peggio di una casella da
+  scrivere;
+- **i nomi riscritti a mano** (16: «Sudafrica» → «Sud Africa»,
+  «Maurizio» → «Mauritius»…) **con il paese che hanno agganciato**. Un
+  paese preso per assonanza e' un prefisso sbagliato addosso a una
+  persona vera;
+- **i paesi con piu' di un suffisso** (7). E' da li' che sono usciti due
+  numeri falsi: il dataset tiene `root` = la **prima cifra** e il resto
+  nei suffissi, quindi la radice da sola dava «Sant'Elena +2» e
+  «Vaticano +3». La regola segue il piano di numerazione: un suffisso
+  solo → radice+suffisso (Anguilla e' +1264); piu' suffissi su **+1 o
+  +7** → la radice, che sono gli unici due prefissi di una cifra che
+  esistono e li' i suffissi sono i distretti interni; piu' suffissi
+  altrove → radice + il primo. I due casi in cui sbaglia comunque stanno
+  in `PREFISSO_A_MANO` col perche': **Vaticano +379** (il dataset mette
+  per primo 06698, la linea romana da cui passa davvero) e **Sahara
+  occidentale +212** (si chiama attraverso il Marocco).
+
+Due cose decise nella casella (`CampoTelefono.jsx`, una sola per la
+scheda del venditore e per il modulo dell'allieva):
+
+- **il prefisso scelto si ricorda anche a numero vuoto.** Lo ha trovato
+  il banco di prova: in archivio va una stringa sola, e senza cifre
+  quella stringa e' vuota — quindi scegliere «Francia +33» *prima* di
+  battere il numero non lasciava traccia, la casella tornava al paese di
+  residenza e il numero nasceva col prefisso sbagliato. Ed e' il gesto
+  normale: prima il paese, poi il numero;
+- **un numero incollato per intero sposta anche il prefisso.** Chi copia
+  un contatto incolla «+41 79…» nella casella del numero: senza, quel
+  «+41» finirebbe nel filtro delle cifre e il numero resterebbe
+  attaccato al +39.
+
+Chiusa, la casella del prefisso mostra **il valore** e non il nome
+(`mostraValore` su `CampoCerca`): lo stesso «+1» appartiene a venti
+paesi, e dopo aver scelto «Canada» riaprendo la scheda si leggerebbe il
+primo di quei venti — una bugia. Aperta, l'elenco mostra i nomi.
+
+**Quello che NON e' stato toccato:** la pagina *Registrazione clienti*,
+dove il `+39` e' un riquadro fisso accanto alla casella. Li' non esiste
+uno Stato di residenza (le citta' sono l'elenco ISTAT italiano) e il
+telefono normalizzato entra nell'**indice unico dell'identita**: allargarlo
+vuol dire una migrazione e una decisione su cosa distingue due omonimi.
+Da chiedere, non da indovinare.
+
+Prove in `prove/prefisso-telefonico.test.jsx` (16).
+
+**I DUE STATI SUBITO DOPO IL NOME** (7/11/2026, dettato dal titolare
+dopo averlo provato davvero: «l'ordine deve essere nome, cognome, stato
+di nascita, stato di residenza, poi i dati della nascita e tutto il
+resto»). Il primo giro li aveva messi in mezzo, e **non bastava**: il
+titolare ha visto il guasto compilando — «il codice fiscale sotto
+continuava a essere calcolato come quello dell'Italia».
+
+**Perche' succedeva, ed e' il punto.** La casella vuota dello Stato vale
+Italia, ed e' giusto che valga Italia: 253 schede su 260 sono italiane e
+quello Stato non l'ha mai scritto nessuno. Ma vuol dire che mentre si
+scrivono nome, sesso, data e comune di nascita il codice fiscale
+italiano **e' gia' stato calcolato e scritto**; si sceglieva la Svizzera
+dopo, e quel codice restava li'. Scritto dall'app, davanti a chi
+incassa, e nessuno lo mette in dubbio — e' la stessa famiglia di guasti
+del «conto giusto sul periodo sbagliato».
+
+Due correzioni, perche' una sola non bastava:
+
+- **l'ordine toglie l'occasione**: i due Stati si incontrano subito dopo
+  il nome, prima di qualunque dato che da loro dipenda;
+- **e il codice che abbiamo scritto NOI se ne va col paese**: scelto uno
+  Stato senza elenco, la casella fiscale si svuota se dentro c'e'
+  esattamente quello che avevamo proposto noi. Quello che ha scritto una
+  persona **non si tocca**, come sempre.
+
+L'ordine dei «Dati dell'allievo» adesso e':
+
+```
+nome e cognome → STATO di nascita, STATO di residenza
+→ sesso, data di nascita, comune di nascita
+→ identificativo fiscale (TIN)
+→ regione, provincia → comune e CAP
+→ via e civico → email → tutor e cellulare
+```
+
+**UN ELENCO LUNGO SI CERCA, OVUNQUE** (8/11/2026). La casella che si
+cerca non vale più solo per gli Stati: `Tendina` la usa da sé **oltre le
+venti voci** (`QUANTE_SI_SCORRONO` in AreeAnagrafiche, e la stessa
+soglia nel modulo). Venti perché le regioni italiane sono venti e si
+scorrono benissimo, e le province di una regione non arrivano a dodici;
+sopra no — i comuni di Torino sono 312, le località del Vallese 303, i
+CAP di Roma 82, e sul telefono una tendina così è un rullo che gira. La
+soglia sta in **un posto solo**, quindi vale anche per le tendine che
+nasceranno domani.
+
+**E si cerca anche per sigla.** `normalizzaLuogo` butta via quello che
+sta fra parentesi — serve per i nomi dei comuni — e così «Valais /
+Wallis (VS)» perdeva proprio la sigla, che è quella che uno scrive: il
+**valore** della voce entra nel testo da cercare. Trovato dal banco di
+prova, non dall'uso.
+
+**E LA COPIA FIRMATA DICE LE STESSE PAROLE** (`_shared/modulo-pdf.ts`).
+Il PDF che l'allieva riceve allegato alla conferma scriveva ancora «Dati
+dell'allievo/a» e «Codice fiscale» mentre la schermata diceva «Dati
+anagrafici» e «Identificativo fiscale personale (TIN)». Non e' una
+differenza di stile: chiamare «codice fiscale» un AHV svizzero e' dire
+una cosa falsa dentro un documento che una persona sottoscrive. Allineato,
+e **`modulo-ricevuto` e' pubblicata** (versione 28, verificata il
+9/11/2026: i tre file in produzione sono identici al repo). I PDF gia'
+archiviati non si toccano e non si devono toccare: sono la fotografia di
+quello che quella persona ha firmato quel giorno.
+
+**L'area si chiama «Dati anagrafici»** e non piu' «Dati dell'allievo», e
+dentro ha un'intestazione sua: **«Dati residenza:»**, subito dopo il
+campo fiscale. Raccoglie due cose diverse — chi e' quella persona e dove
+vive — e da li' in giu' comincia la seconda. Un'intestazione e' una riga
+della disposizione con un `titolo` e **`campi: []`**, che non e' una
+svista: tutto quello che legge quelle righe le scorre con `r.campi`, e
+una riga senza quella lista farebbe cadere la pagina invece di saltare
+l'intestazione. Nel modulo dell'allieva si disegna **solo se almeno uno
+dei campi che le stanno sotto e' davvero arrivato** (`dipendeDa`): li'
+le caselle sono quelle che Impostazioni ha acceso, e un'intestazione
+sopra il nulla e' peggio di un'intestazione che manca.
+
+Il campo fiscale sta **subito sotto la data di nascita**, dove chi
+compila se lo aspetta, e puo' starci perche' sopra di lui ci sono gia'
+tutte e due le cose che devono essere decise prima: i dati da cui si
+calcola, nella riga appena sopra, e lo Stato di residenza che decide con
+quale metro si misura, due righe piu' su. L'ordine qui non e' un gusto,
+e' la lista di quello che deve essere gia' stato deciso.
+
+I due si chiamano per esteso — «Stato di nascita» e «Stato di residenza»
+— perche' affiancati, uno dei due chiamato solo «Stato» non si sa di che
+cosa sia lo stato. Due prove bloccano tutto questo: l'ordine,
+confrontando la posizione vera delle caselle nella pagina, e il codice
+italiano che se ne va quando il paese cambia.
+
+**E una cosa che il banco di prova ha misurato, e che spiega l'ordine
+meglio di qualunque ragionamento:** finche' la scheda e' italiana quella
+casella fa rispettare la *forma* del codice italiano — sei lettere, poi
+le cifre, poi il mese — quindi un AHV svizzero scritto li' dentro
+**non sopravvive alla battitura**. Non e' un difetto del filtro: e' il
+motivo per cui lo Stato va scelto per primo.
+
+**LA VIA SI CERCA ANCHE IN SVIZZERA** (8/11/2026). Le vie svizzere
+stanno su OpenStreetMap come le italiane: mancava solo **dire a quale
+paese chiederle**. L'elenco della residenza dichiara il suo codice
+(`paese: "IT"` / `"CH"`), l'app lo passa a `cerca-indirizzo`, e la
+funzione lo usa al posto dell'«IT» che era scritto a mano. Chi non lo
+manda cerca in Italia, come ha sempre fatto. Il paese entra anche nella
+memoria corta della funzione: senza, la stessa via cercata prima in
+Italia e poi in Svizzera avrebbe risposto con la risposta di prima. Col
+comune già scelto il paese si controlla **solo se Photon lo dice** —
+scartare le righe senza `countrycode` toglierebbe risultati buoni che
+oggi arrivano. Dove un elenco non c'è (gli altri 230 Stati) **non si
+cerca**: la proposta porterebbe un comune e un codice postale che
+nessuno sa risolvere. E `riempiDaVia` risolve la proposta contro
+l'elenco del paese scelto, quindi da una via svizzera escono il cantone
+e l'NPA invece di una sigla italiana.
+
+**Quello che NON copre, e va saputo:** la **fatturazione** a un cliente
+estero non è stata toccata — lì «Provincia» e codice destinatario
+vogliono una decisione sulla fattura, non un elenco.
+
+Prove in `prove/residenza-svizzera.test.jsx` (16): l'elenco (ventisei
+cantoni, Sion 1950, Lugano 6900, Zurigo con molti NPA, il Belgio che
+elenco non ha) e il gesto, col pannello e col modulo montati per
+davvero — si scegli la Svizzera, il cantone si apre **subito**, la
+località scrive l'NPA da sé, a Zurigo l'NPA si scegli, le etichette
+dicono Cantone e NPA, e dichiarare «Italia» su una scheda italiana non
+cancella niente. In `prove/residenza-a-cascata.test.jsx` la prova che
+diceva «una residenza svizzera apre in scrittura libera» adesso dice
+il contrario: era giusta finché quell'elenco non c'era.
+
+### «Scrivo un prodotto e mi dice i prezzi del banco» (8/11/2026)
+
+Il titolare: «quando scrivo un nome di un prodotto mi dice il prezzo
+normale, poi se sono in fiera mi dice sconto fiera in contanti, il prezzo
+finale, e sconto fiera POS, il prezzo finale. In pratica una specie di
+simulazione del POS banco».
+
+**Risponde il browser, non il modello.** Scritto un nome di prodotto
+nell'assistente flottante, la risposta compare **subito**: i prezzi li sa
+gia' l'app, e chiederli a un modello vorrebbe dire aspettare, pagare, e
+far dire delle cifre a chi puo' sbagliarle. Se il testo non nomina nessun
+prodotto la domanda va al modello come sempre.
+
+**E il conto e' quello del POS, non un secondo conto.** `prezziAlBancoDi`
+(App.jsx, accanto a `scontiPerRigaCarrello`) costruisce un carrello di
+UNA riga — come fa `aggiungiAlCarrello` — e lo passa a
+`scontiPerRigaCarrello`, la stessa funzione che scrive il prezzo sullo
+scontrino, una volta per metodo di pagamento, esattamente come
+`fasceDelPagamento`. Un secondo conto qui vorrebbe dire un prezzo detto
+dall'assistente e un prezzo incassato dal banco che possono non
+coincidere: e' il guasto del 7/11/2026, quando le due copie della stessa
+formula si sono staccate per davvero. Una prova confronta le due strade
+sugli stessi centesimi.
+
+Per lo stesso motivo la simulazione **nasce in App.jsx e arriva al
+pannello come prop** (`prezziAlBanco`): il conto vive dove vivono le
+funzioni del POS, e il pannello — che App.jsx importa — non puo'
+importarlo indietro. Senza la prop il pannello funziona come prima.
+
+**«Se sono in fiera»** vuol dire: c'e' un evento i cui giorni contengono
+oggi (`periodoFiera` + `oggiRoma`, gli stessi di «Iscrizioni in fiera»:
+due idee dei giorni di una fiera un giorno si staccano) **e** la tabella
+carta degli eventi e' scritta. Altrimenti si legge il solo prezzo di
+listino, e la riga lo dice. Le due tabelle sono quelle che legge il POS
+(Genera Coupon -> Sconti eventi): cambiata una percentuale li',
+l'assistente la dice da subito.
+
+Il riconoscimento del testo sta in `src/pos/prezzo-al-banco.js`, e **li'
+dentro non si calcola nessun prezzo**. Ogni parola scritta dev'essere
+l'inizio di una parola del nome o dello sku («lamin ess» trova «Kit
+laminazione essential»), le paroline e le parole del prezzo si buttano, e
+serve almeno una parola di tre lettere: senza quelle due prudenze «come
+registro un cliente» diventerebbe la ricerca di un prodotto. Un prodotto
+**senza costo d'acquisto** si nomina lo stesso, col prezzo pieno, e dice
+perche' non ha sconto: un prodotto che non si trova e' un dubbio.
+
+Prove in `prove/prezzo-al-banco.test.jsx` (13).
+
+### Le edge function dell'assistente, pubblicate (9/11/2026)
+
+Il titolare, davanti al tondo che rispondeva ancora 400: «l'assistente non
+trova ancora nulla». Il motivo era che **la correzione viveva solo nel
+repo**: su `claude-sonnet-5-5` il tetto di token del ragionamento non
+esiste piu' (`thinking.type.enabled` -> 400), era corretto dall'8/11 e non
+era mai stato pubblicato. Una funzione non pubblicata non e' un ramo che
+non si usa: e' un tasto che fa un'altra cosa.
+
+Pubblicate, dopo il «si» del titolare:
+
+- **`assistente-regole` v7**, che porta anche il lavoro del 4/11 rimasto
+  in attesa (`analisi_copertura`, il riquadro «DA QUANDO CI SONO I DATI» e
+  le quattro regole sul periodo);
+- **`analisi-domanda` v5**: in produzione c'era ancora quella del
+  25/10/2026, con **sei viste** invece di quattordici. «Chiedi ai dati»
+  non sapeva niente di calendario, corsi, kit, prodotti e costi dei kit,
+  e nemmeno delle date di copertura.
+- **`modulo-ricevuto`: niente da fare.** La versione 28 era gia' allineata
+  al repo, diciture del PDF comprese; la riga che la dava in attesa era
+  vecchia. **Prima di pubblicare si guarda cosa c'e' di la'**: il
+  confronto fra i file serviti e quelli del repo dice in un secondo se
+  c'e' davvero qualcosa da mandare.
+
+**E si verifica dopo, non si dichiara.** Pubblicata una funzione, la si
+rilegge (`get_edge_function`) e si confrontano i file **byte per byte**
+con quelli del repo: su `assistente-regole` i quattro file risultano
+identici. Vale la stessa regola del deploy su Vercel — lo sha, non
+l'impressione.
+
+### «Ho associato il diploma» e il database dice di no (9/11/2026)
+
+Il titolare, davanti all'avviso «CLAUDIA CECCHI: il pacchetto "MICRO
+INDIVIDUALE" non ha un modello di diploma»: **«questo messaggio è falso,
+ho associato il diploma»**.
+
+**Misurato prima di toccare qualunque cosa, e l'avviso diceva il vero:**
+il pacchetto `MICRO INDIVIDUALE` (uno solo con quel nome) ha
+`diploma_path` **null**; l'iscritta è collegata per `kit_id` proprio a
+quello, quindi non è il caso del pacchetto «scritto ma non collegato»;
+nel secchio `diploma-templates` **nessun file è stato caricato oggi** —
+l'ultimo è del 29/10; e il pacchetto è nato **oggi alle 12:31**, mentre
+il tasto «Importa diploma» è andato in produzione **alle 12:53**. Delle
+56 tipologie di kit, 51 hanno un diploma e 5 no.
+
+Quello che resta è un'ipotesi, e come tale va detta: il gesto è stato
+fatto prima che quel tasto esistesse, oppure su un'altra scheda. Ma il
+punto non è ricostruire il clic — **è che non si poteva sapere**, ed è
+quello che è stato corretto.
+
+**UN UPDATE SENZA SELECT MENTE, e qui è costata una discussione.**
+PostgREST risponde «va bene» anche a un update che non ha cambiato
+NESSUNA riga (regola già scritta in questo file, e già pagata una volta).
+Le tre strade del diploma — carica il PDF, importa da un altro pacchetto,
+togli — scrivevano senza contare le righe: chi premeva vedeva una pagina
+che non protestava e se ne andava convinto di aver fatto. Adesso tutte e
+tre fanno `.select("id")`, contano, e se sono zero lo dicono con una
+frase sola (`NESSUNA_RIGA_DIPLOMA`): «il database non ha cambiato nessuna
+riga… ricarica la pagina e riprova». Prove in
+`prove/importa-pacchetto.test.jsx`: a zero righe parla, a una riga tace.
+
+**E «IMPORTA PACCHETTO» NON PORTAVA IL DIPLOMA** (9/11/2026, stesso
+giro: «provo ad importare il diploma da un altro corso e non me lo
+importa»). **«Duplica» il diploma se lo porta dietro da sempre**;
+«Importa pacchetto» prendeva solo i prodotti. Due tasti vicini e due
+idee diverse di cosa sia «il pacchetto» — e chi ne importa uno si
+aspetta il pacchetto, non metà. Ora il diploma viaggia col contenuto
+**quando qui non ce n'è uno**, la conferma lo dice prima («arriva anche
+il diploma «X», che qui manca»), e un diploma già scritto su questo
+pacchetto **non si tocca mai**: può essere quello sostituito apposta, ed
+è la stessa regola del primo caricamento di un corso. «Importa diploma»
+resta per prendere il solo foglio.
+
+**La regola generale, da applicare oltre il diploma:** quando qualcuno
+dice «l'ho fatto» e l'app dice di no, prima si guarda **il dato** — e poi
+si guarda se quella scrittura era in grado di accorgersi di non aver
+scritto. Restano senza conteggio le altre scritture della stessa scheda
+(nome del pacchetto, quantità, contenuto): stesso rischio, da sistemare.
+
+### «Prezzi corso di PMU»: l'assistente mostra la locandina (9/11/2026)
+
+Il titolare: «quando all'agente AI chiedo prezzi corso di PMU, vorrei che
+mi mostrasse nella chat la locandina, che se è composta di più pagine
+posso sfogliare col dito facendo slide da destra verso sinistra, e col
+pinch posso zoomare per vedere i prezzi».
+
+**Perché non può risponderlo il modello.** Il prezzo di un corso **non
+esiste nei dati**: sta scritto sulle locandine di «Prezzi corsi», che
+sono immagini e PDF in un secchio. È perfino scritto nel catalogo che
+l'assistente legge — «il prezzo di un corso non esiste nei dati» — e
+finora la risposta era quella: «non ce l'ho, guarda in Prezzi corsi». Il
+foglio invece ce l'abbiamo, e si mostra. Le cifre **non si riscrivono a
+parole**: una cifra ricopiata da qualcuno è una cifra che un giorno
+sbaglia, e la voce dice solo che la locandina c'è e quante pagine ha.
+
+**La parola che distingue le due domande è «corso».** In anagrafica ci
+sono quattro prodotti che si chiamano PMU (Dispensa PMU, Specchio PMU…),
+e «prezzi PMU» deve continuare a essere la simulazione del banco dell'8/11.
+Quando il testo dice «corso» — o «locandina», o «listino» — risponde
+prima la locandina; senza quella parola l'ordine resta quello di prima, e
+la locandina ha comunque un **secondo giro** quando nessun prodotto
+combacia e si sta chiedendo un prezzo.
+
+Il riconoscimento sta in `src/regole/locandina-corso.js` e lì dentro non
+si disegna e non si legge niente. Due giri, e il secondo serve a un caso
+vero: «quanto costa il corso di PMU **a Milano**» non deve finire a mani
+vuote per colpa di «Milano», che nel nome di un file non c'è e non ci
+sarà mai — quindi se nessuna locandina prende *tutte* le parole, e la
+domanda chiede chiaramente il prezzo di un corso, bastano le parole che
+combaciano. Quel secondo giro **non si fa senza «corso» e senza
+«prezzo»**, o «come funziona il PMU base» mostrerebbe sei cartelli di
+prezzi invece di una spiegazione.
+
+**Un PDF di tre pagine sono tre pagine.** «Prezzi Microblading» è un PDF
+di tre pagine: si disegnano come immagini in App.jsx, dove vive già
+`getPdfjsLib`, e il visore riceve **solo immagini** — di PDF non sa
+niente, e con lo stesso componente si sfoglierebbe un diploma. Non un
+lettore PDF dentro la chat: su iPhone un PDF in un iframe non si sfoglia
+e spesso non si vede nemmeno. Il PDF dei prezzi del needling pesa 52 MB,
+e Supabase risponde a richieste a pezzi (verificato: `206` con
+`content-range`), quindi pdf.js scarica le pagine che serve e non il
+file intero.
+
+**L'elenco delle locandine si legge in un posto solo** (`leggiLocandine`):
+lo usano la pagina «Prezzi corsi» e l'assistente. Due letture scritte due
+volte vorrebbero dire due idee di cos'è una locandina — una delle due si
+dimenticherebbe il PDF chiamato `.png` (ce n'è uno) o la data attaccata
+all'indirizzo che aggira la cache — e quello che si vede nella chat non
+sarebbe quello che c'è nella pagina. L'assistente lo rilegge **al massimo
+ogni cinque minuti**: non è una copia per sempre, una locandina caricata
+adesso deve comparire senza riaprire l'app.
+
+**Vale il permesso `prezzicorsi`.** L'assistente mostra solo le aree che
+quella persona vede, e un cartello dei prezzi mostrato a chi quella
+tessera non l'ha sarebbe un'area aperta da una porta di servizio. Come
+tutti i limiti per persona, finché l'account Supabase è uno per tutti
+decide **cosa l'app mostra** e non cosa la sessione potrebbe leggere: il
+secchio è pubblico e la policy di `storage.objects` vale per
+`authenticated`.
+
+**Il gesto, e le tre decisioni che lo rendono usabile**
+(`src/regole/SfogliaLocandine.jsx`):
+
+- **Il dito in verticale resta della chat.** Il pannello
+  dell'assistente scorre: prendersi anche quel gesto vorrebbe dire una
+  conversazione che non si può più far scorrere passando sopra una
+  locandina. Si guarda la direzione dei primi 8 px e si decide una volta
+  — `sfoglia` o `scorre` — e il riquadro della chat dichiara
+  `touch-action: pan-y`, a tutto schermo `none`.
+- **I listener si attaccano a mano, con `{ passive: false }`.** React
+  registra `touchmove` come listener **passivo**: da dentro un
+  `preventDefault()` non fa niente, e il browser continuerebbe a
+  scorrere e a zoomare di suo mentre si sfoglia.
+- **Il gesto si decide sul gesto, non su quello che è già disegnato.**
+  Zoom, spostamento e corsa del dito vivono anche in un ref. React
+  accorpa i cambi di stato e li disegna dopo: il dito alzato leggeva i
+  valori di *prima* del gesto e la pagina restava dov'era. Lo stato
+  serve a disegnare, il ref a decidere — e lo ha trovato il banco di
+  prova, dove le prove sfogliavano due volte di fila.
+
+Lo zoom cresce **intorno al punto fra le due dita** (allargando, la riga
+che si stava leggendo resta dov'è), il pan non porta mai l'immagine fuori
+dal riquadro, e cambiando pagina si riparte da intera. A tutto schermo si
+chiude col tasto e con Esc e **non** toccando il fondo: con due dita
+addosso a una foto un tocco di troppo è normale, e chiudere per sbaglio
+quello che si sta leggendo è peggio. Nel riquadro della chat il tocco
+**apre**: in un pannello da 380 px una locandina è un francobollo, e
+sfogliarla lì serve a scegliere, non a leggere.
+
+Un'altra trovata dal banco: la freccia «›» sta **dentro** il riquadro che
+si tocca, quindi premerla cambiava pagina *e* apriva lo schermo pieno —
+due cose per un dito solo.
+
+**Quello che non è stato toccato:** le edge function. Il prompt
+dell'assistente continua a dire «il prezzo di un corso non esiste nei
+dati», che è vero e che vale per le domande in cui la locandina non si
+riconosce; insegnargli che adesso l'app il foglio lo mostra vuole una
+pubblicazione, e le edge function si pubblicano quando lo dice il
+titolare. E una cosa da sapere sui nomi dei file, perché la ricerca è
+quella: `Lamazione-individuale-Sopracciglia-Koreana.png` ha un errore di
+battitura nel nome, quindi «laminazione individuale» non la trova —
+quella si corregge rinominando il file in Prezzi corsi, non nel codice.
+
+Prove in `prove/locandina-del-corso.test.jsx` (23), sui **nomi veri** dei
+24 file del secchio: «prezzi corso di PMU» trova le sei del PMU col
+riepilogo per primo, «come registro un cliente» non ne trova nessuna,
+«prezzi PMU» resta dei prodotti; e il gesto toccato per davvero — il dito
+che sfoglia, quello verticale che non sfoglia niente, il bordo che non va
+oltre, le due dita che ingrandiscono e il tocco che apre. **Il pinch vero
+però lo prova solo un pollice su un telefono**: jsdom non fa il layout, e
+il banco visivo di `prove/banco/` non ha una postazione per questa
+galleria.
+
+### Pagata col QR, mai registrata: il codice passava alla vendita dopo (9/11/2026)
+
+Dalla logistica: «Tommaso ieri ha fatto un ordine di aula di 274,61 a
+nome di Vecarelli Rossella. **A lei sono stati scalati ma non mi compare
+ordine**».
+
+**Com'è andata, al secondo.** L'8/11 alle **14:57:43** il pagamento col
+QR `BFG5RE` di **274,61 €** risulta pagato: due Sensitive Cream, un
+Glucan-Age, due A+B Peeling e **6,90 di spedizione** (quindi merce da
+spedire, non da consegnare in aula). Alle **14:57:46** — tre secondi
+dopo — il banco registra un ALTRO carrello: **103,31 €, in CONTANTI**,
+tre prodotti diversi, consegnato in aula. E quella vendita si porta
+dietro `pagamento_codice = BFG5RE`, perché **`richiestaQr` restava nello
+stato del POS dopo la vendita precedente**: `nuovaVendita` azzerava
+carrello, sconti, splittato e spedizione, ma non il QR.
+
+**La seconda metà del danno è quella che ha fatto sparire l'ordine.** Il
+pagamento risultava già legato a una vendita, e la regola «un pagamento
+vale per UNA vendita» (23/10/2026) ha fatto il resto: il recupero
+automatico `recupera_vendite_qr_in_ritardo` l'ha visto come già
+registrato e non ha mai scritto la vendita vera. Soldi presi, niente in
+logistica, **e nessun errore da nessuna parte** — il guasto del 19/10 al
+contrario, e invisibile allo stesso modo.
+
+E c'è un terzo effetto, da sapere quando si riconcilia: quella vendita
+in contanti porta il codice di un incasso Stripe, quindi la cassa della
+classe si aspetta 103,31 € di contante che nessuno ha dato.
+
+**E LA REGOLA NUOVA, dettata dal titolare lo stesso giorno:** «non far
+restare il POS in nessuna condizione vendita dopo vendita. Quindi dopo
+una vendita si resetta **ogni** tipo di pagamento e l'operatore deve
+scegliere ogni volta come chiuderla». **Sostituisce il «il banco si apre
+sul QR» del 7/11/2026**: una preselezione sul modo di incassare è
+esattamente la cosa che fa chiudere uno scontrino col metodo del cliente
+di prima. Ora il POS nasce — e torna dopo ogni vendita — **senza nessuno
+dei quattro tasti acceso**, «Incassa vendita» resta spento finché non se
+ne preme uno, e sopra al tasto c'è scritto perché («scegli come la
+cliente paga: dopo ogni vendita non resta niente di scelto»). L'omaggio,
+che non incassa, resta l'unica strada che non chiede un metodo. Un
+carrello **sospeso** invece riprende il metodo che era stato scelto: lì
+la scelta l'ha già fatta una persona.
+
+**Due difese in più sul codice, nessuna delle due è il promemoria di chi vende:**
+
+- `nuovaVendita` azzera **il QR insieme al carrello** (`richiestaQr`,
+  `statoQr`, `msgQr`);
+- `codiceIncassoDaRegistrare` è l'ultima parola sul payload: il codice
+  si scrive solo su `pos` o su uno **splittato** (dove la parte a carta
+  passa davvero dal QR), **mai** su contanti, buono o omaggio.
+
+E la regola sta anche nel database, perché una regola che vive solo nel
+browser non è una regola: `vendite_shop_codice_solo_con_carta`
+(`20261109150000`), **NOT VALID** di proposito — in archivio c'è **una**
+riga che non la rispetta, POS-1794149866157, ed è quella dell'8/11:
+convalidare adesso vorrebbe dire impedire di correggerla.
+
+**E IL RECUPERO NON POTEVA RIUSCIRE, nemmeno senza il codice rubato.**
+Andando a rimettere in pari i dati è saltato fuori un secondo guasto, più
+grave del primo perché spegne la rete di sicurezza:
+`registra_vendita_da_pagamento` — la funzione che ricostruisce una
+vendita dalle righe del pagamento, quella che usa il cron
+`recupera_vendite_qr_in_ritardo` — componeva la vendita con
+`metodo_pagamento = 'pos'` ma **senza `pagamento_codice`**. Dal
+23/10/2026 `registra_vendita_pos` pretende quel codice per accettare una
+vendita con la carta: quindi **ogni** recupero falliva con
+PAGAMENTO_NON_PROVATO. La rete c'era e non poteva prendere niente.
+Corretta con `20261109160000`, che aggiunge la sola chiave mancante
+sostituendo il testo della funzione viva invece di riscriverla a mano.
+
+**La riparazione, fatta il 9/11/2026 su autorizzazione del titolare:**
+tolto il codice `BFG5RE` dalla vendita in contanti (che resta in
+contanti, con la nota del perché), liberato il pagamento, scritto
+l'indirizzo della cliente nella richiesta — preso dalla **sua scheda di
+iscrizione**, è un'allieva di quella stessa classe — e poi
+`registra_vendita_da_pagamento('BFG5RE')`: è nata **POS-STRIPE-BFG5RE**,
+274,61 € (imponibile 225,09 + IVA 49,52), quattro righe, l'ordine di
+spedizione per Grosseto in stato «da spedire», e il magazzino sceso di 2
+Sensitive Cream, 2 A+B Peeling e 1 Glucan-Age. Tutte e due le righe
+portano scritto in nota cos'è successo: una ricostruzione si riconosce,
+o fra un anno sembra un dato nato così.
+
+### I prodotti di un kit si leggono per reparto, con la foto (9/11/2026)
+
+Il titolare: «quando creo un kit e inserisco i prodotti li devi dividere
+per categorie e assegnare l'immagine, la lista è una confusione sia per
+noi che per la logistica. Sia nella Dashboard di creazione che in
+logistica per la preparazione».
+
+Un kit sono venti-trenta righe, e in fila indiana aghi, pigmenti e
+cartine si somigliano tutti: chi lo compone non vede cosa manca, chi lo
+prepara non trova niente. Ora, in **tutte e due** le pagine, le righe
+stanno sotto il loro **reparto** e ognuna ha la sua **foto**.
+
+**QUALE categoria, ed è la decisione vera.** Si raggruppa per la
+categoria **radice** dell'albero dello shop (Aghi, TUTTI I PIGMENTI, Lash
+Extension), non per la sottocategoria. Misurato sui dati: dei **174
+prodotti che stanno dentro ai kit, 47 appartengono a più di una
+categoria**, e quasi sempre sono la radice **più** una sua figlia («Aghi»
++ «Aghi Universali»). Per la figlia i pigmenti si spaccherebbero in
+Eyebrows/Lips/Eyeliner/Trico — e «Dilution» sta in quattro di quelle
+insieme, quindi non esisterebbe nemmeno una risposta giusta. Il reparto
+invece è **lo scaffale**, che è la domanda di chi prepara.
+
+Un prodotto in più REPARTI (il calibro sta in Accessori, HENNE e
+Progettazione) finisce nel primo in ordine alfabetico: non è il più
+intelligente, è quello **che non cambia da un giorno all'altro** — una
+lista di raccolta che riordina le righe fa perdere il segno fra uno
+scaffale e l'altro. Chi non ha nessuna categoria (3 prodotti su 174) va
+in «Senza categoria», **in fondo**: è il mucchio di quello che non ha un
+posto suo, e non deve stare davanti a quello che ce l'ha.
+
+`repartoPerProdotto` e `raggruppaPerReparto` stanno **in un posto solo**,
+accanto a `collegamentiConPadri`, e le usano le due pagine: due idee di
+«che reparto è questo prodotto» vorrebbero dire lo stesso ago sotto due
+intestazioni diverse, a seconda di chi guarda. Stessa cosa per
+`RiquadroFotoProdotto` e `IntestazioneReparto`. La risalita al padre ha
+una **guardia a otto passi**: una categoria che si dichiara figlia di sé
+stessa girerebbe per sempre, e la pagina non si aprirebbe più senza dire
+perché.
+
+Due cose in più, trovate strada facendo:
+
+- **in logistica ogni reparto dice quante ne restano** («Aghi · 2 di 5»,
+  e «fatto» quando è finito): è il numero che dice se si può passare allo
+  scaffale dopo, e in cima alla pagina c'era solo il totale;
+- **nel kit il nome del prodotto non si taglia più**, va a capo. Era in
+  un riquadro con l'ellissi, e quello che spariva era la **fine** del
+  nome — che su questi prodotti è il formato («Box 10 pz», «ago
+  singolo»), cioè la cosa che distingue due righe quasi uguali. È la
+  stessa trappola della percentuale di sconto al banco del 7/11.
+
+**E le due tabelle vanno chieste**: `categorie_prodotti` e
+`prodotti_categorie` sono state aggiunte alla mappa delle viste di
+`App.jsx` per `contenutokit` e `spedizionicorsi`. Senza, l'elenco
+uscirebbe tutto «Senza categoria» e non lo direbbe nessuno — è la regola
+di «elenco vuoto = tabella non chiesta».
+
+**QUANTO SI LEGGONO** (9/11/2026). Le misure le ha dettate il titolare
+guardando la pagina, e **correggendo due volte**: «il titolo della
+categoria grande il doppio, grassetto e al centro», poi «anche i
+caratteri dei prodotti sono troppo piccoli, raddoppiali e triplica
+quelli del titolo» (33 e 26), infine «ora è troppo, riducili del 40%».
+Da 11 e 13 si arriva a **20** per il titolo del reparto — al centro, in
+grassetto, e a capo invece che fuori dal riquadro, perché «TUTTI I
+PIGMENTI» in grande su un telefono non ci sta — e a **16** per il nome
+del prodotto, con la foto (34), la casella della quantità e la crocetta
+riportate in proporzione: a testo grande erano diventate francobolli, e
+a testo piccolo sarebbero rimaste enormi.
+
+Vale la pena tenere il giro intero: una misura giusta non si sceglie a
+tavolino, si trova guardando la pagina due o tre volte. Il modo di
+sbagliare peggiore sarebbe stato fermarsi al primo numero.
+
+Le due misure stanno in **due costanti sole** (`TESTO_REPARTO`,
+`TESTO_PRODOTTO_KIT`) lette da tutte e tre le liste, raccolta in
+logistica compresa: tre scale diverse per la stessa lista si notano
+passando da una pagina all'altra. Non sono misure di gusto — queste
+liste si leggono **in piedi, con lo scatolone in mano** — e una prova le
+inchioda, così il giorno che qualcuno le rimpicciolisce «per far stare
+più righe» se ne accorge nel banco di prova invece che in magazzino.
+
+**E LA LISTA CHE AVEVA DAVANTI ERA UN'ALTRA** (9/11/2026, subito dopo:
+«non vedo categorie nella lista»). Aveva ragione: quello che guardava era
+**«Accessori didattica»** — trentuno righe in fila indiana — che non e'
+il contenuto di un pacchetto ma una lista del **corso**, disegnata da un
+altro componente (`SchedaAccessoriCorso`) rimasto com'era. La lezione
+vale oltre questo caso: **«la lista dei prodotti di un kit» per chi la
+usa e' UNA cosa, anche quando nel codice sono due** — una correzione
+messa su una sola delle due strade che portano allo stesso posto non e'
+una correzione (gia' scritto il 2/11 per la cache del sito, e ricapitato
+qui).
+
+Prove in `prove/kit-per-reparto.test.jsx` (16) e in
+`prove/raccolta-materiale.test.jsx` (3 nuove), con le pagine montate: la
+radice che vince sulla figlia, la radice più figlia che fa UN reparto e
+non due, l'anello che non blocca niente, l'ordine dei reparti, la foto
+che compare solo a chi ce l'ha, e la raccolta che **senza la mappa dei
+reparti funziona come prima** — una pagina che si rompe perché mancano le
+categorie sarebbe peggio di una pagina senza divisioni.
+
+### «Importa pacchetto»: la lista di un altro kit (9/11/2026)
+
+Il titolare: «quando creo un nuovo pacchetto di un corso ho solo i tasti
+duplica e + prodotto e non ho "importa pacchetto" che mi permetterebbe di
+importare la stessa lista di prodotti associata ad un altro pacchetto
+esistente».
+
+**Si poteva gia' fare, e questo e' il punto.** Copia/Incolla esisteva, ma
+quei due tasti compaiono **solo mentre un altro pacchetto e' aperto**:
+Copia sta su quello aperto, Incolla su tutti gli altri. Su un pacchetto
+appena creato si vedevano davvero solo «Duplica» e «+ Prodotto», e chi non
+sapeva gia' della coppia non aveva modo di scoprirla. E' la stessa famiglia
+del «POS fisico» del 7/11/2026: **una scelta annidata la trova solo chi sa
+gia' che esiste.**
+
+Ora ogni pacchetto ha **«Importa pacchetto»**, sempre: si preme sul
+pacchetto che deve RICEVERE — che e' dove sta la persona — e si scegli da
+quale prendere la lista, anche di un altro corso. L'elenco dice nome, corso
+e quanti prodotti porta: il corso serve perche' due kit si chiamano uguale
+in corsi diversi, e il conteggio e' l'unico modo di accorgersi di aver
+scelto il pacchetto sbagliato **prima** di premere.
+
+Quattro cose decise li' dentro:
+
+- **La scrittura e' una sola** (`sostituisciContenuto`), usata da Incolla e
+  da Importa. Due strade che arrivano allo stesso posto, e due copie del
+  conto vorrebbero dire due idee di cosa succede al contenuto di prima.
+- **Sostituisce, non aggiunge**, come Incolla ha sempre fatto, e la
+  conferma dice i due numeri — «Righe adesso: 2. Dopo: 12, prese da «KIT
+  BASE» (PMU BASE)». I numeri si dicono **come numeri** e non dentro una
+  frase che deve funzionare al singolare e al plurale: «Le 1 righe» si
+  legge come un errore, e un messaggio scritto male lo si salta.
+- **Un pacchetto vuoto non si puo' importare.** Importarlo vorrebbe dire
+  svuotare questo, che non e' quello che uno si aspetta premendo
+  «Importa»: resta fuori dall'elenco.
+- **Gli accessori didattica non viaggiano** (`tipo = 'accessorio'`): sono
+  del corso, non del pacchetto. E dopo l'importazione **il pacchetto si
+  apre**, perche' un elenco che si riempie senza mostrarsi va ricontrollato
+  a mano.
+
+L'elenco dei pacchetti con il loro contenuto si compone **una volta per la
+pagina** (`pacchettiImportabili` in `PaginaContenutoKit`) e non dentro ogni
+scheda: venti schede che se lo rifanno da sole sono lo stesso conto
+ripetuto venti volte a ogni lettera battuta nella ricerca.
+
+**Resta da decidere:** adesso Copia/Incolla e Importa fanno la stessa cosa
+per due strade. Importa la fa da sola e si vede sempre; la coppia non e'
+stata tolta perche' nessuno l'ha chiesto, ma tre tasti per un lavoro solo
+sono due di troppo.
+
+**E lo stesso per il DIPLOMA** (9/11/2026, chiesto subito dopo: «mi serve
+anche importa diploma»). Il foglio e' quasi sempre quello di un altro
+pacchetto, e l'unica strada era ricaricare il PDF — cioe' tenere nel
+secchio copie dello stesso file che un giorno si scostano, e nessuno sa
+quale sia stata stampata.
+
+- **Si copia il PERCORSO, non il file.** Il modello resta uno solo nel
+  secchio, ed e' gia' cosi' che funziona fra i pacchetti di uno stesso
+  corso. Sostituirlo su un pacchetto carica un file nuovo e non tocca gli
+  altri; toglierlo non cancella niente, perche' se qualcuno ci ha
+  stampato dei diplomi quel file deve restare rintracciabile.
+- **L'elenco e' uno per FILE, non uno per pacchetto.** Lo stesso foglio
+  sta addosso a tutti i pacchetti di un corso, e venti righe identiche
+  non sono venti scelte: si raggruppa per percorso e accanto si legge da
+  dove arriva e quanti pacchetti lo usano gia'.
+- **Scrive solo su questo pacchetto.** Il caricamento del PRIMO diploma
+  di un corso lo passa anche agli altri che non ne hanno — li' e' il caso
+  normale, lo stesso foglio per tutti; importare e' un gesto mirato, e
+  scrivere di nascosto su pacchetti che nessuno ha nominato sarebbe una
+  sorpresa.
+- **Il tasto non c'e' se nessun pacchetto ha un diploma**, e non c'e' su
+  chi il diploma ce l'ha gia': li' si legge il file associato e la
+  crocetta per toglierlo, come prima.
+
+Prove in `prove/importa-pacchetto.test.jsx` (12), con la pagina vera
+montata. Una cosa trovata dal banco: **la scheda si cerca per nome e non
+per posizione** — i corsi sono in ordine alfabetico, quindi LAMINAZIONE
+BASE sta sopra PMU BASE, e al primo giro la prova guardava il kit
+sbagliato dicendo di guardare quello giusto.
+
+### La riga della ricerca si svuota con un tasto (9/11/2026)
+
+Il titolare, dal banco: «quando cerchi un prodotto e lo inserisci, sulla
+riga dove hai scritto il vecchio nome per la ricerca ci vuole il tasto
+cancella per svuotare la riga». Il nome di prima resta scritto anche dopo
+che il prodotto e' nel carrello — e deve restare, perche' al banco si
+batte lo stesso prodotto due volte — ma per cercare il prossimo si
+cancellava lettera per lettera, col prodotto appena venduto in una mano e
+il telefono nell'altra.
+
+La × sta dentro **`CampoRicerca`**, cioe' **in tutte e trenta le righe di
+ricerca dell'app** e non solo in quella del POS: una casella che non si
+svuota e' la stessa noia in Gestione magazzino, nello Storico allievi e
+nello Scadenzario, e aggiungere il tasto in un posto solo vorrebbe dire
+due idee di cos'e' una riga di ricerca.
+
+Tre cose decise li' dentro:
+
+- **compare solo con qualcosa scritto.** Su una casella vuota sarebbe un
+  tasto che non fa niente, cioe' un dubbio;
+- **svuota chiamando `onChange` con una riga vuota**, invece di azzerare
+  uno stato suo. I trenta punti che montano il campo leggono tutti e solo
+  `e.target.value`, quindi il loro «la ricerca e' cambiata» passa dalla
+  strada che conoscono gia': `cambiaFiltro` riporta il POS alla prima
+  pagina, `cambiaRicerca` svuota la selezione. Un tasto che svuotasse la
+  casella lasciando l'elenco filtrato sarebbe peggio di nessun tasto;
+- **il fuoco torna nella casella.** Si svuota per scrivere un altro nome,
+  non per guardarla vuota: sul telefono la tastiera resta aperta.
+
+Resta accanto alla lente, che non cerca niente — chiude la tastiera — e
+per questo serve ancora quando si e' finito di scrivere. Prove in
+`prove/svuota-la-ricerca.test.jsx` (3), col banco vero montato: senza
+niente scritto il tasto non c'e', scritto «pigmento» l'elenco si
+restringe e il tasto compare, premuto la riga e' vuota **e tutti i
+prodotti sono tornati**.
+
+### L'errore di una edge function dice perche' (8/11/2026)
+
+Scrivendo nell'assistente arrivava **«Edge Function returned a non-2xx
+status code»**. La funzione il motivo lo diceva — nel corpo, con
+`{ ok: false, errore }` e stato 502 — ma `supabase.functions.invoke`
+davanti a una risposta non-2xx lascia `data` **nullo** e appende il corpo
+a `error.context`: quindi il classico `data?.errore || error?.message`
+mostra sempre la frase inutile. **Un errore che non dice niente manda a
+cercare il guasto nel posto sbagliato**, ed e' costata una diagnosi —
+chiave, dati e permessi, tutti innocenti.
+
+`testoErroreFunzione` quel corpo lo leggeva gia', ma viveva dentro
+App.jsx: ora sta in **`src/errore-funzione.js`**, un posto solo, e la
+usano il monolite (9 punti), l'assistente flottante, Chiedi ai dati e
+Regolamenti. Nel banco di prova `rispondiCon` accetta una `Response`,
+cosi' una risposta che NON e' 2xx si puo' provare: prima era impossibile,
+ed e' il motivo per cui nessuna prova aveva preso questo caso.
+
+**E il motivo, appena l'errore ha parlato, era questo:** «Il modello ha
+risposto 400: "thinking.type.enabled" is not supported for this model.
+Use "thinking.type.adaptive" and "output_config.effort"». Su
+`claude-sonnet-5-5` il **tetto di token del ragionamento non esiste
+piu'**: `budget_tokens` e' rifiutato, e si dice quanto impegnarsi
+(`output_config.effort`) invece di quanti token. `assistente-regole`
+manda ora `thinking: { type: "adaptive" }` con **`effort: "low"`**, che e'
+il gradino di chi deve rispondere subito — la risposta al banco si
+ascolta in piedi. Era l'unico punto in tutte le edge function che mandava
+un budget.
+
+Da qui una regola per quando l'assistente «non risponde»: **il motivo e'
+quasi sempre gia' scritto**, nel corpo della risposta o nei log della
+funzione. Si guarda quello prima di sospettare la chiave, i dati o i
+permessi.
+
+Prove in `prove/errore-funzione.test.jsx` (5).
+
+### «Vendita fiera»: l'iscrizione chiusa al banco (8/11/2026)
+
+Il titolare, con la fiera di Napoli aperta: «nel modulo iscrizione in
+cima metti un flag che si chiama vendita fiera e quelle vendite le
+mostri in una nuova sezione in fiera di napoli in gestione eventi in cui
+elenchi i corsi che stiamo chiudendo in fiera. Facciamo anche in modo
+che Elena possa aprire quelle iscrizioni che sono avvenute in questi due
+giorni per flaggarle.»
+
+**Il gesto è un flag, quello che si scrive è la fiera.** La colonna è
+`iscritti.vendita_evento_id` (migrazione `20261108120000`, rollback
+scritto dentro), non un `vendita_fiera` vero/falso. Il motivo è che la
+sezione sta dentro la scheda di **un** evento: con un booleano la scheda
+della prossima fiera mostrerebbe le iscrizioni di Napoli, e fra sei mesi
+nessuno potrebbe più dire quale banco ha chiuso quei corsi — è lo stesso
+guasto dei sette consensi col QR generico, che non sapevano a quale
+corso appartenessero. Una colonna sola e non due dichiarazioni (un
+booleano *più* l'id): due dichiarazioni della stessa cosa un giorno si
+contraddicono, e si è già pagato con «Copri clip».
+
+**Il flag sta in cima** (`src/eventi/FlagVenditaFiera.jsx`), sopra tutto
+il resto della scheda: al banco si compila di corsa col cliente davanti,
+e una spunta in fondo a una scheda lunga due schermi non la tocca
+nessuno. Si legge anche a scheda chiusa — «questa iscrizione è della
+fiera» è una cosa da poter leggere, non solo da scrivere — ma se non c'è
+nessuna fiera scritta, a scheda chiusa non compare: una riga che dice di
+no in cima a una scheda che si apre per guardare altro è rumore.
+
+Tre cose decise lì dentro:
+
+- **niente casella senza una fiera, e si dice perché.** Una spunta che
+  non può scrivere niente è un dubbio, non una scelta — e «vendita
+  fiera» senza la fiera è esattamente il dato che quella colonna esiste
+  per non avere. Al suo posto una riga che manda a Gestione eventi;
+- **con una fiera sola non c'è niente da scegliere** e il nome si legge
+  accanto alla spunta; con più di una c'è la tendina, che parte dalla
+  più recente. È una preselezione che **si vede**, non una che decide in
+  silenzio (la lezione del POS che parte dalla fiera);
+- **la fiera già scritta sta sempre in elenco**, anche vecchia di un
+  anno: una tendina che non contiene il valore che sta mostrando lo
+  cancella al primo tocco. Si offrono le fiere in corso più quelle
+  finite da meno di `GIORNI_DI_CODA` (7) — al banco si incassa e si
+  corre, le schede si sistemano il lunedì — e mai una annullata, perché
+  un banco non c'è stato.
+
+**Il flag si scrive da sé, e subito.** Non passa da `autosalva`, per due
+motivi. Il primo è tecnico: `autosalva` ricompone l'intero payload
+leggendo lo stato, e lo stato di React non è ancora cambiato
+nell'istante in cui si tocca la casella — si salverebbe il valore di
+prima. Il secondo conta di più: una spunta che non dice se è arrivata al
+server è la stessa forma del guasto dei carrelli sospesi, dove
+«salvato» si diceva prima di saperlo. Quindi `segnaVenditaFiera` scrive
+quella **sola** colonna con un update mirato, conta le righe cambiate
+(un update senza `select` dice «va bene» anche quando non ha toccato
+niente) e dice com'è andata; se fallisce, la spunta torna com'era. Su
+una scheda ancora da creare non c'è niente da aggiornare e il valore
+viaggia nel payload della creazione. **E non resta accesa da una scheda
+all'altra**: al banco si iscrive una dopo l'altra, ma una scheda aperta
+in sede il giorno dopo nascerebbe «di fiera» senza che nessuno l'abbia
+detto.
+
+**La sezione nella scheda della fiera** è `SchedaIscrizioniFiera`
+(Gestione eventi → scheda dell'evento → **Iscrizioni in fiera**), e
+porta due elenchi che sono due cose diverse:
+
+- **I corsi che stiamo chiudendo in fiera** sono le iscrizioni
+  flaggate, raggruppate **per classe e mai per nome del corso**: due
+  edizioni dello stesso corso in due città sono due classi, e sommarle
+  direbbe che a Napoli si è venduto un corso che parte a Milano. In cima
+  il corso su cui la fiera ha portato più gente, che è la domanda a cui
+  la pagina serve a rispondere. Chi non ha ancora una classe non si
+  perde: al banco si prende l'acconto e la data si decide dopo.
+- **Le iscrizioni di questi giorni** sono una **proposta, non un
+  conto**: quelle salvate nei giorni della fiera e non ancora attribuite
+  a nessuna. In quei giorni si iscrive gente da tutta Italia e chi sta
+  in sede continua a lavorare — l'8/11/2026, nella finestra della Fiera
+  di Napoli, cadevano **otto** iscrizioni e la maggior parte erano di
+  classi di Roma e Milano. Quindi `ts` propone e **una persona decide**:
+  nessun flag si accende da solo, e la pagina lo scrive. Quelle già
+  attribuite a un'altra fiera restano fuori: proporle vorrebbe dire
+  invitare a rubarsele.
+
+**I numeri in cima sono due e non uno**: `pattuito` è quello che quelle
+persone pagheranno in tutto, `incassato` quello che è **già** entrato
+(le quote segnate pagate, al totale, righe «+» comprese). Al banco si
+prende un acconto, e una fiera che pattuisce ventimila euro e ne incassa
+mille non è la stessa cosa di una che ne incassa diecimila. Nessuno
+scorporo di IVA: ogni cifra registrata resta com'è scritta.
+
+**Elena flagga da lì, e non le è servito nessun permesso nuovo.** Ha già
+`gestionieventi` sulla sua utenza d'ufficio, e ci arriva da Gestione
+corsi → «Gestione eventi». Si segna **senza aprire la scheda**: a
+iscrizione confermata quella scheda è chiusa a chiave, ed entrarci per
+dichiarare una provenienza vorrebbe dire sbloccare prezzi e quote per
+cambiare un'altra cosa. Il tasto per togliere si chiama «Non è della
+fiera» e non è un cestino: non si cancella niente, si toglie
+un'attribuzione.
+
+**Il giorno di un'iscrizione è quello di chi compilava.** `iscritti.ts`
+è un istante in UTC e le date della fiera sono giorni: tagliare la
+stringa (`ts.slice(0, 10)`, che è quello che fa il resto dell'app nelle
+statistiche) darebbe il giorno **UTC**, e una scheda chiusa alle 00:30
+del 9 a Roma è ancora l'8 in UTC. `giornoRoma` chiede il giorno al fuso
+in cui quella persona stava scrivendo.
+
+**Il conto sta in un posto solo** (`src/eventi/fiera-iscrizioni.js`,
+senza niente che si disegni): lo leggono il flag nella scheda del
+venditore e la sezione nella scheda della fiera. Due copie di «quali
+iscrizioni sono di questa fiera» vorrebbero dire due numeri diversi
+sulla stessa fiera, e quello sbagliato sarebbe sempre quello che si
+guarda.
+
+**Il Conto della fiera NON cambia, ed è deciso** (8/11/2026, il
+titolare: «non devo farci entrare le iscrizioni, elencale e basta»). Il
+Conto continua a dire una cosa sola: se l'evento è andato in pari sulle
+sue spese e sulle vendite del banco, in imponibile. Le iscrizioni ai
+corsi restano fuori, e la sezione nuova le **elenca** senza entrare in
+nessun totale di quel riquadro — «quanto ha reso la fiera» con dentro un
+corso che partirà a gennaio sarebbe una risposta a un'altra domanda. I
+due numeri in cima a «Iscrizioni in fiera» (pattuito e incassato)
+appartengono a quella sezione e non si sommano a niente altrove: chi
+guarda il Conto legge la fiera, chi guarda la sezione legge i corsi.
+
+E il flag **non va sul modulo dell'allieva**: è roba nostra, quindi non
+sta in `CAMPI_MODULO` e non ha una spunta in Impostazioni.
+
+Prove in `prove/vendita-fiera.test.jsx` (32): le regole — il giorno a
+Roma contro il giorno UTC, quali fiere il flag può nominare, le
+iscrizioni di **una** fiera e non di tutte, le due edizioni che restano
+due righe, l'incassato che conta solo le quote pagate — e i due gesti,
+coi componenti montati per davvero: spuntare scrive *quella* fiera,
+togliere scrive il vuoto, senza fiere aperte la casella non c'è, e da
+«È della fiera» parte un update su *quella* iscrizione con *questa*
+fiera, che se non tocca nessuna riga lo dice invece di far finta.
+
+### «Modelle fiera»: il consenso al banco, legato alla fiera (7/11/2026)
+
+Il titolare, con la fiera di Napoli aperta: «a quelli in fiera nella home
+page devi mettere un tasto con i consensi informati da poter far
+compilare alle modelle in fiera. Il tasto si chiama Modelle fiera e lo
+posso sbloccare io agli utenti a richiesta. Per adesso lo attivo di
+default a tutti quelli in fiera.»
+
+**Perché non bastava quello che c'era.** Un consenso si firma inquadrando
+un QR, e i QR erano di due specie: quello della scheda di una **classe**,
+che porta con sé l'edizione, e quello **generico**, che non porta niente.
+In fiera una classe non c'è, quindi restava solo il generico — cioè
+esattamente il guasto di ottobre scritto in `QrConsensi.jsx`: sette
+consensi che non sapevano a quale corso appartenessero, mentre giravano
+due PMU BASE con le stesse date, e nessuno dei due poteva più
+rivendicarli. In fiera sarebbe peggio: le modelle sono molte, di nessuna
+classe, e se una domani contesta un trattamento quel foglio va ritrovato.
+
+Quindi il QR del banco porta la fiera (`?consenso=<codice>&evento=<id>`) e
+la scrive in **`consensi_modelle.evento_id`** (migrazione
+`20261107150000`). `salvaConsenso` non prende più «la classe» come terzo
+argomento ma **a chi appartiene** (`{ corsoDataId, eventoId }`): mai tutti
+e due, perché una firma appartiene a un posto solo. Niente dei due vuol
+dire «codice generico», e si ritrova solo nell'archivio generale.
+
+**Un trattamento per volta, e non sei QR in fila.** In aula i codici sono
+quelli del corso, e un corso sta su un consenso solo; al banco i modelli
+sono tutti e sei. Sei codici accanto su un tavolo vogliono dire una
+modella trattata a microneedling che firma il modulo del trucco
+permanente — e le domande sulla salute non sono le stesse. Si preme prima
+il trattamento, poi compare il suo codice, da solo. Si può stampare e
+appendere al banco.
+
+**Senza una fiera aperta la pagina non mostra niente**, e lo dice: un
+consenso senza la sua fiera, fra un mese, non si sa più di quale evento
+era. La fiera è già scelta quando ce n'è una sola, altrimenti si scegli
+da una tendina. In fondo alla pagina ci sono le modelle che hanno già
+firmato **a quella fiera**, col riepilogo dei «sì» sotto ogni nome — è
+quello che si guarda prima di toccarla — e un tasto «Aggiorna», perché
+lei firma dal suo telefono e la pagina non se ne accorge da sola.
+
+**Il permesso è una casella vera** (`modellefiera` in `TASTI_HOME`), e si
+sblocca a richiesta da Gestione utenti / Password master / venditori /
+assistenti. **Non** sta in `PERMESSI_DI_PARTENZA`: un utente nuovo non la
+trova dentro da sé — è l'opposto di `registrazioneclienti`, e lo ha detto
+il titolare («lo posso sbloccare io agli utenti a richiesta»). Nessun
+bypass per chi amministra.
+
+**Acceso adesso a chi sta al banco, per id e su tutte le identità.** La
+migrazione non nomina nessuno: ricava le righe da
+`eventi_team.vende_al_banco` — la stessa spunta che decide da dove parte
+il POS — e risale ai legami (`master.venditore_id`,
+`utenti_app.venditore_id`, `assistente.master_id`). Sono **14 righe per
+otto persone**, più il profilo Programmatore che serve a verificarla:
+ANDREA PAURA nel team è il venditore «ANDREA», entra come master e ha
+anche una riga assistente; ELIA CITO il contrario. Accendere il permesso
+su una sola identità vuol dire una tessera che c'è o non c'è secondo la
+password battuta, e nessuno capirebbe perché.
+
+Prove in `prove/modelle-fiera.test.jsx` (13): dove finisce scritta
+l'appartenenza (fiera, classe, o niente col codice generico), che i
+consensi di una fiera si chiedano per la loro colonna, la pagina montata
+per davvero — una fiera sola già scelta, nessun codice prima del
+trattamento, il codice che porta `&evento=` e non `&edizione=`, due fiere
+fra cui scegliere, nessuna fiera aperta — e la tessera in Home, che c'è
+solo per chi ha la casella.
+
+### Quanto sconto ha preso QUESTO prodotto (7/11/2026)
+
+Le ragazze al banco della fiera di Napoli: «per ogni prodotto vogliono
+vedere quale percentuale il programma ha calcolato con lo sconto fiera,
+perché la cliente glielo chiede. Quando battono gli aghi vogliono vedere
+sugli aghi che percentuale è stata fatta, poi sul pigmento quella del
+colore». E il motivo: «calcola il prezzo intero e poi applica la
+percentuale tutta insieme nel carrello, così non si capisce qual è il
+prezzo intero e qual è il prezzo scontato di ciascuna riga».
+
+**La percentuale di riga c'era già, e nessuna l'ha mai vista.** Era
+scritta in fondo al NOME del prodotto, dentro un riquadro con
+`white-space: nowrap` + `overflow: hidden` + `text-overflow: ellipsis`:
+cioè un riquadro che taglia quello che non ci sta, e quello che non ci
+sta è sempre l'ultima cosa — proprio lo sconto. Su un telefono, con i
+nomi che hanno i prodotti qui («Excellentia Siero ricrescita Ciglia —
+Espositore 10pz»), l'ellissi se lo mangiava per primo. **Una cosa
+aggiunta in fondo a un riquadro che taglia non esiste**, e non lo dice
+nessun errore: il numero era calcolato giusto e disegnato fuori dallo
+schermo. Adesso sta sulla riga del prezzo, che manda a capo invece di
+tagliare, e una prova controlla che il riquadro del nome non contenga
+percentuali.
+
+**Cosa si legge adesso**, sulla riga di ogni prodotto del carrello:
+`36,60 € → 32,21 € −12% · 2 pz 64,42 €` — il prezzo pieno barrato,
+quello scontato, la percentuale di quella riga, e con più di un pezzo
+quanto fa la riga intera.
+
+**Il prezzo del pezzo si ricava DALLA RIGA**, non il contrario: totale
+della riga diviso i pezzi. Scontare il pezzo e moltiplicarlo
+incasserebbe un centesimo in più di quello che la vendita registra — tre
+pigmenti fanno 96,62 €, che su tre pezzi non è divisibile (32,2066…), e
+32,21 × 3 fa 96,63. Per questo con più di un pezzo si scrive «al pezzo»
+e accanto il totale della riga: il pezzo è arrotondato, il conto che fa
+fede è quello della riga, e i due numeri si leggono per quello che sono
+invece di sembrare l'uno il triplo dell'altro.
+
+**Una riga che non prende niente lo dice** («Su questo nessuno sconto:
+prezzo pieno»), ma solo quando una regola di sconto sta valendo sul
+carrello. È il caso che al banco si chiede per primo: la cliente ha
+visto lo sconto sul pigmento e lo chiede anche sull'altro. Succede quando
+del prodotto non risulta il costo di acquisto — senza margine non c'è
+niente da cedere. Il riquadro dei totali li elencava già, ma lontano da
+lì.
+
+**E il conto di riga adesso è uno solo** (`scontiPerRigaCarrello`).
+Erano **due copie della stessa formula** a quattrocento righe di
+distanza: una per il carrello che si guarda, una per la vendita che si
+registra. Finché quel numero lo leggeva solo chi vende era una
+duplicazione; **da quando lo legge la cliente davanti al banco, due
+copie vogliono dire un prezzo detto e un prezzo incassato che possono
+non coincidere.** Dentro c'è anche il riproporzionamento — se la somma
+delle righe non fa lo sconto del totale, per i centesimi o per il tetto
+al subtotale, si riproporziona e la differenza va sull'ultima riga — che
+prima faceva solo la vendita: era l'unico punto in cui i due numeri si
+staccavano davvero.
+
+**Un difetto trovato strada facendo, e sono margini.** Col codice di
+acquisto di una master lo sconto è in euro per pezzo (il cedibile), e per
+riga non lo calcolava nessuno: le righe venivano tutte zero e il
+riproporzionamento buttava **l'intera differenza sull'ultima riga del
+carrello**. Il totale era giusto — quello che la master pagava non
+cambia — ma `sconto_riga`, `sconto_pct` e `totale_riga` attribuivano
+tutto a un prodotto solo, e con essi il margine per prodotto nelle
+statistiche. Ora ogni riga porta il suo.
+
+**E la ricevuta dice lo stesso numero.** Le righe che la cliente vede
+quando paga — pagina di Stripe, QR, ricevuta — spalmavano lo sconto in
+proporzione al lordo, con **un solo fattore per tutte**: il totale
+tornava, ma un pigmento scontato del 12% e un pezzo senza margine
+scontato dello 0% comparivano ridotti della stessa media. Finché al
+banco non si diceva niente di riga era invisibile; da quando la riga
+dice «36,60 → 32,21 −12%», la ricevuta direbbe un terzo numero. Ora
+quelle righe nascono da `scontiPerRigaCarrello` come tutto il resto
+(`righeDaPagare`), e il fattore resta solo per i due casi in cui il
+totale non è la somma delle righe: le provvigioni scalate e l'omaggio.
+In una vendita normale vale esattamente 1.
+
+Prove in `prove/sconto-di-riga-al-banco.test.jsx` (17): la regola —
+margini diversi danno percentuali diverse sulla stessa vendita, la somma
+delle righe fa **esattamente** lo sconto del carrello, lo sconto più
+grande del carrello non sfonda le righe, l'omaggio, il codice della
+master — e il gesto, col POS vero montato: si batte il prodotto e si
+legge la riga, compresa quella con due pezzi.
+
+### Il POS di chi sta al banco parte dalla fiera (7/11/2026)
+
+Il titolare, sabato mattina con la fiera di Napoli aperta: «Da oggi fino a
+lunedì i POS della vendita al banco di Elia Cito, Andrea Paura, Stefano
+Di Napoli, Elena Rocca, Maria Stella Quaresima e Olga devono essere
+impostati di default su vendita legata a un evento, fiera di Napoli.
+Sconto fiera. Fino a lunedì ore 20.»
+
+**Perché la regola normale qui è rovesciata.** Al banco si parte sempre
+da «vendita non legata a un evento» e lo sconto fiera nasce spento: è la
+stessa regola del corso («NESSUNA PRESELEZIONE DEL CORSO»), scritta
+perché una vendita agganciata da sola a una classe si porta addosso lo
+sconto degli allievi senza che nessuno l'abbia chiesto. Per i tre giorni
+di una fiera però **tutte** le vendite di chi sta a quel banco sono di
+quella fiera, e il giro giusto va ripetuto a mano a ogni scontrino. Chi
+se lo dimentica fa due danni insieme: la vendita resta fuori dal conto
+della fiera — e il materiale partito non torna in pari al rientro — e il
+cliente paga pieno davanti a un banco che lo sconto lo fa.
+
+**Dove vive, e perché non in App.jsx.** Sei nomi e una scadenza scritti
+nel codice sarebbero una regola che vive nel browser: per spegnerla, o
+per tenerla accesa un'ora in più lunedì sera, servirebbe una
+pubblicazione. Sta accanto alla fiera a cui appartiene
+(`20261107100000_pos_parte_dalla_fiera.sql`): `eventi_team.vende_al_banco`
+dice **chi**, `eventi.pos_banco_fino_al` **fino a quando** e
+`eventi.pos_banco_sconto_fiera` se parte anche lo sconto. Si cambia da
+Gestione eventi → scheda della fiera → Team, dal riquadro **«Il banco
+della fiera»**: la spunta verde a sinistra di ogni nome, l'ora, e
+«Spegni». Senza l'ora scritta non si preseleziona niente — che è il
+comportamento di sempre per ogni altro evento, passato e futuro.
+
+**«Chi viene alla fiera» e «chi batte gli scontrini» non sono la stessa
+lista.** Per questo la spunta è per persona e non per evento: una
+preselezione addosso a chi in quei giorni tiene un corso suo altrove
+aggancerebbe alla fiera le vendite della sua aula, con lo sconto della
+fiera sopra. Nel team di Napoli c'erano dieci righe; il titolare ne ha
+nominate sei, e messo davanti ai nomi delle altre due con un'anagrafica
+(CHIARA COLONNELLI, VALENTINA CALASCIBETTA) ha aggiunto anche quelle:
+**otto**. Le due righe **libere** (Miranda Raffaele, Gianluca Rocca)
+restano fuori per forza — senza anagrafica non hanno un'identità
+nell'app, quindi non hanno un POS.
+
+**La parte che si sbaglia senza accorgersene: le identità.**
+`operatoreCorrente` restituisce **una** identità, quella della password
+battuta; in anagrafica la stessa persona ne ha due o tre, e nel team sta
+con quella dell'elenco da cui è stata presa. ANDREA PAURA nel team è il
+**venditore** «ANDREA» e nell'app entra come **master**; ELIA CITO il
+contrario. Una regola scritta su una sola identità li mancherebbe in
+silenzio, cioè al banco, davanti al cliente.
+`identitaDellaPersona` le unisce **per id** — `master.venditore_id`,
+`assistente.master_id` — e **mai per nome**: «ANDREA» e «ANDREA PAURA»
+sono la stessa persona e due stringhe diverse, e questa lezione il
+progetto l'ha già pagata con la notifica del modulo al venditore.
+
+**Resta una partenza, non un obbligo**, e si dice: sopra la tendina
+compare «Sei fra chi vende al banco di *Fiera di Napoli*… se questa
+vendita non è della fiera, cambia qui sopra». Una preselezione muta su
+dove va la vendita e su quanto paga il cliente è il modo di non
+guardarla più, e di non accorgersi il giorno in cui è sbagliata. La
+scelta di chi vende vince sempre e non torna indietro (`bancoDeciso`),
+anche quando è «nessun evento». E **si spegne da sé**: passata l'ora il
+POS riparte da «nessun evento» senza che nessuno debba togliere le
+spunte. Quell'ora decide da dove il banco **parte**, non taglia un
+carrello aperto a metà.
+
+**E la spedizione parte spenta** (7/11/2026, chiesto il giorno stesso:
+«togli la spedizione di default dai POS settati in fiera a Napoli»). Al
+banco la merce esce dallo scatolone ed entra nella borsa della cliente:
+con il carrello ancora vuoto si leggeva «Totale da incassare 6,90 €», e
+su uno scontrino di fiera sono soldi chiesti per un servizio che non
+c'è. La spedizione nasce accesa per decisione del titolare del 23/10
+(«meglio che le toglie la master piuttosto che le dimentica»), che a un
+corso è giusta: quella decisione **non è stata ribaltata per tutti** —
+si spegne sul solo POS che parte da una fiera, dove la consegna a mano
+non è l'eccezione ma la regola. Resta una partenza e non un divieto: chi
+vuole il pacco a casa riaccende la spunta. Una prova controlla le due
+facce — spenta al banco, accesa per chi al banco non c'è.
+
+**Da sapere, e da decidere**: oggi la spedizione è accesa **solo sul
+primo carrello** dopo l'apertura del POS. Dal secondo in poi
+`nuovaVendita` la spegne, e si riaccende scegliendo un corso o
+un'allieva. Quindi il «accesa di default» del 23/10 vale in pratica per
+una vendita sola a sessione. Non è stato toccato: è una decisione del
+titolare, e va ridetta, non indovinata.
+
+**Un buco trovato strada facendo, e sono soldi.** La fotografia di un
+carrello sospeso salvava `scontoFiera` ma **non la fiera**: ripreso dopo
+un ricaricamento della pagina, `eventoPosId` era vuoto, e lo sconto
+fiera senza evento non è «disponibile» — spariva in silenzio insieme
+alla sua spunta, che si vede solo con un evento scelto. Il cliente
+pagava pieno. Ora `eventoPosId` sta nella fotografia; un carrello
+salvato prima non ce l'ha e si riprende con la fiera che la
+preselezione ha già messo.
+
+Prove in `prove/pos-parte-dalla-fiera.test.js` (16, la regola: le
+identità doppie, le righe libere, lunedì alle 19:59 sì e alle 20:00 no,
+la fiera conclusa, due fiere aperte) e
+`prove/pos-parte-dalla-fiera-al-banco.test.jsx` (3, il gesto: il POS
+vero montato, la tendina già sulla fiera, la spunta accesa, e chi non è
+al banco che si apre come sempre).
+
+### Due buchi trovati dal banco di prova, non dall'uso (4/11/2026)
+
+Entrambi erano in produzione da ieri, e li ha trovati `npm test` — che
+ieri non è stato lanciato dopo le ultime aggiunte. Vale come promemoria:
+le tre verifiche prima del push non sono una formalità.
+
+- **Le tessere nuove non avevano la guida.** `registrazioneclienti` e
+  `stampe` erano in `TASTI_HOME` ma non in `AREE_GUIDA`, quindi
+  l'assistente non sapeva spiegarle: alla domanda «come registro un
+  cliente» non avrebbe avuto niente da dire. La prova che controlla che
+  **nessun tasto resti senza guida** esiste proprio per questo, ed era
+  rossa. Aggiunte le due schede (senza cifre: quella regola vale anche
+  qui, e c'è una prova che la fa rispettare).
+- **La prova della conversazione a voce era rimasta al patto vecchio.**
+  Dal 3/11 la frase si consegna dopo **900 ms di silenzio** e non appena
+  il browser la dichiara definitiva; la prova aspettava 120 ms e se ne
+  andava prima che la domanda fosse partita, poi dava la colpa alla
+  lettura. Ora aspetta il silenzio — e prima controlla che il silenzio
+  serva davvero, altrimenti allungare l'attesa nasconderebbe un ritorno
+  alla consegna immediata. La lettura si verifica sui pezzi **riuniti**,
+  perché la voce legge a frasi e quante frasi stiano in un pezzo dipende
+  da una soglia che può cambiare.
+
 ## 5. Comandi
 
 ```bash
@@ -1322,6 +7157,52 @@ sh controlla-funzioni.sh     # tipi delle edge function (Deno), prima di pubblic
 
 **Prima di ogni push: `npm run lint`, `npm test`, `npm run build`.** Tutti e tre
 a zero. Prima di pubblicare una edge function, anche `sh controlla-funzioni.sh`.
+
+**Un push non garantisce una pubblicazione (4/11/2026).** Il commit
+`cd55723` («Gli sconti della fiera si copiano anche dalle master») era su
+GitHub dalle 10:56, e alle 20:45 il sito serviva ancora `8937c43`, di
+un'ora prima: il collegamento GitHub -> Vercel non ha preso quel commit,
+e non ha lasciato nemmeno una build fallita. Il titolare cercava un tasto
+che nel codice c'era e online no.
+
+Come si riconosce, perche' da fuori sembra un difetto della pagina: si
+confronta `git ls-remote origin main` con lo sha dell'ultima
+pubblicazione in produzione, e nel dubbio si scarica il bundle servito e
+ci si cerca dentro una frase nuova (qui bastava «referral personale delle
+master»: assente). Un tasto che manca a video e c'e' nel sorgente e'
+quasi sempre una delle due cose, e vanno escluse in quest'ordine: la
+pubblicazione che non e' partita, e la scheda aperta da ore (il punto qui
+sotto).
+
+Quindi: **dopo un push che deve arrivare a qualcuno, si controlla che lo
+sha pubblicato sia il proprio.** La ripartenza si fa dal pannello Vercel
+(Redeploy) o con un commit nuovo, che fa ripartire il collegamento.
+
+**Due trappole nel controllare che sia arrivata** (8/11/2026, pagate
+tutte e due nello stesso giro):
+
+- **il nome del file servito NON e' quello della build locale.** Vercel
+  ricompila, e l'impronta nel nome cambia: in locale
+  `index-30S72oR2.js`, online `index-cIYdUSso.js`, stesso commit.
+  Aspettare che compaia il proprio nome e' aspettare per sempre. Si
+  confronta lo **sha** (`git ls-remote origin main` contro quello della
+  pubblicazione) e, per essere certi del contenuto, si cerca **dentro il
+  file servito** una stringa che prima non c'era — i nomi delle
+  proprieta' sopravvivono alla minificazione, quelli delle variabili no;
+- **una pagina caricata a richiesta NON sta in `index-*.js`.** Quasi tutte
+  le pagine passano da `pezzo()`, quindi vivono in un file loro
+  (`PaginaContatti-CBimpW7U.js`): cercare una frase nuova dentro il bundle
+  principale non la trova mai, e l'attesa non finisce piu'. Si legge il
+  nome del pezzo **dentro** l'indice servito e si cerca li'. Costato
+  mezz'ora il 10/11/2026, a guardare un controllo che non poteva riuscire;
+- **interrogare il sito con una `curl` nuda, ripetuta, lo fa rispondere
+  403 «Vercel Security Checkpoint»**, e sembra un guasto della
+  pubblicazione. E' la protezione automatica che prende per robot un
+  client senza intestazioni da browser — a maggior ragione se chiede
+  ogni dieci secondi dallo stesso indirizzo. Con lo `User-Agent` di un
+  telefono la stessa richiesta torna **200**: chi usa l'app non vede
+  niente. Se serve davvero un'attesa, si guarda lo stato della
+  pubblicazione dalle API di Vercel, non si martella il sito.
 
 **Pubblicare pianta le schede rimaste aperte (22/10/2026).** L'app è divisa in
 pezzi caricati a richiesta, e ognuno ha il nome col codice del contenuto
@@ -1381,7 +7262,7 @@ giorno in cui il magazzino fosse andato a posto) e due `opacity` scritte nello
 stesso stile. Gli avvisi che restano sono quasi tutti `no-unused-vars`: si
 guardano, non fermano niente.
 
-**Le prove (dal 18/10/2026).** Stanno in `prove/`, 43 file e 368 controlli. Montano i
+**Le prove (dal 18/10/2026).** Stanno in `prove/`, 101 file e 839 controlli. Montano i
 componenti **veri** in jsdom e li toccano — premono il tasto del regolamento,
 scrivono un codice fiscale corto, cliccano «Emetti la fattura» e guardano cosa
 parte. Questo progetto non si rompe in compilazione: si rompe al montaggio e al
@@ -1433,11 +7314,13 @@ di `supabase functions deploy`. Deno sta in `~/.deno/bin/deno`.
   prima il diff e l'impatto sui dati storici.
 - Mettere segreti in variabili `VITE_*`: finiscono nel bundle pubblico.
 - Spostare la generazione dei PDF lato server: è client-side per scelta.
-  **Un'eccezione, dichiarata:** il modulo di iscrizione firmato
-  (`supabase/functions/_shared/modulo-pdf.ts`). Quel PDF deve partire
-  *allegato* a una mail che manda il server; se lo facesse il telefono
-  basterebbe che la pagina si chiuda un istante prima e la conferma
-  uscirebbe senza allegato, cioè senza la cosa per cui esiste.
+  **Due eccezioni, dichiarate, e per la stessa ragione:** il modulo di
+  iscrizione firmato (`supabase/functions/_shared/modulo-pdf.ts`) e la
+  copia firmata del contratto master
+  (`supabase/functions/_shared/contratto-master-pdf.ts`). Quei due PDF
+  devono partire *allegati* a una mail che manda il server; se li facesse
+  il telefono basterebbe che la pagina si chiuda un istante prima e la
+  copia uscirebbe senza allegato, cioè senza la cosa per cui esiste.
 - Riformattare o "sistemare" file non toccati dal task in corso.
 - Aggiungere dipendenze per problemi che il codice esistente già risolve.
 

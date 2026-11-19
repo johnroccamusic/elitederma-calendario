@@ -82,7 +82,9 @@ Deno.serve(async (req) => {
 
   const { data: prodotto, error: erroreLettura } = await supabase
     .from("prodotti_shop")
-    .select("id, woo_product_id")
+    // `quantita` e' la giacenza com'era PRIMA di questa scrittura: serve
+    // a riconoscere il passaggio esaurito <-> disponibile (vedi la cache)
+    .select("id, woo_product_id, quantita")
     .eq("id", prodottoId)
     .single();
   if (erroreLettura || !prodotto) {
@@ -140,7 +142,26 @@ Deno.serve(async (req) => {
   }
 
   // la pagina del prodotto e' in cache sul sito (Breeze + Cloudflare):
-  // prezzo e disponibilita' cambiano solo se la si svuota
-  const avvisoCache = await svuotaCacheSito({ prodottiWooIds: [prodotto.woo_product_id] });
+  // prezzo e disponibilita' cambiano solo se la si svuota.
+  //
+  // E quando un prodotto PASSA da esaurito a disponibile (o viceversa)
+  // non basta la sua pagina: nelle griglie di shop e categorie il tasto
+  // "Aggiungi al carrello" diventa "Leggi tutto" e viceversa, e a quelle
+  // pagine la pulizia mirata non arriva. Il 2/11/2026 "N2 Fixa" e'
+  // tornato disponibile alle 18:02 e per cinque ore i clienti hanno
+  // continuato a leggere "Leggi tutto", convinti che fosse esaurito.
+  // Un numero che cambia senza toccare lo zero le griglie non le cambia.
+  // E IL PREZZO E' VISIBILE QUANTO LA DISPONIBILITA' (2/11/2026): sta
+  // scritto sotto ogni riquadro delle griglie, e li' la pulizia mirata
+  // non arriva. Quindi: prezzo cambiato, oppure disponibilita' che
+  // attraversa lo zero, si svuota tutto. Una quantita' che scende da 6 a
+  // 5 no: nelle griglie quel numero non compare, e la scheda del
+  // prodotto — l'unica che lo mostra — la pulizia mirata la copre.
+  const eraEsaurito = Number(prodotto.quantita ?? 0) <= 0;
+  const oraEsaurito = Number(quantita ?? 0) <= 0;
+  const passaggioDisponibilita = cambiaGiacenza && eraEsaurito !== oraEsaurito;
+  const visibileInGriglia = cambiaPrezzo || passaggioDisponibilita;
+  const avvisoCache = await svuotaCacheSito(
+    visibileInGriglia ? { tutto: true } : { prodottiWooIds: [prodotto.woo_product_id] });
   return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, quantita: cambiaGiacenza ? quantita : undefined, avvisoCache: avvisoCache || undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
