@@ -1,0 +1,275 @@
+<?php
+/**
+ * Plugin Name: Elitederma - Popup Black Friday
+ * Description: Il riquadro che annuncia la promozione, con il codice da copiare. Si accende e si spegne DA SOLO alle date scritte qui dentro, perche' a decidere e' l'orologio di chi guarda e non il server: cosi' non serve svuotare la cache ne' per accenderlo ne' per spegnerlo. Si vede una volta per visitatore, mai nel carrello e mai al checkout.
+ * Version: 1.0
+ * Author: Elitederma
+ */
+
+// ---------------------------------------------------------------------
+// QUELLO CHE SI CAMBIA STA TUTTO QUI, NELLE PRIME RIGHE.
+//
+// LE DATE le legge il BROWSER DI CHI GUARDA, non il server. E' la sola
+// forma che regge su questo sito: ogni pagina arriva dalla copia di
+// Cloudflare con trenta giorni di validita' (misurato: s-maxage=2592000,
+// cf-cache-status HIT), quindi qualunque cosa decisa dal server resta
+// congelata nella copia — il popup non comparirebbe all'inizio e non
+// sparirebbe alla fine. Scritto cosi' invece il riquadro e' sempre nella
+// pagina, e si mostra da se' solo nella finestra giusta.
+//
+// Il fuso e' scritto per esteso (+01:00, l'ora italiana d'inverno): una
+// data senza fuso la ogni browser la interpreta a modo suo.
+//
+// L'IDENTIFICATIVO serve a far ricomparire il riquadro a chi l'aveva
+// gia' chiuso: cambiandolo, la campagna e' un'altra e si rivede.
+// ---------------------------------------------------------------------
+if ( ! defined( 'ELITEDERMA_BF_ID' ) )      { define( 'ELITEDERMA_BF_ID', 'black26' ); }
+if ( ! defined( 'ELITEDERMA_BF_DA' ) )      { define( 'ELITEDERMA_BF_DA', '2026-11-19T00:00:00+01:00' ); }
+if ( ! defined( 'ELITEDERMA_BF_A' ) )       { define( 'ELITEDERMA_BF_A',  '2026-12-01T23:59:59+01:00' ); }
+if ( ! defined( 'ELITEDERMA_BF_CODICE' ) )  { define( 'ELITEDERMA_BF_CODICE', 'BLACK26' ); }
+if ( ! defined( 'ELITEDERMA_BF_TITOLO' ) )  { define( 'ELITEDERMA_BF_TITOLO', 'Black Friday' ); }
+// «FINO AL» e non «20%»: il codice fa il venti pieno su gran parte del
+// catalogo, meno sulla laminazione e niente su sedici prodotti. Scrivere
+// «20% su tutto» e' una promessa che il carrello non mantiene, e la
+// discussione arriva alla cassa.
+if ( ! defined( 'ELITEDERMA_BF_TESTO' ) )   { define( 'ELITEDERMA_BF_TESTO', 'Fino al 20% di sconto su tutto il catalogo. Inserisci il codice al carrello.' ); }
+// IL TASTO PRINCIPALE COPIA IL CODICE E CHIUDE, e non manda da nessuna
+// parte. Il titolare, guardando l'anteprima: «ma a che serve "vai allo
+// shop" se siamo nello shop?». Aveva ragione: questo riquadro lo vede
+// chi sta gia' guardando i prodotti, e in quel momento l'unica cosa
+// utile e' prendersi il codice e continuare. Un tasto che ti porta dove
+// sei gia' e' un tasto che non si preme.
+if ( ! defined( 'ELITEDERMA_BF_TASTO' ) )   { define( 'ELITEDERMA_BF_TASTO', 'Copia il codice' ); }
+// UN SECONDO TASTO, SOLO SE PORTA DAVVERO ALTROVE: vuoto = non compare.
+// Ha senso per una categoria della promozione o una pagina fatta
+// apposta, non per lo shop in generale.
+if ( ! defined( 'ELITEDERMA_BF_LINK' ) )      { define( 'ELITEDERMA_BF_LINK', '' ); }
+if ( ! defined( 'ELITEDERMA_BF_LINK_TESTO' ) ){ define( 'ELITEDERMA_BF_LINK_TESTO', 'Guarda le offerte' ); }
+// dopo quanti secondi compare: due bastano a far caricare la pagina e
+// non sembrare un agguato. Zero = subito.
+if ( ! defined( 'ELITEDERMA_BF_ATTESA' ) )  { define( 'ELITEDERMA_BF_ATTESA', 2 ); }
+// L'IMMAGINE IN TESTA, se la vuoi: carica il file in Media di WordPress,
+// copia il suo indirizzo e incollalo qui. Vuoto = nessuna immagine, e il
+// riquadro resta quello sobrio.
+//
+// Misura giusta: larga 840 px e alta 420 (il doppio di come si vede, per
+// gli schermi fitti). Piu' alta di cosi' su un telefono spinge il tasto
+// fuori dallo schermo, ed e' il tasto il motivo per cui il riquadro
+// esiste.
+if ( ! defined( 'ELITEDERMA_BF_IMMAGINE' ) ) { define( 'ELITEDERMA_BF_IMMAGINE', '' ); }
+// IL LOGO, in testa al riquadro al posto della scritta.
+//
+// E' scritto QUI DENTRO (un data URI) e non preso da un indirizzo, per
+// tre ragioni: non c'e' niente da caricare da nessuna parte, non si puo'
+// rompere il giorno che qualcuno sposta un file, e quando la campagna
+// finisce sparisce insieme allo snippet. Pesa dodici chili di byte su
+// una pagina che ne pesa duecento, e vale solo finche' il popup vive.
+//
+// Se preferisci servirlo da WordPress: carica il PNG in Media, copia il
+// suo indirizzo e incollalo al posto di tutto il data URI. Il resto non
+// cambia.
+//
+// E' il logo BIANCO, l'unico che si veda sul blu del riquadro.
+if ( ! defined( 'ELITEDERMA_BF_LOGO' ) ) { define( 'ELITEDERMA_BF_LOGO', 'data:image/png;base64,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' ); }
+
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+add_action( 'wp_footer', 'elitederma_bf_popup', 99 );
+
+// La guardia e' per Code Snippets, non per PHP: salvando o attivando uno
+// snippet lo esegue DUE volte nella stessa richiesta, e alla seconda la
+// funzione risulta gia' dichiarata. Senza, lo snippet non si accende.
+if ( ! function_exists( 'elitederma_bf_popup' ) ) {
+function elitederma_bf_popup() {
+
+	// NEL CARRELLO E AL CHECKOUT NON COMPARE. Li' la persona sta
+	// pagando: un riquadro sopra un pagamento fa abbandonare, e il
+	// codice in quelle pagine lo si scrive, non lo si scopre.
+	// Il controllo e' doppio — qui e nel JavaScript — perche' anche
+	// queste pagine arrivano dalla cache, e una copia presa altrove
+	// potrebbe portarsi dietro il riquadro.
+	if ( function_exists( 'is_cart' ) && ( is_cart() || is_checkout() || is_account_page() ) ) {
+		return;
+	}
+
+	$id     = ELITEDERMA_BF_ID;
+	$codice = ELITEDERMA_BF_CODICE;
+	?>
+<div id="ed-bf" class="ed-bf" hidden aria-hidden="true">
+  <div class="ed-bf__velo" data-ed-bf-chiudi></div>
+  <div class="ed-bf__scheda" role="dialog" aria-modal="true" aria-labelledby="ed-bf-titolo">
+    <button type="button" class="ed-bf__x" data-ed-bf-chiudi aria-label="Chiudi">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+
+<?php if ( ELITEDERMA_BF_IMMAGINE ) : ?>
+    <div class="ed-bf__foto"><img src="<?php echo esc_url( ELITEDERMA_BF_IMMAGINE ); ?>" alt="<?php echo esc_attr( ELITEDERMA_BF_TITOLO ); ?>" loading="lazy"></div>
+<?php endif; ?>
+<?php if ( ELITEDERMA_BF_LOGO ) : ?>
+    <img class="ed-bf__logo" src="<?php echo esc_attr( ELITEDERMA_BF_LOGO ); ?>" alt="Elitederma" width="200" height="25">
+<?php else : ?>
+    <div class="ed-bf__marchio">Elitederma</div>
+<?php endif; ?>
+    <div class="ed-bf__filo"></div>
+
+    <h2 id="ed-bf-titolo" class="ed-bf__titolo"><?php echo esc_html( ELITEDERMA_BF_TITOLO ); ?></h2>
+    <p class="ed-bf__testo"><?php echo esc_html( ELITEDERMA_BF_TESTO ); ?></p>
+
+    <div class="ed-bf__codice">
+      <span class="ed-bf__etichetta">Il tuo codice</span>
+      <code class="ed-bf__valore" id="ed-bf-codice"><?php echo esc_html( $codice ); ?></code>
+    </div>
+
+    <button type="button" class="ed-bf__cta" id="ed-bf-copia"><?php echo esc_html( ELITEDERMA_BF_TASTO ); ?></button>
+<?php if ( ELITEDERMA_BF_LINK ) : ?>
+    <a class="ed-bf__link" href="<?php echo esc_url( ELITEDERMA_BF_LINK ); ?>"><?php echo esc_html( ELITEDERMA_BF_LINK_TESTO ); ?></a>
+<?php endif; ?>
+    <button type="button" class="ed-bf__dopo" data-ed-bf-chiudi>Continua a guardare</button>
+  </div>
+</div>
+
+<style>
+/* I colori sono quelli del brand book, non inventati qui:
+   Blu Elite #0B1A33, Oro #D1A570, Avorio #F2EDE8, Taupe #74685F. */
+.ed-bf{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px}
+.ed-bf[hidden]{display:none}
+.ed-bf__velo{position:absolute;inset:0;background:rgba(11,26,51,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;transition:opacity .25s ease}
+.ed-bf.ed-bf--su .ed-bf__velo{opacity:1}
+.ed-bf__scheda{position:relative;width:min(420px,100%);max-height:calc(100vh - 40px);overflow:auto;
+  background:linear-gradient(170deg,#0B1A33 0%,#132544 100%);
+  border:1px solid rgba(209,165,112,.45);border-radius:18px;
+  padding:34px 30px 26px;text-align:center;color:#F2EDE8;
+  box-shadow:0 24px 70px rgba(11,26,51,.55);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  opacity:0;transform:translateY(14px) scale(.97);transition:opacity .3s ease,transform .3s cubic-bezier(.2,.8,.3,1)}
+.ed-bf.ed-bf--su .ed-bf__scheda{opacity:1;transform:none}
+.ed-bf__x{position:absolute;top:12px;right:12px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+  background:transparent;border:none;border-radius:50%;color:rgba(242,237,232,.55);cursor:pointer;padding:0;transition:color .18s,background .18s}
+.ed-bf__x:hover{color:#D1A570;background:rgba(209,165,112,.12)}
+.ed-bf__foto{margin:-34px -30px 20px;border-radius:18px 18px 0 0;overflow:hidden;line-height:0}
+.ed-bf__foto img{width:100%;height:auto;display:block}
+.ed-bf__logo{display:block;width:200px;max-width:70%;height:auto;margin:0 auto}
+.ed-bf__marchio{font-size:11px;letter-spacing:.42em;text-transform:uppercase;color:#D1A570;font-weight:600;padding-left:.42em}
+.ed-bf__filo{width:54px;height:1px;margin:12px auto 20px;background:linear-gradient(90deg,transparent,#D1A570,transparent)}
+.ed-bf__titolo{margin:0 0 10px;font-size:30px;line-height:1.12;font-weight:700;letter-spacing:.02em;color:#F2EDE8}
+.ed-bf__testo{margin:0 0 22px;font-size:14.5px;line-height:1.55;color:rgba(242,237,232,.78)}
+.ed-bf__codice{border:1px dashed rgba(209,165,112,.5);border-radius:12px;padding:13px 14px 14px;margin-bottom:20px;background:rgba(209,165,112,.06)}
+.ed-bf__etichetta{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:rgba(242,237,232,.55);margin-bottom:8px}
+.ed-bf__valore{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:23px;font-weight:700;letter-spacing:.16em;color:#D1A570;background:none;padding:0;user-select:all}
+.ed-bf__cta{display:block;width:100%;background:#D1A570;color:#0B1A33;border:none;text-decoration:none;font-weight:700;font-size:15px;
+  font-family:inherit;border-radius:11px;padding:14px 18px;cursor:pointer;transition:filter .18s,background .18s}
+.ed-bf__cta:hover{filter:brightness(1.07);color:#0B1A33}
+.ed-bf__cta.ed-bf--fatto{background:#F2EDE8}
+.ed-bf__link{display:block;margin-top:10px;color:#D1A570;text-decoration:none;font-size:13.5px;font-weight:600}
+.ed-bf__link:hover{color:#D1A570;text-decoration:underline}
+.ed-bf__dopo{display:block;width:100%;margin-top:12px;background:none;border:none;color:rgba(242,237,232,.45);
+  font-size:12.5px;cursor:pointer;padding:6px}
+.ed-bf__dopo:hover{color:rgba(242,237,232,.75)}
+@media (max-width:420px){.ed-bf__scheda{padding:30px 22px 22px}.ed-bf__titolo{font-size:26px}.ed-bf__foto{margin:-30px -22px 18px}}
+/* chi ha chiesto meno animazioni al suo sistema non le riceve */
+@media (prefers-reduced-motion:reduce){.ed-bf__velo,.ed-bf__scheda{transition:none}}
+</style>
+
+<script>
+(function () {
+  var ID    = <?php echo wp_json_encode( $id ); ?>;
+  var DA    = <?php echo wp_json_encode( ELITEDERMA_BF_DA ); ?>;
+  var A     = <?php echo wp_json_encode( ELITEDERMA_BF_A ); ?>;
+  var ATTESA= <?php echo (int) ELITEDERMA_BF_ATTESA; ?>;
+  var CHIAVE = 'ed-bf-visto-' + ID;
+
+  var nodo = document.getElementById('ed-bf');
+  if (!nodo) { return; }
+
+  // LA FINESTRA LA DECIDE L'OROLOGIO DI CHI GUARDA.
+  // E' il motivo per cui questo riquadro non ha bisogno che si svuoti la
+  // cache: la pagina puo' essere vecchia di giorni, le date restano
+  // scritte dentro e il confronto si fa adesso.
+  var ora = Date.now();
+  if (ora < Date.parse(DA) || ora > Date.parse(A)) { return; }
+
+  // Nel carrello e al checkout no, nemmeno su una copia presa altrove.
+  var corpo = document.body ? document.body.className : '';
+  if (/woocommerce-cart|woocommerce-checkout|woocommerce-account/.test(corpo)) { return; }
+
+  // Una volta per visitatore. In finestra anonima `localStorage` puo'
+  // lanciare: si riprova senza memoria, che e' meglio di una pagina che
+  // si rompe per un riquadro pubblicitario.
+  function letto() { try { return localStorage.getItem(CHIAVE) === '1'; } catch (e) { return false; } }
+  function segna() { try { localStorage.setItem(CHIAVE, '1'); } catch (e) {} }
+  if (letto()) { return; }
+
+  function chiudi() {
+    nodo.classList.remove('ed-bf--su');
+    segna();
+    window.setTimeout(function () {
+      nodo.hidden = true;
+      nodo.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', suEsc);
+    }, 260);
+  }
+  function suEsc(e) { if (e.key === 'Escape') { chiudi(); } }
+
+  function apri() {
+    nodo.hidden = false;
+    nodo.setAttribute('aria-hidden', 'false');
+    // due fotogrammi prima della classe, o la transizione non parte:
+    // il nodo e' appena uscito da display:none e il browser non ha
+    // ancora uno stato di partenza da cui animare
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () { nodo.classList.add('ed-bf--su'); });
+    });
+    document.addEventListener('keydown', suEsc);
+    var x = nodo.querySelector('.ed-bf__x');
+    if (x) { x.focus(); }
+  }
+
+  Array.prototype.forEach.call(nodo.querySelectorAll('[data-ed-bf-chiudi]'), function (el) {
+    el.addEventListener('click', chiudi);
+  });
+
+  var copia = document.getElementById('ed-bf-copia');
+  var valore = document.getElementById('ed-bf-codice');
+  if (copia && valore) {
+    copia.addEventListener('click', function () {
+      var testo = valore.textContent.trim();
+      // Si dice che e' fatto, e POI si chiude. Chiudere subito lascerebbe
+      // il dubbio di aver copiato davvero, e il codice e' il motivo per
+      // cui questo riquadro esiste.
+      function fatto() {
+        copia.textContent = 'Codice copiato';
+        copia.classList.add('ed-bf--fatto');
+        window.setTimeout(chiudi, 900);
+      }
+      // la scrivania moderna degli appunti vuole una pagina sicura: si
+      // prova, e si ricade su quella vecchia invece di non fare niente
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(testo).then(fatto, vecchiaManiera);
+      } else { vecchiaManiera(); }
+      function vecchiaManiera() {
+        try {
+          var t = document.createElement('textarea');
+          t.value = testo; t.setAttribute('readonly', '');
+          t.style.position = 'fixed'; t.style.opacity = '0';
+          document.body.appendChild(t); t.select();
+          document.execCommand('copy'); document.body.removeChild(t);
+          fatto();
+        } catch (e) {
+          // non si e' potuto copiare: lo si seleziona e NON si chiude,
+          // cosi' basta un tasto per prenderlo. Un messaggio di errore su
+          // un popup di sconti non lo legge nessuno; una riga di testo
+          // gia' selezionata si capisce da sola.
+          var r = document.createRange(); r.selectNodeContents(valore);
+          var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+          copia.textContent = 'Premi Cmd+C';
+        }
+      }
+    });
+  }
+
+  window.setTimeout(apri, Math.max(0, ATTESA) * 1000);
+})();
+</script>
+	<?php
+}
+}

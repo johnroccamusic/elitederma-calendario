@@ -1593,6 +1593,65 @@ del 50%**. È così che l'ago sarebbe finito in un listino Distributor a
 il punto 6 della specifica dei listini rivenditori: un costo mancante deve
 dare **nessuno sconto**, non il massimo.
 
+### Il popup del Black Friday si accende e si spegne da solo (19/11/2026)
+
+Il titolare: «come si attiva il popup su WooCommerce per dire che è iniziato il
+black friday?» — e la risposta era che **non c'è niente da attivare**: sul sito
+non è installato nessuno strumento per i popup (controllato sull'HTML della
+home: nessun Popup Maker, nessun OptinMonster, niente), e l'avviso negozio
+nativo di WooCommerce è spento.
+
+**IL VINCOLO CHE DECIDE LA FORMA È LA CACHE.** Misurato sulla home:
+`cf-cache-status: HIT`, `cache-control: max-age=0, s-maxage=2592000` — la
+pagina arriva dalla copia di Cloudflare, buona trenta giorni. Qualunque cosa
+decisa dal **server** resta congelata in quella copia: il popup non comparirebbe
+il giorno che comincia e **non sparirebbe** il giorno che finisce. È lo stesso
+guasto che a novembre ha tenuto «Leggi tutto» su N2 Fixa per cinque ore.
+
+Quindi il riquadro **sta sempre nella pagina** e a decidere se mostrarlo è
+**l'orologio di chi guarda**: le due date sono scritte nello snippet, il
+confronto lo fa il browser. Si accende e si spegne da solo, e la cache si
+svuota **una volta sola**, quando lo si installa.
+
+**IL TASTO NON MANDA DOVE SEI GIÀ**, ed è una correzione sua davanti
+all'anteprima: «ma a che serve "vai allo shop" se siamo nello shop?». Chi vede
+il riquadro sta già guardando i prodotti, e l'unica cosa utile in quel momento è
+prendersi il codice. Il tasto d'oro quindi **copia e chiude**, dicendo «Codice
+copiato» prima di sparire — chiudere subito lascerebbe il dubbio di aver
+copiato, e il codice è il motivo per cui il riquadro esiste. Se la copia non
+riesce **non si chiude**: seleziona il codice e dice di premere Cmd+C. Resta
+possibile un secondo link, spento di default, che compare solo se porta davvero
+altrove.
+
+**Il logo sta DENTRO lo snippet** (un data URI, 16 KB): niente da caricare da
+nessuna parte, niente che si rompa il giorno che un file si sposta, e sparisce
+con la campagna. Il PNG l'ha dato il titolare — bianco su trasparente, 1599×198,
+rimpicciolito a 480 — ed è l'unico che si veda sul blu. Non è stato messo nello
+storage di Supabase perché la chiave pubblicabile non ci può scrivere, e sta
+bene così: le policy sono chiuse dal 18/10.
+
+I colori vengono dal **brand book** e non dalle costanti dell'app (sono due
+palette diverse, vedi la memoria): Blu Elite `#0B1A33`, Oro `#D1A570`, Avorio
+`#F2EDE8`.
+
+Tre regole di comportamento, ognuna per un modo di infastidire: compare dopo
+**2 secondi** e non in faccia; **una volta per visitatore** (`localStorage`, con
+l'identificativo della campagna nella chiave, così una campagna nuova si rivede);
+**mai nel carrello, al checkout e nell'area account** — lì si sta pagando, e il
+controllo è doppio, lato server e lato browser, perché anche quelle pagine
+arrivano dalla cache.
+
+**E il testo dice «fino al 20%», non «20%».** BLACK26 fa il venti pieno su gran
+parte del catalogo, meno sulla laminazione e niente su sedici prodotti: «20% su
+tutto» è una promessa che il carrello non mantiene, e la discussione arriva alla
+cassa.
+
+`wordpress/elitederma-popup-black-friday.php`, importabile da
+`wordpress/json/`. L'anteprima si costruisce **estraendo il markup dallo
+snippet** e risolvendo i segnaposti PHP, non riscrivendolo: una seconda copia si
+scosterebbe alla prima correzione, e si guarderebbe una cosa diversa da quella
+che si installa.
+
 ### Sopra il 10% lo sconto di un coupon lo decide il listino rivenditori (19/11/2026)
 
 Il titolare: «quando faccio un coupon che genera uno sconto del 20%, deve
