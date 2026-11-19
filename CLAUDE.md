@@ -1491,6 +1491,90 @@ CALASCIBETTA hanno il flag e nessuna riga in `venditori` (TOMMASO
 GIUMBINI ce l'ha, collegata). Nessun dato è stato toccato: la scrittura
 non era mai andata a buon fine.
 
+### Un prodotto che non si vende più si toglie dal listino (19/11/2026)
+
+Il titolare, davanti all'«Ago 5 Magnum Universale 0.35 Cheyenne»: «quell'ago
+non lo vendiamo più». E subito dopo: «non ho una funzione per spegnere i
+prodotti senza cancellarli … in modo che non vengano più elencati nei
+listini ma magari siano validi ancora per le statistiche di vendita».
+
+**Cancellare non era una strada**: il cestino in Gestione magazzino esiste
+solo per i prodotti **mai venduti**, perché una scheda cancellata spezza le
+vendite che la citano. Un prodotto ritirato restava quindi in listino per
+sempre.
+
+**IL FLAG C'ERA GIÀ ED È `prodotti_shop.attivo`**, e faceva già esattamente
+quel lavoro — verificato sulle viste, non sui commenti:
+
+| | |
+|---|---|
+| `v_prezzi_listini` (da cui nascono tutti i listini) | `WHERE p.attivo IS NOT FALSE` → **esce dai listini** |
+| `analisi_vendite_righe` (le statistiche) | `attivo` è una **colonna**, non un filtro → **le vendite restano** |
+| `analisi_prodotti` (l'assistente ai dati) | idem: distingue, non nasconde |
+
+Mancavano **il gesto e la pagina**: quel flag non lo scriveva nessun tasto,
+e l'unica riga spenta in archivio era stata messa così a mano.
+
+**Il gesto sta nella tendina «Disponibilità»**, come quarta voce accanto a
+Pubblicato / Privato / Bozza — scelta del titolare, dopo che gli avevo
+proposto una colonna su ogni riga: «aggiungere "Fuori listino" e il prodotto
+finisce nella cartella storico prodotti fuori listino». È la soluzione
+migliore, e il motivo è che per chi apre la scheda **la domanda è una sola**
+— dove sta questo prodotto — e due comandi vicini che rispondono alla stessa
+domanda si leggono come due cose diverse.
+
+**I primi tre valori sono stati di WooCommerce, il quarto no**, ed è
+l'unica cosa da sapere di questa tendina: «Fuori listino» è `attivo = false`.
+Sul sito il prodotto va in **privato**, non in bozza, perché `private` è
+esattamente quello che `woo-riallinea-shop` scrive da sé sui prodotti spenti
+— due verdetti diversi se lo rimbalzerebbero avanti e indietro ogni notte.
+
+**Tre regole di scrittura, in un posto solo** (`campiFuoriListino`, pura ed
+esportata, perché sono tre modi di sbagliare in silenzio):
+
+- **`attivo` si scrive SEMPRE**, in tutti e due i versi. Scrivendolo solo
+  quando si spegne, un prodotto rimesso in listino resterebbe spento per
+  sempre e nessuno capirebbe perché;
+- **la data si mette solo NEL MOMENTO IN CUI ESCE.** Riscriverla a ogni
+  salvataggio direbbe «uscito oggi» su un prodotto uscito tre mesi fa e
+  riaperto per correggere una descrizione: uno storico che mente sulla sola
+  cosa che gli si chiede. Per questo la scheda si porta dietro
+  `eraFuoriListino`, com'era quando è stata aperta;
+- **rientrando la data si azzera**, o resterebbe addosso a un prodotto che
+  in listino c'è.
+
+**La domanda prima di scrivere nomina dove il prodotto è ancora impegnato.**
+Uscendo dal listino esce anche dai **kit dei corsi** e dalle **distinte dei
+bundle**, perché quelle liste filtrano `attivo`: dirlo dopo sarebbe una
+scatola che parte senza un pezzo col tasto che dice di sì — il guasto del
+6/11 da un'altra porta. Il conteggio si chiede **solo quando serve**
+(scegliendo «Fuori listino»), e compare sia nel riquadro sotto la tendina
+sia nella conferma. E si dice «togliere», non «cancellare»: non sparisce
+niente, e chiamarla cancellazione farebbe credere di distruggere una scheda
+con tutto il suo storico.
+
+**La pagina «Prodotti fuori listino»** sta in Magazzino e shop, accanto a
+«Omaggi». Un gesto solo: **rimettere in listino**. E non ripubblica sul
+sito — torna in listino e basta, dove deve stare online lo decide chi apre
+la scheda: riaccendere una vetrina pubblica da un elenco che si guarda per
+tutt'altro sarebbe una vendita riaperta per sbaglio. I prodotti senza data
+(usciti prima che questa pagina esistesse) dicono **«data non nota»** invece
+di inventare un giorno — la regola delle 16.327 richieste del CRM.
+
+Migrazione `20261119140000_prodotti_fuori_listino.sql`: due colonne,
+`fuori_listino_il` e `fuori_listino_da`, rollback dentro. Nessun dato
+toccato. Prove in `prove/prodotti-fuori-listino.test.jsx` (13), con la
+pagina montata e premuta: la lista, la data non nota, il tasto che scrive
+**esattamente** le tre chiavi su quel prodotto, il «no» che non scrive
+niente, e lo zero righe che lo dice.
+
+**Da sapere per chi controlla:** un costo d'acquisto scritto **0** vale
+«non lo so» per `listino_cedibile`, che in quel caso dà il **tetto pieno
+del 50%**. È così che l'ago sarebbe finito in un listino Distributor a
+14,35 € senza che nessuno sapesse il margine. **Resta da sistemare**, ed è
+il punto 6 della specifica dei listini rivenditori: un costo mancante deve
+dare **nessuno sconto**, non il massimo.
+
 ### La raccolta del materiale, a tutta pagina (30/10/2026)
 
 In Logistica → Spedizioni corsi, in alto a destra nella scheda di

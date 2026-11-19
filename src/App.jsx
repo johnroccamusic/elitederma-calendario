@@ -42737,7 +42737,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, onApriListiniRivenditori, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriProdottiFuoriListino, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, onApriListiniRivenditori, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -42797,6 +42797,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
             { chiave: "venditealbanco", title: "Vendite al banco", descrizione: "Tutte le vendite fatte con il POS interno.", Icona: IconaTilePos, attivo: true, onClick: onApriVenditeAlBanco },
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
+            { chiave: "prodottifuorilistino", title: "Prodotti fuori listino", descrizione: "Quelli che non si vendono più: fuori dai listini, con le loro vendite intatte.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiFuoriListino },
             { chiave: "magazzinoguasti", title: "Magazzino guasti", descrizione: "Quello che torna rotto dai corsi: fuori giacenza, e quali prodotti si rompono più spesso.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriMagazzinoGuasti },
             { chiave: "analisiconsumi", title: "Consumi ai corsi", descrizione: "Quanto si consuma per allievo, chi si discosta dalla media e quali corsi vanno fuori riga.", Icona: IconaElencoRighe, attivo: true, onClick: onApriAnalisiConsumi },
             // i carrelli sospesi come tasto vero, con icona e disco, al posto
@@ -61238,6 +61239,125 @@ function PaginaStatisticheVenditeCanale({ venditeShop, wooCoupon, ricarica, orig
 // "Omaggi": prodotti usciti dal POS senza essere venduti (tipo_movimento
 // "omaggio", totale sempre zero) — qui interessa solo cosa e quanto è
 // stato regalato, non un incasso che non esiste
+// COSA SI SCRIVE QUANDO UN PRODOTTO ESCE O RIENTRA NEL LISTINO.
+//
+// Sta qui, fuori dalla scheda e pura, perche' sono tre regole che si
+// sbagliano in silenzio:
+//
+//  - `attivo` si scrive SEMPRE, in tutti e due i versi: scrivendolo solo
+//    quando si spegne, un prodotto rimesso in listino resterebbe spento
+//    per sempre e nessuno capirebbe perche';
+//  - la data si mette SOLO NEL MOMENTO IN CUI ESCE. Riscriverla a ogni
+//    salvataggio direbbe «uscito oggi» su un prodotto uscito tre mesi fa
+//    e riaperto per correggere una descrizione — cioe' uno storico che
+//    mente sulla sola cosa che gli si chiede;
+//  - rientrando la data si AZZERA, o resterebbe addosso a un prodotto che
+//    in listino c'e'.
+export function campiFuoriListino(f, operatore = null, adesso = new Date()) {
+  if (!f?.fuoriListino) return { attivo: true, fuori_listino_il: null, fuori_listino_da: null };
+  if (f.eraFuoriListino) return { attivo: false };
+  return { attivo: false, fuori_listino_il: adesso.toISOString(), fuori_listino_da: operatore || null };
+}
+
+// I PRODOTTI FUORI LISTINO: quelli che non si vendono piu'. 19/11/2026.
+//
+// Il titolare, davanti all'«Ago 5 Magnum»: «quell'ago non lo vendiamo
+// piu'», e poi: «non ho una funzione per spegnere i prodotti senza
+// cancellarli». Cancellare non si poteva — il cestino in Gestione
+// magazzino c'e' solo per i prodotti MAI venduti, perche' una scheda
+// cancellata spezza le vendite che la citano — quindi un prodotto
+// ritirato restava in listino per sempre.
+//
+// Qui dentro ci sono quelli usciti, e l'unico gesto e' rimetterli.
+// Rimetterli NON li ripubblica sul sito: torna solo in listino, e dove
+// deve stare sullo shop lo decide chi apre la scheda. Riaccendere da qui
+// una vetrina pubblica sarebbe una vendita riaperta da un elenco che si
+// guarda per tutt'altro.
+export function PaginaProdottiFuoriListino({ prodottiShop = [], ricarica, onBack, titolo = "Prodotti fuori listino" }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const [msg, setMsg] = useState("");
+  const [inCorso, setInCorso] = useState(null);
+
+  const fuori = useMemo(() => {
+    const q = ricerca.trim().toLowerCase();
+    return (prodottiShop || [])
+      .filter((p) => p.attivo === false)
+      .filter((p) => !q || (p.nome || "").toLowerCase().includes(q))
+      // i piu' recenti in cima; quelli senza data (usciti prima che
+      // questa pagina esistesse) in fondo, non in mezzo
+      .sort((a, b) => String(b.fuori_listino_il || "").localeCompare(String(a.fuori_listino_il || "")));
+  }, [prodottiShop, ricerca]);
+
+  async function rimetti(p) {
+    if (!confermaRimozione(`«${p.nome}» dallo storico`, "Torna in listino e nelle liste di magazzino. Sullo shop NON si ripubblica da solo: se deve tornare online, aprilo e scegli «Pubblicato».")) return;
+    setInCorso(p.id); setMsg("");
+    const { data, error } = await supabase.from("prodotti_shop")
+      .update({ attivo: true, fuori_listino_il: null, fuori_listino_da: null })
+      .eq("id", p.id).select("id");
+    setInCorso(null);
+    if (error) { setMsg(`Non sono riuscito a rimetterlo in listino: ${testoErrore(error)}`); return; }
+    // un update che non tocca niente risponde «va bene» (regola del 9/11)
+    if (!data?.length) { setMsg("Il database non ha cambiato nessuna riga: ricarica la pagina e riprova."); return; }
+    setMsg(`«${p.nome}» e' di nuovo in listino.`);
+    ricarica?.(["prodotti_shop"]);
+  }
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{titolo}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.55, marginBottom: 16, maxWidth: 720 }}>
+          Prodotti che non si vendono piu&apos;. Non sono in nessun listino e non compaiono in magazzino, ma
+          <b style={{ color: NAVY }}> le vendite gia&apos; fatte restano intere nelle statistiche</b>: la loro storia
+          non si tocca. Un prodotto esce di qui dalla sua scheda, con «Disponibilita&apos; → Fuori listino».
+        </div>
+
+        {msg && (
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY, background: "#EFF5FF", border: "1px solid #CBDDF5",
+            borderRadius: 10, padding: "9px 12px", marginBottom: 12 }} data-msg-fuori-listino>{msg}</div>
+        )}
+
+        <div style={{ marginBottom: 14, maxWidth: 360 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca un prodotto…" />
+        </div>
+
+        {fuori.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 14, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`,
+            borderRadius: 14, padding: "18px 20px" }} data-nessun-fuori-listino>
+            {ricerca.trim()
+              ? "Nessun prodotto fuori listino con questo nome."
+              : "Nessun prodotto fuori listino: sono tutti in vendita."}
+          </div>
+        ) : (
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+            {fuori.map((p, i) => (
+              <div key={p.id} data-fuori-listino={p.nome}
+                style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "12px 14px",
+                  borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, flex: "1 1 220px", minWidth: 0 }}>{p.nome}</span>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>
+                  {p.fuori_listino_il
+                    ? `uscito il ${new Date(p.fuori_listino_il).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}`
+                    : "data non nota"}
+                  {p.fuori_listino_da ? ` · ${p.fuori_listino_da}` : ""}
+                </span>
+                <Button variant="ghost" style={{ fontSize: 12.5, padding: "6px 12px" }}
+                  disabled={inCorso === p.id} onClick={() => rimetti(p)}>
+                  {inCorso === p.id ? "Rimetto…" : "Rimetti in listino"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PaginaOmaggi({ venditeShop, prodottiShop = [], ricarica, onBack, titolo = "Omaggi" }) {
   // il nome dei prodotti si rilegge dall'anagrafica: quello salvato sulla
   // riga e' di quando la riga e' nata, e invecchia a ogni rinominata
@@ -62879,7 +62999,7 @@ export function esitoRiallineaShop(data, error) {
   return { riuscito: true, rispostaPersa: false, testo: pezzi.join(" \u00b7 ") };
 }
 
-function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scartiShop = [], categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, eventi = [], eventiMateriali = [], riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   // la percentuale di sicurezza della regola dei punti, decisa in
   // Gestione punti: le colonne dei punti la seguono
   const [schemaPuntiSalvato, salvaSchemaPunti] = useImpostazioneCondivisa(CHIAVE_SCHEMA_PUNTI_MASTER, SCHEMA_PUNTI_MASTER_DEFAULT);
@@ -64479,6 +64599,7 @@ function PaginaMagazzino({ ruoloUtente, scostamenti = [], scartiShop = [], categ
                   prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
                   fornitori={fornitori} impostazioniIva={impostazioniIva}
                   ricarica={ricarica} assicuraTabelle={assicuraTabelle} onBack={onBack}
+                  operatore={operatore}
                   vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
                   ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
                   onSchedaChiusa={() => setSchedaAperta(null)}
@@ -79088,7 +79209,7 @@ function ManigliaFraPannelli({ onInizia, onMuovi, onFine, onRimetti, personalizz
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa, onSchedaApertaSu }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId, soloScheda = false, onSchedaChiusa, onSchedaApertaSu, operatore = null }) {
   // i dati che questa pagina usa davvero, dichiarati QUI e non solo nella
   // mappa delle viste: se un domani la pagina viene incorporata altrove
   // (è già successo), se li porta dietro invece di trovarsi liste vuote
@@ -79116,6 +79237,31 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const setRicerca = incorporata ? () => {} : setRicercaLocale;
   const [filtroStato, setFiltroStato] = useState("tutti");
   const [prodottoForm, setProdottoForm] = useState(null);
+  // DOVE QUESTO PRODOTTO È ANCORA IMPEGNATO, e si chiede solo quando
+  // serve: mettendolo fuori listino esce anche dai kit dei corsi e dalle
+  // distinte dei bundle, perché quelle liste filtrano `attivo`. Dirlo
+  // dopo sarebbe una scatola che parte senza un pezzo col tasto che dice
+  // di sì — è il guasto del 6/11 da un'altra porta.
+  const [usoDelProdotto, setUsoDelProdotto] = useState(null);
+  useEffect(() => {
+    const id = prodottoForm?.fuoriListino ? prodottoForm.id : null;
+    if (!id) { setUsoDelProdotto(null); return; }
+    let vivo = true;
+    (async () => {
+      const [kit, bundle] = await Promise.all([
+        supabase.from("corsi_kit_prodotti").select("id").eq("prodotto_id", id),
+        supabase.from("bundle_componenti").select("bundle_id").eq("componente_id", id),
+      ]);
+      if (!vivo) return;
+      const nKit = (kit.data || []).length;
+      const nBundle = (bundle.data || []).length;
+      const pezzi = [];
+      if (nKit) pezzi.push(`${nKit} ${nKit === 1 ? "kit di corso" : "kit di corso"}`);
+      if (nBundle) pezzi.push(`${nBundle} ${nBundle === 1 ? "bundle" : "bundle"}`);
+      setUsoDelProdotto({ kit: nKit, bundle: nBundle, quante: nKit + nBundle, frase: pezzi.join(" e ") });
+    })();
+    return () => { vivo = false; };
+  }, [prodottoForm?.id, prodottoForm?.fuoriListino]);
   const [categoriaForm, setCategoriaForm] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [caricandoImmagine, setCaricandoImmagine] = useState(false);
@@ -79488,6 +79634,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       modoAcquisto: "netto",
       aliquotaAcquisto: p.aliquota_iva_acquisto ?? aliquotaIvaDefault,
       stato: p.stato || "publish",
+      // FUORI LISTINO non e' uno stato di WooCommerce: e' `attivo = false`.
+      // Nella tendina pero' sta insieme agli altri tre, perche' per chi
+      // apre la scheda la domanda e' una sola — dove sta questo prodotto.
+      fuoriListino: p.attivo === false,
+      // com'era quando la scheda si e' aperta: serve a non riscrivere la
+      // data di uscita a ogni salvataggio di un prodotto gia' fuori
+      eraFuoriListino: p.attivo === false,
       soloOffline: !!p.solo_offline,
       nonSulPos: !!p.escludi_vendita_diretta,
       // categorie che l'utente ha accettato di riportare online / sul POS
@@ -79577,7 +79730,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
   function nuovoProdotto(padreId) {
     setProdottoForm({
-      id: null, nome: "", descrizioneBreve: "", descrizione: "", prezzo: "", stato: "publish",
+      id: null, nome: "", descrizioneBreve: "", descrizione: "", prezzo: "", stato: "publish", fuoriListino: false, eraFuoriListino: false,
       modoVendita: "lordo", aliquotaVendita: aliquotaIvaDefault,
       costo: "", modoAcquisto: "netto", aliquotaAcquisto: aliquotaIvaDefault,
       soloOffline: false, nonSulPos: false, sbloccaOffline: [], sbloccaPos: [], qtaStock: "",
@@ -79955,6 +80108,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       pezzi_per_confezione: bundleConFisica && parseNum(f.pezziConfezione) > 0 ? parseInt(parseNum(f.pezziConfezione), 10) : null,
       solo_offline: !!f.soloOffline,
       escludi_vendita_diretta: !!f.nonSulPos,
+      // FUORI LISTINO. `attivo` si scrive sempre, in tutti e due i versi:
+      // scrivendolo solo quando si spegne, un prodotto rimesso in listino
+      // resterebbe spento per sempre senza che nessuno capisca perche'.
+      // La data si mette solo QUANDO ESCE e si azzera quando rientra: e'
+      // la memoria del gesto, non un campo da riscrivere a ogni salvataggio
+      // — altrimenti lo storico direbbe «uscito oggi» su un prodotto
+      // uscito tre mesi fa e riaperto per correggere una descrizione.
+      ...campiFuoriListino(f, operatore),
       backorder_attivo: !!f.backorder,
       backorder_messaggio: String(f.backorderTesto || "").trim() || null,
     };
@@ -80030,7 +80191,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           descrizioneBreve: f.descrizioneBreve,
           descrizione: f.descrizione,
           prezzo: calcolo.prezzoLordo,
-          stato: f.stato,
+          // fuori listino = invisibile sul sito. Si manda «private» e non
+          // «draft» perche' e' esattamente quello che `woo-riallinea-shop`
+          // scrive da se' sui prodotti spenti: due verdetti diversi sullo
+          // stesso prodotto se lo rimbalzerebbero avanti e indietro ogni notte.
+          stato: f.fuoriListino ? "private" : f.stato,
           categorieIds: categorieIdsDaSalvare,
           immagini: f.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
           // il back order va detto al sito nello stesso salvataggio: se
@@ -80146,6 +80311,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const calcolo = calcoloPrezzi;
     if (calcolo.prezzoNetto != null && !(calcolo.prezzoNetto > 0)) { setMsgErrore("Il prezzo di vendita deve essere maggiore di zero."); return; }
     const componentiSnapshot = [...componenti];
+    // TOGLIERE DAL LISTINO SI CHIEDE, e si chiede qui: e' il momento in
+    // cui qualcosa viene scritto. La frase nomina il prodotto (davanti a
+    // un elenco «sei sicuro?» non dice quale) e dice dove va a finire —
+    // non si cancella niente, e chiamarla cancellazione farebbe credere
+    // di distruggere una scheda con tutto il suo storico di vendite.
+    if (f.fuoriListino && !f.eraFuoriListino) {
+      const dove = usoDelProdotto?.quante > 0
+        ? `Esce dai listini, dalle liste di magazzino e da ${usoDelProdotto.frase}: quelle scatole partirebbero senza. Le vendite gia' fatte restano nelle statistiche, e da «Prodotti fuori listino» si rimette dentro.`
+        : "Esce dai listini e dalle liste di magazzino, ma le vendite gia' fatte restano nelle statistiche. Da «Prodotti fuori listino» si rimette dentro.";
+      if (!confermaRimozione(`«${f.nome.trim()}» dal listino`, dove)) return;
+    }
     setMsgErrore(""); setMsgSuccesso("");
 
     // Il salvataggio passa da WooCommerce e dura qualche secondo: nessuno
@@ -80747,15 +80923,50 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0,1fr) minmax(0,1fr)", gap: 12, alignItems: "start", marginBottom: 16 }}>
           <div>
             <div style={spEtichetta}>Disponibilità</div>
-            {/* gli stessi stati di WooCommerce: pubblicato lo vedono tutti,
-                privato solo chi entra nel sito da amministratore (utile per
-                preparare un prodotto o tenerlo fuori catalogo senza
-                perderlo), bozza non è nemmeno pubblicato */}
-            <select style={spCampo} value={prodottoForm.stato} onChange={(e) => aggiornaForm({ stato: e.target.value })}>
+            {/* I PRIMI TRE SONO GLI STATI DI WOOCOMMERCE: pubblicato lo
+                vedono tutti, privato solo chi entra nel sito da
+                amministratore (utile per preparare un prodotto o tenerlo
+                fuori catalogo senza perderlo), bozza non è nemmeno
+                pubblicato.
+
+                IL QUARTO NON È UNO STATO DEL SITO: «Fuori listino» è
+                `prodotti_shop.attivo = false`, cioè un prodotto che non si
+                vende più. Sta qui dentro, e non in una casella a parte,
+                perché per chi apre la scheda la domanda è una sola — dove
+                sta questo prodotto — e due comandi vicini che rispondono
+                alla stessa domanda si leggono come due cose diverse.
+
+                Cosa comporta, ed è già vero nel dato: esce da TUTTI i
+                listini (`v_prezzi_listini` filtra `attivo IS NOT FALSE`) e
+                dalle liste di magazzino, ma le sue vendite passate restano
+                intere nelle statistiche, che quel flag se lo portano come
+                colonna e non come filtro. Sul sito va in privato, che è
+                esattamente quello che il riallineamento notturno fa già da
+                sé per i prodotti spenti. */}
+            <select style={spCampo}
+              value={prodottoForm.fuoriListino ? "fuori_listino" : prodottoForm.stato}
+              onChange={(e) => {
+                const scelto = e.target.value;
+                if (scelto === "fuori_listino") aggiornaForm({ fuoriListino: true });
+                else aggiornaForm({ fuoriListino: false, stato: scelto });
+              }}>
               <option value="publish">Pubblicato</option>
               <option value="private">Privato</option>
               <option value="draft">Bozza</option>
+              <option value="fuori_listino">Fuori listino</option>
             </select>
+            {prodottoForm.fuoriListino && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", background: "#FDF8EC",
+                border: "1px solid #EBD9AE", borderRadius: 10, padding: "8px 10px", marginTop: 8, lineHeight: 1.5 }}
+                data-avviso-fuori-listino>
+                Salvando, esce dai listini e dalle liste di magazzino e finisce in <b>Prodotti fuori listino</b>,
+                da dove si rimette dentro quando serve. <b>Le vendite già fatte restano nelle statistiche.</b>
+                {usoDelProdotto?.quante > 0 && (
+                  <> Attenzione: sta ancora in <b>{usoDelProdotto.frase}</b> — uscendo dal listino esce anche da lì,
+                  e quelle scatole partirebbero senza.</>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <div style={spEtichetta}>Quantità in stock</div>
@@ -90009,6 +90220,7 @@ function Gestionale() {
     // legge fiere e consensi per conto suo, con due richieste sue
     modellefiera: [],
     omaggi: ["vendite_shop", "prodotti_shop"],
+    prodottifuorilistino: ["prodotti_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop", "impostazioni_iva"],
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
@@ -90817,6 +91029,7 @@ function Gestionale() {
   function apriVenditeAlBanco(provenienza = "magazzinoshop") { setProvenienzaVenditeShop(provenienza); apriViewProtetta("venditealbanco"); }
   function apriProdottiUsatiKit() { apriViewProtetta("prodottiusatikit"); }
   function apriOmaggi() { apriViewProtetta("omaggi"); }
+  function apriProdottiFuoriListino() { apriViewProtetta("prodottifuorilistino"); }
   function apriClassificazioneVoci() { apriViewProtetta("classificazionevocishop"); }
   function apriCrmShop() { apriViewProtetta("crmshop"); }
   function apriGeneraCoupon() { apriViewProtetta("generacoupon"); }
@@ -91196,6 +91409,7 @@ function Gestionale() {
       { chiave: "venditealbanco", titolo: etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco"), apri: () => apriVenditeAlBanco("magazzinoshop") },
       { chiave: "prodottiusatikit", titolo: etichettaTasto("magazzinoshop", "prodottiusatikit", "Prodotti usati per i kit"), apri: apriProdottiUsatiKit },
       { chiave: "omaggi", titolo: etichettaTasto("magazzinoshop", "omaggi", "Omaggi"), apri: apriOmaggi },
+      { chiave: "prodottifuorilistino", titolo: etichettaTasto("magazzinoshop", "prodottifuorilistino", "Prodotti fuori listino"), apri: apriProdottiFuoriListino },
       { chiave: "classificazionevoci", titolo: etichettaTasto("magazzinoshop", "classificazionevoci", "Classificazione voci di vendita"), apri: apriClassificazioneVoci },
     ] },
     { chiave: "pos", titolo: etichettaTasto("home", "pos", "POS Vendita diretta"), apri: apriPos, figli: [] },
@@ -92139,6 +92353,7 @@ function Gestionale() {
           onApriVenditeAlBanco={() => apriVenditeAlBanco("magazzinoshop")}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
           onApriOmaggi={apriOmaggi}
+          onApriProdottiFuoriListino={apriProdottiFuoriListino}
           onApriMagazzinoGuasti={() => setView("magazzinoguasti")}
           onApriAnalisiConsumi={() => setView("analisiconsumi")}
           onApriClassificazioneVoci={apriClassificazioneVoci}
@@ -92275,6 +92490,14 @@ function Gestionale() {
         <PaginaVenditeShop venditeShop={venditeShop} corsi={corsi} corsiDate={corsiDate} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} origine="pos" ruoloUtente={ruoloUtente} chi={operatoreApp?.nome || ""} ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
       )}
 
+      {view === "prodottifuorilistino" && (
+        <PaginaProdottiFuoriListino
+          prodottiShop={prodottiShop} ricarica={fetchDati}
+          onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "prodottifuorilistino", "Prodotti fuori listino")}
+        />
+      )}
+
       {view === "omaggi" && (
         <PaginaOmaggi venditeShop={venditeShop} prodottiShop={prodottiShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} titolo={etichettaTasto("magazzinoshop", "omaggi", "Omaggi")} />
       )}
@@ -92315,6 +92538,7 @@ function Gestionale() {
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           eventi={eventi} eventiMateriali={eventiMateriali}
           riordiniInCorso={riordiniInCorso}
+          operatore={operatoreApp?.nome || null}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} ricarica={fetchDati}
@@ -92381,6 +92605,7 @@ function Gestionale() {
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} fornitori={fornitori} impostazioniIva={impostazioniIva}
           ricarica={fetchDati} assicuraTabelle={assicuraTabelle} onBack={() => setView("magazzinoshop")}
+          operatore={operatoreApp?.nome || null}
         />
       )}
 
