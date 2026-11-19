@@ -1744,10 +1744,35 @@ Snippets, o un carrello di prova), e che le **meta del coupon** arrivino
 davvero — per saperlo serve un coupon di prova creato e poi cancellato sul sito
 vero, che è un'azione sullo shop e si fa su richiesta.
 
-**E i 22 codici in vita non sono stati riscritti.** Portano ancora la forma
-vecchia su WooCommerce: la frazione gliela darebbe «Riscrivi sul sito», uno per
-uno, e sono i codici personali delle master. Va deciso quando — e vanno avvisate
-prima.
+**E I CODICI DELLE MASTER RESTANO SUL LORO MECCANISMO**, deciso dal titolare la
+sera stessa: «i codici delle master fanno riferimento ad un altro trattamento,
+in seguito passeranno ad acquisire la qualifica di rivenditore». I 22 codici in
+vita non sono stati riscritti e continuano a cedere una quota del cedibile
+**della scala vecchia**.
+
+**Ed è stato un dietrofront, perché per qualche ora erano stati uniti.** Su
+«vale per tutti» avevo spostato anche la base su cui le master scontano — al
+banco e sul sito — e la misura dice perché si è tornati indietro:
+
+| sconto di una master, su tutto il catalogo | |
+|---|---|
+| prima | 1.007,47 € |
+| con la scala nuova | **1.385,25 €** |
+| | **+377,78 €, +37,5%** |
+
+Su **161 prodotti** scontava di più, su 17 di meno, su 17 niente. Avevo
+avvisato dei prodotti che lo perdono e **non avevo misurato il verso opposto**:
+il cedibile nuovo è in media più alto (40,8% contro 29,2%), quindi quasi ovunque
+la master ci guadagnava. Non era stato chiesto, ed è denaro.
+
+Adesso **le due scale sono due, ed è la forma giusta**: `_ed_cedibile_riv_pct`
+(listino rivenditori) per i coupon sopra la soglia, `_ed_cedibile_eur` (scala
+vecchia) per il codice di acquisto delle master. Tenerle separate non è
+pignoleria: è la differenza fra lo sconto di una master e quello di un
+rivenditore, e la scala vecchia è anche quella che decide i suoi **punti** e le
+sue **provvigioni** — così sconto e punti parlano la stessa lingua. Il giorno
+che una master prenderà la qualifica di rivenditrice passerà all'altra, e sarà
+una decisione scritta invece di una conseguenza.
 
 ### Una fattura a rate ha una spesa per rata (19/11/2026)
 

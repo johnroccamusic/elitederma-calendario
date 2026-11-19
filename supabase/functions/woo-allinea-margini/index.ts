@@ -55,25 +55,24 @@ Deno.serve(async (req) => {
   const perId: Record<string, any> = {};
   (listino || []).forEach((r: any) => { perId[r.id] = r; });
 
-  // IL CEDIBILE DEL LISTINO RIVENDITORI (19/11/2026).
+  // IL CEDIBILE DEL LISTINO RIVENDITORI (19/11/2026), che e' UNA COSA
+  // SOLA: `_ed_cedibile_riv_pct`, quanto quel pezzo puo' cedere in
+  // percento. Lo legge lo snippet dello sconto progressivo, per i
+  // coupon sopra la soglia.
   //
-  // Deciso dal titolare: «la legge deve essere il listino rivenditori»,
-  // e vale «per tutti». Da qui nascono DUE campi nascosti sul prodotto:
+  // `_ed_cedibile_eur` NON viene da qui: resta sulla scala vecchia
+  // (`v_prezzi_listini`), perche' e' il numero su cui una master sconta
+  // comprando per se'. Per qualche ora erano stati uniti, e la misura
+  // dice perche' si e' tornati indietro: sul catalogo intero lo sconto
+  // di una master passava da 1.007,47 a 1.385,25 euro, +377,78. Non era
+  // stato chiesto. Il titolare, la sera stessa: «i codici delle master
+  // fanno riferimento ad un altro trattamento, in seguito passeranno ad
+  // acquisire la qualifica di rivenditore».
   //
-  //   _ed_cedibile_riv_pct  quanto quel pezzo puo' cedere, in percento
-  //   _ed_cedibile_eur      gli stessi euro, per il codice delle master
-  //
-  // La scala VECCHIA (`v_prezzi_listini`, qui sopra) resta dov'e' e
-  // continua a scrivere `_ed_margine_pct`: e' lei a decidere i punti e
-  // le provvigioni delle master, e riscriverla sposterebbe i punti di
-  // tutte senza che nessuno l'abbia chiesto. Le due non coincidono su
-  // nessuno dei 187 prodotti dello shop — cedibile medio 29,2% contro
-  // 40,8% — quindi tenerle separate non e' pignoleria.
-  //
-  // `coupon_cedibili()` e non la view: quella funzione restituisce
-  // percentuale, euro e reparto e NIENTE costi, ed e' la stessa che
-  // legge il banco. Due letture diverse dello stesso numero sono due
-  // numeri che un giorno divergono.
+  // Le due scale non coincidono su nessuno dei 187 prodotti dello shop
+  // — cedibile medio 29,2% contro 40,8% — quindi tenerle separate non e'
+  // pignoleria: e' la differenza fra lo sconto di una master e quello di
+  // un rivenditore, che sono due cose.
   const { data: cedibili } = await supabase.rpc("coupon_cedibili");
   const rivPerId: Record<string, any> = {};
   (cedibili || []).forEach((r: any) => { rivPerId[r.prodotto_id] = r; });
@@ -110,14 +109,19 @@ Deno.serve(async (req) => {
     // prodotti. La quota viaggia sul coupon, e il reparto serve al sito
     // per sapere quale quota applicare quando un reparto ha la sua.
     const l = perId[p.id];
-    // Il cedibile, in percento e in euro, dal LISTINO RIVENDITORI: e' la
-    // legge dello sconto dal 19/11/2026. Vuoto e non "0" quando il
+    // Il cedibile in percento, dal LISTINO RIVENDITORI: e' la legge
+    // dello sconto dei coupon dal 19/11/2026. Vuoto e non "0" quando il
     // prodotto non sta nel listino — vuoto vuol dire «non si sa» e il
     // sito non sconta, zero vorrebbe dire «si sa che e' zero»: qui le
     // due cose portano allo stesso sconto, ma non allo stesso motivo.
     const riv = rivPerId[p.id];
     const cedibileRivPct = riv?.cedibile_pct != null ? String(Number(riv.cedibile_pct)) : "";
-    const cedibileEuro = riv?.cedibile_eur != null ? String(Number(riv.cedibile_eur)) : "";
+    // gli euro cedibili del codice master: dalla scala VECCHIA, come
+    // prima del 19/11. Vedi il perche' qui sopra.
+    const cedibilePct = l?.sconto_max_pct;
+    const nettoListino = Number(l?.pubblico_netto);
+    const cedibileEuro = cedibilePct != null && nettoListino > 0
+      ? String(Math.round(nettoListino * Number(cedibilePct)) / 100) : "";
     return {
       id: p.woo_product_id,
       meta_data: [

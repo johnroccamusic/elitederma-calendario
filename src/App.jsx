@@ -75501,55 +75501,61 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
     });
     return () => { vivo = false; };
   }, [parametriListino]);
-  // IL CEDIBILE ARRIVA DA UNA FONTE SOLA, ED E' IL LISTINO RIVENDITORI
-  // (19/11/2026, deciso dal titolare: «la legge deve essere il listino
-  // rivenditori», e vale «per tutti»).
+  // DUE CEDIBILI, E SONO DUE LEGGI DIVERSE (19/11/2026, sera).
   //
-  // Prima erano due leggi per la stessa cosa: il codice di acquisto
-  // delle master leggeva `v_prezzi_listini` (la scala vecchia, quella
-  // che decide punti e provvigioni) e il listino rivenditori ne usava
-  // un'altra. Sui 187 prodotti dello shop le due non coincidevano su
-  // NESSUNO — cedibile medio 29,2% contro 40,8%.
+  // Il coupon sopra la soglia segue il LISTINO RIVENDITORI: e' la legge
+  // scelta dal titolare, «il riferimento, la legge deve essere il
+  // listino rivenditori».
   //
-  // Adesso tutti e due i meccanismi che cedono il cedibile leggono
-  // `coupon_cedibili()`: il codice master cede una quota per reparto, il
-  // coupon sopra la soglia una frazione del tetto. Quella funzione non
-  // restituisce costi ne' margini: al banco ci sta una master, e per
-  // incassare non le servono.
+  // Il codice di acquisto di una master no, e resta su `v_prezzi_listini`
+  // — la scala vecchia. Deciso lo stesso giorno, poche ore dopo: «i
+  // codici delle master fanno riferimento ad un altro trattamento, in
+  // seguito passeranno ad acquisire la qualifica di rivenditore».
   //
-  // CONSEGUENZA VOLUTA: su 16 prodotti (quasi tutta la linea
-  // LAMINAZIONE) il cedibile nuovo e' zero, quindi l'acquisto personale
-  // di una master li' non sconta piu'. I suoi PUNTI non si muovono:
-  // quelli stanno su `v_prezzi_listini`, che non e' stata toccata.
-  const serveIlCedibile = couponAcquistoMaster || couponSegueIlListino;
+  // Per qualche ora erano stati uniti, e la misura dice perche' si e'
+  // tornati indietro: sul catalogo intero lo sconto che una master si
+  // fa comprando per se' passava da 1.007,47 a 1.385,25 euro,
+  // +377,78 — di piu' su 161 prodotti, niente su 17. Non era stato
+  // chiesto, ed e' denaro.
+  //
+  // Tenerla sulla scala vecchia e' anche piu' coerente: e' la stessa che
+  // decide i suoi PUNTI e le sue PROVVIGIONI, quindi sconto e punti
+  // parlano la stessa lingua. Il giorno che una master prende la
+  // qualifica di rivenditrice passera' all'altra, e sara' una decisione
+  // scritta invece di una conseguenza.
   useEffect(() => {
-    if (!serveIlCedibile || cedibilePerProdotto) return;
+    if (!couponAcquistoMaster || cedibilePerProdotto) return;
+    let vivo = true;
+    leggiListino().then((righe) => {
+      if (!vivo) return;
+      const mappa = new Map();
+      (righe || []).forEach((r) => {
+        if (r.sconto_max_pct == null || !(r.pubblico_netto > 0)) return;
+        mappa.set(r.id, { cedibile: Math.round(Number(r.pubblico_netto) * Number(r.sconto_max_pct)) / 100, blocco: r.blocco_ordine });
+      });
+      setCedibilePerProdotto(mappa);
+    }).catch(() => { if (vivo) setCedibilePerProdotto(new Map()); });
+    return () => { vivo = false; };
+  }, [couponAcquistoMaster, cedibilePerProdotto]);
+  // I cedibili del LISTINO RIVENDITORI, per i coupon sopra la soglia.
+  // Lettura a parte da quella qui sopra, e non e' una duplicazione: sono
+  // due scale diverse per due regole diverse, e il giorno in cui una
+  // cambia l'altra non si deve muovere. `coupon_cedibili()` non
+  // restituisce costi ne' margini — al banco ci sta una master, e per
+  // incassare non le servono.
+  const [cedibiliCoupon, setCedibiliCoupon] = useState(null);
+  useEffect(() => {
+    if (!couponSegueIlListino || cedibiliCoupon) return;
     let vivo = true;
     supabase.rpc("coupon_cedibili").then(({ data, error }) => {
       if (!vivo) return;
-      if (error) { setCedibilePerProdotto(new Map()); return; }
+      if (error) { setCedibiliCoupon(new Map()); return; }
       const mappa = new Map();
-      (data || []).forEach((r) => {
-        mappa.set(r.prodotto_id, {
-          cedibile: Number(r.cedibile_eur),
-          cedibilePct: Number(r.cedibile_pct),
-          // il NUMERO del reparto: la quota per reparto delle master si
-          // cerca con quello (`quotaMasterDi`), non col nome
-          blocco: r.blocco_ordine,
-        });
-      });
-      setCedibilePerProdotto(mappa);
+      (data || []).forEach((r) => { mappa.set(r.prodotto_id, Number(r.cedibile_pct)); });
+      setCedibiliCoupon(mappa);
     });
     return () => { vivo = false; };
-  }, [serveIlCedibile, cedibilePerProdotto]);
-  // le percentuali per il coupon escono dalla STESSA lettura: due
-  // richieste per lo stesso dato sono due dati che un giorno divergono
-  const cedibiliCoupon = useMemo(() => {
-    if (!cedibilePerProdotto) return null;
-    const mappa = new Map();
-    cedibilePerProdotto.forEach((v, id) => { mappa.set(id, v.cedibilePct); });
-    return mappa;
-  }, [cedibilePerProdotto]);
+  }, [couponSegueIlListino, cedibiliCoupon]);
   // Finche' i cedibili non sono arrivati non si passa dal listino: con
   // una mappa vuota ogni prodotto avrebbe cedibile zero, e il carrello
   // mostrerebbe sconto zero per mezzo secondo prima di correggersi.
