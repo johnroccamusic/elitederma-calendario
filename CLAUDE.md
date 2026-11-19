@@ -1665,12 +1665,15 @@ Quattro decisioni, e ognuna è un modo di sbagliare:
 documento giustifica un'uscita dal conto. Al 19/11/2026 le fatture ricevute
 sono **835 e quelle legate a una spesa 6**.
 
-Migrazioni **due**, e l'ordine conta: `20261119160000` aggiunge la colonna e
-travasa i 6 legami (applicata); `20261119161000` **toglie**
+Migrazioni **due, e l'ordine conta**: `20261119160000` aggiunge la colonna e
+travasa i 6 legami; `20261119161000` **toglie**
 `fatture_ricevute_fic.spesa_id` e si applica **dopo la pubblicazione** —
 finché in giro ci sono schede aperte col bundle di prima, quelle scrivono
-ancora là, e togliendola il loro tasto risponderebbe un errore. Il controllo
-da fare prima è scritto nel file.
+ancora là, e togliendola il loro tasto risponderebbe un errore. Tutte e due
+applicate il 19/11/2026, la seconda dopo aver verificato lo sha servito e che
+non fosse rimasto **nessun** legame scritto soltanto di là (il controllo è
+scritto nel file). I 6 legami sono intatti, la colonna vecchia non c'è più:
+due dichiarazioni dello stesso fatto, un giorno, si contraddicono.
 
 Prove in `prove/fattura-a-rate.test.jsx` (16), sui numeri veri della 771 e
 della 846: il conto e i suoi bordi (i centesimi, la fattura di un altro, la
