@@ -110,6 +110,8 @@ import { avviaSalvataggio, concludiSalvataggio, consumaRiapertura, useSalvataggi
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 import { statoSincronizzazione, ultimoGiroRiuscito, minutiDa, daQuanto, MINUTI_MASSIMI_SENZA_SYNC } from "../supabase/functions/_shared/sync-vigilanza.js";
 import { BACKORDER_TESTO_PREDEFINITO, messaggioBackorder } from "../supabase/functions/_shared/bundle.js";
+import { passaDalListino, frazioneDelTetto, scontoListinoPct, effettoSulCatalogo, dannoDellaForzatura } from "../supabase/functions/_shared/sconto-listino.js";
+import { leggiListinoAdmin } from "./rivenditori/dati.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -5761,7 +5763,7 @@ export function scontiPerRigaCarrello({
   // il suo totale, invece di rifare lo stesso conto per conto proprio.
   carrello = [], prodottiPerId = {}, subtotale = 0, scontoApplicato = null,
   fasce = null, contanti = false, eccezione = null,
-  couponNum = 0, baseCoupon = null, coperturaCoupon = null,
+  couponNum = 0, baseCoupon = null, coperturaCoupon = null, listinoCoupon = null,
   scontoTipo = "percentuale", scontoNum = 0, omaggio = false,
   acquistoMaster = false, cedibilePerProdotto = null, quotaMaster = null,
 } = {}) {
@@ -5806,7 +5808,7 @@ export function scontiPerRigaCarrello({
     if (fasce) {
       return round2((lordoRiga * percentualeFasciaDi(prodottiPerId[r.prodottoId], fasce, subtotale, contanti, eccezione)) / 100);
     }
-    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon);
+    if (couponNum > 0) return scontoCouponCarrello([r], prodottiPerId, couponNum, baseCoupon, coperturaCoupon, listinoCoupon);
     if (scontoNum > 0) {
       // lo sconto a mano in euro si spalma in proporzione: e' una cifra
       // sul carrello, non su un prodotto
@@ -6189,12 +6191,32 @@ function copertureCoupon(coupon, prodottiShop, categorieProdotti, prodottiCatego
 // sconta tutto, come prima: le chiamate che non hanno sottomano
 // l'anagrafica delle categorie non possono decidere, e cambiare il loro
 // risultato di nascosto sarebbe peggio del guasto.
-export function scontoCouponCarrello(righe, prodottoPerId, percentuale, base, copre = null) {
+export function scontoCouponCarrello(righe, prodottoPerId, percentuale, base, copre = null, listino = null) {
   if (!(percentuale > 0)) return 0;
   if (copre) righe = (righe || []).filter((r) => copre(r.prodottoId));
   const lordo = round2((righe || []).reduce((s, r) => s + r.prezzo * r.quantita, 0));
   if (lordo <= 0) return 0;
   if (base === "margine") return scontoSulMargineCarrello(righe, prodottoPerId, percentuale);
+  // SOPRA LA SOGLIA COMANDA IL LISTINO RIVENDITORI (19/11/2026).
+  //
+  // La percentuale del coupon non e' piu' lo sconto: e' quanta parte del
+  // tetto si concede. Ogni prodotto cede la sua quota — 30 su un tetto
+  // di 50 vuol dire tre quinti del suo cedibile — e un prodotto che non
+  // ha margine non si sconta.
+  //
+  // Un prodotto che NON STA NEL LISTINO non ha un cedibile noto, quindi
+  // non si sconta: e' il verso prudente, e il banco lo dice sulla riga
+  // («Su questo nessuno sconto: prezzo pieno»). Misurato sui tre mesi
+  // prima del cambio, al POS le sole righe senza prodotto in anagrafica
+  // sono la spedizione — che non si sconta comunque — e una vendita al
+  // corso battuta a mano.
+  if (listino && passaDalListino({ valore: percentuale, soglia: listino.soglia, forzato: listino.forzato })) {
+    return round2((righe || []).reduce((somma, r) => {
+      const pct = scontoListinoPct(listino.cedibili?.get(r.prodottoId), percentuale, listino.tetto);
+      if (!(pct > 0)) return somma;
+      return somma + round2(((Number(r.prezzo) || 0) * (Number(r.quantita) || 0) * pct) / 100);
+    }, 0));
+  }
   // «SUL NETTO» E «SUL LORDO» SONO LA STESSA CIFRA, E PRIMA NON LO ERANO.
   //
   // Scontare del 30% l'imponibile e poi aggiungere l'IVA da' lo stesso
@@ -45372,7 +45394,7 @@ function PannelloScontiEventi({ prodottiShop, coupon, corsi, corsiDate, ricarica
   );
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ruoloUtente, ricarica, onBack, titolo = "Genera Coupon" }) {
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiCategorie = [], prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, regoleReferralNeedling, venditeShop, puntiMasterImpostazioni, ruoloUtente, operatore = null, ricarica, onBack, titolo = "Genera Coupon" }) {
   // i nomi delle cinque tessere si riscrivono col tasto destro, come
   // quelli della home: stessa tabella, pagina "generacoupon"
   const [nomeTessera, rinominaTessera] = useEtichetteTasti("generacoupon");
@@ -45406,7 +45428,67 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   // il form "Nuovo coupon" è lo stesso, cambia solo cosa succede al
   // salvataggio (insert vs update)
   const [couponInModifica, setCouponInModifica] = useState(null);
+  // SOPRA LA SOGLIA COMANDA IL LISTINO RIVENDITORI (19/11/2026), e si
+  // puo' forzare col motivo scritto.
+  const [forzato, setForzato] = useState(false);
+  const [forzatoMotivo, setForzatoMotivo] = useState("");
+  const [listinoRighe, setListinoRighe] = useState(null);
+  const [parametriListino, setParametriListino] = useState(null);
   const formRef = useRef(null);
+
+  // il listino e i suoi parametri: qui si legge la view ADMIN, con costi
+  // e margini, perche' questa pagina deve poter dire «questo prodotto va
+  // sotto costo» prima di farti forzare. Al banco no: la' va solo la
+  // percentuale (`coupon_cedibili`).
+  useEffect(() => {
+    let vivo = true;
+    leggiListinoAdmin().then((r) => { if (vivo) setListinoRighe(r || []); }).catch(() => { if (vivo) setListinoRighe([]); });
+    supabase.from("rivenditori_parametri").select("chiave, numero").then(({ data }) => {
+      if (!vivo) return;
+      const per = {};
+      (data || []).forEach((x) => { per[x.chiave] = Number(x.numero); });
+      setParametriListino({ tetto: per.tetto_sconto_pct ?? 50, soglia: per.soglia_sconto_libero_pct, ricarico: per.ricarico_minimo_pct ?? 67 });
+    });
+    return () => { vivo = false; };
+  }, []);
+
+  // LE RIGHE DEL LISTINO CHE QUESTO COUPON TOCCA DAVVERO.
+  //
+  // Su un coupon per categoria — che e' l'esempio del titolare, «il 30%
+  // sui prodotti di laminazione» — fare il conto su tutto il catalogo
+  // darebbe un numero falso. Le categorie si risolvono CON I PADRI
+  // (`collegamentiConPadri`), come il filtro delle statistiche: chi
+  // scegli un reparto si aspetta dentro le sue sottocategorie.
+  const righeCoperteDalCoupon = useMemo(() => {
+    const righe = listinoRighe || [];
+    if (ambito === "prodotti") {
+      return righe.filter((r) => prodottiSelId.has(r.id) && !escludiProdottiSelId.has(r.id));
+    }
+    if (ambito === "categorie") {
+      const legami = collegamentiConPadri(prodottiCategorie, categorieProdotti);
+      const dentro = new Set(legami.filter((l) => categorieSelId.has(l.categoria_id)).map((l) => l.prodotto_id));
+      return righe.filter((r) => dentro.has(r.id) && !escludiProdottiSelId.has(r.id));
+    }
+    const fuoriCat = new Set(
+      collegamentiConPadri(prodottiCategorie, categorieProdotti)
+        .filter((l) => escludiCategorieSelId.has(l.categoria_id)).map((l) => l.prodotto_id),
+    );
+    return righe.filter((r) => !escludiProdottiSelId.has(r.id) && !fuoriCat.has(r.id));
+  }, [listinoRighe, ambito, prodottiSelId, categorieSelId, escludiProdottiSelId, escludiCategorieSelId, prodottiCategorie, categorieProdotti]);
+
+  const valoreNumForm = parseNum(valore);
+  const seguirebbeIlListino = tipoSconto === "percent" && parametriListino != null
+    && passaDalListino({ valore: valoreNumForm, soglia: parametriListino.soglia, forzato: false });
+  const effettoListino = useMemo(() => (
+    seguirebbeIlListino
+      ? effettoSulCatalogo(righeCoperteDalCoupon, { valore: valoreNumForm, tetto: parametriListino.tetto })
+      : null
+  ), [seguirebbeIlListino, righeCoperteDalCoupon, valoreNumForm, parametriListino]);
+  const dannoForzatura = useMemo(() => (
+    seguirebbeIlListino
+      ? dannoDellaForzatura(righeCoperteDalCoupon, { valore: valoreNumForm, ricarico: parametriListino.ricarico })
+      : null
+  ), [seguirebbeIlListino, righeCoperteDalCoupon, valoreNumForm, parametriListino]);
 
   function toggleSet(setter, id) {
     setter((prev) => { const nuovo = new Set(prev); nuovo.has(id) ? nuovo.delete(id) : nuovo.add(id); return nuovo; });
@@ -45420,6 +45502,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setEscludiCategorieSelId(new Set()); setEscludiProdottiSelId(new Set());
     setUtilizziMax(""); setUtilizziMaxPerUtente(""); setSpesaMinima("");
     setNonCumulabile(false); setLimitaAEmail("");
+    setForzato(false); setForzatoMotivo("");
   }
 
   // clic sul codice di un coupon (solo bozza/programmato, mai un coupon
@@ -45445,6 +45528,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
     setSpesaMinima(c.spesa_minima != null ? String(c.spesa_minima) : "");
     setNonCumulabile(!!c.non_cumulabile);
     setLimitaAEmail((c.limita_a_email || []).join(", "));
+    setForzato(!!c.forzato);
+    setForzatoMotivo(c.forzato_motivo || "");
     setMsg("");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -45461,6 +45546,23 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       const { data: giaEmesso } = await supabase.from("codici_emessi").select("codice").eq("codice", codiceLower).maybeSingle();
       if (giaEmesso) { setMsgTipo("errore"); setMsg(`Il codice "${codice.trim().toUpperCase()}" è già stato usato in passato: scegline un altro.`); return; }
     }
+    // LA FORZATURA VUOLE UN MOTIVO, e lo pretende anche il database
+    // (`coupon_forzatura_col_motivo`). Qui si dice prima, con la frase
+    // giusta: un rifiuto del database su una scheda piena si legge come
+    // un guasto.
+    if (forzato && !forzatoMotivo.trim()) {
+      setMsgTipo("errore");
+      setMsg("Per forzare lo sconto contro il listino serve il motivo: fra sei mesi, davanti a un prodotto venduto sotto costo, deve essere scritto perché.");
+      return;
+    }
+    // Un coupon oltre il tetto di sconto chiede piu' di tutto il
+    // cedibile: non e' una frazione, e' una forzatura. Lo si dice invece
+    // di concederlo in silenzio.
+    if (tipoSconto === "percent" && parametriListino && valoreNum > parametriListino.tetto && !forzato) {
+      setMsgTipo("errore");
+      setMsg(`${fmtPctErp2(valoreNum)} supera il tetto di sconto del listino (${fmtPctErp2(parametriListino.tetto)}): più di tutto il cedibile si concede solo forzando, col motivo scritto.`);
+      return;
+    }
     setSalvando(true); setMsg("");
     const oggi = dataOggiStr();
     const stato = validoDa && validoDa > oggi ? "programmato" : "bozza";
@@ -45472,8 +45574,21 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       // solo dove c'e' una percentuale da leggere
       base_sconto: tipoSconto === "percent" ? BASE_SCONTO_VALIDA(baseSconto) : "lordo",
       valore: valoreNum,
-      // quanto scrivere davvero su WooCommerce perche' tolga gli stessi euro
-      valore_woo: tipoSconto === "percent" ? percentualeWooEquivalente(valoreNum, BASE_SCONTO_VALIDA(baseSconto), margineMedioCatalogo) : valoreNum,
+      // QUANTO SCRIVERE SU WOOCOMMERCE.
+      //
+      // Un coupon di WooCommerce porta UNA percentuale, e il sito non sa
+      // i margini: lo sconto per prodotto lo applica lo snippet
+      // `elitederma-sconto-fasce.php`. Quando comanda il listino si
+      // scrive la media EFFETTIVA pesata sui prezzi — la stessa logica
+      // di `percentualeWooDaFasce` — cosi' che se lo snippet fosse
+      // spento il totale resti vicino al vero invece di scontare la
+      // percentuale piena su tutto. Forzato, invece, piatto e' proprio
+      // quello che si vuole.
+      valore_woo: tipoSconto !== "percent"
+        ? valoreNum
+        : (!forzato && seguirebbeIlListino && effettoListino
+          ? effettoListino.mediaPesata
+          : percentualeWooEquivalente(valoreNum, BASE_SCONTO_VALIDA(baseSconto), margineMedioCatalogo)),
       valido_da: validoDa || null,
       valido_fino_a: validoFinoA || null,
       ambito,
@@ -45487,6 +45602,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       non_cumulabile: nonCumulabile,
       limita_a_email: limitaAEmail.trim() ? limitaAEmail.split(",").map((s) => s.trim()).filter(Boolean) : null,
       stato,
+      forzato,
+      forzato_motivo: forzato ? forzatoMotivo.trim() : null,
+      forzato_da: forzato ? (operatore || null) : null,
+      forzato_il: forzato ? new Date().toISOString() : null,
     };
     const { error } = couponInModifica
       ? await supabase.from("coupon").update(payload).eq("id", couponInModifica)
@@ -45891,6 +46010,78 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
             <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Non cumulabile con altri coupon</span>
           </label>
 
+          {/* COSA FARA' QUESTO COUPON, PRIMA DI SALVARLO.
+              «Sconto del 20%» su un catalogo in cui sedici prodotti ne
+              prendono zero e' una frase che non dice il vero: qui si
+              legge il conto vero, sui prodotti che questo coupon copre
+              davvero (ambito ed esclusioni comprese). Compare solo sopra
+              la soglia, perche' sotto lo sconto resta libero e un
+              riquadro su ogni coupon si impara a saltare. */}
+          {seguirebbeIlListino && effettoListino && (
+            <div data-riquadro-listino style={{ background: forzato ? "#FDECEC" : "#FBF3E0", border: `1px solid ${forzato ? "#F0C2BD" : "#E6D5A8"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: forzato ? "#C0392B" : "#8A6A1B" }}>
+                {forzato
+                  ? `Sconto forzato: ${fmtPctErp2(valoreNumForm)} piatto, contro il listino`
+                  : `Sopra il ${fmtPctErp2(parametriListino.soglia)} comanda il listino rivenditori`}
+              </div>
+              {!forzato && (
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
+                  Il {fmtPctErp2(valoreNumForm)} è il <b>tetto</b>: ogni prodotto sconta la sua parte di quello che può cedere
+                  ({fmtPctErp2(valoreNumForm)} su un tetto di {fmtPctErp2(parametriListino.tetto)} = {String(round2(frazioneDelTetto(valoreNumForm, parametriListino.tetto) * 100)).replace(".", ",")}% del suo cedibile).
+                  <div style={{ marginTop: 6, color: NAVY }}>
+                    Sui <b>{effettoListino.quanti}</b> prodotti coperti: <b>{effettoListino.pieno.length}</b> prendono il {fmtPctErp2(valoreNumForm)} pieno,
+                    {" "}<b>{effettoListino.ridotto.length}</b> meno, <b>{effettoListino.nessuno.length}</b> niente.
+                    {" "}Sconto medio effettivo <b>{fmtPctErp2(effettoListino.mediaPesata)}</b>.
+                  </div>
+                  {effettoListino.nessuno.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      Niente sconto su: {effettoListino.nessuno.slice(0, 6).map((d) => d.nome).join(" · ")}
+                      {effettoListino.nessuno.length > 6 ? ` e altri ${effettoListino.nessuno.length - 6}` : ""}.
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* LA FORZATURA. Richiesta del titolare: «se un giorno decido
+                  di mettere il 30% sui prodotti di laminazione per
+                  sbarazzarmene e quindi venderli sotto prezzo, tu mi devi
+                  segnalare che io non ho quel margine e io ti devo
+                  confermare la forzatura». */}
+              {dannoForzatura && (dannoForzatura.sottoCosto.length > 0 || dannoForzatura.sottoPavimento.length > 0) && (
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${forzato ? "#F0C2BD" : "#E6D5A8"}`, lineHeight: 1.5 }}>
+                  <b style={{ color: "#C0392B" }}>Forzandolo piatto</b>, {fmtPctErp2(valoreNumForm)} su tutto:
+                  {dannoForzatura.sottoCosto.length > 0 && (
+                    <div style={{ marginTop: 4, color: "#C0392B", fontWeight: 700 }}>
+                      {dannoForzatura.sottoCosto.length === 1 ? "1 prodotto va SOTTO COSTO" : `${dannoForzatura.sottoCosto.length} prodotti vanno SOTTO COSTO`}
+                      {": "}
+                      {dannoForzatura.sottoCosto.slice(0, 4).map((d) => `${d.nome} ${fmtEuroErp2(d.margine)}/pz`).join(" · ")}
+                      {dannoForzatura.sottoCosto.length > 4 ? ` e altri ${dannoForzatura.sottoCosto.length - 4}` : ""}
+                    </div>
+                  )}
+                  {dannoForzatura.sottoPavimento.length > 0 && (
+                    <div style={{ marginTop: 4 }}>
+                      {dannoForzatura.sottoPavimento.length} sotto il margine minimo, ma ancora in utile.
+                    </div>
+                  )}
+                </div>
+              )}
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginTop: 10 }}>
+                <input type="checkbox" data-forza-sconto checked={forzato} onChange={(e) => setForzato(e.target.checked)} style={{ width: 15, height: 15 }} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Forza lo sconto piatto, contro il listino</span>
+              </label>
+              {forzato && (
+                <div style={{ marginTop: 8 }}>
+                  <Field label="Perché lo forzi (obbligatorio)">
+                    <input data-motivo-forzatura style={inputStyle} value={forzatoMotivo} onChange={(e) => setForzatoMotivo(e.target.value)}
+                      placeholder="es. svuotare il magazzino della linea laminazione" />
+                  </Field>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -4, lineHeight: 1.45 }}>
+                    Resta scritto sul coupon con il tuo nome e la data. Un prezzo sotto costo senza il perché accanto, fra sei mesi, si legge come un difetto dell'app.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 8 }}>
             <Button onClick={salvaCoupon} disabled={salvando}>{salvando ? "Salvo…" : (couponInModifica ? "Salva modifiche" : "Salva coupon")}</Button>
             {couponInModifica && <Button variant="ghost" onClick={svuotaForm} disabled={salvando}>Annulla modifica</Button>}
@@ -45913,11 +46104,26 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                     <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
                   )}
                   <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
+                  {/* FORZATO SI VEDE DA FUORI. Un codice che sconta contro
+                      il listino, e che su qualche prodotto vende sotto
+                      costo, non puo' somigliare a tutti gli altri: fra sei
+                      mesi, davanti a quell'ordine, deve essere leggibile
+                      che qualcuno l'ha deciso e perche'. */}
+                  {c.forzato && (
+                    <span data-pastiglia-forzato title={[c.forzato_motivo, c.forzato_da, c.forzato_il ? fmtData(c.forzato_il.slice(0, 10)) : null].filter(Boolean).join(" · ")}
+                      style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, padding: "2px 9px" }}>Forzato</span>
+                  )}
                 </div>
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>
                   {c.tipo_sconto === "percent" ? `${c.valore}%` : fmtEuroErp2(c.valore)} · {ETICHETTA_TIPO_SCONTO[c.tipo_sconto]}
                   {c.valido_fino_a ? ` · scade il ${fmtData(c.valido_fino_a)}` : ""}
                 </div>
+                {c.forzato && c.forzato_motivo && (
+                  <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: 2, lineHeight: 1.4 }}>
+                    Sconto piatto forzato contro il listino: {c.forzato_motivo}
+                    {c.forzato_da ? ` — ${c.forzato_da}` : ""}
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {(c.stato === "bozza" || c.stato === "programmato") && (
@@ -74395,6 +74601,16 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // serve, e sono trecento righe.
   const [quotaMasterPos] = useImpostazioneCondivisa(CHIAVE_QUOTA_MASTER, { generale: QUOTA_MASTER_DEFAULT, reparti: {} });
   const [cedibilePerProdotto, setCedibilePerProdotto] = useState(null);
+  // SOPRA LA SOGLIA IL COUPON SEGUE IL LISTINO RIVENDITORI (19/11/2026).
+  //
+  // Servono tre cose: il tetto e la soglia (da `rivenditori_parametri`,
+  // che si cambiano dalla pagina del listino) e il cedibile di ogni
+  // prodotto. Quest'ultimo NON arriva dalla view del listino ma da
+  // `coupon_cedibili()`, che restituisce l'id e la percentuale e niente
+  // altro: al banco ci sta una master, e costi e margini non le servono
+  // per incassare. Stessa ragione per cui l'export del listino non
+  // restituisce i costi.
+  const [parametriListino, setParametriListino] = useState(null);
   const [note, setNote] = useState("");
   // Il nome di chi compra, facoltativo. Finora non lo chiedeva nessuno e
   // chi vendeva lo infilava nelle note: adesso ha un campo suo, e la nota
@@ -75200,6 +75416,23 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
                     ) : (
                     <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", marginTop: 3 }}>
                       Codice valido: −{fmtPctErp2(percentualeDaTabelle)}
+                      {/* PERCHE' LA CIFRA NON E' QUELLA SCRITTA SUL CODICE.
+                          Dal 19/11/2026 sopra la soglia la percentuale del
+                          coupon e' un TETTO: ogni prodotto sconta quanto il
+                          listino rivenditori gli consente, e su un carrello
+                          misto la media viene piu' bassa. Senza questa riga,
+                          «ho messo 20 e ne fa 12,4» si legge come un difetto
+                          dell'app — ed e' invece la regola che funziona. */}
+                      {listinoCoupon && (
+                        <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 400, color: grigioCarrello, marginTop: 1 }}>
+                          Il {fmtPctErp2(Number(couponAttivo.valore))} del codice è il tetto: ogni prodotto sconta quanto il listino rivenditori gli consente.
+                        </span>
+                      )}
+                      {couponAttivo.forzato && (
+                        <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 1 }}>
+                          Sconto forzato contro il listino: {fmtPctErp2(Number(couponAttivo.valore))} piatto{couponAttivo.forzato_motivo ? ` — ${couponAttivo.forzato_motivo}` : ""}
+                        </span>
+                      )}
                       {/* quanto durera': un codice a uso singolo sparisce dopo
                           questo carrello, e saperlo prima evita di cercarlo
                           alla vendita dopo credendo che sia sparito per errore */}
@@ -75247,20 +75480,84 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // il codice con cui la master compra per se': i prezzi sono quelli del
   // listino master, non le fasce
   const couponAcquistoMaster = couponAttivo?.serie_regole === "acquisto_master";
+  // il coupon attivo passa dal listino? La domanda si puo' fare solo
+  // dopo aver letto i parametri: finche' non ci sono, non si sconta
+  // niente di piu' di quello che si sconterebbe comunque.
+  const couponSegueIlListino = passaDalListino({
+    valore: couponAttivo?.valore,
+    soglia: parametriListino?.soglia,
+    forzato: couponAttivo?.forzato,
+  }) && parametriListino != null;
   useEffect(() => {
-    if (!couponAcquistoMaster || cedibilePerProdotto) return;
+    if (parametriListino) return;
     let vivo = true;
-    leggiListino().then((righe) => {
+    supabase.from("rivenditori_parametri").select("chiave, numero").then(({ data }) => {
       if (!vivo) return;
+      const per = {};
+      (data || []).forEach((r) => { per[r.chiave] = Number(r.numero); });
+      // la soglia manca = si passa comunque dal listino (vedi
+      // `passaDalListino`): il verso prudente e' quello
+      setParametriListino({ tetto: per.tetto_sconto_pct ?? 50, soglia: per.soglia_sconto_libero_pct });
+    });
+    return () => { vivo = false; };
+  }, [parametriListino]);
+  // IL CEDIBILE ARRIVA DA UNA FONTE SOLA, ED E' IL LISTINO RIVENDITORI
+  // (19/11/2026, deciso dal titolare: «la legge deve essere il listino
+  // rivenditori», e vale «per tutti»).
+  //
+  // Prima erano due leggi per la stessa cosa: il codice di acquisto
+  // delle master leggeva `v_prezzi_listini` (la scala vecchia, quella
+  // che decide punti e provvigioni) e il listino rivenditori ne usava
+  // un'altra. Sui 187 prodotti dello shop le due non coincidevano su
+  // NESSUNO — cedibile medio 29,2% contro 40,8%.
+  //
+  // Adesso tutti e due i meccanismi che cedono il cedibile leggono
+  // `coupon_cedibili()`: il codice master cede una quota per reparto, il
+  // coupon sopra la soglia una frazione del tetto. Quella funzione non
+  // restituisce costi ne' margini: al banco ci sta una master, e per
+  // incassare non le servono.
+  //
+  // CONSEGUENZA VOLUTA: su 16 prodotti (quasi tutta la linea
+  // LAMINAZIONE) il cedibile nuovo e' zero, quindi l'acquisto personale
+  // di una master li' non sconta piu'. I suoi PUNTI non si muovono:
+  // quelli stanno su `v_prezzi_listini`, che non e' stata toccata.
+  const serveIlCedibile = couponAcquistoMaster || couponSegueIlListino;
+  useEffect(() => {
+    if (!serveIlCedibile || cedibilePerProdotto) return;
+    let vivo = true;
+    supabase.rpc("coupon_cedibili").then(({ data, error }) => {
+      if (!vivo) return;
+      if (error) { setCedibilePerProdotto(new Map()); return; }
       const mappa = new Map();
-      (righe || []).forEach((r) => {
-        if (r.sconto_max_pct == null || !(r.pubblico_netto > 0)) return;
-        mappa.set(r.id, { cedibile: Math.round(Number(r.pubblico_netto) * Number(r.sconto_max_pct)) / 100, blocco: r.blocco_ordine });
+      (data || []).forEach((r) => {
+        mappa.set(r.prodotto_id, {
+          cedibile: Number(r.cedibile_eur),
+          cedibilePct: Number(r.cedibile_pct),
+          // il NUMERO del reparto: la quota per reparto delle master si
+          // cerca con quello (`quotaMasterDi`), non col nome
+          blocco: r.blocco_ordine,
+        });
       });
       setCedibilePerProdotto(mappa);
-    }).catch(() => { if (vivo) setCedibilePerProdotto(new Map()); });
+    });
     return () => { vivo = false; };
-  }, [couponAcquistoMaster, cedibilePerProdotto]);
+  }, [serveIlCedibile, cedibilePerProdotto]);
+  // le percentuali per il coupon escono dalla STESSA lettura: due
+  // richieste per lo stesso dato sono due dati che un giorno divergono
+  const cedibiliCoupon = useMemo(() => {
+    if (!cedibilePerProdotto) return null;
+    const mappa = new Map();
+    cedibilePerProdotto.forEach((v, id) => { mappa.set(id, v.cedibilePct); });
+    return mappa;
+  }, [cedibilePerProdotto]);
+  // Finche' i cedibili non sono arrivati non si passa dal listino: con
+  // una mappa vuota ogni prodotto avrebbe cedibile zero, e il carrello
+  // mostrerebbe sconto zero per mezzo secondo prima di correggersi.
+  // Meglio lo sconto di prima per mezzo secondo che un prezzo che balla
+  // davanti alla cliente.
+  const listinoCoupon = couponSegueIlListino && cedibiliCoupon
+    ? { soglia: parametriListino.soglia, tetto: parametriListino.tetto, forzato: !!couponAttivo?.forzato, cedibili: cedibiliCoupon }
+    : null;
   const cartaDiClasse = couponNeedlingAttivo ? fasceNeedlingCartaPos : fasceCorsiCartaPos;
   const contantiDiClasse = couponNeedlingAttivo ? fasceNeedlingContantiPos : fasceContantiCorsiPos;
   // LE TABELLE DI SCONTO DI QUESTO CARRELLO, LETTE PER UN METODO.
@@ -75362,7 +75659,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       fasce: fasceDelPagamento(inContanti),
       contanti: inContanti,
       eccezione: eccezioneFasceInUso,
-      couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
+      couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum, listinoCoupon,
       omaggio: omaggioAttivo,
       acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
     });
@@ -75481,7 +75778,7 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
       fasce: fasceInUsoSulCarrello,
       contanti: pagamentoContaComeContanti(metodoPagamento),
       eccezione: eccezioneFasceInUso,
-      couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum,
+      couponNum, baseCoupon, coperturaCoupon, scontoTipo, scontoNum, listinoCoupon,
       omaggio: omaggioAttivo,
       acquistoMaster: couponAcquistoMaster, cedibilePerProdotto, quotaMaster: quotaMasterPos,
     });
@@ -90354,7 +90651,7 @@ function Gestionale() {
     // i contatti si leggono una pagina alla volta dalla pagina stessa
     // (crm_cerca_contatti): nessuna tabella intera da caricare
     crmcontatti: [],
-    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
+    generacoupon: ["coupon", "categorie_prodotti", "prodotti_categorie", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop_storico", "prodotti_shop", "master", "venditori", "target_vendite_prodotti", "categorie_prodotti", "prodotti_categorie"],
     // prodotti e categorie servono al filtro per categoria (3/11/2026):
     // senza, la tendina sarebbe vuota e non lo direbbe nessuno
@@ -92555,12 +92852,12 @@ function Gestionale() {
 
       {view === "generacoupon" && (
         <PaginaGeneraCoupon
-          coupon={coupon} categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} master={master}
+          coupon={coupon} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie} prodottiShop={prodottiShop} master={master}
           corsi={corsi} corsiDate={corsiDate} location={location}
           regoleReferralAutomatico={regoleReferralAutomatico} regoleReferralNeedling={regoleReferralNeedling}
           venditeShop={venditeShop}
           puntiMasterImpostazioni={puntiMasterImpostazioni}
-          ruoloUtente={ruoloUtente}
+          ruoloUtente={ruoloUtente} operatore={operatoreApp?.nome || null}
           ricarica={fetchDati} onBack={() => setView("compensipremi")}
           titolo={etichettaTasto("compensipremi", "generacoupon", "Genera Coupon")}
         />

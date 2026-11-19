@@ -55,6 +55,29 @@ Deno.serve(async (req) => {
   const perId: Record<string, any> = {};
   (listino || []).forEach((r: any) => { perId[r.id] = r; });
 
+  // IL CEDIBILE DEL LISTINO RIVENDITORI (19/11/2026).
+  //
+  // Deciso dal titolare: «la legge deve essere il listino rivenditori»,
+  // e vale «per tutti». Da qui nascono DUE campi nascosti sul prodotto:
+  //
+  //   _ed_cedibile_riv_pct  quanto quel pezzo puo' cedere, in percento
+  //   _ed_cedibile_eur      gli stessi euro, per il codice delle master
+  //
+  // La scala VECCHIA (`v_prezzi_listini`, qui sopra) resta dov'e' e
+  // continua a scrivere `_ed_margine_pct`: e' lei a decidere i punti e
+  // le provvigioni delle master, e riscriverla sposterebbe i punti di
+  // tutte senza che nessuno l'abbia chiesto. Le due non coincidono su
+  // nessuno dei 187 prodotti dello shop — cedibile medio 29,2% contro
+  // 40,8% — quindi tenerle separate non e' pignoleria.
+  //
+  // `coupon_cedibili()` e non la view: quella funzione restituisce
+  // percentuale, euro e reparto e NIENTE costi, ed e' la stessa che
+  // legge il banco. Due letture diverse dello stesso numero sono due
+  // numeri che un giorno divergono.
+  const { data: cedibili } = await supabase.rpc("coupon_cedibili");
+  const rivPerId: Record<string, any> = {};
+  (cedibili || []).forEach((r: any) => { rivPerId[r.prodotto_id] = r; });
+
   const { data: prodotti, error } = await supabase
     .from("prodotti_shop")
     .select("id, nome, woo_product_id, prezzo_vendita, costo_acquisto")
@@ -87,16 +110,25 @@ Deno.serve(async (req) => {
     // prodotti. La quota viaggia sul coupon, e il reparto serve al sito
     // per sapere quale quota applicare quando un reparto ha la sua.
     const l = perId[p.id];
-    const cedibilePct = l?.sconto_max_pct;
-    const nettoListino = Number(l?.pubblico_netto);
-    const cedibileEuro = cedibilePct != null && nettoListino > 0
-      ? String(Math.round(nettoListino * Number(cedibilePct)) / 100) : "";
+    // Il cedibile, in percento e in euro, dal LISTINO RIVENDITORI: e' la
+    // legge dello sconto dal 19/11/2026. Vuoto e non "0" quando il
+    // prodotto non sta nel listino — vuoto vuol dire «non si sa» e il
+    // sito non sconta, zero vorrebbe dire «si sa che e' zero»: qui le
+    // due cose portano allo stesso sconto, ma non allo stesso motivo.
+    const riv = rivPerId[p.id];
+    const cedibileRivPct = riv?.cedibile_pct != null ? String(Number(riv.cedibile_pct)) : "";
+    const cedibileEuro = riv?.cedibile_eur != null ? String(Number(riv.cedibile_eur)) : "";
     return {
       id: p.woo_product_id,
       meta_data: [
         { key: "_ed_margine_pct", value: margine },
         { key: "_ed_margine_eur", value: margineEuro },
+        { key: "_ed_cedibile_riv_pct", value: cedibileRivPct },
         { key: "_ed_cedibile_eur", value: cedibileEuro },
+        // il NUMERO del reparto e non il nome: la quota per reparto del
+        // codice master si cerca con quello (`listino_master_quota` ha
+        // per chiavi 1..12 e 99). Col nome avrebbe sempre ricaduto sulla
+        // quota generale, in silenzio e su tutti i reparti.
         { key: "_ed_blocco", value: l?.blocco_ordine != null ? String(l.blocco_ordine) : "" },
       ],
     };

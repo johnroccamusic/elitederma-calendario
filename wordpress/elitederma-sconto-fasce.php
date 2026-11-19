@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Elitederma - Sconto a fasce
- * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. I coupon di acquisto delle master cedono una quota di quello che su ogni pezzo si puo' cedere. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
- * Version: 1.3
+ * Description: Applica ai coupon dell'accademia una percentuale di sconto diversa per ogni prodotto, scelta in base a quanto quel prodotto rende. I prodotti del reparto Needling hanno invece una tabella loro, a scaglioni di spesa e sul prezzo netto. I coupon di acquisto delle master cedono una quota di quello che su ogni pezzo si puo' cedere. Dal 19/11/2026 i coupon sopra la soglia seguono il listino rivenditori: la loro percentuale e' un TETTO, e ogni prodotto sconta la sua parte di quello che puo' cedere. Senza questo innesto il coupon resta valido e applica la sua percentuale unica.
+ * Version: 1.4
  * Author: Elitederma
  */
 
@@ -55,15 +55,58 @@ function elitederma_sconto_a_fasce( $sconto, $importo_da_scontare, $riga_carrell
 	$pct_sul_margine = $coupon->get_meta( '_ed_sconto_margine_pct' );
 	$needling_grezzo = $coupon->get_meta( '_ed_needling' );
 	$quota_master    = $coupon->get_meta( '_ed_quota_master' );
+	$frazione_ced    = $coupon->get_meta( '_ed_frazione_cedibile' );
 
-	// Nessuno dei tre contrassegni: non e' un coupon dell'accademia, o e'
+	// Nessuno dei contrassegni: non e' un coupon dell'accademia, o e'
 	// una normale percentuale sul prezzo. Si lascia fare a WooCommerce,
 	// esattamente come prima che questo file esistesse.
-	if ( empty( $fasce_grezze ) && '' === (string) $pct_sul_margine && empty( $needling_grezzo ) && empty( $quota_master ) ) {
+	if ( empty( $fasce_grezze ) && '' === (string) $pct_sul_margine && empty( $needling_grezzo )
+		&& empty( $quota_master ) && '' === (string) $frazione_ced ) {
 		return $sconto;
 	}
 
 	$prodotto = $riga_carrello['data'];
+
+	// ---- CASO R: IL LISTINO DEI RIVENDITORI ----
+	//
+	// Deciso dal titolare il 19/11/2026: «quando faccio un coupon che
+	// genera uno sconto del 20%, deve seguire cmq i listini dei
+	// rivenditori con il 20% di sconto, ovvero il tetto e' 20 ma non
+	// tutto ha 20... da oggi non sara' piu' possibile creare sconti
+	// liberi di qualsiasi percentuale perche' sopra al 10% subentreranno
+	// i calcoli che fanno i listini attuali dei rivenditori».
+	//
+	// La percentuale scritta sul coupon non e' lo sconto: e' quanta parte
+	// del tetto si concede. Sul COUPON viaggia la frazione gia' calcolata
+	// (_ed_frazione_cedibile: 30 su un tetto di 50 = 0,6) e sul PRODOTTO
+	// quanto quel pezzo puo' cedere (_ed_cedibile_riv_pct). Cosi'
+	// cambiare la percentuale del coupon non obbliga a riscrivere
+	// duecento prodotti, ed e' lo stesso conto che fa il POS
+	// (scontoListinoPct in _shared/sconto-listino.js).
+	//
+	// La percentuale e' sul LORDO, come le fasce: `$importo_da_scontare`
+	// e' quello che WooCommerce chiede di scontare su questa riga.
+	//
+	// UN PRODOTTO SENZA IL CEDIBILE SCRITTO NON SI SCONTA. E' la stessa
+	// regola del banco e degli altri casi qui dentro: non si regala
+	// qualcosa di cui non si sa quanto vale. Un coupon forzato non arriva
+	// mai qui — di la' la frazione non viene scritta affatto, e il coupon
+	// torna a scontare piatto come WooCommerce sa fare da se'.
+	if ( '' !== (string) $frazione_ced ) {
+		$frazione = (float) $frazione_ced;
+		if ( $frazione <= 0 ) {
+			return 0.0;
+		}
+		$cedibile_pct = elitederma_meta_prodotto( $prodotto, '_ed_cedibile_riv_pct' );
+		if ( '' === $cedibile_pct ) {
+			return 0.0;
+		}
+		$pct = (float) $cedibile_pct * $frazione;
+		if ( $pct <= 0 ) {
+			return 0.0;
+		}
+		return round( (float) $importo_da_scontare * $pct / 100, wc_get_rounding_precision() );
+	}
 
 	// ---- CASO M: IL LISTINO DELLE MASTER ----
 	//

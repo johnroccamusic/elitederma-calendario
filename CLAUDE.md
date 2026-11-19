@@ -1593,6 +1593,140 @@ del 50%**. È così che l'ago sarebbe finito in un listino Distributor a
 il punto 6 della specifica dei listini rivenditori: un costo mancante deve
 dare **nessuno sconto**, non il massimo.
 
+### Sopra il 10% lo sconto di un coupon lo decide il listino rivenditori (19/11/2026)
+
+Il titolare: «quando faccio un coupon che genera uno sconto del 20%, deve
+seguire cmq i listini dei rivenditori con il 20% di sconto, ovvero **il tetto
+è 20 ma non tutto ha 20**… da oggi non sarà più possibile creare sconti liberi
+di qualsiasi percentuale perché sopra al 10% subentreranno i calcoli che fanno
+i listini attuali dei rivenditori». E, sulla legge: **«il riferimento, la legge
+deve essere il listino rivenditori»**.
+
+**LA REGOLA È LA PROPORZIONE, NON IL MINIMO**, e la scelta è sua fra le due che
+gli ho messo davanti coi numeri:
+
+```
+frazione            = valore_coupon / tetto_sconto        (30 / 50 = 0,6)
+sconto_del_prodotto = cedibile_del_prodotto × frazione
+```
+
+Un coupon al 30% vale **tre quinti** di quello che ogni prodotto può cedere:
+Arizona (cedibile 50%) → 30%, Kit laminazione ciglia (14,7%) → **8,82%**,
+N2 Fixa (0%) → **niente**. Col minimo il Kit avrebbe preso 14,7: è la
+differenza che ha deciso lui.
+
+**Non si inventa un meccanismo: se ne estende uno che gira da settembre.** Il
+codice di acquisto delle master cede già una quota del cedibile, al banco e sul
+sito. La regola nuova ha la stessa forma, con un'altra frazione.
+
+**Le altre tre decisioni, sue:** la soglia è **10% e si cambia dalla pagina**
+(`rivenditori_parametri.soglia_sconto_libero_pct`, col registro); la regola vale
+**per tutti** i codici, `need30` compreso («è solo su una categoria ma presto
+sparirà»); un **costo mancante dà zero** cedibile.
+
+**E C'ERANO DUE LEGGI PER LA STESSA COSA.** Il codice di acquisto delle master
+leggeva `v_prezzi_listini` — la scala vecchia, quella che decide punti e
+provvigioni — e il listino rivenditori un'altra. Sui 187 prodotti dello shop le
+due non coincidono su **nessuno**: cedibile medio **29,2% contro 40,8%**. Adesso
+tutti e due i meccanismi leggono `coupon_cedibili()`.
+
+**Conseguenza voluta, da dire alle master prima che alla cassa:** su **16
+prodotti** (quasi tutta la linea LAMINAZIONE) il cedibile nuovo è zero, quindi
+l'acquisto personale di una master lì non sconta più. **I punti non si muovono**:
+restano su `v_prezzi_listini`, che non è stata toccata di una riga.
+
+**`coupon_cedibili()` NON restituisce i costi**, ed è il punto: al banco ci sta
+una master, e per incassare le serve solo quanto si può cedere — percentuale,
+euro per pezzo e numero del reparto. Stessa ragione per cui l'export del listino
+non manda i costi.
+
+| tetto del coupon | prendono il pieno | meno | niente |
+|---|---|---|---|
+| 12,30% (i codici master) | 166 | 5 | 16 |
+| 15% | 165 | 6 | 16 |
+| **20%** | **158** | **13** | **16** |
+| 30% | 146 | 25 | 16 |
+
+**LA FORZATURA.** Richiesta sua, con l'esempio: «se un giorno decido di mettere
+il 30% sui prodotti di laminazione per sbarazzarmene e quindi venderli sotto
+prezzo, **tu mi devi segnalare che io non ho quel margine e io ti devo
+confermare la forzatura**». Misurato su quel caso: forzando un 30% piatto su
+LAMINAZIONE, **6 prodotti vanno sotto costo** — Mascara espositore −14,04 €/pz,
+Brow Wow espositore −12,12, Excellentia −10,21 — e 21 sotto il margine minimo.
+
+Il riquadro nomina i prodotti e gli euro, non il numero: «sei prodotti sotto
+costo» senza i nomi è un allarme che si impara a premere via. **Il motivo è
+obbligatorio** e lo pretende anche il database (`coupon_forzatura_col_motivo`),
+perché un prezzo sotto costo senza il perché accanto, fra sei mesi, si legge
+come un difetto dell'app. Resta sul coupon con nome e data, e si vede come
+pastiglia **«Forzato»** dovunque quel codice compare. **Oltre il tetto (50%) è
+una forzatura per definizione**: chiedere più di tutto il cedibile non è una
+frazione.
+
+**La formula sta in `_shared/sconto-listino.js`**, letta dall'app e da Deno come
+`email.js`: due copie vorrebbero dire una percentuale detta in pagina e un'altra
+incassata dal sito — il guasto del 7/11/2026, quando le due copie della formula
+del carrello si sono staccate per davvero. E al banco **il conto del coupon ha
+un punto solo**, perché il totale è la somma delle righe.
+
+**Sul sito lo applica lo snippet, e il sito non sa i margini.** Un coupon di
+WooCommerce porta **una percentuale sola**: il per-prodotto lo fa
+`elitederma-sconto-fasce.php` (v1.4, **CASO R**), che legge la frazione dal
+coupon (`_ed_frazione_cedibile`) e il cedibile dal prodotto
+(`_ed_cedibile_riv_pct`, scritto da `woo-allinea-margini`). Sul coupon va la
+frazione e non la percentuale per prodotto, per la stessa ragione della quota
+master: cambiare il coupon non deve obbligare a riscrivere duecento prodotti.
+Nel campo `amount` va la **media effettiva pesata sui prezzi**, così se lo
+snippet fosse spento il totale resta vicino al vero invece di scontare la
+percentuale piena su tutto. Un coupon **forzato non riceve la frazione**: senza
+quel contrassegno il sito sconta piatto da sé.
+
+**Due difetti trovati facendo questo, e nessuno dei due si sarebbe visto:**
+
+- **`_ed_blocco` porta il NUMERO del reparto, non il nome.** La quota per
+  reparto delle master si cerca con quello (`listino_master_quota` ha per chiavi
+  1…12 e 99): scrivendoci il nome sarebbe ricaduta sulla quota generale, su
+  tutti i reparti, in silenzio. Preso guardando il dato prima di scrivere.
+- **`woo-aggiorna-coupon` mandava `valore` dove la creazione manda
+  `valore_woo`.** Su `need30` voleva dire **30 al posto di 24,59**: premere
+  «Riscrivi sul sito» cambiava la percentuale di ripiego di un coupon che
+  nessuno aveva toccato. Allineato.
+
+**E un errore mio, che il banco ha preso al primo giro:** `serveIlCedibile`
+usava `couponSegueIlListino` **prima** della sua riga — in questo file una
+`const` usata prima della sua dichiarazione non dà un avviso, dà il POS che non
+si apre. Undici file di prove rossi, fra cui tutti quelli che montano il banco.
+È la stessa trappola del 28/10 (`corsiDateDocentiPos`), e la regola resta: in
+App.jsx **si guarda l'ordine delle righe**, non solo che il nome esista.
+
+**Un prodotto fuori dal listino non si sconta**, e il banco lo dice sulla riga.
+Misurato prima di scegliere questo verso: in tre mesi le sole righe del POS
+senza prodotto in anagrafica sono **la spedizione** — che non si sconta comunque
+— e **una** vendita al corso battuta a mano.
+
+Migrazioni `20261119180000` (la soglia, il costo mancante che dà zero, le
+quattro colonne della forzatura col vincolo sul motivo, `coupon_cedibili`) e
+`20261119181000` (il reparto come numero). **Il listino non si è mosso di una
+riga**: 128 prodotti al tetto prima e dopo, perché i prodotti senza costo erano
+zero su 195 — era il momento in cui quella correzione non costava niente.
+
+Prove in `prove/coupon-segue-il-listino.test.jsx` (23) e il banco PHP
+`wordpress/prova-sconto-fasce.php`, che finge quel tanto di WooCommerce che
+serve: lo snippet dà **gli stessi centesimi del POS** (13,47 · 20,72 · 0).
+`php -l` dice solo che il file si legge, e questo snippet decide dei prezzi sul
+sito. Il banco **non si importa** in Code Snippets — ridefinisce `add_filter` e
+`has_term` per girare senza WordPress — e `genera-json.mjs` adesso salta i file
+`prova-*` come già saltava `-ORIGINALE`.
+
+**Resta da fare, e non l'ho fatto:** importare il `.json` dello snippet sul sito
+(**v1.4**; da verificare prima che la v1.3 sia davvero attiva: senza l'innesto
+un coupon al 30% sullo shop è un **30% piatto**, c'è scritto nello snippet
+stesso); **pubblicare** `woo-allinea-margini`, `woo-crea-coupon` e
+`woo-aggiorna-coupon`, che aspettano il «pubblica»; e poi un giro completo di
+allineamento dei margini, che è quello che scrive `_ed_cedibile_riv_pct` sui
+prodotti. Finché quel giro non è passato, sul sito il CASO R non trova il
+cedibile e **non sconta**: al banco invece vale già.
+
 ### Una fattura a rate ha una spesa per rata (19/11/2026)
 
 Il titolare, sulla fattura Orthostetica n. 771: **«anche se è pagata devo

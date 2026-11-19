@@ -26,6 +26,7 @@
 //   supabase.functions.invoke('woo-crea-coupon', { body: { couponId } })
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { passaDalListino, frazioneDelTetto } from "../_shared/sconto-listino.js";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -138,8 +139,31 @@ Deno.serve(async (req) => {
   }
   const metaMaster = quotaMaster ? [{ key: "_ed_quota_master", value: JSON.stringify(quotaMaster) }] : [];
 
+  // LA FRAZIONE DEL TETTO: sopra la soglia comanda il listino
+  // rivenditori (19/11/2026, deciso dal titolare: «la legge deve essere
+  // il listino rivenditori»).
+  //
+  // Sul coupon viaggia SOLO la frazione — 30 su un tetto di 50 = 0,6 —
+  // e quanto ogni pezzo puo' cedere sta sul prodotto
+  // (`_ed_cedibile_riv_pct`, scritto dall'allineamento dei margini).
+  // Stessa ragione della quota master: cambiare la percentuale del
+  // coupon non deve obbligare a riscrivere duecento prodotti.
+  //
+  // UN COUPON FORZATO NON LA RICEVE, e non e' una dimenticanza: forzare
+  // vuol dire scontare piatto, e senza questo contrassegno il sito fa
+  // esattamente quello da se'.
+  const { data: parametri } = await supabase
+    .from("rivenditori_parametri").select("chiave, numero")
+    .in("chiave", ["tetto_sconto_pct", "soglia_sconto_libero_pct"]);
+  const perChiave: Record<string, number> = {};
+  (parametri || []).forEach((r: any) => { perChiave[r.chiave] = Number(r.numero); });
+  const seguiIlListino = riga.tipo_sconto === "percent"
+    && passaDalListino({ valore: riga.valore, soglia: perChiave.soglia_sconto_libero_pct, forzato: riga.forzato });
+  const frazione = seguiIlListino ? frazioneDelTetto(riga.valore, perChiave.tetto_sconto_pct ?? 50) : 0;
+  const metaListino = frazione > 0 ? [{ key: "_ed_frazione_cedibile", value: String(frazione) }] : [];
+
   if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
-    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, ...metaNeedling, ...metaMaster];
+    payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, ...metaNeedling, ...metaMaster, ...metaListino];
   } else if (riga.base_sconto === "margine") {
     // Anche la percentuale unica "sul margine" va detta al sito per
     // quello che e': il 15% di quei dieci euro di guadagno, non il 15%
@@ -147,13 +171,13 @@ Deno.serve(async (req) => {
     // giusta sul totale degli ordini e sbagliata su ogni singolo
     // carrello. Il frammento legge questo e il margine in euro scritto
     // sul prodotto, e fa il conto esatto riga per riga.
-    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, ...metaNeedling, ...metaMaster];
-  } else if (metaNeedling.length || metaMaster.length) {
+    payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, ...metaNeedling, ...metaMaster, ...metaListino];
+  } else if (metaNeedling.length || metaMaster.length || metaListino.length) {
     // Un coupon a percentuale secca non entra in nessuno dei due rami
     // qui sopra, e i suoi contrassegni non partivano: il codice di
     // acquisto di una master e' esattamente cosi'. Senza questa riga il
     // sito gli avrebbe applicato la percentuale media e basta.
-    payloadWoo.meta_data = [...metaNeedling, ...metaMaster];
+    payloadWoo.meta_data = [...metaNeedling, ...metaMaster, ...metaListino];
   }
 
   try {

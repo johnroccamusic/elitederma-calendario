@@ -22,6 +22,7 @@
 // `validoFinoA` è "aaaa-mm-gg", oppure null per togliere la scadenza.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { passaDalListino, frazioneDelTetto } from "../_shared/sconto-listino.js";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -114,17 +115,42 @@ Deno.serve(async (req) => {
   }
   const metaMaster = { key: "_ed_quota_master", value: quotaMaster ? JSON.stringify(quotaMaster) : "" };
 
+  // LA FRAZIONE DEL TETTO: sopra la soglia comanda il listino
+  // rivenditori (19/11/2026). Sul coupon viaggia solo la frazione — 30
+  // su un tetto di 50 = 0,6 — e quanto ogni pezzo puo' cedere sta sul
+  // prodotto (`_ed_cedibile_riv_pct`).
+  //
+  // Vuota quando non si applica, con la stessa regola delle altre qui
+  // sopra: il valore vuoto conta quanto quello pieno, perche' cancella
+  // il contrassegno dai coupon che se lo portavano dietro — un coupon
+  // forzato dopo essere stato normale, per esempio.
+  const { data: parametri } = await supabase
+    .from("rivenditori_parametri").select("chiave, numero")
+    .in("chiave", ["tetto_sconto_pct", "soglia_sconto_libero_pct"]);
+  const perChiave: Record<string, number> = {};
+  (parametri || []).forEach((r: any) => { perChiave[r.chiave] = Number(r.numero); });
+  const seguiIlListino = riga.tipo_sconto === "percent"
+    && passaDalListino({ valore: riga.valore, soglia: perChiave.soglia_sconto_libero_pct, forzato: riga.forzato });
+  const frazione = seguiIlListino ? frazioneDelTetto(riga.valore, perChiave.tetto_sconto_pct ?? 50) : 0;
+  const metaListino = { key: "_ed_frazione_cedibile", value: frazione > 0 ? String(frazione) : "" };
+
   const payloadWoo: Record<string, unknown> = {};
   if (haValidoFinoA) payloadWoo.date_expires = validoFinoA === null ? "" : validoFinoA;
   if (aggiornaRegola) {
     payloadWoo.discount_type = "percent";
-    payloadWoo.amount = String(riga.valore ?? 0);
+    // LA STESSA PERCENTUALE CHE SCRIVE LA CREAZIONE, e prima non lo era:
+    // `woo-crea-coupon` manda `valore_woo` (la conversione sul lordo, o
+    // la media effettiva quando comanda il listino) e qui si mandava
+    // `valore`. Su `need30` voleva dire 30 al posto di 24,59 — cioe'
+    // premere «Riscrivi sul sito» cambiava la percentuale di ripiego di
+    // un coupon che nessuno aveva toccato.
+    payloadWoo.amount = String(riga.valore_woo ?? riga.valore ?? 0);
     if (riga.tipo_regola_sconto === "fasce" && Array.isArray(riga.fasce_sconto) && riga.fasce_sconto.length) {
-      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling, metaMaster];
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: JSON.stringify(riga.fasce_sconto) }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling, metaMaster, metaListino];
     } else if (riga.base_sconto === "margine") {
-      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }, metaNeedling, metaMaster];
+      payloadWoo.meta_data = [{ key: "_ed_sconto_margine_pct", value: String(riga.valore) }, { key: "_ed_fasce_sconto", value: "" }, metaNeedling, metaMaster, metaListino];
     } else {
-      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling, metaMaster];
+      payloadWoo.meta_data = [{ key: "_ed_fasce_sconto", value: "" }, { key: "_ed_sconto_margine_pct", value: "" }, metaNeedling, metaMaster, metaListino];
     }
   }
 

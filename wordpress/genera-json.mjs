@@ -41,7 +41,11 @@ let quanti = 0;
 // «-ORIGINALE» non e' uno snippet da installare: e' la copia di com'era
 // prima un altro snippet, tenuta per confronto. Importarla vorrebbe dire
 // due motori di sconto attivi insieme sullo stesso carrello.
-const daSaltare = (f) => /ORIGINALE/i.test(f);
+// E «prova-*» e' un BANCO DI PROVA: si lancia da riga di comando e
+// ridefinisce funzioni di WordPress (add_filter, has_term) per poter
+// girare senza WordPress. Importarlo in Code Snippets vorrebbe dire
+// farle ridefinire DENTRO WordPress, cioe' rompere il sito.
+const daSaltare = (f) => /ORIGINALE/i.test(f) || /^prova-/i.test(f);
 
 for (const file of readdirSync(cartella).filter((f) => f.endsWith(".php") && !daSaltare(f)).sort()) {
   const php = readFileSync(join(cartella, file), "utf8");
