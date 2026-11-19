@@ -118,9 +118,20 @@ function elitederma_barra_scorrevole() {
    ripetuta sembra una frase sola sbagliata */
 .ed-barra__rombo{color:#D1A570;font-size:calc(var(--ed-corpo,11.5px) * .68);margin:0 24px;flex:0 0 auto}
 @keyframes ed-barra-scorre{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-/* fermandocisi sopra si ferma: una scritta che scorre e non si puo'
-   rileggere e' una scritta che non si legge */
-.ed-barra:hover .ed-barra__nastro{animation-play-state:paused}
+/* FERMANDOCISI SOPRA SI FERMA, MA SOLO DOVE C'E' UN MOUSE.
+   Una scritta che scorre e non si puo' rileggere non si legge, e li'
+   dentro ci sono le date: col puntatore sopra, la striscia si ferma.
+   Su un telefono pero' questa stessa riga la UCCIDEVA: iOS applica
+   `:hover` al tocco e ce lo lascia finche' non si tocca da un'altra
+   parte — e la striscia sta sotto l'header, cioe' dove si appoggia il
+   pollice per far scorrere la pagina. Il primo scorrimento la fermava
+   e non ripartiva piu'.
+   `hover: hover` + `pointer: fine` vuol dire «un dispositivo che sa
+   davvero stare sopra una cosa senza toccarla»: mouse e trackpad si',
+   dito no. */
+@media (hover:hover) and (pointer:fine){
+  .ed-barra:hover .ed-barra__nastro{animation-play-state:paused}
+}
 .ed-barra__x{position:absolute;top:50%;right:6px;transform:translateY(-50%);width:24px;height:24px;
   display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);border:none;border-radius:50%;
   color:rgba(255,255,255,.6);cursor:pointer;padding:0;transition:color .18s,background .18s}
