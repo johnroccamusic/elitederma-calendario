@@ -1593,6 +1593,93 @@ del 50%**. È così che l'ago sarebbe finito in un listino Distributor a
 il punto 6 della specifica dei listini rivenditori: un costo mancante deve
 dare **nessuno sconto**, non il massimo.
 
+### Una fattura a rate ha una spesa per rata (19/11/2026)
+
+Il titolare, sulla fattura Orthostetica n. 771: **«anche se è pagata devo
+poterci unire la fattura ricevuta da Fatture in Cloud, ma che cambia?»**
+
+**Prima di tutto: non c'era niente da sistemare, e la mia prima diagnosi era
+sbagliata.** Guardando le spese avevo visto due righe da 910,04 e 910,05
+nate a 54 secondi di distanza con lo stesso numero di documento, e le avevo
+chiamate doppioni. Lo erano, nella forma. Ma il dato di Fatture in Cloud dice
+un'altra cosa:
+
+> **La 771 è di 1.820,09 €, e 910,04 + 910,05 fa 1.820,09 esatto.**
+
+Non due doppioni: **le due rate**, e in `documento_fornitore.rate` c'è il
+piano scritto da FIC — 910,05 il 13/11 e 910,04 il 13/12. Stessa cosa per la
+846: 1.843,58 in due rate da 921,79. Avevo contato 5.797,83 € di «debito
+fantasma» che è invece debito vero. **La lezione: due righe quasi identiche
+dello stesso fornitore sono un piano rate finché il totale della fattura non
+dice il contrario** — e quel totale sta in `fatture_ricevute_fic.totale` e in
+`documento_fornitore.rate`, non nelle spese.
+
+**Il difetto vero stava nella FORMA del legame.** `fatture_ricevute_fic` aveva
+una colonna `spesa_id`: **una fattura, una spesa**. E il quadro «Associa una
+fattura» mostra apposta solo le fatture *libere*, per non staccarne una da
+dove sta. Messe insieme, le due cose fanno questo: attaccata la fattura alla
+prima rata, **la seconda non poteva più riceverla** — quell'uscita sarebbe
+rimasta «da associare» per sempre, senza nessun modo di chiuderla. Il
+commento nel codice lo diceva già («la fattura si attacca a UNA spesa —
+`spesa_id` ne tiene una»), come un limite da conoscere invece che da togliere.
+
+**IL LEGAME SI SPOSTA SULLA SPESA** (`spese.fattura_fic_id`), che è la parte
+«molte»: una fattura, tante spese quante sono le rate. Da lì la **copertura si
+calcola** — `coperturaFattura(fattura, spese)`, pura ed esportata: somma dei
+totali delle spese legate contro il totale della fattura, con `resta`,
+`completa`, `iniziata` ed `eccede`.
+
+**Non si tiene in una colonna, ed è la decisione di fondo.** Un numero
+riassuntivo può contraddire le righe che dovrebbe riassumere, e il giorno in
+cui lo fa non si sa più a quale dei due credere. `documento_fornitore` ha
+`importo_allocato` proprio per questo mestiere e lo si aggiorna a mano in sei
+punti: qui no.
+
+Cosa cambia nei quattro posti che leggevano quel legame:
+
+| | prima | adesso |
+|---|---|---|
+| Prima nota, riga pagata | «Riconciliata» o «da associare» | «Riconciliata · una rata: della fattura resta € X» |
+| «Associa una fattura» | solo le fatture **libere** | quelle **non coperte per intero**, col piano rate di FIC e quanto resta |
+| Registro documenti | «Importata» | «Importata in 2 rate», oppure «Coperta 910,05 di 1.820,09» |
+| Segnalatore «Spese da importare» | senza spesa | non ancora coperta per intero |
+
+Quattro decisioni, e ognuna è un modo di sbagliare:
+
+- **il verde «importo esatto» ora confronta quello che RESTA**, non il totale.
+  Su una fattura intonsa è lo stesso numero, quindi la segnalazione di prima
+  resta vera; su una a rate diventa utile per la prima volta — è lei a dire
+  che quei 910,04 sono la rata che manca.
+- **il legame si scrive su TUTTE le spese della riga**, non sulla prima. Un
+  bonifico solo che paga due spese è una riga sola: attaccando la fattura a
+  una delle due, l'altra resterebbe senza, e il giorno in cui quel gruppo si
+  scioglie nessuno saprebbe più quale fattura la giustificava.
+- **coperta più del dovuto si segnala e non si vieta** («Coperta più del
+  dovuto», e una domanda prima di scrivere). Vuol dire che una delle spese
+  collegate appartiene a un'altra fattura, e quale lo sa una persona.
+- **«Errore, non pagata» stacca la fattura nella STESSA scrittura della
+  spesa.** Erano due richieste: la seconda poteva non partire, e lasciava una
+  spesa da pagare con la sua fattura ancora addosso.
+
+**Nessun importo si muove**: questo legame non è contabilità, dice solo quale
+documento giustifica un'uscita dal conto. Al 19/11/2026 le fatture ricevute
+sono **835 e quelle legate a una spesa 6**.
+
+Migrazioni **due**, e l'ordine conta: `20261119160000` aggiunge la colonna e
+travasa i 6 legami (applicata); `20261119161000` **toglie**
+`fatture_ricevute_fic.spesa_id` e si applica **dopo la pubblicazione** —
+finché in giro ci sono schede aperte col bundle di prima, quelle scrivono
+ancora là, e togliendola il loro tasto risponderebbe un errore. Il controllo
+da fare prima è scritto nel file.
+
+Prove in `prove/fattura-a-rate.test.jsx` (16), sui numeri veri della 771 e
+della 846: il conto e i suoi bordi (i centesimi, la fattura di un altro, la
+copertura eccedente), il quadro montato — una fattura mezza coperta che
+compare e dice quanto resta col piano rate, una coperta per intero che **non**
+compare, il tasto premuto che scrive su tutte e due le spese della riga, e lo
+zero righe che lo dice. E la guardia che dura: **nessun punto dell'app legge
+più `f.spesa_id`**, verificata rossa rimettendo il filtro vecchio.
+
 ### La raccolta del materiale, a tutta pagina (30/10/2026)
 
 In Logistica → Spedizioni corsi, in alto a destra nella scheda di

@@ -1,0 +1,42 @@
+-- ---------------------------------------------------------
+-- Via il legame vecchio: una fattura non punta piu' a una spesa sola
+-- (19/11/2026)
+--
+-- Gemella di 20261119160000, che ha spostato il legame sulla spesa
+-- (spese.fattura_fic_id) e ha travasato i 6 che c'erano.
+--
+-- Qui si toglie fatture_ricevute_fic.spesa_id, che ormai nessuno legge:
+-- una colonna che sembra viva e non lo e' e' peggio di una che manca,
+-- perche' chi apre la tabella ci ragiona sopra — e perche' due
+-- dichiarazioni dello stesso fatto, un giorno, si contraddicono.
+--
+-- SI APPLICA DOPO LA PUBBLICAZIONE, non prima: finche' in giro ci sono
+-- schede aperte col bundle di ieri, quelle scrivono ancora su questa
+-- colonna, e togliendola il tasto "Associa una fattura" di quelle schede
+-- risponderebbe un errore.
+--
+-- Prima di applicarla, il controllo che dice se e' rimasto qualcosa
+-- scritto soltanto di la':
+--
+--   select count(*) from fatture_ricevute_fic f
+--    where f.spesa_id is not null
+--      and not exists (select 1 from spese s where s.fattura_fic_id = f.id);
+--
+-- Se non e' zero, quei legami vanno travasati prima (la stessa update
+-- della migrazione gemella).
+-- ---------------------------------------------------------
+
+alter table public.fatture_ricevute_fic drop column if exists spesa_id;
+
+-- ---------------------------------------------------------
+-- ROLLBACK
+--   alter table public.fatture_ricevute_fic
+--     add column spesa_id uuid references public.spese(id) on delete set null;
+--   update public.fatture_ricevute_fic f
+--      set spesa_id = (select s.id from public.spese s
+--                       where s.fattura_fic_id = f.id
+--                       order by s.data_pagamento nulls last, s.created_at
+--                       limit 1);
+-- ATTENZIONE: tornando indietro di una fattura a rate si tiene UNA sola
+-- spesa, la prima pagata. Le altre rate perdono il legame.
+-- ---------------------------------------------------------

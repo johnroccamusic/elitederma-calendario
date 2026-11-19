@@ -50963,7 +50963,10 @@ function SegnalatoriContabilita({
   const documenti = documentoFornitoreTabella || [];
   const daRiconciliare = documenti.filter((d) => d.tipo !== "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
   const ncDaRiconciliare = documenti.filter((d) => d.tipo === "nota_credito" && d.stato === "da_riconciliare" && dentroContabilita(d)).length;
-  const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id && dentroContabilita(f)).length;
+  // non "senza spesa" ma "non ancora coperta per intero": una fattura a
+  // rate con una rata gia' importata ha ancora l'altra da importare, e
+  // sparire da questo conteggio la farebbe dimenticare
+  const daImportare = (fattureRicevuteFic || []).filter((f) => !coperturaFattura(f, spese).completa && dentroContabilita(f)).length;
   const daApprovare = contabilitaDaApprovare({
     corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi,
     leva, location, hotel, quoteVenditoriSplit, locationPrezzi, spese, venditeShop, busteAppendici,
@@ -54319,11 +54322,15 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
       })
     : elencoMeseFic;
   // Associata vuol dire due cose, perche' i sistemi sono due: o la
-  // fattura e' stata trasformata in una spesa (spesa_id), o la sua
-  // gemella in documento_fornitore risulta riconciliata. Guardarne uno
-  // solo lascerebbe fuori quasi tutto: al 22/09/2026 le fatture con una
-  // spesa collegata erano 6, quelle riconciliate 72.
-  const ficAssociata = (f) => !!f.spesa_id || documentoFornitorePerFicId[f.fic_id]?.stato === "riconciliato";
+  // fattura e' stata trasformata in spese, o la sua gemella in
+  // documento_fornitore risulta riconciliata. Guardarne uno solo
+  // lascerebbe fuori quasi tutto: al 22/09/2026 le fatture con una spesa
+  // collegata erano 6, quelle riconciliate 72.
+  //
+  // Dal lato spese si guarda la copertura e non la presenza di un
+  // legame: una fattura a rate con una rata sola importata e' ancora da
+  // lavorare, e darla per associata vorrebbe dire perdere l'altra rata.
+  const ficAssociata = (f) => coperturaFattura(f, spese).completa || documentoFornitorePerFicId[f.fic_id]?.stato === "riconciliato";
   const elencoVistaFic = elencoFiltratoFic.filter((f) => (vistaFic === "associate" ? ficAssociata(f) : !ficAssociata(f)));
   const quanteDaAssociareFic = elencoFiltratoFic.filter((f) => !ficAssociata(f)).length;
   const quanteAssociateFic = elencoFiltratoFic.length - quanteDaAssociareFic;
@@ -55035,11 +55042,24 @@ export function PaginaAmministrazione({ impegnoTabella = [], locationPrezzi = []
                   importo={fmtEuroErp(f.totale)}
                 >
                   {(() => {
-                    if (f.spesa_id) {
+                    const cop = coperturaFattura(f, spese);
+                    if (cop.iniziata) {
+                      // coperta per intero: "Importata". Coperta a meta':
+                      // lo dice, perche' resta una rata da importare e una
+                      // pastiglia verde la farebbe dare per finita
                       return (
                         <>
-                          <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Importata</span>
-                          <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
+                          <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: cop.completa ? "#2E7D32" : "#B8860B", background: cop.completa ? "#E3F3E5" : "#FBF3E0", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>
+                            {cop.completa
+                              ? `Importata${cop.righe.length > 1 ? ` in ${cop.righe.length} rate` : ""}`
+                              : `Coperta ${fmtEuroErp2(cop.coperto)} di ${fmtEuroErp2(cop.totale)}`}
+                          </span>
+                          {cop.eccede && (
+                            <span style={{ ...fontBody, fontSize: 9.2, fontWeight: 700, color: "#C0392B", background: "#FDECEC", borderRadius: 10, padding: "3px 8px", whiteSpace: "nowrap" }}>Coperta piu' del dovuto</span>
+                          )}
+                          <button onClick={() => onApriModificaSpesa(cop.righe[0].id)} style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 13, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>
+                            {cop.righe.length > 1 ? `Vedi spese (${cop.righe.length})` : "Vedi spesa"}
+                          </button>
                         </>
                       );
                     }
@@ -55480,13 +55500,44 @@ function ChipSpesa({ children }) {
     </span>
   );
 }
+/**
+ * Quanto di una fattura e' coperto dalle spese che la pagano.
+ *
+ * Una fattura a rate ha una spesa per rata: la n. 771 di Orthostetica e'
+ * 1.820,09 e Fatture in Cloud la porta in due rate, 910,05 il 13/11 e
+ * 910,04 il 13/12. Quindi "questa fattura e' associata" non e' un si' o
+ * un no: e' una somma.
+ *
+ * Si CALCOLA dalle righe e non si tiene in una colonna, perche' un
+ * numero riassuntivo puo' contraddire le righe che dovrebbe riassumere —
+ * e il giorno in cui lo fa non si sa piu' quale dei due credere.
+ *
+ * `eccede` e' il caso da guardare: piu' spese del dovuto su una fattura
+ * vuol dire che una di loro appartiene a un'altra fattura. Si segnala e
+ * non si vieta: quale sia lo sa una persona.
+ */
+export function coperturaFattura(fattura, spese = []) {
+  const totale = round2(Number(fattura?.totale || 0));
+  const righe = fattura?.id ? (spese || []).filter((s) => s.fattura_fic_id === fattura.id) : [];
+  const coperto = round2(righe.reduce((t, s) => t + (Number(s.totale) || 0), 0));
+  return {
+    totale, coperto, righe,
+    resta: round2(Math.max(0, totale - coperto)),
+    completa: righe.length > 0 && coperto >= totale - 0.01,
+    iniziata: righe.length > 0,
+    eccede: coperto > totale + 0.01,
+  };
+}
 const SPESE_PAGINA_INIZIALE = 10;
 /**
  * Le fatture arrivate, per attaccarne una a una spesa pagata dal conto.
  *
- * Si vedono solo quelle libere: una fattura gia' attaccata a un'altra
- * spesa comparirebbe qui come scelta possibile e, scegliendola, la si
- * staccherebbe da dove sta senza che nessuno se ne accorga.
+ * Si vedono quelle NON ANCORA COPERTE PER INTERO, non quelle "libere".
+ * Una fattura a rate ha una spesa per rata, e col vecchio filtro dopo la
+ * prima rata non compariva mai piu': la seconda uscita restava "da
+ * associare" per sempre, senza nessun modo di chiuderla. Una coperta per
+ * intero resta fuori, perche' sceglierla vorrebbe dire portarla via da
+ * dove sta.
  *
  * L'ordine e' quello delle date, dalla piu' recente: sempre, senza
  * eccezioni. Prima le fatture dell'importo esatto saltavano in cima, e
@@ -55495,7 +55546,7 @@ const SPESE_PAGINA_INIZIALE = 10;
  * e' arrivati. L'importo esatto resta segnalato dov'e', in verde: e' un
  * aiuto a riconoscerla, non una ragione per spostarla.
  */
-function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAssociata }) {
+export function ModaleAssociaFattura({ riga, idSpese = [], fatture, spese = [], documenti = [], onChiudi, onAssociata }) {
   const [ricerca, setRicerca] = useState("");
   const [salvando, setSalvando] = useState(null);
   const [errore, setErrore] = useState("");
@@ -55505,10 +55556,19 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
   const importoSpesa = Number(riga?.importo ?? riga?.totale ?? 0);
   const quanteSpese = riga?.speseGruppo?.length || 1;
 
+  // il piano rate scritto da Fatture in Cloud, quando ce n'e' uno: e'
+  // l'unica prova che quella fattura si paga in piu' volte, e va letta
+  // PRIMA di scegliere, non dopo
+  const rateDi = (f) => {
+    const doc = (documenti || []).find((d) => d.fic_id != null && f?.fic_id != null && d.fic_id === f.fic_id);
+    const rate = Array.isArray(doc?.rate) ? doc.rate : [];
+    return rate.length > 1 ? rate : [];
+  };
+
   const elenco = useMemo(() => {
     const parole = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const libere = (fatture || []).filter((f) => !f.spesa_id);
-    const filtrate = parole.length === 0 ? libere : libere.filter((f) => {
+    const aperte = (fatture || []).filter((f) => !coperturaFattura(f, spese).completa);
+    const filtrate = parole.length === 0 ? aperte : aperte.filter((f) => {
       const dentro = [f.fornitore_nome, f.numero_documento, f.descrizione, f.categoria].filter(Boolean).join(" ").toLowerCase();
       return parole.every((p) => dentro.includes(p));
     });
@@ -55518,13 +55578,25 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
       String(b.data_documento || "").localeCompare(String(a.data_documento || ""))
       || String(b.numero_documento || "").localeCompare(String(a.numero_documento || ""), "it", { numeric: true })
     ));
-  }, [fatture, ricerca, importoSpesa]);
+  }, [fatture, spese, ricerca, importoSpesa]);
 
+  // Il legame si scrive su TUTTE le spese della riga, non sulla prima.
+  // Un bonifico solo che paga due spese e' una riga sola: attaccando la
+  // fattura a una delle due, l'altra resterebbe senza — e il giorno in
+  // cui quel gruppo si scioglie nessuno saprebbe piu' quale fattura la
+  // giustificava.
   async function associa(f) {
     setErrore("");
+    const cop = coperturaFattura(f, spese);
+    if (importoSpesa > cop.resta + 0.01 && !window.confirm(
+      `Di questa fattura ${cop.iniziata ? `resta da coprire ${fmtEuroErp2(cop.resta)}` : `il totale e' ${fmtEuroErp2(cop.totale)}`}, `
+      + `e questa uscita e' di ${fmtEuroErp2(importoSpesa)}.\n\n`
+      + `Attaccarla comunque? La fattura risultera' coperta per piu' di quanto vale, `
+      + `e vuol dire che una delle spese collegate appartiene a un'altra fattura.`
+    )) return;
     setSalvando(f.id);
     const { data, error } = await supabase
-      .from("fatture_ricevute_fic").update({ spesa_id: idSpesaDaLegare }).eq("id", f.id).select("id, spesa_id");
+      .from("spese").update({ fattura_fic_id: f.id }).in("id", idSpese).select("id, fattura_fic_id");
     setSalvando(null);
     if (error) { setErrore(error.message); return; }
     // Un update che non tocca NESSUNA riga non e' un errore per il
@@ -55547,7 +55619,8 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
           <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Associa una fattura</div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3, lineHeight: 1.45 }}>
             {riga?.descrizione || "Spesa"} · <b style={{ color: NAVY }}>{fmtEuroErp2(importoSpesa)}</b> usciti dal conto.
-            {quanteSpese > 1 ? ` Questa riga copre ${quanteSpese} spese: la fattura vale per tutte.` : ""} Scegli la fattura che corrisponde.
+            {quanteSpese > 1 ? ` Questa riga copre ${quanteSpese} spese: la fattura si attacca a tutte.` : ""} Scegli la fattura che corrisponde.
+            <br />Una fattura a rate compare finche' non e' coperta per intero: accanto si legge quanto resta.
           </div>
         </div>
         <div style={{ padding: 14 }}>
@@ -55562,10 +55635,17 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
           <div style={{ maxHeight: "56vh", overflowY: "auto" }}>
             {elenco.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: 16, textAlign: "center" }}>
-                {ricerca.trim() ? "Nessuna fattura con queste parole." : "Non ci sono fatture libere: sono tutte gia' associate a una spesa."}
+                {ricerca.trim() ? "Nessuna fattura con queste parole." : "Non ci sono fatture aperte: sono tutte gia' coperte per intero dalle spese che le pagano."}
               </div>
             ) : elenco.map((f) => {
-              const uguale = Math.abs(Number(f.totale || 0) - importoSpesa) < 0.02;
+              const cop = coperturaFattura(f, spese);
+              const rate = rateDi(f);
+              // verde = questa uscita copre esattamente quello che resta.
+              // Su una fattura intonsa "quello che resta" e' il totale,
+              // quindi la segnalazione di prima resta vera; su una fattura
+              // a rate diventa utile per la prima volta
+              const uguale = Math.abs(cop.resta - importoSpesa) < 0.02;
+              const supera = importoSpesa > cop.resta + 0.01;
               return (
                 <button
                   key={f.id} onClick={() => associa(f)} disabled={salvando === f.id}
@@ -55582,9 +55662,29 @@ function ModaleAssociaFattura({ riga, idSpesaDaLegare, fatture, onChiudi, onAsso
                     <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
                       {f.numero_documento || "senza numero"} · {quando(f.data_documento)}{f.categoria ? ` · ${f.categoria}` : ""}
                     </span>
+                    {rate.length > 0 && (
+                      <span style={{ display: "block", ...fontBody, fontSize: 11, color: "#1F4E8C", marginTop: 3 }}>
+                        In {rate.length} rate: {rate.map((r) => `${fmtEuroErp2(Number(r.amount || 0))} il ${quando(r.due_date)}`).join(" · ")}
+                      </span>
+                    )}
+                    {cop.iniziata && (
+                      <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 700, color: "#B8860B", marginTop: 3 }}>
+                        Gia' coperta {fmtEuroErp2(cop.coperto)} da {cop.righe.length === 1 ? "una spesa" : `${cop.righe.length} spese`} · resta {fmtEuroErp2(cop.resta)}
+                      </span>
+                    )}
+                    {supera && (
+                      <span style={{ display: "block", ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", marginTop: 3 }}>
+                        Questa uscita supera di {fmtEuroErp2(round2(importoSpesa - cop.resta))} quello che resta da coprire
+                      </span>
+                    )}
                   </span>
-                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: uguale ? "#2E7D32" : NAVY, whiteSpace: "nowrap" }}>
-                    {salvando === f.id ? "Associo…" : fmtEuroErp2(Number(f.totale || 0))}
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: uguale ? "#2E7D32" : NAVY, whiteSpace: "nowrap", textAlign: "right" }}>
+                    {salvando === f.id ? "Associo…" : fmtEuroErp2(cop.iniziata ? cop.resta : cop.totale)}
+                    {cop.iniziata && (
+                      <span style={{ display: "block", ...fontBody, fontSize: 10.5, fontWeight: 600, color: MUTED }}>
+                        di {fmtEuroErp2(cop.totale)}
+                      </span>
+                    )}
                   </span>
                 </button>
               );
@@ -56121,17 +56221,16 @@ function PaginaInserimentoCostiRicavi({
   // l'esito delle azioni sulle righe (riportare una spesa da pagare):
   // in questa pagina non c'era nessun posto dove dirlo
   const [msgPN, setMsgPN] = useState("");
-  const fatturePerSpesa = useMemo(() => {
+  const fatturePerId = useMemo(() => {
     const mappa = {};
-    (fattureRicevuteFic || []).forEach((f) => { if (f.spesa_id && !mappa[f.spesa_id]) mappa[f.spesa_id] = f; });
+    (fattureRicevuteFic || []).forEach((f) => { mappa[f.id] = f; });
     return mappa;
   }, [fattureRicevuteFic]);
   // Una riga di prima nota puo' coprire piu' spese: un bonifico solo che
-  // paga due Costo Location diventa una riga sola, "2 spese: ...". La
-  // fattura pero' si attacca a UNA spesa — spesa_id ne tiene una — e
-  // cercarla con l'id della riga, che per un gruppo e' "gruppo_<id>",
-  // non la trovava mai: la fattura spariva dalle libere e la riga
-  // continuava a dire "da associare".
+  // paga due Costo Location diventa una riga sola, "2 spese: ...", con
+  // per id "gruppo_<id>" — che nella tabella spese non esiste. Da qui si
+  // ricavano gli id delle spese VERE, che sono quelle su cui il legame
+  // con la fattura si scrive e si rilegge.
   const idSpeseDiRiga = (m) => (
     m?.speseGruppo?.length ? m.speseGruppo.map((x) => x.id) : [m?.spesaReale?.id || m?.id].filter(Boolean)
   );
@@ -56156,17 +56255,18 @@ function PaginaInserimentoCostiRicavi({
       `\nLa spesa non viene cancellata: torna a essere un debito aperto.`
     )) return;
 
+    // il legame con la fattura si stacca nella STESSA scrittura: era una
+    // seconda richiesta, che poteva non partire e lasciare una spesa da
+    // pagare con la sua fattura ancora addosso
     const { error } = await supabase.from("spese").update({
       stato: "impegnata",
       data_pagamento: null, metodo_pagamento: null,
       importo_pagato_cash: null, percentuale_pagata_cash: null,
       gruppo_pagamento: null,
       numero_documento: null, data_documento: null,
+      fattura_fic_id: null,
     }).eq("id", spesa.id);
     if (error) { setMsgPN("Non riportata: " + testoErrore(error)); return; }
-
-    // la fattura di Fatture in Cloud torna in "Da associare"
-    await supabase.from("fatture_ricevute_fic").update({ spesa_id: null }).eq("spesa_id", spesa.id);
     // e il documento fornitore si riprende la quota che questa spesa gli
     // aveva preso, tornando da riconciliare se non ne resta nessuna
     if (numero) {
@@ -56182,10 +56282,16 @@ function PaginaInserimentoCostiRicavi({
     ricarica?.(["spese", "fatture_ricevute_fic", "documento_fornitore"]);
   }
 
+  // Il legame sta sulla SPESA (spese.fattura_fic_id): una fattura a rate
+  // ha una spesa per rata, e tenerlo sulla fattura ne faceva stare una
+  // sola. Basta la prima spesa della riga che ne porti uno: le spese di
+  // un gruppo sono pagate dallo stesso bonifico, quindi dalla stessa
+  // fattura.
+  const speseDiRiga = (m) => (m?.speseGruppo?.length ? m.speseGruppo : [m?.spesaReale].filter(Boolean));
   const fatturaDiRiga = (m) => {
     if (associateAdesso[m?.id]) return associateAdesso[m.id];
-    for (const id of idSpeseDiRiga(m)) {
-      if (fatturePerSpesa[id]) return fatturePerSpesa[id];
+    for (const sp of speseDiRiga(m)) {
+      if (sp?.fattura_fic_id && fatturePerId[sp.fattura_fic_id]) return fatturePerId[sp.fattura_fic_id];
     }
     return null;
   };
@@ -56233,13 +56339,15 @@ function PaginaInserimentoCostiRicavi({
       {spesaDaAssociare && (
         <ModaleAssociaFattura
           riga={spesaDaAssociare}
-          idSpesaDaLegare={idSpeseDiRiga(spesaDaAssociare)[0]}
+          idSpese={idSpeseDiRiga(spesaDaAssociare)}
           fatture={fattureRicevuteFic}
+          spese={spese}
+          documenti={documentoFornitoreTabella}
           onChiudi={() => setSpesaDaAssociare(null)}
           onAssociata={(fattura) => {
             setAssociateAdesso((prec) => ({ ...prec, [spesaDaAssociare.id]: fattura }));
             setSpesaDaAssociare(null);
-            ricarica(["fatture_ricevute_fic"]);
+            ricarica(["spese", "fatture_ricevute_fic"]);
           }}
         />
       )}
@@ -56520,7 +56628,13 @@ function PaginaInserimentoCostiRicavi({
                       // striscia verde a sinistra quando la spesa ha gia' la sua
                       // fattura addosso: si vede scorrendo, senza leggere
                       const ft = fatturaDiRiga(m);
-                      return ft ? { barraSinistra: "#2E7D32", titoloBarra: `Associata a ${ft.fornitore_nome || "fornitore"} — ${ft.numero_documento || "senza numero"}` } : {};
+                      if (!ft) return {};
+                      const cop = coperturaFattura(ft, spese);
+                      return {
+                        barraSinistra: "#2E7D32",
+                        titoloBarra: `Associata a ${ft.fornitore_nome || "fornitore"} — ${ft.numero_documento || "senza numero"}`
+                          + (cop.completa ? "" : `, una rata: della fattura resta ${fmtEuroErp2(cop.resta)}`),
+                      };
                     })()}
                     piede={(
                       <>
@@ -56564,15 +56678,25 @@ function PaginaInserimentoCostiRicavi({
                         )}
                         {m.spesaReale.stato === "pagata" && !spesaPagataInCash(m.spesaReale) && (() => {
                           const fattura = fatturaDiRiga(m);
-                          return fattura ? (
+                          if (!fattura) return <AzioneTesto onClick={() => setSpesaDaAssociare(m)} colore="#B8860B">da associare</AzioneTesto>;
+                          // Su una fattura a rate "Riconciliata" da sola
+                          // farebbe credere che la fattura sia chiusa: lo
+                          // e' questa uscita, non il documento. Quanto
+                          // resta si legge qui, che e' dove si guarda.
+                          const cop = coperturaFattura(fattura, spese);
+                          return (
                             <span
-                              title={`Associata a ${fattura.fornitore_nome || "fornitore"} — ${fattura.numero_documento || "senza numero"}`}
+                              title={`Associata a ${fattura.fornitore_nome || "fornitore"} — ${fattura.numero_documento || "senza numero"}`
+                                + (cop.completa ? "" : `, coperta ${fmtEuroErp2(cop.coperto)} di ${fmtEuroErp2(cop.totale)}`)}
                               style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#1F4E8C", whiteSpace: "nowrap" }}
                             >
                               Riconciliata
+                              {!cop.completa && (
+                                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: "#B8860B" }}>
+                                  {` · una rata: della fattura resta ${fmtEuroErp2(cop.resta)}`}
+                                </span>
+                              )}
                             </span>
-                          ) : (
-                            <AzioneTesto onClick={() => setSpesaDaAssociare(m)} colore="#B8860B">da associare</AzioneTesto>
                           );
                         })()}
                         {/* Modifica ed Elimina vogliono l'id di una spesa
@@ -88274,10 +88398,16 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     }
 
     // spesa creata a partire da "Importa come spesa" su una fattura di
-    // Fatture in Cloud: la segna come già importata, così non ricompare
-    // più con il tasto "Importa come spesa" nel Registro documenti fornitore
+    // Fatture in Cloud: il legame si scrive sulla SPESA. Da lì il
+    // Registro documenti fornitore ricava quanto di quella fattura è
+    // coperto — e una fattura a rate resta da importare finché non lo è
+    // per intero, invece di sparire alla prima rata.
     if (prefill?.fatturaFicId) {
-      await supabase.from("fatture_ricevute_fic").update({ spesa_id: idSpesa }).eq("id", prefill.fatturaFicId);
+      const { data: legata } = await supabase.from("spese")
+        .update({ fattura_fic_id: prefill.fatturaFicId }).eq("id", idSpesa).select("id");
+      if (!legata || legata.length === 0) {
+        setMsg("Spesa salvata, ma il legame con la fattura non è passato: riaprila e associala da Prima nota cassa.");
+      }
     }
     // spesa nata da "Contabilizza" su un movimento banca: il movimento
     // resta collegato e diventa grigio; con la spunta nasce anche la regola
