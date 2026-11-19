@@ -159,3 +159,43 @@ describe("la pagina «Prodotti fuori listino»", () => {
     await p.smonta();
   });
 });
+
+// E SI GUARDANO ANCHE DA GESTIONE MAGAZZINO (19/11/2026, subito dopo: «vorrei
+// vederlo in questa pagina ma non lo trovo»). La tessera stava un livello
+// sopra, nel pannello Magazzino/Shop; chi cerca un prodotto che «non c'è più»
+// lo cerca invece nella tabella del magazzino.
+//
+// Queste sono guardie sul sorgente, e lo dicono: il filtro vive dentro una
+// pagina che nessuna prova monta: quello che si può inchiodare è che la
+// pastiglia esista e che i segnalatori NON contino i ritirati.
+describe("il filtro «Fuori listino» in Gestione magazzino", () => {
+  it("la pastiglia c'è, accanto agli altri filtri rapidi", () => {
+    expect(SORGENTE).toContain('{ v: "fuorilistino", l: "Fuori listino" }');
+  });
+
+  it("acceso, la tabella cambia SORGENTE invece di restringere quella di sempre", () => {
+    // i ritirati non stanno nell'elenco normale: mostrarli insieme agli
+    // altri vorrebbe dire rimetterli in catalogo
+    expect(SORGENTE).toContain('let prodottiVisti = filtroRapido === "fuorilistino" ? fuoriListino : inListino;');
+  });
+
+  it("i segnalatori in cima contano solo i prodotti in listino", () => {
+    // un prodotto che non si vende più non è «sotto scorta» né «fermo da
+    // 90 giorni»: è fermo apposta. Se questi quattro tornassero a leggere
+    // `prodottiConStato` — che adesso comprende i ritirati — i numeri in
+    // cima alla pagina salirebbero senza che nessuno abbia comprato o
+    // smesso di comprare niente.
+    for (const riga of [
+      "const sottoScorta = inListino.filter((p) => p.sottoScorta);",
+      "const senzaCosto = inListino.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);",
+      "const kitSenzaCosto = inListino.filter((p) => p.isBundle && p.costo_acquisto == null);",
+      "const fermi = inListino.filter((p) => p.inVenditaReale && p.giorniFermo > 90);",
+    ]) expect(SORGENTE).toContain(riga);
+  });
+
+  it("col filtro acceso la pagina dice che cosa si sta guardando", () => {
+    // le righe hanno la stessa forma di sempre: senza la frase
+    // sembrerebbero prodotti in vendita con lo stock a zero
+    expect(SORGENTE).toContain("data-avviso-elenco-fuori-listino");
+  });
+});

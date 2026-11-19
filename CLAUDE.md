@@ -1561,9 +1561,27 @@ tutt'altro sarebbe una vendita riaperta per sbaglio. I prodotti senza data
 (usciti prima che questa pagina esistesse) dicono **«data non nota»** invece
 di inventare un giorno — la regola delle 16.327 richieste del CRM.
 
+**E SI GUARDANO ANCHE DA GESTIONE MAGAZZINO** (stesso giorno, subito dopo:
+«vorrei vederlo in questa pagina ma non lo trovo»). La tessera stava un
+livello sopra, nel pannello Magazzino/Shop, e chi cerca un prodotto che «non
+c'è più» lo cerca invece nella tabella del magazzino. Ora è una pastiglia
+accanto a **Tutti · Sotto scorta · Esauriti · Senza costo · Fermi**.
+
+È l'unico di quei filtri che cambia la **sorgente** invece di restringere
+quella di sempre: i ritirati non stanno nell'elenco normale, e mostrarli
+insieme agli altri vorrebbe dire rimetterli in catalogo. Per questo
+`prodottiConStato` adesso arricchisce **tutti** i prodotti — arricchirli una
+seconda volta sarebbe un secondo conto sullo stesso prodotto — e i
+segnalatori in cima leggono `inListino`: **un prodotto che non si vende più
+non è «sotto scorta» né «fermo da 90 giorni», è fermo apposta**, e contarlo
+lì farebbe salire quei numeri senza che nessuno abbia smesso di comprare
+niente. Col filtro acceso la pagina scrive cosa si sta guardando: le righe
+hanno la forma di sempre, e senza quella frase sembrerebbero prodotti in
+vendita con lo stock a zero.
+
 Migrazione `20261119140000_prodotti_fuori_listino.sql`: due colonne,
 `fuori_listino_il` e `fuori_listino_da`, rollback dentro. Nessun dato
-toccato. Prove in `prove/prodotti-fuori-listino.test.jsx` (13), con la
+toccato. Prove in `prove/prodotti-fuori-listino.test.jsx` (17), con la
 pagina montata e premuta: la lista, la data non nota, il tasto che scrive
 **esattamente** le tre chiavi su quel prodotto, il «no» che non scrive
 niente, e lo zero righe che lo dice.

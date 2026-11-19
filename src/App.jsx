@@ -63479,7 +63479,12 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
   // prodottiConStato, che non esiste ancora mentre lo sto costruendo)
   const prodottiPerId = Object.fromEntries((prodottiShop || []).map((pp) => [pp.id, pp]));
 
-  const prodottiConStato = (prodottiShop || []).filter((p) => p.attivo !== false).map((p) => {
+  // TUTTI, ritirati compresi: il filtro «Fuori listino» li mostra in questa
+  // stessa tabella, e arricchirli una seconda volta vorrebbe dire due conti
+  // sullo stesso prodotto. Chi conta i segnalatori usa `inListino` qui sotto:
+  // un prodotto che non si vende piu' non e' «sotto scorta» ne' «fermo da 90
+  // giorni» — e' fermo apposta.
+  const prodottiConStato = (prodottiShop || []).map((p) => {
     const chiave = (p.nome || "").trim().toLowerCase();
     const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
     const categorieIds = categorieIdPerProdottoId[p.id] || [];
@@ -63701,14 +63706,16 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
     await ricarica(["prodotti_shop"]);
   }
 
-  const sottoScorta = prodottiConStato.filter((p) => p.sottoScorta);
-  const senzaCosto = prodottiConStato.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
+  const inListino = prodottiConStato.filter((p) => p.attivo !== false);
+  const fuoriListino = prodottiConStato.filter((p) => p.attivo === false);
+  const sottoScorta = inListino.filter((p) => p.sottoScorta);
+  const senzaCosto = inListino.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
   // I KIT rimasti senza costo sono un'altra cosa da un prodotto a cui
   // nessuno ha ancora scritto il costo: li' si scrive un numero, qui c'e'
   // una distinta da riparare — e intanto quel kit al banco non si sconta.
   // Per questo hanno un avviso loro, col nome del componente da sistemare.
-  const kitSenzaCosto = prodottiConStato.filter((p) => p.isBundle && p.costo_acquisto == null);
-  const fermi = prodottiConStato.filter((p) => p.inVenditaReale && p.giorniFermo > 90);
+  const kitSenzaCosto = inListino.filter((p) => p.isBundle && p.costo_acquisto == null);
+  const fermi = inListino.filter((p) => p.inVenditaReale && p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
   const giaOrdinatiMag = useMemo(
     () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
@@ -63726,7 +63733,10 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
     return { risultato, piano, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
   }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, eventi, eventiMateriali]);
 
-  let prodottiVisti = prodottiConStato;
+  // «Fuori listino» e' l'unico filtro che cambia la SORGENTE e non
+  // restringe quella di sempre: i ritirati non stanno nell'elenco normale,
+  // e mostrarli insieme agli altri vorrebbe dire rimetterli in catalogo.
+  let prodottiVisti = filtroRapido === "fuorilistino" ? fuoriListino : inListino;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
   // "senza fornitore" e' una scelta utile quanto le altre: sono i prodotti
   // che l'Advisor non sa a chi ordinare
@@ -63769,7 +63779,7 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
   // ci sono gia' sull'altro scaffale. Sparpagliati in duecento righe
   // quella coppia non si vede mai.
   if (filtroRapido === "confezioni") {
-    const daAprire = prodottiConStato.filter(generaSingoli);
+    const daAprire = inListino.filter(generaSingoli);
     const idSfusi = new Set(daAprire.map((x) => x.prodotto_sfuso_id).filter(Boolean));
     prodottiVisti = prodottiVisti.filter((p) => generaSingoli(p) || idSfusi.has(p.id));
   }
@@ -63947,7 +63957,7 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
   const tastoConfezioniSfusi = (
     <>
             {vistaProdotti === "elenco" && (() => {
-              const quante = prodottiConStato.filter(generaSingoli).length;
+              const quante = inListino.filter(generaSingoli).length;
               if (quante === 0) return null;
               const acceso = filtroRapido === "confezioni";
               return (
@@ -64031,13 +64041,28 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
             {/* questi filtri leggono lo stato del magazzino, cosa che solo
                 la tabella sa mostrare: sceglierne uno riporta all'elenco
                 invece di restare un tasto che non fa niente */}
-            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
+            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" },
+              // I ritirati si guardano da qui, dove si guarda il magazzino,
+              // e non solo dalla tessera un livello sopra: chi cerca un
+              // prodotto che «non c'e' piu'» lo cerca in questa tabella.
+              { v: "fuorilistino", l: "Fuori listino" }].map((f) => (
               <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12.5, fontWeight: 600, padding: isMobile ? "7px 10px" : "7px 13px", borderRadius: isMobile ? 9 : 16, border: "none", flex: isMobile ? "1 1 0" : undefined, minWidth: 0, whiteSpace: "nowrap", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
                 {f.l}
               </button>
             ))}
           </div>
   );
+  // CON IL FILTRO ACCESO LA TABELLA MOSTRA ALTRO, E VA DETTO: le righe
+  // hanno la stessa forma di sempre, e senza questa frase sembrerebbero
+  // prodotti in vendita con lo stock a zero.
+  const avvisoFuoriListino = filtroRapido === "fuorilistino" ? (
+    <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE",
+      borderRadius: 10, padding: "8px 12px", marginBottom: 10, lineHeight: 1.5 }} data-avviso-elenco-fuori-listino>
+      Questi <b>{fuoriListino.length}</b> prodotti sono <b>fuori listino</b>: non si vendono più e non compaiono in
+      nessun listino. Le loro vendite restano nelle statistiche. Per rimetterne uno dentro, aprilo e scegli
+      «Disponibilità → Pubblicato».
+    </div>
+  ) : null;
   const filtriAttivi = [categoriaSel, fornitoreSel, canaleSel].filter(Boolean).length;
   // sul telefono i prodotti per pagina sono una tendina, non cinque
   // tasti: cosi' stanno sulla stessa riga di «Aggiorna lo shop»
@@ -64389,6 +64414,7 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
         }}>
 
         {vistaProdotti === "elenco" && (<div style={{ minWidth: 0 }}>
+        {avvisoFuoriListino}
         <div ref={rifElencoCard} style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
             {/* Il font stretto su tutta la tabella. Le colonne sono
