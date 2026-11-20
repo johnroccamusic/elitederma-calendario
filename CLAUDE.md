@@ -1665,10 +1665,26 @@ Tre decisioni minori, ognuna per un motivo:
   dopo ogni altro movimento di magazzino. Confermando il numero che c'era
   non parte niente, perché non c'è niente da allineare.
 
-**Chi può premerlo**: chi apre Gestione magazzino, come per la correzione
-a mano dello stock, che non ha un permesso suo. Inventare qui un cancello
-che la rettifica non ha sarebbe una regola nuova non chiesta; quello che
-si fa è **scrivere chi ha contato** (`movimenti_magazzino.utente`).
+**Chi può premerlo: tutti quelli che entrano in Gestione magazzino, e
+dal 20/11/2026 è una decisione del titolare**, non più una coerenza
+scelta da me con la correzione a mano dello stock (che un permesso suo
+non ce l'ha). Testuale: «questa area è accessibile da tutti coloro che
+possono accedere a gestione magazzino». Quindi niente casella in
+`TASTI_HOME` e niente cancello per ruolo: quello che resta scritto è
+**chi ha contato** (`movimenti_magazzino.utente`). Il giorno che servisse
+restringere, è una decisione nuova e va ridetta.
+
+**E le 84 righe si chiudono UNA A UNA, contando.** Gli avevo offerto un
+giro in blocco da approvare a mucchi — le righe nate da una correzione a
+mano, le più vecchie di un mese, quelle da uno o due pezzi — e ha
+risposto no: «i prodotti verranno verificati uno a uno». È la risposta
+giusta, ed è il motivo per cui quel tasto non ha un «seleziona tutti»:
+premerlo senza essere andati allo scaffale vuol dire dichiarare un
+conteggio che non è stato fatto, e da quel momento quel numero porta una
+firma — nessuno lo rimetterà più in dubbio. Delle 84, **74 dicono che in
+magazzino ce n'è meno di quanto risulta a registro**, e la più vecchia è
+del 20 ottobre: non è rumore, è un mese di pezzi usciti senza la loro
+riga.
 
 Migrazione `20261120110000_il_conto_che_non_torna_si_verifica.sql`,
 rollback dentro — e dice che i movimenti `verifica_magazzino` già scritti
