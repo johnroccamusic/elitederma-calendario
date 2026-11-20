@@ -1774,6 +1774,38 @@ Tre cose da ricordare, perché ricapiterà:
   fatturato**, perché `venditaIncassata` conta solo `completed` e
   `processing`: li si legge nella colonna «Non riusciti».
 
+**LA RISERVA È STATA PORTATA DA 60 A 10 MINUTI** (20/11/2026). Il titolare:
+«ma non si può fare in modo che solo gli ordini riusciti impegnino il
+prodotto?». Si può — «Mantieni lo stock (minuti)»
+(`woocommerce_hold_stock_minutes`, WooCommerce → Impostazioni → Prodotti →
+Inventario): **svuotando il campo la riserva si spegne del tutto.** Non si è
+fatto, e il motivo è che quel campo fa **due** lavori: tiene la merce E
+annulla da sé gli ordini non pagati. A campo vuoto i cinque ordini fantasma
+di oggi non si chiuderebbero più da soli — resterebbero «in attesa» per
+sempre, da cancellare a mano uno per uno, e i 32 annullamenti del trimestre
+sono in buona parte quella pulizia automatica.
+
+**Il valore si è scelto misurando, non a sentimento.** Su 320 ordini
+incassati in sei mesi: la metà paga entro **12 secondi**, 95 su 100 entro
+**6 minuti**, **10 su 320** oltre i dieci minuti e **1 su 320** oltre
+l'ora. L'ora di attesa serviva a **un ordine su trecentoventi** e in cambio
+spegneva la vendita per un'ora **una volta su cinque** (in 90 giorni: 189
+riusciti, 47 no). A dieci minuti sono coperti 310 clienti su 320, la merce
+si libera sei volte più in fretta e gli ordini abbandonati continuano a
+chiudersi da soli.
+
+**E il rischio che la riserva esiste per evitare non è mai accaduto**: in un
+anno intero di ordini pagati non c'è **un solo caso** in cui due clienti
+abbiano preso l'ultimo pezzo nella stessa ora — i pezzi contesi sono sempre
+2 o 3 su giacenze da 18 a 320.
+
+**Il valore attuale non si legge da qui**, e va detto come tale: le chiavi
+WooCommerce in `ispeziona-prodotto` toccano solo
+`/wp-json/wc/v3/products/{id}`, non le impostazioni; i 60 minuti di prima
+erano **misurati** (bloccato alle 14:21 UTC, libero alle 15:30) e
+coincidevano col valore con cui WooCommerce nasce. **Il campo l'ha scritto
+il titolare dal pannello il 20/11/2026: 10 minuti.**
+
 **E una cosa corretta sul posto:** la scheda del nero portava la
 descrizione dell'argento («Batteria di ricambio per Horus colore
 argento»), in anagrafica **e** sul sito — il prodotto era nato
