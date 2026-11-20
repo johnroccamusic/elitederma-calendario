@@ -1806,6 +1806,54 @@ erano **misurati** (bloccato alle 14:21 UTC, libero alle 15:30) e
 coincidevano col valore con cui WooCommerce nasce. **Il campo l'ha scritto
 il titolare dal pannello il 20/11/2026: 10 minuti.**
 
+**E I 111.453,40 € «IN ATTESA» NON SONO MAI STATI SOLDI NOSTRI** (20/11/2026).
+Il titolare, davanti a quella cifra: «non abbiamo mai gestito ordini con
+bonifico o in attesa di che poi?». Aveva ragione, e la risposta cambia come
+si legge quel numero: **di bonifici dal sito ne esiste UNO in tutta la
+storia dello shop** (43,80 €, 10/06/2025). Il resto sono **domande di
+finanziamento a rate**:
+
+| gateway | ordini | importo | quando |
+|---|---|---|---|
+| AppPago «paga in comode quote» | 33 | **87.753,60 €** | tutto maggio 2024 |
+| Scalapay Pay in 3 / Pay in 4 | 20 | 23.656,00 € | marzo-maggio 2024 |
+| Bonifico bancario | 1 | 43,80 € | 10/06/2025 |
+
+Quei due sistemi **aprono l'ordine quando il cliente scegli la rata** e lo
+lasciano in attesa finché la finanziaria non approva; se la pratica non si
+conclude **non lo annulla nessuno**, perché quei gateway non chiamano
+l'annullamento. Resta in attesa per sempre.
+
+**Nessuno dei 54 porta un id di transazione**: non è denaro perso, è denaro
+mai entrato. E le righe non sono prodotti ma **saldi e acconti di corsi**
+battuti a mano sul sito — cioè lo stesso guasto del 20/11/2026 moltiplicato:
+26 persone, e le prime tre hanno riprovato **otto volte in due giorni**
+(21.502 € di tentativi), **sette volte in un giorno** (21.000 €) e quattro.
+Quei corsi, se sono stati fatti, sono stati incassati fuori dal sito.
+
+**Il cerchio non si chiude, e va detto come tale:** chi di quelle 26 abbia
+poi frequentato non si sa, perché `storico_allievi` **non ha nemmeno
+un'email** (zero righe su tutte) e `iscritti` parte dal 29/07/2026. Quello
+che si misura è che **14 su 26 hanno poi comprato sul sito** (13.443,14 € in
+tutto): come clienti non si sono perse.
+
+**I 53 ordini a rate si possono annullare senza conseguenze**, verificato
+prima di proporlo: delle loro 58 righe **zero** corrispondono a un prodotto
+in anagrafica e **zero** muovono magazzino. Non cambia il fatturato (dal
+18/11 `venditaIncassata` li esclude già): ripulisce la cifra scritta sopra
+l'elenco dei clienti shop. **L'ordine 8330 resta fuori**: è l'unico bonifico
+e l'unico con una **data di pagamento** scritta (10/06/2025, 17:01), quindi
+potrebbe essere arrivato davvero — e dall'app non si controlla, l'estratto
+conto in archivio parte dal 01/07/2026. Si guarda dal portale della banca.
+
+**Le due cose da decidere, e nessuna è urgente** (il titolare, messo davanti
+alla scelta: «non so cosa dirti» — quindi restano qui, non in sospeso su di
+lui): se annullare quei 53; e se il pagamento a rate di un **saldo corso** da
+3.000 € vada tenuto così — AppPago e Scalapay sono ancora accesi, l'ordine
+11033 di oggi era Scalapay, e **un finanziamento che si ferma a metà oggi non
+avvisa nessuno**: resta un ordine in attesa e una persona che crede di aver
+pagato.
+
 **E una cosa corretta sul posto:** la scheda del nero portava la
 descrizione dell'argento («Batteria di ricambio per Horus colore
 argento»), in anagrafica **e** sul sito — il prodotto era nato
