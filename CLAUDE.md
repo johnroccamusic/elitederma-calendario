@@ -1710,6 +1710,79 @@ niente a mano**, e rilegge la migrazione per pretendere che fra i parametri
 non compaia nessun `p_atteso`. È la scorciatoia che si riscrive in dieci
 secondi e che funziona finché nessuno guarda.
 
+### Un ordine non pagato tiene la merce, e chi riprova si blocca da solo (20/11/2026)
+
+Il titolare: «una cliente dice che non riesce a comprare la batteria
+dell'horus dal sito perché dice che non sono disponibili anche se ce ne
+sono due».
+
+**La giacenza non c'entrava, e il primo sospetto era sbagliato.** «Non
+disponibile» sul sito di solito vuol dire pagina in cache (2/11/2026,
+«Leggi tutto» su N2 Fixa) oppure un bundle che non si compone
+(4/11/2026). Qui no: *Batteria horus nero* aveva **2 pezzi**, nessuno
+impegnato in un carrello sospeso, e il sito diceva `instock`,
+`purchasable: true`, `stock_quantity: 2`. Anche la pagina servita dalla
+cache scriveva «Solo 2 pezzi disponibili» col tasto per comprare.
+
+**L'ha risolto la schermata, non il ragionamento:** l'errore non stava
+sulla scheda, stava **nel carrello**, e rifiutava **un solo pezzo**:
+«Non è presente abbastanza "Batteria horus nero" in magazzino. Riduci la
+quantità nel carrello».
+
+**IL MOTIVO È CHE WOOCOMMERCE RISERVA LA MERCE DEGLI ORDINI NON PAGATI**
+(«Hold stock»), e la riserva **non si vede da nessuna parte**: la scheda
+mostra `stock_quantity`, il carrello conta `stock_quantity − riservato`.
+Due numeri veri che dicono due cose opposte sullo stesso prodotto.
+
+Ricostruito dagli ordini, tutti della stessa persona in nove minuti:
+
+| ordine | ora (UTC) | pezzi | metodo |
+|---|---|---|---|
+| 11033 | 14:21 | 2 | Scalapay |
+| 11035 | 14:25 | 2 | Stripe |
+| 11036 | 14:26 | 1 | Stripe |
+| 11037 | 14:28 | 1 | Stripe |
+| 11038 | 14:30 | 1 | Stripe |
+
+**Sette pezzi riservati su due.** Il primo tentativo con Scalapay è nato
+`pending` e si è preso **tutti e due** i pezzi; da quel momento il
+magazzino era a zero per chiunque, lei compresa. E ogni riprova lasciava
+**un altro ordine in attesa che riservava altra merce**: più riprovava,
+più si chiudeva la porta.
+
+**La riserva è durata un'ora** (misurata, non letta da un'impostazione):
+alle 15:30 UTC un `add-item` sulla Store API ha riaccettato tutti e due
+i pezzi. Il blocco si era sciolto da sé.
+
+Tre cose da ricordare, perché ricapiterà:
+
+- **Davanti a «non riesco a comprare», chiedere la schermata.** Scheda e
+  carrello sono due posti diversi, e dicono due numeri diversi: mezz'ora
+  è andata a controllare la cache di una pagina che era giusta. È la
+  stessa lezione dell'11/11 sulle sedi — *prima si fa dire quale tasto
+  si preme*.
+- **Il gesto si prova per davvero.** `POST /wp-json/wc/store/v1/cart/add-item`
+  (serve l'intestazione `Nonce`, presa da un GET su `/cart`) è esattamente
+  quello che fa un cliente, non crea ordini e non muove giacenze: è
+  l'unico modo di sapere se il carrello accetta, perché né l'anagrafica
+  né la Store API dei prodotti conoscono la riserva.
+- **Su due pezzi in casa, un checkout abbandonato spegne la vendita per
+  un'ora.** Il back order lo eviterebbe (la batteria ce l'ha spento, il
+  *Dermografo Horus* acceso): **decisione del titolare, non presa.** E
+  restano da annullare a mano i cinque ordini `pending`, 256,30 € di
+  tentativi mai incassati — che dal 18/11/2026 **non entrano nel
+  fatturato**, perché `venditaIncassata` conta solo `completed` e
+  `processing`: li si legge nella colonna «Non riusciti».
+
+**E una cosa corretta sul posto:** la scheda del nero portava la
+descrizione dell'argento («Batteria di ricambio per Horus colore
+argento»), in anagrafica **e** sul sito — il prodotto era nato
+duplicando l'altro. Riscritta con `woo-gestisci-prodotto` azione
+`modifica`, che scrive il sito e **riallinea l'anagrafica dalla risposta
+del sito nella stessa chiamata**: correggerla solo di là sarebbe tornata
+indietro al primo salvataggio della scheda. Verificata in tutti e tre i
+posti, cache del sito compresa.
+
 ### Il popup del Black Friday si accende e si spegne da solo (19/11/2026)
 
 Il titolare: «come si attiva il popup su WooCommerce per dire che è iniziato il
