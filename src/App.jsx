@@ -63194,37 +63194,206 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // La lista vuota non si disegna: un riquadro che dice "tutto a posto"
 // tutti i giorni diventa invisibile esattamente il giorno in cui
 // servirebbe.
-function PannelloScostamenti({ scostamenti = [], prodottiPerId = {}, isMobile }) {
-  if (!scostamenti.length) return null;
+// COSA CAMBIA UNA VERIFICA, DETTO PRIMA DI PREMERE (20/11/2026).
+//
+// `atteso` e' quello che dice il registro, `trovato` la giacenza scritta
+// in magazzino, `contato` i pezzi che la persona ha appena contato sullo
+// scaffale. Di quel gesto una parte tocca il magazzino e una parte no, e
+// chi preme deve sapere quale: confermando il numero che l'app mostra
+// gia', la giacenza non si muove di un pezzo e si scrive soltanto la
+// riga di registro che mancava.
+//
+// Sta fuori dal componente per poterla provare senza montare la pagina.
+export function cosaCambiaLaVerifica({ atteso, trovato, contato }) {
+  const n = typeof contato === "string" ? (contato.trim() === "" ? NaN : Number(contato)) : Number(contato);
+  if (!Number.isInteger(n) || n < 0) {
+    return { valido: false, delta: 0, giacenzaCambia: false, frase: "Scrivi quanti pezzi hai contato: un numero intero, zero compreso." };
+  }
+  const delta = n - atteso;
+  const giacenzaCambia = n !== trovato;
+  const movimento = `${delta > 0 ? "+" : ""}${delta}`;
+  let frase;
+  if (!giacenzaCambia && delta === 0) {
+    frase = `Registro e magazzino dicono già ${n}: non c'è niente da correggere, la riga sparisce.`;
+  } else if (!giacenzaCambia) {
+    frase = `La giacenza resta ${trovato} e non si muove di un pezzo. A registro si scrive il movimento che mancava: ${movimento}.`;
+  } else if (delta === 0) {
+    frase = `La giacenza passa da ${trovato} a ${n}, e così torna d'accordo col registro.`;
+  } else {
+    frase = `La giacenza passa da ${trovato} a ${n}. A registro si scrive il movimento che mancava: ${movimento}.`;
+  }
+  return { valido: true, delta, giacenzaCambia, frase };
+}
+
+// La frase da leggere DOPO, che racconta quello che e' successo davvero.
+// Non ripete la previsione: i numeri del pannello sono la fotografia
+// delle 05:15 e durante la giornata vendite e corsi muovono tutti e due
+// i conti, quindi l'atteso vero lo ricalcola il database al momento. Se
+// i due non coincidono, e' questa la cifra giusta.
+export function fraseVerificaFatta(d) {
+  if (!d) return "";
+  const pezzi = [`${d.nome || "Il prodotto"}: contati ${d.contato} pezzi.`];
+  if (d.giacenza_cambiata) pezzi.push(`La giacenza è passata da ${d.quantita_prima} a ${d.contato}.`);
+  else pezzi.push(`La giacenza era già quella e non è stata toccata.`);
+  if (d.delta) pezzi.push(`A registro si è scritto ${d.delta > 0 ? "+" : ""}${d.delta}: il movimento che mancava.`);
+  else pezzi.push("A registro non mancava niente.");
+  pezzi.push("I conti su questo prodotto tornano.");
+  return pezzi.join(" ");
+}
+
+const MOTIVI_VERIFICA = {
+  conteggio_non_valido: "il conteggio non è un numero valido.",
+  non_trovato: "questo prodotto non è più in anagrafica.",
+};
+
+function PannelloScostamenti({ scostamenti = [], prodottiPerId = {}, isMobile, operatore = null, ricarica }) {
+  // GLI HOOK STANNO SOPRA IL CANCELLO. Sotto c'e' un `return null` quando
+  // la lista e' vuota: dichiararli dopo vorrebbe dire un numero di hook
+  // diverso fra una lettura e l'altra, cioe' la pagina che muore al
+  // montaggio — la trappola di questo file, gia' pagata una volta.
+  const [apertoId, setApertoId] = useState(null);
+  const [contato, setContato] = useState("");
+  const [inCorso, setInCorso] = useState(false);
+  const [esito, setEsito] = useState(null);
+
+  // la lista vuota non si disegna, ma se si e' appena verificato qualcosa
+  // il riquadro resta per dire com'e' andata: verificato l'ultimo degli
+  // 84, sparire senza una parola sarebbe il gesto piu' importante della
+  // pagina che non lascia traccia
+  if (!scostamenti.length && !esito) return null;
+
   const quando = (iso) => {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "long" });
   };
+
+  function apri(x) {
+    setEsito(null);
+    setApertoId(x.prodotto_id);
+    setContato(String(x.trovato));
+  }
+
+  async function conferma(x) {
+    const c = cosaCambiaLaVerifica({ atteso: x.atteso, trovato: x.trovato, contato });
+    if (!c.valido || inCorso) return;
+    setInCorso(true);
+    const { data, error } = await supabase.rpc("magazzino_verifica", {
+      p_prodotto_id: x.prodotto_id,
+      p_contato: Number(contato),
+      p_chi: operatore || null,
+    });
+    setInCorso(false);
+    if (error || !data?.ok) {
+      setEsito({ errore: true, testo: "Non ho potuto registrare la verifica: " + (error?.message || MOTIVI_VERIFICA[data?.motivo] || "il database non ha risposto come doveva.") });
+      return;
+    }
+    // il sito vende la giacenza dell'app: se e' cambiata va rimessa in
+    // pari anche di la', come fa ogni altro movimento di magazzino
+    if (data.giacenza_cambiata && prodottiPerId[x.prodotto_id]?.woo_product_id) allineaShop([x.prodotto_id]);
+    setApertoId(null);
+    setEsito({ errore: false, testo: fraseVerificaFatta(data) });
+    ricarica?.(["prodotti_shop", "magazzino_scostamenti"]);
+  }
+
+  const tastoVerifica = {
+    ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A2D2D", background: "#FFFFFF",
+    border: "1px solid #E0B3AE", borderRadius: 9, padding: "6px 11px", cursor: "pointer",
+    whiteSpace: "nowrap", flex: "0 0 auto", minHeight: 32,
+  };
+
   return (
     <div style={{
       background: "#FDF1F0", border: "1px solid #E8BDB8", borderLeft: "5px solid #B3261E",
       borderRadius: 14, padding: isMobile ? "13px 14px" : "16px 18px", marginBottom: 14,
     }}>
       <div style={{ ...fontDisplay, fontSize: 13.5, fontWeight: 700, color: "#8A2D2D", letterSpacing: 0.6 }}>
-        I CONTI NON TORNANO SU {scostamenti.length} {scostamenti.length === 1 ? "PRODOTTO" : "PRODOTTI"}
+        {scostamenti.length
+          ? `I CONTI NON TORNANO SU ${scostamenti.length} ${scostamenti.length === 1 ? "PRODOTTO" : "PRODOTTI"}`
+          : "I CONTI TORNANO"}
       </div>
-      <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5, margin: "5px 0 10px" }}>
-        La giacenza non coincide con la somma dei movimenti registrati: qualcuno l&apos;ha scritta
-        senza passare dall&apos;app. Finché è così, nessuno dei due numeri è affidabile.
-      </div>
+      {scostamenti.length > 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, lineHeight: 1.5, margin: "5px 0 10px" }}>
+          La giacenza non coincide con la somma dei movimenti registrati: qualcuno l&apos;ha scritta
+          senza passare dall&apos;app. Finché è così, nessuno dei due numeri è affidabile.
+          <b> Conta i pezzi sullo scaffale e premi «Verificato»:</b> la riga sparisce per sempre, non per una notte.
+        </div>
+      )}
+      {esito && (
+        <div data-esito-verifica style={{
+          ...fontBody, fontSize: 12.5, lineHeight: 1.5, borderRadius: 10, padding: "9px 11px", margin: "4px 0 10px",
+          background: esito.errore ? "#FFFFFF" : "#EEF7EE",
+          border: `1px solid ${esito.errore ? "#E0B3AE" : "#BFDCBF"}`,
+          color: esito.errore ? "#8A2D2D" : "#245C27",
+        }}>
+          {esito.testo}
+        </div>
+      )}
       {scostamenti.map((x) => {
         const p = prodottiPerId[x.prodotto_id];
+        const aperto = apertoId === x.prodotto_id;
+        const c = aperto ? cosaCambiaLaVerifica({ atteso: x.atteso, trovato: x.trovato, contato }) : null;
         return (
-          <div key={x.prodotto_id} style={{
-            ...fontBody, fontSize: 13, color: NAVY, display: "flex", gap: 10,
-            flexWrap: "wrap", alignItems: "baseline", borderTop: "1px solid #F0D8D5", padding: "7px 0",
-          }}>
-            <span style={{ fontWeight: 700, flex: "1 1 180px", minWidth: 0 }}>{p?.nome || "(prodotto non trovato)"}</span>
-            <span style={{ color: MUTED }}>registro {x.atteso} · magazzino {x.trovato}</span>
-            <span style={{ fontWeight: 700, color: x.differenza > 0 ? "#2E7D32" : "#B3261E" }}>
-              {x.differenza > 0 ? "+" : ""}{x.differenza}
-            </span>
-            <span style={{ color: MUTED, fontSize: 12 }}>dal {quando(x.dal)}</span>
+          <div key={x.prodotto_id} data-scostamento={x.prodotto_id} style={{ borderTop: "1px solid #F0D8D5", padding: "7px 0" }}>
+            <div style={{
+              ...fontBody, fontSize: 13, color: NAVY, display: "flex", gap: 10,
+              flexWrap: "wrap", alignItems: "center",
+            }}>
+              <span style={{ fontWeight: 700, flex: "1 1 180px", minWidth: 0 }}>{p?.nome || "(prodotto non trovato)"}</span>
+              <span style={{ color: MUTED }}>registro {x.atteso} · magazzino {x.trovato}</span>
+              <span style={{ fontWeight: 700, color: x.differenza > 0 ? "#2E7D32" : "#B3261E" }}>
+                {x.differenza > 0 ? "+" : ""}{x.differenza}
+              </span>
+              <span style={{ color: MUTED, fontSize: 12 }}>dal {quando(x.dal)}</span>
+              {!aperto && (
+                <button
+                  type="button" data-verifica-apri={x.prodotto_id} onClick={() => apri(x)}
+                  title="Ho contato i pezzi in magazzino" style={tastoVerifica}
+                >
+                  ✓ Verificato
+                </button>
+              )}
+            </div>
+            {aperto && (
+              <div style={{
+                background: "#FFFFFF", border: "1px solid #E8BDB8", borderRadius: 10,
+                padding: "10px 12px", marginTop: 8,
+              }}>
+                <label style={{ ...fontBody, fontSize: 12.5, color: GRAFITE, display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
+                  Quanti pezzi hai contato in magazzino?
+                  <input
+                    data-verifica-contato value={contato} autoFocus inputMode="numeric"
+                    onChange={(e) => setContato(e.target.value.replace(/[^\d]/g, ""))}
+                    style={{ ...inputStyle, width: 74, padding: "5px 7px", fontSize: 14, textAlign: "right", marginBottom: 0 }}
+                  />
+                </label>
+                <div data-verifica-frase style={{
+                  ...fontBody, fontSize: 12.5, lineHeight: 1.5, marginTop: 7,
+                  color: c?.valido ? GRAFITE : "#8A2D2D",
+                }}>
+                  {c?.frase}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  <button
+                    type="button" data-verifica-conferma={x.prodotto_id}
+                    disabled={!c?.valido || inCorso} onClick={() => conferma(x)}
+                    style={{
+                      ...fontBody, fontSize: 13, fontWeight: 700, color: "#FFFFFF",
+                      background: !c?.valido || inCorso ? "#B9A7A5" : "#2E7D32",
+                      border: "none", borderRadius: 9, padding: "8px 14px",
+                      cursor: !c?.valido || inCorso ? "default" : "pointer", minHeight: 36,
+                    }}
+                  >
+                    {inCorso ? "Registro…" : "✓ Verificato"}
+                  </button>
+                  <button
+                    type="button" data-verifica-annulla onClick={() => setApertoId(null)} disabled={inCorso}
+                    style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: GRAFITE, background: "none", border: "1px solid #DCD6D2", borderRadius: 9, padding: "8px 14px", cursor: inCorso ? "default" : "pointer", minHeight: 36 }}
+                  >
+                    Annulla
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -64567,7 +64736,7 @@ function PaginaMagazzino({ ruoloUtente, operatore = null, scostamenti = [], scar
                 {scostamenti.length + scartiShop.length === 0 && (
                   <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Tutti i conti tornano: nessuna differenza fra registro, magazzino e sito.</div>
                 )}
-                <PannelloScostamenti scostamenti={scostamenti} prodottiPerId={prodottiPerId} isMobile={isMobile} />
+                <PannelloScostamenti scostamenti={scostamenti} prodottiPerId={prodottiPerId} isMobile={isMobile} operatore={operatore} ricarica={ricarica} />
                 <PannelloScartiShop scarti={scartiShop} prodottiPerId={prodottiPerId} isMobile={isMobile} />
               </div>
             )}

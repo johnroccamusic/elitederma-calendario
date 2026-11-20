@@ -1593,6 +1593,107 @@ del 50%**. È così che l'ago sarebbe finito in un listino Distributor a
 il punto 6 della specifica dei listini rivenditori: un costo mancante deve
 dare **nessuno sconto**, non il massimo.
 
+### «Verificato»: il conto che non torna si chiude contando lo scaffale (20/11/2026)
+
+Il titolare, davanti alle **84 righe** di «I conti non tornano»: «metti un
+tasto verificato vicino a ciascun prodotto per eliminare il prodotto dalla
+lista una volta verificato il quantitativo in magazzino».
+
+**Un tasto che cancella la riga sarebbe un tasto che non fa niente**, e il
+peggio è che per una notte sembrerebbe aver funzionato:
+`controlla_saldi_magazzino()` riscrive quell'elenco ogni notte alle 05:15
+con un **upsert**, quindi finché `saldo di partenza + somma dei movimenti`
+non coincide con la giacenza, la riga torna il giorno dopo identica.
+
+**E C'ERA DI PEGGIO, trovato guardando il dato: nessun gesto dell'app
+poteva chiudere una di quelle 84 righe.** Una rettifica normale non lo fa:
+`muoviStock` scrive la giacenza **e** il movimento con lo stesso delta,
+quindi alza tutti e due i numeri della stessa cifra e la differenza resta
+identica. Chi andava a contare e correggeva il numero si ritrovava la riga
+ancora lì, senza capire perché — e non c'era niente da capire, era l'unico
+esito possibile.
+
+**Cosa vuol dire «Verificato».** Vuol dire: sono andato allo scaffale e ho
+contato N pezzi. Da lì discendono due scritture, e **una sola delle due
+tocca il magazzino**:
+
+| | |
+|---|---|
+| la giacenza | diventa N — e se N è quella che c'era già, **non si muove di un pezzo** |
+| il registro | riceve il movimento **mancante**, `N − atteso`, con nome e data |
+
+Quel movimento non è merce che si muove: è la riga che qualcuno non ha
+scritto quando ha toccato il numero da fuori, messa lì adesso. Da quel
+momento i due conti tornano e la riga sparisce **per sempre, non per una
+notte** — provato rifacendo girare il controllo notturno in una transazione
+annullata: `riga_dopo_il_giro: 0`.
+
+**Non contraddice «il controllo non corregge» del 19/10**, e vale la pena
+dire perché: lì si vietava di scrivere **la giacenza** da un quarto punto,
+di nascosto, per far tacere un allarme. Qui la giacenza la scrive una
+persona che ha contato, e quello che si aggiunge è una riga di **registro**
+— esattamente il pezzo che mancava.
+
+**L'atteso si ricalcola nel database, non arriva dal browser.** I numeri
+della pagina sono la fotografia delle 05:15, e durante la giornata vendite
+e corsi muovono tutti e due i conti: fidarsi di quella cifra vorrebbe dire
+scrivere un movimento sbagliato, cioè **uno scostamento nuovo creato dal
+tasto che serve a toglierli**. `magazzino_verifica(prodotto, contato, chi)`
+blocca prima la riga del prodotto (`for update`, come `stock_muovi`) e poi
+somma i movimenti, così una vendita che sta scrivendo in quell'istante o è
+già dentro al conto o aspetta. Dalla pagina parte **solo il conteggio**.
+
+**Il gesto chiede quanti pezzi, e la casella parte dal numero dell'app**:
+il caso normale è confermarlo e si chiude con un tocco. Ma la casella
+c'è, e non è un di più — è l'unico posto in cui può finire il numero vero
+di chi ha contato diverso, e senza di lei quella persona non avrebbe
+nessuna strada (vedi sopra: la rettifica non chiude niente). Sotto, la
+frase dice **prima di premere** cosa succede ai due numeri, e cambia
+mentre si scrive. Dopo, il riquadro racconta quello che è successo
+**davvero**, coi numeri che il database ha ricalcolato: se non coincidono
+con la previsione, è quella la cifra giusta.
+
+Tre decisioni minori, ognuna per un motivo:
+
+- **zero è un conteggio valido.** Rifiutarlo vorrebbe dire non poter
+  chiudere proprio le righe dei prodotti finiti, che sono quelle che si va
+  a contare più volentieri;
+- **verificato l'ultimo, il riquadro resta** per dire com'è andata. Con
+  l'elenco vuoto sparirebbe, e il gesto più importante della pagina non
+  lascerebbe traccia;
+- **se la giacenza cambia, WooCommerce si riallinea** (`allineaShop`), come
+  dopo ogni altro movimento di magazzino. Confermando il numero che c'era
+  non parte niente, perché non c'è niente da allineare.
+
+**Chi può premerlo**: chi apre Gestione magazzino, come per la correzione
+a mano dello stock, che non ha un permesso suo. Inventare qui un cancello
+che la rettifica non ha sarebbe una regola nuova non chiesta; quello che
+si fa è **scrivere chi ha contato** (`movimenti_magazzino.utente`).
+
+Migrazione `20261120110000_il_conto_che_non_torna_si_verifica.sql`,
+rollback dentro — e dice che i movimenti `verifica_magazzino` già scritti
+restano, perché sono la storia di chi ha contato cosa. Provata in
+transazione annullata su «Colla Ultra Clear 5ml» (registro 64, magazzino
+24) e su «Nairobi» (210 / 195): conferma del numero dell'app → giacenza
+ferma e movimento −40; conteggio diverso (20 su Nairobi) → giacenza 20 e
+movimento −190; secondo giro sullo stesso prodotto → delta 0 e **nessun
+secondo movimento**; conteggio negativo e prodotto inesistente rifiutati.
+Niente committato: 84 righe prima e dopo. `anon` non ha EXECUTE
+(`proacl` riletto sul database vivo, non la migrazione).
+
+**Una cosa da sapere per chi controlla:** `movimenti_magazzino` **non lo
+legge nessuno in tutta l'app** — misurato prima di scrivere: l'unico che lo
+somma è `controlla_saldi_magazzino`. Quindi l'origine nuova
+`verifica_magazzino` non sporca nessun conto, nessuna statistica e nessun
+margine.
+
+Prove in `prove/scostamento-si-verifica.test.jsx` (16), col pannello
+montato e premuto, più **la guardia che dura**: rilegge `src/App.jsx` e
+pretende che il pannello passi da `magazzino_verifica` e **non cancelli
+niente a mano**, e rilegge la migrazione per pretendere che fra i parametri
+non compaia nessun `p_atteso`. È la scorciatoia che si riscrive in dieci
+secondi e che funziona finché nessuno guarda.
+
 ### Il popup del Black Friday si accende e si spegne da solo (19/11/2026)
 
 Il titolare: «come si attiva il popup su WooCommerce per dire che è iniziato il
