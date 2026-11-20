@@ -2576,6 +2576,39 @@ una guardia che pretende che **nessuno dei due listini disegni il nome per
 conto suo**: se un giorno torna un `drawText("ELITEDERMA")` lì dentro, sono
 di nuovo due carte intestate.
 
+**IL LISTINO SI APRE CON LE REGOLE, E OGNI PRODOTTO HA LA SUA SPUNTA
+(18/11/2026).** Il titolare: «quando compilo i listini dovresti mettere
+all'inizio le regole per ottenere la scontistica e per diventare uno degli
+aventi diritto agli sconti», e «tutti i flag vicino a tutti i prodotti in
+modo che se ne deflaggo uno esce dal listino definitivamente».
+
+- **Le regole** sono `regoleSconti(livelliScelti, tetto)` in
+  `listinoPdf.js`: come si entra in ogni livello, quanto si compra in
+  dodici mesi per restarci, il riassortimento minimo, il ciclo, il rientro
+  e quattro avvertenze (sconto massimo non su tutti i prodotti, IVA
+  esclusa, resi, niente cumulo). **Si compongono dalle soglie di
+  `rivenditori_livelli`**, come il regolamento: scritte a mano, il giorno
+  che si alza una soglia il listino prometterebbe quella vecchia. Il PDF le
+  stampa in cima alla prima pagina al posto della riga per livello che
+  c'era (il riassunto la contiene già); la pagina le mostra sotto «Come
+  funzionano gli sconti». **Con un livello solo non nominano gli altri**:
+  la frase sui riassortimenti dice solo che sotto il minimo lo sconto è più
+  basso, senza dire di quale livello sarebbe. Il foglio Excel non le porta:
+  è una tabella, e righe di testo in cima la rovinerebbero per chi la
+  ordina o la filtra.
+- **La spunta del prodotto** sta accanto al nome, ed è un elenco di id in
+  `impostazioni_layout_tabelle` (`listini_rivenditori_prodotti_esclusi`),
+  filtrato dentro `righeEsportabili` come le categorie, così vale per PDF,
+  foglio e conteggio. **Per id e non per nome**, al contrario delle
+  categorie: un prodotto rinominato è lo stesso prodotto, e tolto una volta
+  deve restare fuori. Le righe tolte restano in pagina, smorzate e con
+  «fuori dal listino»: da lì si correggono prezzo e costo. **Se la scrittura
+  fallisce la spunta torna com'era e la pagina lo dice** — a differenza
+  delle altre due spunte, che tacciono: un prodotto tolto che il server non
+  ha ricevuto ricomparirebbe nel listino di domani. Un prodotto che non
+  può entrare in nessun listino (senza prezzo, solo banco) ha la spunta
+  spenta.
+
 **Resta da fare, e va deciso:** il **testo del regolamento**; i **19 prezzi
 al pubblico** che non reggono il 40% (gli espositori, la linea laminazione, i
 marchi di terzi) e i **due kit** scesi sotto il 15% di sconto cedibile; se i

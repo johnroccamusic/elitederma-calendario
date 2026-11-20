@@ -11,6 +11,7 @@
 // resta larghezza, e questo foglio si legge per confrontare numeri.
 import { soloWinAnsi } from "../prezzi/winansi.js";
 import { caricaLogoTestata, innestaLogo, disegnaTestata, disegnaTestatina } from "../prezzi/intestazione.js";
+import { spezzaInRighe } from "./regolamentoPdf.js";
 
 const A4 = { corto: 595.28, lungo: 841.89 };
 const MARGINE = 34;
@@ -54,11 +55,18 @@ export const soglia = (n) => `€ ${Number(n || 0).toLocaleString("it-IT", { max
 // per sempre senza comparire in nessun elenco.
 export const nomeCategoria = (r) => r.blocco || "ALTRI PRODOTTI";
 
-export function righeEsportabili(righe, escluse = []) {
+//
+// E fuori restano I PRODOTTI TOLTI UNO PER UNO (18/11/2026, chiesto dal
+// titolare: «se ne deflaggo uno esce dal listino definitivamente»), per id.
+// Stesso posto e stesso motivo delle categorie: un filtro solo per i tre
+// usi.
+export function righeEsportabili(righe, escluse = [], prodottiEsclusi = []) {
   const fuori = new Set((escluse || []).map(String));
+  const tolti = new Set((prodottiEsclusi || []).map(String));
   return (righe || [])
     .filter((r) => r.pubblico_netto != null && r.pubblico_lordo != null && r.sullo_shop !== false)
     .filter((r) => !fuori.has(nomeCategoria(r)))
+    .filter((r) => !tolti.has(String(r.id)))
     .slice()
     .sort((a, b) => (a.blocco_ordine - b.blocco_ordine) || String(a.nome).localeCompare(String(b.nome), "it"));
 }
@@ -78,9 +86,9 @@ export function categorieDelListino(righe) {
   return [...m.values()].sort((a, b) => a.ordine - b.ordine);
 }
 
-export function perReparto(righe, escluse = []) {
+export function perReparto(righe, escluse = [], prodottiEsclusi = []) {
   const mappa = new Map();
-  righeEsportabili(righe, escluse).forEach((r) => {
+  righeEsportabili(righe, escluse, prodottiEsclusi).forEach((r) => {
     const k = nomeCategoria(r);
     if (!mappa.has(k)) mappa.set(k, { nome: k, ordine: r.blocco_ordine ?? 99, prodotti: [] });
     mappa.get(k).prodotti.push(r);
@@ -135,20 +143,76 @@ export function righeIntestazione(livelliScelti, tettoPct) {
   });
 }
 
+// COME FUNZIONANO GLI SCONTI: la prima cosa del listino (18/11/2026,
+// chiesto dal titolare: «all'inizio le regole per ottenere la scontistica
+// e per diventare uno degli aventi diritto agli sconti»).
+//
+// Non è un testo scritto a mano: è il riassunto del regolamento, composto
+// dalle stesse soglie (`rivenditori_livelli`) da cui nascono il
+// regolamento e i prezzi. Scritto a parte, il giorno che l'admin alza una
+// soglia il listino prometterebbe quella vecchia.
+//
+// E vale la regola del listino a un livello solo: NON NOMINA GLI ALTRI.
+// Chi riceve il listino Professional legge come si entra, come si resta e
+// che ordine minimo serve per il Professional, e basta. Per questo la
+// frase sui riassortimenti cambia: con più livelli dice che si applica il
+// più alto raggiunto, con uno dice solo che sotto il minimo lo sconto è
+// più basso — senza dire di quale livello sarebbe.
+export function regoleSconti(livelliScelti, tettoPct = 50) {
+  const livelli = (livelliScelti || []).slice().sort((a, b) => a.ordine - b.ordine);
+  if (!livelli.length) return [];
+  const uno = livelli.length === 1;
+  const scontoDi = (l) => String(Math.round(Number(l.frazione) * Number(tettoPct) * 10) / 10).replace(".", ",");
+
+  const livelloPerLivello = livelli.map((l) => {
+    const entra = l.ingresso_cumulabile
+      ? `si entra con ${soglia(l.ingresso_eur)} di acquisti cumulati, anche su più ordini, e lo sconto vale dagli ordini successivi`
+      : `si entra con un singolo ordine da ${soglia(l.ingresso_eur)}, già scontato`;
+    return `${l.nome} - sconto fino al ${scontoDi(l)}%: ${entra}; per mantenerlo servono ${soglia(l.mantenimento_eur)} di acquisti in dodici mesi; ogni riassortimento deve essere di almeno ${soglia(l.riassortimento_minimo_eur)}.`;
+  });
+
+  const riassortimento = uno
+    ? `Ogni ordine si valuta da solo: i prezzi di questo listino valgono per ordini da almeno ${soglia(livelli[0].riassortimento_minimo_eur)} netti; sotto quella cifra lo sconto è più basso.`
+    : "Ogni ordine si valuta da solo: si applica il livello più alto il cui riassortimento minimo è raggiunto dal totale dell'ordine, senza superare il livello che il rivenditore possiede.";
+
+  return [
+    {
+      titolo: uno ? `Come si ottiene il livello ${livelli[0].nome}` : "Come si diventa rivenditore e si ottengono gli sconti",
+      righe: livelloPerLivello,
+    },
+    {
+      titolo: "Come si conserva lo sconto",
+      righe: [
+        "Il livello vale per un ciclo di dodici mesi dalla data d'ingresso. A fine ciclo si guarda il totale degli acquisti del ciclo: se raggiunge la soglia annua il livello si conferma, altrimenti si scende.",
+        "Chi scende può rientrare con un ordine pari a quanto mancava alla soglia, mai meno dell'ordine d'ingresso e mai più del doppio.",
+        riassortimento,
+      ],
+    },
+    {
+      titolo: "Da sapere",
+      righe: [
+        "La percentuale del livello è lo sconto massimo: su alcuni prodotti è più bassa, e vale il prezzo scritto accanto al prodotto.",
+        "Tutti gli importi sono IVA esclusa, al netto degli sconti e senza spedizione. Resi e note di credito riducono gli acquisti del ciclo. Gli sconti non si sommano ad altre promozioni.",
+        "Le condizioni complete sono nel Regolamento commerciale rivenditori Elitederma.",
+      ],
+    },
+  ];
+}
+
 // ---------- Excel ----------
 //
 // È un CSV con il punto e virgola e la virgola decimale, come l'altro
 // export del listino: si apre in Excel con un doppio clic. Un vero .xlsx
 // vorrebbe dire una libreria per scrivere uno zip, e questo progetto ha
 // sei dipendenze per scelta.
-export function csvListinoRivenditori(righe, livelliScelti, escluse = []) {
+export function csvListinoRivenditori(righe, livelliScelti, escluse = [], prodottiEsclusi = []) {
   const colonne = colonneListino(livelliScelti);
   const cella = (v) => {
     const t = String(v ?? "");
     return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const testata = ["Categoria", "Prodotto", ...colonne.map((c) => `${c.titolo} (${c.sotto})`)].map(cella).join(";");
-  const corpo = righeEsportabili(righe, escluse).map((r) =>
+  const corpo = righeEsportabili(righe, escluse, prodottiEsclusi).map((r) =>
     [nomeCategoria(r), r.nome, ...colonne.map((c) => c.valore(r))].map(cella).join(";"));
   return "﻿" + [testata, ...corpo].join("\r\n") + "\r\n";
 }
@@ -191,10 +255,10 @@ async function caricaPdfLibLocale() {
 
 // ---------- PDF ----------
 export async function creaListinoRivenditoriPdf(righe, livelliScelti, {
-  tettoPct = 50, getPdfLib, righeSocieta = [], dataDi = null, escluse = [], logo,
+  tettoPct = 50, getPdfLib, righeSocieta = [], dataDi = null, escluse = [], prodottiEsclusi = [], logo,
 } = {}) {
   const { PDFDocument, StandardFonts, rgb } = await (getPdfLib || caricaPdfLibLocale)();
-  const reparti = perReparto(righe, escluse);
+  const reparti = perReparto(righe, escluse, prodottiEsclusi);
   // il marchio: chi chiama puo' passarne i byte (le prove lo fanno),
   // altrimenti si legge da `public/`. Se non arriva, la testata scrive il
   // nome come prima — un listino senza logo e' meno grave di un listino
@@ -276,13 +340,31 @@ export async function creaListinoRivenditoriPdf(righe, livelliScelti, {
     };
     if (numeroPagina === 1) {
       y = disegnaTestata(pagina, comune);
-      // le condizioni del livello, in alto: è la prima cosa che un
-      // rivenditore cerca sul foglio che gli arriva
-      righeIntestazione(livelliScelti, tettoPct).forEach((r) => {
-        pagina.drawText(soloWinAnsi(r), { x: MARGINE, y, size: 8, font: normale, color: colore(GRIGIO) });
-        y -= 11;
-      });
-      y -= 6;
+      // COME FUNZIONANO GLI SCONTI, prima dei prezzi: è la prima cosa che
+      // un rivenditore cerca sul foglio che gli arriva, e una tabella di
+      // prezzi scontati senza le regole per averli è una promessa a metà.
+      // Sostituisce la riga per livello che stava qui: il riassunto la
+      // contiene già, e due elenchi delle stesse soglie uno sotto l'altro
+      // sono uno di troppo.
+      const regole = regoleSconti(livelliScelti, tettoPct);
+      if (regole.length) {
+        pagina.drawText("COME FUNZIONANO GLI SCONTI", { x: MARGINE, y, size: 9.5, font: grassetto, color: colore(NAVY) });
+        y -= 14;
+        regole.forEach((blocco) => {
+          pagina.drawText(soloWinAnsi(blocco.titolo), { x: MARGINE, y, size: 8.5, font: grassetto, color: colore(NAVY) });
+          y -= 11;
+          blocco.righe.forEach((riga) => {
+            spezzaInRighe(riga, normale, 8, destra - MARGINE - 10).forEach((pezzo, i) => {
+              if (i === 0) pagina.drawText("-", { x: MARGINE + 2, y, size: 8, font: normale, color: colore(GRIGIO) });
+              pagina.drawText(pezzo, { x: MARGINE + 10, y, size: 8, font: normale, color: colore(GRIGIO) });
+              y -= 10;
+            });
+          });
+          y -= 4;
+        });
+        pagina.drawLine({ start: { x: MARGINE, y: y + 2 }, end: { x: destra, y: y + 2 }, thickness: 0.8, color: colore(BORDO) });
+        y -= 8;
+      }
     } else {
       y = disegnaTestatina(pagina, comune);
     }
