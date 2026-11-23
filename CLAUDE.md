@@ -7911,6 +7911,45 @@ le tre verifiche prima del push non sono una formalità.
   perché la voce legge a frasi e quante frasi stiano in un pezzo dipende
   da una soglia che può cambiare.
 
+### «Loghi e Certificati»: il certificato 42 ore si genera dall'app (23/11/2026)
+
+Il titolare: «Assegna logo» diventa **«Loghi e Certificati»**, una cartella
+con due aree — **Assegna loghi** (la procedura di prima, intatta:
+`GenerazioneLoghi` dentro `src/certificati/LoghiECertificati.jsx`) e **Crea
+certificato** → **Certificato 42 ore**: si compilano le voci del modello, si
+preme «Genera Certificato» ed esce un PDF definitivo identico al modello,
+firme comprese; sotto, l'elenco di quelli fatti. Il permesso resta
+`generazioneloghi` (nessuna casella nuova); i livelli interni passano da
+`registraInterceptaIndietro`, così l'Indietro torna alla cartella e non in Home.
+
+**Il modello non è un modulo.** I nove riquadri rossi del PDF sono note
+`FreeText` appoggiate sopra la pagina, più un `AcroForm` vuoto.
+`generaPdfCertificato42` (`src/certificati/certificato-42-ore.js`) toglie le
+note e il modulo e **disegna** i dati nella pagina: è questo che rende il PDF
+definitivo, una casella di modulo si riscrive con qualunque lettore. I
+rettangoli si rileggono dal file (`riquadriDelModello`); quelli scritti nel
+codice sono il ripiego. Sotto le note c'è un riquadrino grigio che si copre
+col colore del foglio, **254/255 e non bianco**: col bianco pieno le toppe si
+vedono.
+
+**Il modello firmato NON sta nel repo** (che è pubblico) né in un secchio
+pubblico: un foglio firmato e vuoto è un certificato che chiunque riempie.
+Sta in `certificati/_modelli/certificato-42-ore.pdf`, secchio **privato**, e
+si carica una volta dal riquadro «Manca il modello» della pagina. I PDF
+generati vanno nello stesso secchio (`42-ore/…`) e ogni certificato ha la sua
+riga in `certificati_generati` con i dati scritti sopra — fra un anno si sa
+cosa è stato certificato a chi senza aprire il file. Prima il file, poi la
+riga; se la riga non si scrive il file si toglie. Le voci si possono prendere
+da un'iscrizione (`cercaIscritti` / `datiDaIscritto`): chi ha fatto il corso
+è quasi sempre in archivio. **Un certificato non si cancella dall'app**: è
+definitivo, e non è stato chiesto.
+
+Migrazione `20261123190000_certificati.sql` (tabella, secchio, policy
+`to authenticated`, rollback dentro). Prove in
+`prove/certificato-42-ore.test.jsx` (5), con un modello finto costruito con le
+stesse note: il PDF esce senza note né modulo, i testi composti come sul
+foglio, cosa manca, e la cartella montata.
+
 ## 5. Comandi
 
 ```bash

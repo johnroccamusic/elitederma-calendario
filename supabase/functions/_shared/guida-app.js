@@ -82,8 +82,8 @@ Ci sono anche i rientri del materiale dai corsi e dalle fiere: al rientro non si
   },
   {
     chiave: "generazioneloghi",
-    titolo: "Assegna logo",
-    testo: `ASSEGNA LOGO — i loghi, i watermark e i materiali ufficiali da personalizzare e scaricare.`,
+    titolo: "Loghi e Certificati",
+    testo: `LOGHI E CERTIFICATI — una cartella con due aree. «Assegna loghi»: i loghi, i watermark e i materiali ufficiali da personalizzare e scaricare. «Crea certificato» → «Certificato 42 ore»: si compilano i dati dello studente (nome, nascita, residenza), il periodo del corso, luogo e data di rilascio, e «Genera Certificato» scarica il PDF definitivo con le firme; sotto c'è l'elenco dei certificati già fatti, da riscaricare. I dati si possono prendere da un'iscrizione cercando nome o cognome. La prima volta va caricato il modello vuoto del certificato.`,
   },
   {
     chiave: "gestionemodelle",

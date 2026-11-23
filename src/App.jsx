@@ -90,6 +90,7 @@ import PaginaModulo from "./iscrizione/PaginaModulo.jsx";
 import { separaCivico, pulisciCitta } from "./iscrizione/indirizzo-pezzi.js";
 import { confrontaDocumento, scadenzaDocumento } from "./iscrizione/documento.js";
 import ChiediAiDati from "./statistiche/ChiediAiDati.jsx";
+import LoghiECertificati from "./certificati/LoghiECertificati.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
@@ -24510,7 +24511,7 @@ function PaginaStoricoLoghi({ loghiImpostazioni, ricarica, onBack, onRiscarica =
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Storico loghi" onBack={onBack} titoloIndietro="Assegna logo" />
+      <TopBar title="Storico loghi" onBack={onBack} titoloIndietro="Assegna loghi" />
       {/* Storico dei loghi emessi. Il cestino c'e' solo sul primo — che e'
           l'ultimo generato — perche' il progressivo e' una fila: togliendo
           un numero in mezzo resterebbe un buco che nessuno potrebbe piu'
@@ -25835,7 +25836,7 @@ function scaricaBlob(blob, nomeFile) {
 // genera i PNG nero (sempre) e bianco (se la categoria lo richiede) con
 // nome e codice progressivo scritti sopra, usando la calibrazione fatta
 // in "Setting loghi"
-function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica, onBack, titolo = "Generazione loghi" }) {
+function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica, onBack, titolo = "Generazione loghi", titoloIndietro = "Home" }) {
   const [masterId, setMasterId] = useState("");
   const [corso, setCorso] = useState("");
   const [variante, setVariante] = useState("artist");
@@ -26078,7 +26079,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title={titolo} onBack={onBack} />
+      <TopBar title={titolo} onBack={onBack} titoloIndietro={titoloIndietro} />
       <div style={cardStyle}>
         {/* cosa si genera: il selettore a pillole in cima, e sotto solo i
             campi che servono a quella scelta */}
@@ -29473,7 +29474,7 @@ export const TASTI_HOME = [
   { chiave: "pos", etichetta: "POS Vendita diretta" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
   { chiave: "compensipremi", etichetta: "Area compensi e premi" },
-  { chiave: "generazioneloghi", etichetta: "Assegna logo" },
+  { chiave: "generazioneloghi", etichetta: "Loghi e Certificati" },
   { chiave: "gestionemodelle", etichetta: "Gestione modelle" },
   { chiave: "statistiche", etichetta: "Statistiche" },
   { chiave: "crmallievi", etichetta: "CRM Allievi" },
@@ -92091,7 +92092,7 @@ function Gestionale() {
       { chiave: "gestionepunti", titolo: etichettaTasto("compensipremi", "gestionepunti", "Gestione punti"), apri: apriGestionePunti },
       { chiave: "puntimaster", titolo: etichettaTasto("compensipremi", "puntimaster", "Punti master"), apri: apriPuntiMaster },
     ] },
-    { chiave: "generazioneloghi", titolo: etichettaTasto("home", "generazioneloghi", "Assegna logo"), apri: apriGenerazioneLoghi, figli: [] },
+    { chiave: "generazioneloghi", titolo: etichettaTasto("home", "generazioneloghi", "Loghi e Certificati"), apri: apriGenerazioneLoghi, figli: [] },
     { chiave: "gestionemodelle", titolo: etichettaTasto("home", "gestionemodelle", "Gestione modelle"), apri: apriGestioneModelle, figli: [] },
     { chiave: "prezzicorsi", titolo: etichettaTasto("home", "prezzicorsi", "Prezzi corsi"), apri: apriPrezziCorsi, figli: [] },
     { chiave: "statistiche", titolo: etichettaTasto("home", "statistiche", "Statistiche"), apri: apriStatistiche, figli: [
@@ -92678,7 +92679,7 @@ function Gestionale() {
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos, badge: numeroCarrelliSospesi },
               { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti, badge: pacchiDaSpedire },
               { chiave: "compensipremi", title: "Area compensi e premi", descrizione: "Coupon, referral, provvigioni e premi", Icona: IconaTileOmaggio, attivo: tastoAbilitato("compensipremi"), onClick: apriCompensiPremi },
-              { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaTileMarchio, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
+              { chiave: "generazioneloghi", title: "Loghi e Certificati", descrizione: "Loghi, watermark e certificati di fine corso", Icona: IconaTileMarchio, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
               // Aperto a TUTTI, senza permesso: qui ci sono solo i codici
               // da far inquadrare, nessun documento e nessun dato di
@@ -93337,7 +93338,15 @@ function Gestionale() {
       )}
 
       {view === "generazioneloghi" && (
-        <GenerazioneLoghi master={master} loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni} ricarica={fetchDati} onBack={() => setView("home")} titolo={etichettaTasto("home", "generazioneloghi", "Assegna logo")} />
+        <LoghiECertificati
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "generazioneloghi", "Loghi e Certificati")}
+          chi={operatoreCorrente(utenteLoggato, venditoreLoggato)?.nome || ""}
+          registraInterceptaIndietro={registraInterceptaIndietro}
+          renderLoghi={(tornaAllaCartella) => (
+            <GenerazioneLoghi master={master} loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni} ricarica={fetchDati} onBack={tornaAllaCartella} titolo="Assegna loghi" titoloIndietro="Loghi e Certificati" />
+          )}
+        />
       )}
 
       {view === "dashboardvenditori" && (

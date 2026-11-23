@@ -1,0 +1,112 @@
+// IL CERTIFICATO 42 ORE (23/11/2026).
+//
+// Tre cose da difendere:
+//
+// 1. IL PDF E' DEFINITIVO. Il modello ha nove note rosse appoggiate sopra
+//    la pagina e un modulo vuoto: se ne restasse anche una, il certificato
+//    uscirebbe con i bordi rossi e con una casella che chiunque riscrive.
+//    Il modello vero non sta nel repo (e' un foglio firmato, e il repo e'
+//    pubblico): qui se ne costruisce uno finto con le stesse note.
+// 2. SI GENERA SOLO QUANDO C'E' TUTTO, e la pagina dice cosa manca.
+// 3. LA CARTELLA. «Loghi e Certificati» apre «Assegna loghi» (la procedura
+//    di prima, intatta) e «Crea certificato» → «Certificato 42 ore».
+import { describe, it, expect } from "vitest";
+import React from "react";
+import { PDFDocument, PDFName, PDFString } from "pdf-lib";
+import { rispondiCon } from "./preparazione.js";
+import { monta, clicca, attendi, scrivi } from "./aiuto.js";
+import {
+  RIQUADRI_42_ORE, mancanti42, testiDelCertificato, generaPdfCertificato42, nomeFileCertificato, datiVuoti42, riquadriDelModello,
+} from "../src/certificati/certificato-42-ore.js";
+import { datiDaIscritto } from "../src/certificati/dati.js";
+import LoghiECertificati from "../src/certificati/LoghiECertificati.jsx";
+
+async function modelloFinto() {
+  const doc = await PDFDocument.create();
+  const pagina = doc.addPage([595, 842]);
+  const note = Object.values(RIQUADRI_42_ORE).map((r) => doc.context.register(doc.context.obj({
+    Type: "Annot", Subtype: "FreeText", Rect: r, Contents: PDFString.of(""), DA: PDFString.of("/Helv 10 Tf 0 g"),
+  })));
+  pagina.node.set(PDFName.of("Annots"), doc.context.obj(note));
+  doc.catalog.set(PDFName.of("AcroForm"), doc.context.obj({ Fields: [] }));
+  return await doc.save();
+}
+
+const COMPLETI = {
+  ...datiVuoti42(new Date("2026-11-23T10:00:00Z")),
+  nome: "Maria", cognome: "Rossi", luogo_nascita: "Napoli", data_nascita: "1990-04-02",
+  indirizzo: "Via Roma 1", comune: "Roma", provincia: "rm", corso_dal: "2026-11-01", corso_al: "2026-11-08",
+};
+
+describe("il certificato 42 ore", () => {
+  it("toglie le note e il modulo, e porta il nome nel titolo", async () => {
+    const modello = await modelloFinto();
+    const prima = await PDFDocument.load(modello);
+    expect(riquadriDelModello(prima).nome).toEqual(RIQUADRI_42_ORE.nome);
+    const bytes = await generaPdfCertificato42(modello, COMPLETI);
+    const dopo = await PDFDocument.load(bytes);
+    expect(dopo.getPageCount()).toBe(1);
+    const annots = dopo.getPage(0).node.Annots();
+    expect(annots ? annots.size() : 0).toBe(0);
+    expect(dopo.catalog.get(PDFName.of("AcroForm"))).toBeUndefined();
+    expect(dopo.getTitle()).toBe("Certificato di abilitazione - Maria Rossi");
+  });
+
+  it("compone i testi come sul foglio", () => {
+    const t = testiDelCertificato(COMPLETI);
+    expect(t.periodo).toBe("01/11/2026 al 08/11/2026");
+    expect(t.luogoData).toBe("Roma, 23/11/2026");
+    expect(t.dataNascita).toBe("02/04/1990");
+    expect(t.provincia).toBe("RM");
+    expect(nomeFileCertificato(COMPLETI)).toBe("Certificato-42-ore-Rossi-Maria.pdf");
+  });
+
+  it("dice cosa manca, e un corso che finisce prima di cominciare", () => {
+    expect(mancanti42(COMPLETI)).toEqual([]);
+    expect(mancanti42({ ...COMPLETI, cognome: " " })).toEqual(["Cognome"]);
+    expect(mancanti42({ ...COMPLETI, corso_al: "2026-10-01" })).toContain("il corso finisce prima di cominciare");
+  });
+
+  it("dall'iscrizione prende solo quello che sa", () => {
+    const r = { id: "i1", nome: "MARIA", cognome: "D'ANGELO", data_nascita: "1990-04-02", comune_nascita: "NAPOLI", stato_nascita: "", indirizzo_residenza: "via roma", civico_residenza: "3", citta_residenza: "", prov_residenza: "na", classe: { data_inizio: "2026-11-01", data_fine: "2026-11-08" } };
+    const d = datiDaIscritto(r, { ...datiVuoti42(), comune: "Pozzuoli" });
+    expect(d.nome).toBe("Maria");
+    expect(d.cognome).toBe("D'Angelo");
+    expect(d.indirizzo).toBe("Via Roma 3");
+    expect(d.comune).toBe("Pozzuoli"); // l'iscrizione non lo sa: resta com'era
+    expect(d.provincia).toBe("NA");
+    expect(d.corso_dal).toBe("2026-11-01");
+    expect(d.iscritto_id).toBe("i1");
+  });
+});
+
+describe("la cartella Loghi e Certificati", () => {
+  it("apre Assegna loghi e Crea certificato → Certificato 42 ore", async () => {
+    rispondiCon({
+      "_modelli/certificato-42-ore.pdf": new Response(JSON.stringify({ error: "not_found" }), { status: 400, headers: { "Content-Type": "application/json" } }),
+      certificati_generati: [{ id: "c1", nome: "Anna", cognome: "Bianchi", corso_dal: "2026-10-01", corso_al: "2026-10-08", luogo_rilascio: "Roma", data_rilascio: "2026-10-09", creato_il: "2026-10-09T10:00:00Z", percorso: "42-ore/x.pdf" }],
+    });
+    let tornato = 0;
+    const p = await monta(<LoghiECertificati onBack={() => {}} renderLoghi={(torna) => <button onClick={() => { tornato += 1; torna(); }}>PROCEDURA LOGHI</button>} />);
+    expect(p.testo()).toContain("Assegna loghi");
+    expect(p.testo()).toContain("Crea certificato");
+
+    await clicca(p.tasto("Assegna loghi"));
+    expect(p.testo()).toContain("PROCEDURA LOGHI");
+    await clicca(p.tasto("PROCEDURA LOGHI"));
+    expect(tornato).toBe(1);
+
+    await clicca(p.tasto("Crea certificato"));
+    await clicca(p.tasto("Certificato 42 ore"));
+    await attendi(150);
+    expect(p.testo()).toContain("Manca il modello del certificato");
+    expect(p.testo()).toContain("Anna Bianchi");
+    const genera = p.tasto("Genera Certificato");
+    expect(genera.disabled).toBe(true);
+    expect(p.testo()).toContain("Manca ancora: Nome, Cognome");
+
+    await scrivi(p.nodo.querySelector('input[aria-label="Nome"]'), "Maria");
+    expect(p.testo()).not.toContain("Manca ancora: Nome,");
+    await p.smonta();
+  });
+});
