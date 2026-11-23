@@ -204,6 +204,8 @@ const SCUSATE = {
   "eventi/GestioneEventi.jsx::togliStanza": "scrittura di una riga: la domanda sta sul tasto",
   "consensi/dati.ts::scollegaConsensoDaCorso": "scrittura: la domanda sta in QrConsensi",
   "progetti/AllegatiProgetto.jsx::eliminaAllegato": "scrittura: la domanda sta nel componente, sopra",
+  "certificati/dati.js::eliminaCertificato": "scrittura: la domanda sta in PaginaCertificato, col nome davanti",
+  "certificati/dati.js::eliminaModello": "scrittura: la domanda sta in PaginaCertificato",
   "stampe/dati.js::eliminaFile": "scrittura: la domanda sta in StampePackaging",
   "stampe/dati.js::eliminaStampa": "scrittura: la domanda sta in StampePackaging",
   "stampe/dati.js::eliminaRiga": "scrittura: la domanda sta in StampePackaging",

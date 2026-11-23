@@ -11,7 +11,8 @@ import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GOLD, fontBody, stileTitoloPagina, inputStyle, campoDataStyle } from "../ui/stile.js";
 import { dataItaliana } from "./certificato-42-ore.js";
 import { CERTIFICATI } from "./tipi.js";
-import { leggiModello, caricaModello, leggiCertificati, generaECertifica, scaricaCertificato, salvaFile, cercaIscritti, datiDaIscritto } from "./dati.js";
+import { leggiModello, caricaModello, eliminaModello, leggiCertificati, generaECertifica, eliminaCertificato, scaricaCertificato, salvaFile, cercaIscritti, datiDaIscritto } from "./dati.js";
+import { confermaCancellazione } from "../ui/conferma.js";
 
 export default function PaginaCertificato({ onBack, chi = "", certificato = CERTIFICATI.pmu_42_ore }) {
   // undefined = sto guardando, null = il modello non c'e' ancora
@@ -65,14 +66,50 @@ export default function PaginaCertificato({ onBack, chi = "", certificato = CERT
     }
   }
 
-  async function caricaIlModello(file) {
+  // SOSTITUIRE IL MODELLO (23/11/2026): il file nuovo prende il posto di
+  // quello di prima, che non si recupera. Si chiede, e si dice che i
+  // certificati gia' fatti restano come sono.
+  async function sostituisciIlModello(file) {
+    if (!file) return;
+    if (!confermaCancellazione(`il modello attuale del ${certificato.titolo.toLowerCase()}`, `Al suo posto va «${file.name}». I certificati già generati restano come sono; da adesso i nuovi escono dal file nuovo.`)) return;
+    await caricaIlModello(file, "Modello sostituito: da adesso i certificati si generano dal file nuovo.");
+  }
+
+  async function togliIlModello() {
+    if (!confermaCancellazione(`il modello del ${certificato.titolo.toLowerCase()}`, "Finché non ne carichi un altro non si potranno generare certificati di questo tipo. Quelli già generati restano come sono.")) return;
+    setCaricando(true); setMsg(null);
+    try {
+      await eliminaModello(certificato.modello);
+      setModello(null);
+      setMsg({ testo: "Modello tolto. Carica il nuovo PDF qui sopra." });
+    } catch (e) {
+      setMsg({ errore: true, testo: e.message });
+    } finally {
+      setCaricando(false);
+    }
+  }
+
+  async function eliminaIlCertificato(riga) {
+    const chiDice = `${riga.nome || ""} ${riga.cognome || ""}`.trim() || "questa persona";
+    if (!confermaCancellazione(`il certificato di ${chiDice}`, "Il PDF archiviato non sarà più recuperabile. Se serve, lo rigeneri compilando di nuovo le voci.")) return;
+    setMsg(null);
+    try {
+      const { fileRimasto } = await eliminaCertificato(riga);
+      setMsg({ testo: fileRimasto ? `Certificato di ${chiDice} tolto dall'elenco (il file in archivio non sono riuscito a cancellarlo, ma non è più raggiungibile).` : `Certificato di ${chiDice} cancellato.` });
+    } catch (e) {
+      setMsg({ errore: true, testo: e.message });
+    }
+    await rileggiElenco();
+  }
+
+  async function caricaIlModello(file, testoRiuscito = "Modello caricato: da adesso i certificati si generano da questo.") {
     if (!file) return;
     setCaricando(true); setMsg(null);
     try {
       await caricaModello(file, certificato.modello);
       const letto = await leggiModello(certificato.modello);
       setModello(letto);
-      setMsg({ testo: letto ? "Modello caricato: da adesso i certificati si generano da questo." : "Il modello è stato caricato ma non riesco a rileggerlo: ricarica la pagina." , errore: !letto });
+      setMsg({ testo: letto ? testoRiuscito : "Il modello è stato caricato ma non riesco a rileggerlo: ricarica la pagina." , errore: !letto });
     } catch (e) {
       setMsg({ errore: true, testo: e.message });
     } finally {
@@ -104,6 +141,23 @@ export default function PaginaCertificato({ onBack, chi = "", certificato = CERT
               {caricando ? "Carico…" : "Carica il modello (PDF)"}
               <input type="file" accept="application/pdf,.pdf" disabled={caricando} style={{ display: "none" }} onChange={(e) => { caricaIlModello(e.target.files?.[0]); e.target.value = ""; }} />
             </label>
+          </div>
+        )}
+
+        {modello && (
+          <div style={{ ...riquadro, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 240px", ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.5 }}>
+              <b>Modello in uso</b>
+              <div style={{ color: MUTED, fontSize: 12.5 }}>Per cambiarlo carica il PDF nuovo: prende il posto di questo. I certificati già fatti non cambiano.</div>
+            </div>
+            <label style={{ display: "inline-block", border: `1px solid ${CREAM_BORDER}`, color: NAVY, background: "#fff", borderRadius: 10, padding: "8px 14px", cursor: caricando ? "default" : "pointer", ...fontBody, fontWeight: 700, fontSize: 13.5, opacity: caricando ? 0.6 : 1 }}>
+              {caricando ? "Carico…" : "Sostituisci il modello (PDF)"}
+              <input type="file" accept="application/pdf,.pdf" disabled={caricando} data-sostituisci-modello style={{ display: "none" }} onChange={(e) => { sostituisciIlModello(e.target.files?.[0]); e.target.value = ""; }} />
+            </label>
+            <button type="button" onClick={togliIlModello} disabled={caricando} aria-label="Togli il modello" title="Togli il modello"
+              style={{ ...tastoCestino, opacity: caricando ? 0.6 : 1 }}>
+              <IconaCestino />
+            </button>
           </div>
         )}
 
@@ -164,14 +218,14 @@ export default function PaginaCertificato({ onBack, chi = "", certificato = CERT
         {elenco === null && <div style={{ ...fontBody, color: MUTED }}>Carico…</div>}
         {elenco && elenco.length === 0 && <div style={{ ...fontBody, color: MUTED }}>Nessun certificato ancora.</div>}
         <div style={{ display: "grid", gap: 8 }}>
-          {elencoVisto.map((r) => <RigaCertificato key={r.id} riga={r} onErrore={(t) => setMsg({ errore: true, testo: t })} />)}
+          {elencoVisto.map((r) => <RigaCertificato key={r.id} riga={r} onErrore={(t) => setMsg({ errore: true, testo: t })} onElimina={() => eliminaIlCertificato(r)} />)}
         </div>
       </div>
     </div>
   );
 }
 
-function RigaCertificato({ riga, onErrore }) {
+function RigaCertificato({ riga, onErrore, onElimina }) {
   const [apro, setApro] = useState(false);
   const creato = riga.creato_il ? new Date(riga.creato_il).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   return (
@@ -187,8 +241,21 @@ function RigaCertificato({ riga, onErrore }) {
         setApro(true);
         try { await scaricaCertificato(riga); } catch (e) { onErrore(e.message); } finally { setApro(false); }
       }}>{apro ? "Apro…" : "Scarica"}</Button>
+      <button type="button" onClick={onElimina} data-cestino={riga.id} aria-label={`Cancella il certificato di ${riga.nome || ""} ${riga.cognome || ""}`.trim()} title="Cancella il certificato" style={tastoCestino}>
+        <IconaCestino />
+      </button>
     </div>
   );
 }
+
+function IconaCestino({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
+const tastoCestino = { width: 40, height: 40, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #F1C9C5", color: "#B3261E", borderRadius: 10, cursor: "pointer", flex: "0 0 auto" };
 
 const riquadro = { background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 16, marginBottom: 14 };

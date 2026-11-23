@@ -77,6 +77,33 @@ export async function generaECertifica(certificato, modello, dati, chi) {
   return { riga: data, bytes, nomeFile: nomeFileCertificato({ ...dati, tipo: certificato.tipo }) };
 }
 
+// CANCELLARE UN CERTIFICATO FATTO PER SBAGLIO (23/11/2026). Prima la
+// riga, poi il file: al contrario, se la riga non si cancellasse,
+// resterebbe in elenco un certificato che punta a un file che non c'e'
+// piu', e «Scarica» darebbe un errore senza dire perche'. Un file
+// rimasto orfano nel secchio privato invece non lo vede nessuno.
+// Si contano le righe: un delete senza select dice «fatto» anche quando
+// non ha toccato niente.
+export async function eliminaCertificato(riga) {
+  if (!riga?.id) throw new Error("Certificato non riconosciuto.");
+  const { data, error } = await supabase.from("certificati_generati").delete().eq("id", riga.id).select("id");
+  if (error) throw new Error("Non riesco a cancellare il certificato: " + error.message);
+  if (!data || data.length === 0) throw new Error("Il database non ha cancellato nessuna riga: forse il certificato era già stato tolto. Ricarica la pagina.");
+  if (riga.percorso) {
+    const { error: erroreFile } = await supabase.storage.from(SECCHIO_CERTIFICATI).remove([riga.percorso]);
+    if (erroreFile) return { fileRimasto: true };
+  }
+  return { fileRimasto: false };
+}
+
+// Togliere il modello caricato. I certificati gia' generati non si
+// toccano: sono PDF a se', e non dipendono dal modello da cui sono nati.
+export async function eliminaModello(percorso = MODELLO_42_ORE) {
+  const { data, error } = await supabase.storage.from(SECCHIO_CERTIFICATI).remove([percorso]);
+  if (error) throw new Error("Non riesco a togliere il modello: " + error.message);
+  if (Array.isArray(data) && data.length === 0) throw new Error("Il modello non risulta più in archivio: ricarica la pagina.");
+}
+
 export async function scaricaCertificato(riga) {
   const { data, error } = await supabase.storage.from(SECCHIO_CERTIFICATI).download(riga.percorso);
   if (error || !data) throw new Error("Non riesco ad aprire il certificato: " + (error?.message || "file non trovato"));

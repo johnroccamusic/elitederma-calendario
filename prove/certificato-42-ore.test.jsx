@@ -177,3 +177,94 @@ describe("il certificato needling", () => {
     await p.smonta();
   });
 });
+
+// IL CESTINO E IL MODELLO DA SOSTITUIRE (23/11/2026). Il titolare: «metti
+// il cestino, con la domanda di sicurezza, ad ogni certificato che generi
+// nel caso ci fosse un errore», e la possibilità di sostituire il modello.
+describe("cancellare un certificato e sostituire il modello", () => {
+  const MARIA = { id: "cg1", tipo: "needling", nome: "Maria", cognome: "Rossi", corso_dal: "2026-11-01", corso_al: "2026-11-02", percorso: "needling/x.pdf", creato_il: "2026-11-23T10:00:00Z" };
+
+  function finto({ cancellate = [{ id: "cg1" }] } = {}) {
+    const chiamate = [];
+    let elenco = [MARIA];
+    globalThis.fetch = globalThis.window.fetch = async (url, op = {}) => {
+      const u = String(url); const metodo = (op.method || "GET").toUpperCase();
+      chiamate.push({ u, metodo, corpo: op.body });
+      const json = (x) => new Response(JSON.stringify(x), { status: 200, headers: { "Content-Type": "application/json" } });
+      if (u.includes("_modelli/")) {
+        if (metodo === "GET") return new Response(new Uint8Array([37, 80, 68, 70, 45]), { status: 200, headers: { "Content-Type": "application/pdf" } });
+        return json([{ name: "x" }]);
+      }
+      if (u.includes("/storage/v1/object/certificati")) return json([{ name: "needling/x.pdf" }]);
+      if (u.includes("certificati_generati")) {
+        if (metodo === "DELETE") { elenco = []; return json(cancellate); }
+        return json(elenco);
+      }
+      return json([]);
+    };
+    return chiamate;
+  }
+
+  async function apri() {
+    const { default: PaginaCertificato } = await import("../src/certificati/PaginaCertificato.jsx");
+    const { CERTIFICATI } = await import("../src/certificati/tipi.js");
+    const p = await monta(<PaginaCertificato onBack={() => {}} certificato={CERTIFICATI.needling} />);
+    await attendi(150);
+    return p;
+  }
+
+  it("il cestino chiede col nome davanti, e col «no» non cancella niente", async () => {
+    const chiamate = finto();
+    const chiesto = [];
+    window.confirm = (t) => { chiesto.push(t); return false; };
+    const p = await apri();
+    await clicca(p.nodo.querySelector('[data-cestino="cg1"]'));
+    expect(chiesto[0]).toContain("Sei sicuro di voler cancellare il certificato di Maria Rossi?");
+    expect(chiamate.some((c) => c.metodo === "DELETE")).toBe(false);
+    await p.smonta();
+  });
+
+  it("col «sì» cancella la riga e poi il file, e l'elenco si svuota", async () => {
+    const chiamate = finto();
+    window.confirm = () => true;
+    const p = await apri();
+    await clicca(p.nodo.querySelector('[data-cestino="cg1"]'));
+    await attendi(100);
+    const delRiga = chiamate.findIndex((c) => c.metodo === "DELETE" && c.u.includes("certificati_generati") && c.u.includes("cg1"));
+    const delFile = chiamate.findIndex((c) => c.metodo === "DELETE" && c.u.includes("/storage/v1/object/certificati") && !c.u.includes("_modelli"));
+    expect(delRiga).toBeGreaterThan(-1);
+    expect(delFile).toBeGreaterThan(delRiga);
+    expect(p.testo()).toContain("Certificato di Maria Rossi cancellato.");
+    expect(p.testo()).toContain("Nessun certificato ancora.");
+    await p.smonta();
+  });
+
+  it("zero righe cancellate si dice, e il file non si tocca", async () => {
+    const chiamate = finto({ cancellate: [] });
+    window.confirm = () => true;
+    const p = await apri();
+    await clicca(p.nodo.querySelector('[data-cestino="cg1"]'));
+    await attendi(100);
+    expect(p.testo()).toContain("non ha cancellato nessuna riga");
+    expect(chiamate.some((c) => c.metodo === "DELETE" && c.u.includes("/storage/"))).toBe(false);
+    await p.smonta();
+  });
+
+  it("col modello caricato si può sostituire o togliere, e togliere chiede", async () => {
+    const chiamate = finto();
+    const chiesto = [];
+    window.confirm = (t) => { chiesto.push(t); return false; };
+    const p = await apri();
+    expect(p.testo()).toContain("Modello in uso");
+    expect(p.nodo.querySelector("[data-sostituisci-modello]")).not.toBeNull();
+    await clicca(p.nodo.querySelector('[aria-label="Togli il modello"]'));
+    expect(chiesto[0]).toContain("il modello del certificato needling");
+    expect(chiamate.some((c) => c.metodo === "DELETE" && c.u.includes("_modelli"))).toBe(false);
+    window.confirm = () => true;
+    await clicca(p.nodo.querySelector('[aria-label="Togli il modello"]'));
+    await attendi(100);
+    expect(chiamate.some((c) => c.metodo === "DELETE" && c.u.includes("/storage/"))).toBe(true);
+    expect(p.testo()).toContain("Manca il modello del certificato");
+    await p.smonta();
+  });
+});

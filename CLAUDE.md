@@ -7941,8 +7941,14 @@ riga in `certificati_generati` con i dati scritti sopra — fra un anno si sa
 cosa è stato certificato a chi senza aprire il file. Prima il file, poi la
 riga; se la riga non si scrive il file si toglie. Le voci si possono prendere
 da un'iscrizione (`cercaIscritti` / `datiDaIscritto`): chi ha fatto il corso
-è quasi sempre in archivio. **Un certificato non si cancella dall'app**: è
-definitivo, e non è stato chiesto.
+è quasi sempre in archivio. **Un certificato fatto per sbaglio si cancella** (23/11/2026,
+chiesto dal titolare): ogni riga dell'elenco ha il cestino, con la domanda
+che nomina la persona. Si cancella **prima la riga e poi il file** — al
+contrario resterebbe in elenco un certificato che punta al vuoto — e il
+delete conta le righe. Il **modello** si sostituisce («Sostituisci il
+modello (PDF)», con la domanda: quello di prima non si recupera) o si
+toglie col cestino accanto; i certificati già fatti non cambiano, sono
+PDF a sé.
 
 **Il secondo certificato, «Certificato needling»** (23/11/2026, sera). Il
 modello è «Certificato abilitazione PMU 16 ore compilabile», in
