@@ -20,6 +20,8 @@ import {
 } from "../src/certificati/certificato-42-ore.js";
 import { datiDaIscritto } from "../src/certificati/dati.js";
 import LoghiECertificati from "../src/certificati/LoghiECertificati.jsx";
+import { CAMPI_PDF_NEEDLING, generaPdfCertificatoNeedling, datiVuotiNeedling, mancantiNeedling, testiNeedling, riquadriNeedlingDelModello } from "../src/certificati/certificato-needling.js";
+import { nomeFileCertificato as nomeFileDiTipo } from "../src/certificati/dati.js";
 
 async function modelloFinto() {
   const doc = await PDFDocument.create();
@@ -107,6 +109,71 @@ describe("la cartella Loghi e Certificati", () => {
 
     await scrivi(p.nodo.querySelector('input[aria-label="Nome"]'), "Maria");
     expect(p.testo()).not.toContain("Manca ancora: Nome,");
+    await p.smonta();
+  });
+});
+
+// Il modello needling ha campi di un modulo vero, con un nome ciascuno:
+// se ne costruisce uno finto con gli stessi nomi.
+async function modelloNeedlingFinto() {
+  const doc = await PDFDocument.create();
+  const pagina = doc.addPage([595, 842]);
+  const form = doc.getForm();
+  let y = 700;
+  for (const nome of Object.values(CAMPI_PDF_NEEDLING)) {
+    const campo = form.createTextField(nome);
+    campo.addToPage(pagina, { x: 100, y, width: 200, height: 19 });
+    y -= 30;
+  }
+  return await doc.save();
+}
+
+describe("il certificato needling", () => {
+  const DATI = { ...datiVuotiNeedling(new Date("2026-11-23T10:00:00Z")), nome: "Maria", cognome: "Rossi", luogo_nascita: "Napoli", data_nascita: "1990-04-02", indirizzo: "Via Roma 1", comune: "Roma", provincia: "rm", codice_fiscale: "rssmra90d42f839x", corso_dal: "2026-11-01", corso_al: "2026-11-02" };
+
+  it("legge i campi per nome, poi toglie il modulo e lascia la pagina", async () => {
+    const modello = await modelloNeedlingFinto();
+    const prima = await PDFDocument.load(modello);
+    expect(riquadriNeedlingDelModello(prima).nome.map(Math.round)).toEqual([100, 700, 301, 720]);
+    const dopo = await PDFDocument.load(await generaPdfCertificatoNeedling(modello, DATI));
+    const annots = dopo.getPage(0).node.Annots();
+    expect(annots ? annots.size() : 0).toBe(0);
+    expect(dopo.catalog.get(PDFName.of("AcroForm"))).toBeUndefined();
+    expect(dopo.getTitle()).toBe("Certificato di abilitazione needling - Maria Rossi");
+  });
+
+  it("chiede anche il codice fiscale, e lo scrive maiuscolo", () => {
+    expect(mancantiNeedling(DATI)).toEqual([]);
+    expect(mancantiNeedling({ ...DATI, codice_fiscale: "" })).toEqual(["Cod. fis."]);
+    const t = testiNeedling(DATI);
+    expect(t.codiceFiscale).toBe("RSSMRA90D42F839X");
+    expect(t.corsoDal).toBe("01/11/2026");
+    expect(t.luogoData).toBe("Roma, 23/11/2026");
+    expect(nomeFileDiTipo({ ...DATI, tipo: "needling" })).toBe("Certificato-needling-Rossi-Maria.pdf");
+    expect(nomeFileDiTipo({ ...DATI, tipo: "pmu_42_ore" })).toBe("Certificato-42-ore-Rossi-Maria.pdf");
+  });
+
+  it("dall'iscrizione prende anche il codice fiscale", () => {
+    const d = datiDaIscritto({ id: "i2", nome: "ANNA", cognome: "BIANCHI", codice_fiscale: "bncnna80a41h501z" }, datiVuotiNeedling());
+    expect(d.codice_fiscale).toBe("BNCNNA80A41H501Z");
+    // il 42 ore quella voce non ce l'ha, e non gliela si aggiunge
+    expect("codice_fiscale" in datiDaIscritto({ id: "i3", codice_fiscale: "X" }, datiVuoti42())).toBe(false);
+  });
+
+  it("in Crea certificato c'e' anche Certificato needling, con le sue voci", async () => {
+    rispondiCon({
+      "_modelli/certificato-needling.pdf": new Response(JSON.stringify({ error: "not_found" }), { status: 400, headers: { "Content-Type": "application/json" } }),
+      certificati_generati: [],
+    });
+    const p = await monta(<LoghiECertificati onBack={() => {}} renderLoghi={() => null} />);
+    await clicca(p.tasto("Crea certificato"));
+    expect(p.testo()).toContain("Certificato 42 ore");
+    await clicca(p.tasto("Certificato needling"));
+    await attendi(150);
+    expect(p.testo()).toContain("Manca il modello del certificato");
+    expect(p.testo()).toContain("certificato abilitazione PMU 16 ore compilabile");
+    expect(p.nodo.querySelector('input[aria-label="Cod. fis."]')).not.toBeNull();
+    expect(p.testo()).toContain("Nessun certificato ancora.");
     await p.smonta();
   });
 });

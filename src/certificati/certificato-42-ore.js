@@ -58,7 +58,7 @@ export function datiVuoti42(oggi = new Date()) {
   return d;
 }
 
-function isoGiorno(d) {
+export function isoGiorno(d) {
   // il giorno di Roma, non quello UTC: un certificato fatto alle 00:30
   // e' gia' del giorno dopo per chi lo firma
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" }).format(d);

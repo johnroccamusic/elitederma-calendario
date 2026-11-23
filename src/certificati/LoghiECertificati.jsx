@@ -2,7 +2,8 @@
 // l'ha fatta diventare una cartella con due aree dentro. La procedura dei
 // loghi non cambia di una riga e si apre da «Assegna loghi»; accanto c'e'
 // «Crea certificato», che oggi ha un certificato solo — il 42 ore del PMU —
-// e domani ne avra' altri, per questo e' un elenco e non un tasto diretto.
+// e dal 23/11 sera anche il needling: per questo e' un elenco, e ogni
+// certificato e' una voce di `tipi.js`.
 //
 // I livelli vivono qui dentro e non nella `view` dell'app: l'Indietro in
 // alto (e il gesto, e il tasto di Android) li vede solo attraverso
@@ -12,10 +13,12 @@
 import React, { useEffect, useState } from "react";
 import { TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, fontBody, stileTitoloPagina } from "../ui/stile.js";
-import PaginaCertificato42 from "./PaginaCertificato42.jsx";
+import PaginaCertificato from "./PaginaCertificato.jsx";
+import { CERTIFICATI, ORDINE_CERTIFICATI } from "./tipi.js";
 
-// il livello sopra a ognuno: e' l'unica cosa che l'Indietro deve sapere
-const SOPRA = { loghi: "menu", certificati: "menu", "42ore": "certificati" };
+// il livello sopra a ognuno: e' l'unica cosa che l'Indietro deve sapere.
+// Ogni certificato e' un livello col suo tipo, e sta sotto «Crea certificato».
+const SOPRA = { loghi: "menu", certificati: "menu" };
 
 export default function LoghiECertificati({ onBack, titolo = "Loghi e Certificati", renderLoghi, chi = "", registraInterceptaIndietro = null }) {
   const [livello, setLivello] = useState("menu");
@@ -23,12 +26,12 @@ export default function LoghiECertificati({ onBack, titolo = "Loghi e Certificat
   useEffect(() => {
     if (!registraInterceptaIndietro) return undefined;
     if (livello === "menu") { registraInterceptaIndietro(null); return undefined; }
-    registraInterceptaIndietro(() => setLivello(SOPRA[livello] || "menu"));
+    registraInterceptaIndietro(() => setLivello(SOPRA[livello] || (CERTIFICATI[livello] ? "certificati" : "menu")));
     return () => registraInterceptaIndietro(null);
   }, [livello, registraInterceptaIndietro]);
 
   if (livello === "loghi") return renderLoghi(() => setLivello("menu"));
-  if (livello === "42ore") return <PaginaCertificato42 onBack={() => setLivello("certificati")} chi={chi} />;
+  if (CERTIFICATI[livello]) return <PaginaCertificato key={livello} certificato={CERTIFICATI[livello]} onBack={() => setLivello("certificati")} chi={chi} />;
 
   const certificati = livello === "certificati";
   return (
@@ -45,7 +48,9 @@ export default function LoghiECertificati({ onBack, titolo = "Loghi e Certificat
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {certificati ? (
-            <Tessera titolo="Certificato 42 ore" testo="Abilitazione PMU: dati dello studente, periodo del corso, luogo e data." onClick={() => setLivello("42ore")} />
+            ORDINE_CERTIFICATI.map((t) => (
+              <Tessera key={t} titolo={CERTIFICATI[t].titolo} testo={CERTIFICATI[t].tessera} onClick={() => setLivello(t)} />
+            ))
           ) : (
             <>
               <Tessera titolo="Assegna loghi" testo="Personalizza loghi, watermark e materiali ufficiali." onClick={() => setLivello("loghi")} />

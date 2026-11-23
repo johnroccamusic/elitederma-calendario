@@ -7944,6 +7944,19 @@ da un'iscrizione (`cercaIscritti` / `datiDaIscritto`): chi ha fatto il corso
 è quasi sempre in archivio. **Un certificato non si cancella dall'app**: è
 definitivo, e non è stato chiesto.
 
+**Il secondo certificato, «Certificato needling»** (23/11/2026, sera). Il
+modello è «Certificato abilitazione PMU 16 ore compilabile», in
+`_modelli/certificato-needling.pdf`, e qui le caselle sono **campi di un
+modulo vero** (undici, con un nome): si leggono per nome
+(`riquadriNeedlingDelModello`) e il certificato si fa allo stesso modo —
+via il modulo, i dati disegnati. Ha una voce in più, il **codice fiscale**
+(colonna `certificati_generati.codice_fiscale`, migrazione
+`20261123200000`; se manca la riga si scrive senza, il codice resta nel
+PDF). Ogni certificato è una voce di `src/certificati/tipi.js` — titolo,
+modello, cartella, voci, generatore — e la pagina (`PaginaCertificato.jsx`)
+è una sola per tutti; l'elenco sotto mostra solo i certificati di quel
+tipo.
+
 Migrazione `20261123190000_certificati.sql` (tabella, secchio, policy
 `to authenticated`, rollback dentro). Prove in
 `prove/certificato-42-ore.test.jsx` (5), con un modello finto costruito con le

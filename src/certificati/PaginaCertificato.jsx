@@ -1,5 +1,7 @@
-// «CERTIFICATO 42 ORE» (23/11/2026): le voci del modello, il tasto
-// «Genera Certificato» e sotto l'elenco di quelli gia' fatti.
+// LA PAGINA DI UN CERTIFICATO (23/11/2026): le voci del modello, il tasto
+// «Genera Certificato» e sotto l'elenco di quelli gia' fatti. E' una sola
+// per tutti i certificati (42 ore, needling…): cosa cambia lo dice la voce
+// di `tipi.js` che riceve.
 //
 // Il tasto resta spento finche' manca qualcosa, e dice COSA: un
 // certificato con una riga vuota non si consegna, e «manca qualcosa»
@@ -7,13 +9,14 @@
 import React, { useEffect, useState } from "react";
 import { Button, Field, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GOLD, fontBody, stileTitoloPagina, inputStyle, campoDataStyle } from "../ui/stile.js";
-import { CAMPI_42_ORE, datiVuoti42, mancanti42, dataItaliana } from "./certificato-42-ore.js";
-import { leggiModello42, caricaModello42, leggiCertificati, generaECertifica42, scaricaCertificato, salvaFile, cercaIscritti, datiDaIscritto } from "./dati.js";
+import { dataItaliana } from "./certificato-42-ore.js";
+import { CERTIFICATI } from "./tipi.js";
+import { leggiModello, caricaModello, leggiCertificati, generaECertifica, scaricaCertificato, salvaFile, cercaIscritti, datiDaIscritto } from "./dati.js";
 
-export default function PaginaCertificato42({ onBack, chi = "" }) {
+export default function PaginaCertificato({ onBack, chi = "", certificato = CERTIFICATI.pmu_42_ore }) {
   // undefined = sto guardando, null = il modello non c'e' ancora
   const [modello, setModello] = useState(undefined);
-  const [dati, setDati] = useState(() => datiVuoti42());
+  const [dati, setDati] = useState(() => certificato.datiVuoti());
   const [elenco, setElenco] = useState(null);
   const [msg, setMsg] = useState(null);
   const [generando, setGenerando] = useState(false);
@@ -23,11 +26,11 @@ export default function PaginaCertificato42({ onBack, chi = "" }) {
   const [filtroElenco, setFiltroElenco] = useState("");
 
   async function rileggiElenco() {
-    try { setElenco(await leggiCertificati()); } catch (e) { setElenco([]); setMsg({ errore: true, testo: "Non riesco a leggere i certificati fatti: " + e.message }); }
+    try { setElenco(await leggiCertificati(certificato.tipo)); } catch (e) { setElenco([]); setMsg({ errore: true, testo: "Non riesco a leggere i certificati fatti: " + e.message }); }
   }
 
   useEffect(() => {
-    leggiModello42().then(setModello).catch(() => setModello(null));
+    leggiModello(certificato.modello).then(setModello).catch(() => setModello(null));
     rileggiElenco();
   }, []);
 
@@ -42,17 +45,17 @@ export default function PaginaCertificato42({ onBack, chi = "" }) {
     return () => { vivo = false; clearTimeout(t); };
   }, [ricerca]);
 
-  const mancano = mancanti42(dati);
+  const mancano = certificato.mancanti(dati);
   const cambia = (chiave, valore) => setDati((d) => ({ ...d, [chiave]: valore }));
 
   async function genera() {
     if (mancano.length > 0 || !modello) return;
     setGenerando(true); setMsg(null);
     try {
-      const { bytes, nomeFile } = await generaECertifica42(modello, dati, chi);
+      const { bytes, nomeFile } = await generaECertifica(certificato, modello, dati, chi);
       salvaFile(bytes, nomeFile);
       setMsg({ testo: `Certificato di ${dati.nome} ${dati.cognome} generato e archiviato. Lo trovi qui sotto.` });
-      setDati(datiVuoti42());
+      setDati(certificato.datiVuoti());
       setRicerca("");
       await rileggiElenco();
     } catch (e) {
@@ -66,8 +69,8 @@ export default function PaginaCertificato42({ onBack, chi = "" }) {
     if (!file) return;
     setCaricando(true); setMsg(null);
     try {
-      await caricaModello42(file);
-      const letto = await leggiModello42();
+      await caricaModello(file, certificato.modello);
+      const letto = await leggiModello(certificato.modello);
       setModello(letto);
       setMsg({ testo: letto ? "Modello caricato: da adesso i certificati si generano da questo." : "Il modello è stato caricato ma non riesco a rileggerlo: ricarica la pagina." , errore: !letto });
     } catch (e) {
@@ -85,17 +88,17 @@ export default function PaginaCertificato42({ onBack, chi = "" }) {
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 16px 80px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
           <TastoLivelloPrecedente titolo="Crea certificato" onClick={onBack} />
-          <div style={{ ...stileTitoloPagina, color: NAVY }}>Certificato 42 ore</div>
+          <div style={{ ...stileTitoloPagina, color: NAVY }}>{certificato.titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18, lineHeight: 1.5 }}>
-          Certificato di abilitazione PMU. Compila le voci e premi «Genera Certificato»: esce il PDF uguale al modello, con le firme, e non si può più modificare.
+          {certificato.descrizione} Compila le voci e premi «Genera Certificato»: esce il PDF uguale al modello, con le firme, e non si può più modificare.
         </div>
 
         {modello === null && (
           <div style={{ ...riquadro, borderColor: "#E8B04A", background: "#FFF8EA" }}>
             <div style={{ ...fontBody, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Manca il modello del certificato</div>
             <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.5, marginBottom: 10 }}>
-              Va caricato una volta sola: è il PDF vuoto con le firme («certificazione abilitazione 42 ore PMU – campi vuoti»). Resta in un archivio privato, perché un foglio firmato e vuoto non deve poterlo scaricare chiunque.
+              Va caricato una volta sola: è il PDF vuoto con le firme («{certificato.nomeModello}»). Resta in un archivio privato, perché un foglio firmato e vuoto non deve poterlo scaricare chiunque.
             </div>
             <label style={{ display: "inline-block", background: NAVY, color: "#fff", borderRadius: 10, padding: "10px 16px", cursor: caricando ? "default" : "pointer", ...fontBody, fontWeight: 700, fontSize: 14, opacity: caricando ? 0.6 : 1 }}>
               {caricando ? "Carico…" : "Carica il modello (PDF)"}
@@ -123,7 +126,7 @@ export default function PaginaCertificato42({ onBack, chi = "" }) {
 
         <div style={riquadro}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
-            {CAMPI_42_ORE.map((c) => (
+            {certificato.campi.map((c) => (
               <Field key={c.chiave} label={c.etichetta}>
                 <input
                   type={c.tipo === "date" ? "date" : "text"}

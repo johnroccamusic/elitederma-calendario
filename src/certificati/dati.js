@@ -2,33 +2,35 @@
 // Il PDF si compone nel browser (come tutti i PDF dell'app): qui si
 // prende il modello, si salva il certificato fatto e si rilegge l'elenco.
 import { supabase } from "../supabase.js";
-import { generaPdfCertificato42, nomeFileCertificato } from "./certificato-42-ore.js";
+import { CERTIFICATI } from "./tipi.js";
 
 export const SECCHIO_CERTIFICATI = "certificati";
 // Il modello vuoto con le firme sta nello stesso secchio privato: un
 // foglio firmato e vuoto, scaricabile da chiunque conosca l'indirizzo,
 // sarebbe un certificato che chiunque puo' riempire.
-export const MODELLO_42_ORE = "_modelli/certificato-42-ore.pdf";
+export const MODELLO_42_ORE = CERTIFICATI.pmu_42_ore.modello;
 
 // null = il modello non c'e' ancora (va caricato una volta)
-export async function leggiModello42() {
-  const { data, error } = await supabase.storage.from(SECCHIO_CERTIFICATI).download(MODELLO_42_ORE);
+export async function leggiModello(percorso = MODELLO_42_ORE) {
+  const { data, error } = await supabase.storage.from(SECCHIO_CERTIFICATI).download(percorso);
   if (error || !data) return null;
   return new Uint8Array(await data.arrayBuffer());
 }
 
-export async function caricaModello42(file) {
+export async function caricaModello(file, percorso = MODELLO_42_ORE) {
   if (!file) throw new Error("Nessun file scelto.");
   const testa = new Uint8Array(await file.slice(0, 5).arrayBuffer());
   // si guarda l'inizio del file, non il nome: un'immagine chiamata .pdf
   // farebbe fallire ogni certificato dopo
   if (String.fromCharCode(...testa) !== "%PDF-") throw new Error("Il file scelto non è un PDF.");
-  const { error } = await supabase.storage.from(SECCHIO_CERTIFICATI).upload(MODELLO_42_ORE, file, { upsert: true, contentType: "application/pdf" });
+  const { error } = await supabase.storage.from(SECCHIO_CERTIFICATI).upload(percorso, file, { upsert: true, contentType: "application/pdf" });
   if (error) throw new Error("Non riesco a caricare il modello: " + error.message);
 }
 
-export async function leggiCertificati() {
-  const { data, error } = await supabase.from("certificati_generati").select("*").order("creato_il", { ascending: false }).limit(500);
+// solo quelli di un tipo: l'elenco sotto il 42 ore non deve mostrare i
+// certificati needling, e viceversa
+export async function leggiCertificati(tipo = "pmu_42_ore") {
+  const { data, error } = await supabase.from("certificati_generati").select("*").eq("tipo", tipo).order("creato_il", { ascending: false }).limit(500);
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -36,14 +38,14 @@ export async function leggiCertificati() {
 // Genera, archivia e registra. Il file per primo, poi la riga: se la riga
 // non si scrive il file si toglie, invece di restare orfano in un secchio
 // dove nessuno lo ritrova.
-export async function generaECertifica42(modello, dati, chi) {
-  const bytes = await generaPdfCertificato42(modello, dati);
-  const percorso = `42-ore/${new Date().toISOString().slice(0, 10)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+export async function generaECertifica(certificato, modello, dati, chi) {
+  const bytes = await certificato.genera(modello, dati);
+  const percorso = `${certificato.cartella}/${new Date().toISOString().slice(0, 10)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
   const { error } = await supabase.storage.from(SECCHIO_CERTIFICATI).upload(percorso, new Blob([bytes], { type: "application/pdf" }), { upsert: false, contentType: "application/pdf" });
   if (error) throw new Error("Il certificato è pronto ma non riesco ad archiviarlo: " + error.message);
   const vuotoNull = (v) => (String(v || "").trim() ? String(v).trim() : null);
   const riga = {
-    tipo: "pmu_42_ore",
+    tipo: certificato.tipo,
     nome: String(dati.nome || "").trim(),
     cognome: String(dati.cognome || "").trim(),
     luogo_nascita: vuotoNull(dati.luogo_nascita),
@@ -59,18 +61,32 @@ export async function generaECertifica42(modello, dati, chi) {
     percorso,
     creato_da: chi || null,
   };
-  const { data, error: erroreRiga } = await supabase.from("certificati_generati").insert(riga).select().single();
+  if (certificato.campi.some((c) => c.chiave === "codice_fiscale")) riga.codice_fiscale = vuotoNull(String(dati.codice_fiscale || "").toUpperCase());
+  let { data, error: erroreRiga } = await supabase.from("certificati_generati").insert(riga).select().single();
+  // Se l'archivio non ha ancora la colonna del codice fiscale, la riga si
+  // scrive senza: il codice resta comunque stampato nel PDF archiviato, e
+  // fermare un certificato per una colonna mancante sarebbe peggio.
+  if (erroreRiga && "codice_fiscale" in riga && /codice_fiscale/.test(erroreRiga.message || "")) {
+    const { codice_fiscale: _cf, ...senza } = riga;
+    ({ data, error: erroreRiga } = await supabase.from("certificati_generati").insert(senza).select().single());
+  }
   if (erroreRiga) {
     await supabase.storage.from(SECCHIO_CERTIFICATI).remove([percorso]);
     throw new Error("Il certificato non è stato registrato: " + erroreRiga.message);
   }
-  return { riga: data, bytes, nomeFile: nomeFileCertificato(dati) };
+  return { riga: data, bytes, nomeFile: nomeFileCertificato({ ...dati, tipo: certificato.tipo }) };
 }
 
 export async function scaricaCertificato(riga) {
   const { data, error } = await supabase.storage.from(SECCHIO_CERTIFICATI).download(riga.percorso);
   if (error || !data) throw new Error("Non riesco ad aprire il certificato: " + (error?.message || "file non trovato"));
   salvaFile(data, nomeFileCertificato(riga));
+}
+
+export function nomeFileCertificato(riga) {
+  const pulito = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const prefisso = CERTIFICATI[riga?.tipo]?.prefissoFile || CERTIFICATI.pmu_42_ore.prefissoFile;
+  return `${prefisso}-${pulito(riga.cognome)}-${pulito(riga.nome)}.pdf`;
 }
 
 export function salvaFile(blobOBytes, nome) {
@@ -91,7 +107,7 @@ export function salvaFile(blobOBytes, nome) {
 export async function cercaIscritti(testo) {
   const parole = String(testo || "").trim().split(/\s+/).filter((p) => p.length >= 2).slice(0, 3);
   if (parole.length === 0) return [];
-  let q = supabase.from("iscritti").select("id, nome, cognome, data_nascita, comune_nascita, stato_nascita, indirizzo_residenza, civico_residenza, citta_residenza, prov_residenza, corso_data_id").limit(12);
+  let q = supabase.from("iscritti").select("id, nome, cognome, codice_fiscale, data_nascita, comune_nascita, stato_nascita, indirizzo_residenza, civico_residenza, citta_residenza, prov_residenza, corso_data_id").limit(12);
   for (const p of parole) {
     const pulita = p.replace(/[%_,()]/g, "");
     q = q.or(`nome.ilike.%${pulita}%,cognome.ilike.%${pulita}%`);
@@ -124,6 +140,7 @@ export function datiDaIscritto(r, attuali) {
     indirizzo: scegli(titolo(via), attuali.indirizzo),
     comune: scegli(titolo(r.citta_residenza), attuali.comune),
     provincia: scegli(String(r.prov_residenza || "").toUpperCase().slice(0, 2), attuali.provincia),
+    ...("codice_fiscale" in attuali ? { codice_fiscale: scegli(String(r.codice_fiscale || "").toUpperCase(), attuali.codice_fiscale) } : {}),
     corso_dal: scegli(r.classe?.data_inizio, attuali.corso_dal),
     corso_al: scegli(r.classe?.data_fine, attuali.corso_al),
   };
