@@ -22,12 +22,22 @@ import React from "react";
 import { AssegnazioneMaster } from "../src/App.jsx";
 import { monta } from "./aiuto.js";
 
+// NIENTE DATE A CALENDARIO IN UNA PROVA (23/11/2026).
+//
+// Queste prove montano una pagina che il giorno di oggi se lo legge da
+// sola, e il corso era fissato al 20-22/11/2026: il 23 era concluso,
+// quindi usciva dall'elenco e le prove accusavano il codice di un guasto
+// che non c'era. E' la stessa lezione del 16/11/2026 sulla fiera di
+// Napoli — una data scritta a mano e' una prova con una scadenza — e si
+// chiude nello stesso modo: il corso nasce rispetto a oggi.
+const fraGiorni = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
 const CORSI = [{ id: "co1", nome: "SEXYLINE VELVET INDIVIDUALE", colore: "#3D4A94" }];
 const LOCATION = [{ id: "lo1", nome: "ROMA", nome_sede: "Hotel Centrale" }];
 // una classe della stagione in corso (settembre 2026 → agosto 2027)
 const CLASSI = [{
   id: "cd1", corso_id: "co1", location_id: "lo1",
-  data_inizio: "2026-11-20", data_fine: "2026-11-22",
+  data_inizio: fraGiorni(5), data_fine: fraGiorni(7),
   master_id: "ma1", pagamento_sede: "bonifico",
 }];
 const MASTER = [{ id: "ma1", nome: "CHIARA COLONNELLI" }];

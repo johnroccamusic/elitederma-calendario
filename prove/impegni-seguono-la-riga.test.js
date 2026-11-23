@@ -10,7 +10,9 @@
 // cash a 0. Fino al 30/10 l'importo mostrato seguiva già la riga, ma
 // quello scritto restava, e il relitto lo doveva togliere una persona.
 import { describe, it, expect } from "vitest";
-import { allineaImpegniAllaClasse } from "../src/App.jsx";
+import fs from "node:fs";
+import path from "node:path";
+import { allineaImpegniAllaClasse, impegniRinviatiPerChiave } from "../src/App.jsx";
 
 const CLASSE = "f74559cf-0000-0000-0000-000000000001";
 const ALTRA = "aaaaaaaa-0000-0000-0000-000000000002";
@@ -201,5 +203,74 @@ describe("lo scadenziario allinea gli impegni di tutte le classi che ha ricalcol
       protette: new Set([CASA_MANUELA]), soloAnnullamenti: true,
     });
     expect(protetto.daAnnullare).toEqual([]);
+  });
+});
+
+// UN IMPEGNO ANNULLATO NON E' UN RINVIO (23/11/2026).
+//
+// Il caso: quota venditore di SIMONA sull'HENNE di Roma del 21/11/2026,
+// 50 euro. Il suo impegno era stato annullato dall'allineamento il 20/11;
+// la quota e' tornata dovuta, ma il Riepilogo continuava a leggere quella
+// riga annullata come «questa quota e' nello scadenziario». Risultato:
+// marcata «Scad.» nel Riepilogo, assente dallo Scadenzario (che elenca
+// solo aperto/parzialmente_coperto), fuori dalla busta. Le altre quattro
+// quote della classe sono state pagate, la sua no.
+const CLASSE_HENNE = "a4ccf9c8-0000-0000-0000-00000000000b";
+const SIMONA = `cash_venditore_${CLASSE_HENNE}_SIMONA`;
+const quotaSimona = (stato) => ({
+  id: `s-${stato}`, origine_id: CLASSE_HENNE, chiave_origine: SIMONA, stato,
+  descrizione: "SIMONA (quota venditore) — contanti non coperti",
+  importo_previsto: 50, importo_coperto: 0,
+});
+
+describe("un impegno annullato non conta come rinvio", () => {
+  it("l'annullato non entra nella mappa: la quota torna dovuta", () => {
+    expect(impegniRinviatiPerChiave([quotaSimona("annullato")]).has(SIMONA)).toBe(false);
+  });
+
+  it("aperto e parzialmente_coperto ci sono: quelli sono rinvii veri", () => {
+    for (const stato of ["aperto", "parzialmente_coperto"]) {
+      expect(impegniRinviatiPerChiave([quotaSimona(stato)]).get(SIMONA)?.stato).toBe(stato);
+    }
+  });
+
+  it("chiuso e coperto ci restano: quei soldi sono usciti, non si pagano due volte", () => {
+    // e' la meta' da non correggere mai: togliendoli dalla mappa, la
+    // quota tornerebbe a carico della busta di una classe che l'ha
+    // GIA' pagata dallo scadenziario
+    for (const stato of ["chiuso", "coperto"]) {
+      expect(impegniRinviatiPerChiave([quotaSimona(stato)]).has(SIMONA)).toBe(true);
+    }
+  });
+
+  it("una riga senza chiave non entra, come prima", () => {
+    expect(impegniRinviatiPerChiave([{ id: "x", stato: "aperto", chiave_origine: null }]).size).toBe(0);
+  });
+
+  it("niente impegni, o elenco mancante: mappa vuota e nessun errore", () => {
+    expect(impegniRinviatiPerChiave([]).size).toBe(0);
+    expect(impegniRinviatiPerChiave(null).size).toBe(0);
+    expect(impegniRinviatiPerChiave(undefined).size).toBe(0);
+  });
+
+  // LA GUARDIA CHE DURA. Il difetto non stava in un componente: stava in
+  // come il Riepilogo costruisce quella mappa, e nessuna prova che monti
+  // una pagina poteva vederlo. Qui si pretende che la mappa passi dalla
+  // funzione, e che la riga di prima — il `new Map` senza filtro sullo
+  // stato — non torni.
+  it("il Riepilogo costruisce la mappa dalla funzione, non a mano", () => {
+    const sorgente = fs.readFileSync(path.join(process.cwd(), "src/App.jsx"), "utf8");
+    expect(sorgente).toContain("const impegniPerChiave = impegniRinviatiPerChiave(impegni);");
+    expect(sorgente).not.toContain(
+      'new Map((impegni || []).filter((x) => x.chiave_origine).map((x) => [x.chiave_origine, x]))',
+    );
+  });
+
+  it("chi fa rinascere un impegno deve invece poterlo vedere annullato", () => {
+    // `rinviaCashAgliImpegni` legge `impegni` diretto: la chiave e' unica,
+    // e senza vedere la riga annullata l'upsert non saprebbe di doverla
+    // far rinascere (e un insert fallirebbe con 23505)
+    const sorgente = fs.readFileSync(path.join(process.cwd(), "src/App.jsx"), "utf8");
+    expect(sorgente).toContain('const giaCiEra = (impegni || []).find((x) => x.chiave_origine === chiave);');
   });
 });

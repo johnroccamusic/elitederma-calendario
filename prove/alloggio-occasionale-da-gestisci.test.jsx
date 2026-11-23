@@ -6,6 +6,16 @@ import { ModaleGestisciAlloggio, AssegnazioneMaster } from "../src/App.jsx";
 import { monta, clicca, scrivi, attendi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
+// NIENTE DATE A CALENDARIO IN UNA PROVA (23/11/2026).
+//
+// Queste prove montano una pagina che il giorno di oggi se lo legge da
+// sola, e il corso era fissato al 20-22/11/2026: il 23 era concluso,
+// quindi usciva dall'elenco e le prove accusavano il codice di un guasto
+// che non c'era. E' la stessa lezione del 16/11/2026 sulla fiera di
+// Napoli — una data scritta a mano e' una prova con una scadenza — e si
+// chiude nello stesso modo: il corso nasce rispetto a oggi.
+const fraGiorni = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
 const CD = { id: "cd1", data_inizio: "2026-11-16", data_fine: "2026-11-17" };
 
 describe("Alloggio occasionale da Gestisci", () => {
@@ -62,7 +72,7 @@ describe("Dalla pagina si capisce che l'alloggio si scegli", () => {
       <AssegnazioneMaster
         corsi={[{ id: "co1", nome: "SEXYLINE", colore: "#3D4A94" }]}
         location={[{ id: "lo1", nome: "ROMA", nome_sede: "Centrale" }]}
-        corsiDate={[{ id: "cd1", corso_id: "co1", location_id: "lo1", data_inizio: "2026-11-20", data_fine: "2026-11-22", master_id: "ma1", pagamento_sede: "bonifico" }]}
+        corsiDate={[{ id: "cd1", corso_id: "co1", location_id: "lo1", data_inizio: fraGiorni(5), data_fine: fraGiorni(7), master_id: "ma1", pagamento_sede: "bonifico" }]}
         corsiDateDocenti={[]} master={[{ id: "ma1", nome: "CHIARA" }]} assistente={[]} leva={[]}
         hotel={[{ id: "h1", nome: "Hotel Roma" }]} hotelPrezzi={[]} hotelPeriodi={[]} locationPrezzi={[]} spese={[]}
         ruoloUtente="programmatore" layoutCondiviso={null}
@@ -91,7 +101,7 @@ describe("Dalla pagina si capisce che l'alloggio si scegli", () => {
       <AssegnazioneMaster
         corsi={[{ id: "co1", nome: "SEXYLINE", colore: "#3D4A94" }]}
         location={[{ id: "lo1", nome: "ROMA", nome_sede: "Centrale" }]}
-        corsiDate={[{ id: "cd1", corso_id: "co1", location_id: "lo1", data_inizio: "2026-11-20", data_fine: "2026-11-22", master_id: "ma1", pagamento_sede: "bonifico", alloggio_id: "h1" }]}
+        corsiDate={[{ id: "cd1", corso_id: "co1", location_id: "lo1", data_inizio: fraGiorni(5), data_fine: fraGiorni(7), master_id: "ma1", pagamento_sede: "bonifico", alloggio_id: "h1" }]}
         corsiDateDocenti={[]} master={[{ id: "ma1", nome: "CHIARA" }]} assistente={[]} leva={[]}
         hotel={[{ id: "h1", nome: "Hotel Roma" }]} hotelPrezzi={[]} hotelPeriodi={[]} locationPrezzi={[]} spese={[]}
         ruoloUtente="programmatore" layoutCondiviso={null}

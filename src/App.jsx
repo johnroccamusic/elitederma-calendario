@@ -30104,6 +30104,46 @@ function raggruppaQuoteVenditori(listaIscritti) {
   return [...perVenditore.values()].sort((a, b) => b.totale - a.totale);
 }
 
+// UN IMPEGNO ANNULLATO NON E' UN RINVIO (23/11/2026).
+//
+// Il Riepilogo legge gli impegni per chiave per sapere se la quota in
+// contanti di una riga e' GIA' stata rinviata allo scadenziario, e quindi
+// non pesa piu' sulla busta del corso. Finche' quell'elenco teneva dentro
+// anche gli impegni `annullato`, una quota rinviata e poi annullata
+// dall'allineamento restava marcata «Scad.» per sempre: nello Scadenzario
+// non c'era — quello elenca solo aperto/parzialmente_coperto — e dalla
+// busta era fuori. Spariva da tutti e due i posti, e nessuno lo diceva.
+//
+// Il caso: quota venditore di SIMONA sull'HENNE di Roma del 21/11/2026,
+// 50 euro. L'impegno era nato il 20/11 alle 16:00:59 e l'allineamento
+// l'ha annullato alle 16:02:20, nello stesso secondo in cui su quella
+// riga si riscriveva la modalita' di pagamento. L'annullamento era
+// giusto (in quell'istante la riga non prevedeva contanti); sbagliato era
+// continuare a leggerlo come un rinvio quando la quota e' tornata dovuta.
+// Le altre quattro quote della classe sono state pagate il 23/11, la sua
+// non e' stata nemmeno proposta — e nemmeno i due tasti della riga
+// potevano riprenderla: «Busta» rispondeva che restava nello
+// scadenziario, «Scad.» non riscriveva niente perche' una riga con quella
+// chiave c'era gia'.
+//
+// `chiuso` e `coperto` restano dentro, ed e' voluto: quei soldi sono
+// usciti davvero, e rimettere la quota a carico della busta vorrebbe dire
+// pagarla due volte. Misurato il 23/11/2026: tutti e 25 gli impegni
+// chiusi in archivio hanno la loro spesa con la stessa chiave, quindi
+// anche senza di loro resterebbero coperti — ma una cassa non si lascia
+// appesa a un «anche senza».
+//
+// Chi deve invece VEDERE un impegno annullato e' `rinviaCashAgliImpegni`:
+// la chiave e' unica, e per far rinascere quella riga le serve sapere che
+// c'e'. Quello legge `impegni` diretto, non questa mappa.
+export function impegniRinviatiPerChiave(impegni) {
+  return new Map(
+    (impegni || [])
+      .filter((x) => x.chiave_origine && x.stato !== "annullato")
+      .map((x) => [x.chiave_origine, x]),
+  );
+}
+
 // Come viene pagato un venditore su una classe. Senza una riga in
 // quote_venditori_split si intende contanti: e' il default, e resta
 // implicito perche' "non e' stato deciso" e "si e' deciso cash" restano
@@ -31324,7 +31364,7 @@ function PannelloRiepilogoAmministrativo({
   // perche' il contante del corso non bastava — e allora diventa un
   // impegno, da saldare piu' avanti per bonifico o dalla cassa centrale.
   // In tutti e due i casi smette di pesare sulla busta di questo corso.
-  const impegniPerChiave = new Map((impegni || []).filter((x) => x.chiave_origine).map((x) => [x.chiave_origine, x]));
+  const impegniPerChiave = impegniRinviatiPerChiave(impegni);
   // La quota venditori si decide venditore per venditore: ognuno ha la
   // sua chiave negli impegni ("cash_venditore_<classe>_<VENDITORE>", che
   // non si confonde con quella della riga totale) e il suo flag. La riga

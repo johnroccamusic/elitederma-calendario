@@ -4477,6 +4477,89 @@ confrontarlo col `classe_id`.
 `alloggio_…`, 561,20 + 561,20 + 240 €, classe cancellata), su sua parola:
 «erano prove». Restano scritti come `annullato`, non cancellati.
 
+### Un impegno annullato non è un rinvio (23/11/2026)
+
+Il titolare: «nel corso del 21 di novembre di Patrizia Savi di Enne non
+risulta la vendita di Simona, non sta in scadenzario».
+
+**La vendita c'era, ed era la sua quota venditore a essere svanita.** HENNE,
+Roma, 21/11: cinque iscritte, cinque quote da 50 € — **250 €**. Il 23/11 ne
+sono state pagate quattro dalla cassa contanti (Patrizia Savi, Raffaele,
+Andrea, Olga); la quinta, di SIMONA, non è stata **nemmeno proposta**.
+
+**Dov'era finita.** Il suo impegno era nato il 20/11 alle 16:00:59 e
+l'allineamento l'ha messo ad `annullato` alle **16:02:20**, nello stesso
+secondo in cui su quella riga si riscriveva la modalità di pagamento
+(`quote_venditori_split`, SIMONA, 16:02:20.457). L'annullamento era giusto:
+in quell'istante quella riga non prevedeva contanti. Sbagliato era
+continuare a **leggerlo come un rinvio** quando la quota è tornata dovuta.
+
+**IL DIFETTO ERA UNA RIGA SOLA, e non stava in nessun componente**:
+`impegniPerChiave`, nel Riepilogo della classe, costruiva la mappa degli
+impegni **senza guardare lo stato**. Da lì:
+
+| | |
+|---|---|
+| nel Riepilogo | la riga di Simona risultava su **«Scad.»** |
+| nello Scadenzario | **non c'era**: quell'elenco filtra `aperto`/`parzialmente_coperto` |
+| nella busta | fuori, perché «rinviata» |
+
+Cinquanta euro in nessuno dei due posti, e nessuna pagina che lo dicesse.
+**E nemmeno i due tasti della riga potevano riprenderla:** «Busta»
+rispondeva «il contante di questa classe non basta, resta nello
+scadenziario» — dove non era — e «Scad.» non scriveva niente, perché
+`rinviaCashAgliImpegni` vedeva una riga con quella chiave e la dava per
+fatta. Un vicolo chiuso, ed è il motivo per cui il titolare l'ha cercata e
+non l'ha trovata.
+
+**La correzione** è `impegniRinviatiPerChiave` (pura ed esportata): un
+impegno `annullato` non entra nella mappa, quindi la quota torna dovuta e
+la passeggiata della busta decide di nuovo. **`chiuso` e `coperto` restano
+dentro, ed è la metà da non toccare mai:** quei soldi sono usciti davvero, e
+rimetterli a carico della busta vorrebbe dire pagarli due volte (misurato il
+23/11: tutti e 25 gli impegni chiusi in archivio hanno la loro spesa con la
+stessa chiave, quindi sarebbero coperti comunque — ma una cassa non si
+lascia appesa a un «anche senza»). **Chi invece deve vedere un annullato è
+`rinviaCashAgliImpegni`**, che legge `impegni` diretto: la chiave è unica, e
+senza quella riga non saprebbe di doverla far rinascere.
+
+**Lo Scadenzario non aveva il buco** (`vociCashRinviate` filtra già lo
+stato): il punto cieco era uno, e quello.
+
+**Misurato prima di toccare niente: era l'unico caso in archivio.** Degli
+altri tre impegni annullati nessuno ha una quota ancora dovuta (due
+`location_` e un `alloggio_` del 18/08, più Casa Manuela dell'11/11, dove il
+cash è davvero zero). A Simona quei 50 € non erano stati pagati da nessun'altra
+strada — ha ricevuto le quote di altre tre classi, non questa.
+
+**Il ripristino**, fatto il 23/11/2026 su richiesta del titolare: l'impegno
+di Simona rimesso ad `aperto`, 50 € previsti, niente coperto e niente
+effettivo — la forma identica a quella che avrebbe nascendo adesso dal tasto
+«Scad.». Una riga cambiata, nessun importo inventato. La classe adesso torna:
+quattro quote pagate più una nello scadenziario, 250 €. La busta di quella
+classe era già stata depositata (23/11), quindi quei 50 € si pagano dalla
+cassa contanti come le altre quattro — non dalla busta.
+
+Prove in `prove/impegni-seguono-la-riga.test.js` (+7): i cinque stati uno per
+uno, e **la guardia che dura** — rilegge `src/App.jsx` e pretende che la
+mappa passi dalla funzione e che la riga di prima, il `new Map` senza filtro
+sullo stato, non torni. Una prova che monti una pagina questo guasto non
+l'avrebbe mai visto: il componente mostrava fedelmente quello che gli veniva
+dato.
+
+**E otto prove erano rosse prima di toccare niente, per la seconda volta
+per lo stesso motivo** (23/11/2026). `deposito-master`,
+`alloggio-occasionale-da-gestisci` e `operativo-corsi-da-cellulare`
+fissavano un corso al **20-22/11/2026**: al push del 20/11 passavano, il 23
+quel corso era concluso, usciva dall'elenco di Operativo corsi e dalla
+dashboard, e le prove accusavano il codice di un guasto che non c'era. È la
+lezione del 16/11 sulla fiera di Napoli — **una data scritta a calendario in
+una prova è una prova con una scadenza** — e si chiude nello stesso modo: le
+tre classi nascono rispetto a oggi (`fraGiorni`). Prima di correggere si è
+messa da parte la modifica e si sono rigirati i tre file sul codice di
+`1ee4f58`: già rosse lì. **Davanti a una prova rossa si guarda prima se era
+rossa anche prima**, o si corregge il codice sbagliato.
+
 ### Un impegno non più dovuto si toglie da sé anche dallo Scadenzario (11/11/2026)
 
 Il titolare, davanti a «Costo Alloggio — CASA MANUELA» a **zero** in

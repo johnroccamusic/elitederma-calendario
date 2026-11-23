@@ -31,6 +31,16 @@ import { rispondiCon } from "./preparazione.js";
 
 if (!globalThis.ResizeObserver) globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
+// NIENTE DATE A CALENDARIO IN UNA PROVA (23/11/2026).
+//
+// Queste prove montano una pagina che il giorno di oggi se lo legge da
+// sola, e il corso era fissato al 20-22/11/2026: il 23 era concluso,
+// quindi usciva dall'elenco e le prove accusavano il codice di un guasto
+// che non c'era. E' la stessa lezione del 16/11/2026 sulla fiera di
+// Napoli — una data scritta a mano e' una prova con una scadenza — e si
+// chiude nello stesso modo: il corso nasce rispetto a oggi.
+const fraGiorni = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
 const CD = { id: "cd1", corso_id: "co1", location_id: "lo1", data_inizio: "2026-11-10", data_fine: "2026-11-11" };
 const VENDITA_CASH = { id: "v1", corso_data_id: "cd1", tipo_movimento: "vendita", metodo_pagamento: "contanti", totale: 150, totale_imponibile: 150, busta_numero: null, prodotti: [], data_ordine: "2026-11-10T10:00:00" };
 // un'allieva che ha saldato in contanti al corso
@@ -239,7 +249,7 @@ describe("il Riepilogo amministrativo: una riga sua, separata dalla busta", () =
 });
 
 describe("il gesto, con la dashboard della master montata per davvero", () => {
-  const CD_APERTA = { ...CD, id: "cd9", data_inizio: "2026-11-10", data_fine: "2026-11-20", master_id: "m1" };
+  const CD_APERTA = { ...CD, id: "cd9", data_inizio: fraGiorni(-2), data_fine: fraGiorni(2), master_id: "m1" };
   const dashboard = (corsiDate) => (
     <PaginaDashboardMaster
       master={[{ id: "m1", nome: "Chiara" }]} corsi={[{ id: "co1", nome: "PMU" }]}
