@@ -18,6 +18,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
 import { testoErroreFunzione } from "../errore-funzione.js";
+import { avvisoEmail, correzioneEmail } from "../iscrizione/email.js";
 import { Button } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, BG, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
 import { componiCampagna, SEGNAPOSTI_CAMPAGNA } from "../../supabase/functions/_shared/email.js";
@@ -142,6 +143,7 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
   const [salvando, setSalvando] = useState(false);
   const [preparazione, setPreparazione] = useState(null);
   const [invio, setInvio] = useState(null); // { inCorso, inviate, fallite, restanti, totale }
+  const [rimbalziAggiornati, setRimbalziAggiornati] = useState(0);
   // «ESCLUDI QUELLE GIA' SPEDITE» (24/11/2026, chiesto dal titolare per
   // dividere il pubblico a gruppi). La regola vive in
   // `crm_campagna_prepara`: qui si accende e si spegne, e si scrive nei
@@ -308,6 +310,44 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
     setSalvando(false);
   }
 
+  // IL CICLO DEI LOTTI STA IN UN POSTO SOLO. Lo chiamano «Invia» e il
+  // rinvio agli indirizzi corretti: due copie vorrebbero dire due idee di
+  // cosa fare quando Resend rifiuta un lotto, e quella sbagliata si
+  // scoprirebbe con delle mail a meta' strada. Torna quante ne ha spedite
+  // e quante no; chi chiama scrive la frase, perche' «spedite 20» e
+  // «rinviate 2 corrette» non sono la stessa notizia.
+  async function spedisciLotti(idCampagna, quanti) {
+    let inviate = 0, fallite = 0, restanti = quanti;
+    let rifiutiDiFila = 0;
+    setInvio({ inCorso: true, inviate, fallite, restanti, totale: quanti });
+    for (let giro = 0; giro < 10000 && !fermati.current; giro++) {
+      const { data, error } = await supabase.functions.invoke("crm-campagna-invia", { body: { campagna_id: idCampagna, lotto: 100 } });
+      // rifiuto TEMPORANEO di Resend (limite di velocita', servizio giu'): le
+      // righe sono tornate in coda, si aspetta e si riprova; dopo cinque
+      // volte di fila ci si ferma e la campagna si riprende da Campagne
+      if (data?.temporaneo) {
+        if (++rifiutiDiFila >= 5) throw new Error(data.errore || "Resend non risponde.");
+        setInvio((x) => x ? { ...x, restanti: data.restanti ?? x.restanti, attendo: true } : x);
+        await new Promise((ok) => setTimeout(ok, (data.riprova_tra || 20) * 1000));
+        continue;
+      }
+      rifiutiDiFila = 0;
+      // un'altra chiamata sta spedendo le righe rimaste: si aspetta
+      if (data?.attesa) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
+      // il motivo vero sta nel CORPO della risposta, non in error.message:
+      // «Edge Function returned a non-2xx status code» ha mandato a cercare
+      // un guasto nella funzione quando era il database a rifiutare (24/11)
+      if (error || (!data?.ok && !data?.stato)) throw new Error(data?.errore || (error ? await testoErroreFunzione(error) : "Invio interrotto."));
+      inviate += data.inviate || 0; fallite += data.fallite || 0; restanti = data.restanti || 0;
+      setInvio({ inCorso: restanti > 0, inviate, fallite, restanti, totale: quanti });
+      if (!data.ok) throw new Error(data.errore || "Resend ha rifiutato un lotto.");
+      if (!restanti) break;
+    }
+    const { data: agg } = await supabase.from("crm_campagne").select("*").eq("id", idCampagna).maybeSingle();
+    if (agg) setCampagna(agg);
+    return { inviate, fallite };
+  }
+
   async function invia() {
     const c = campagna;
     if (!c?.id || !c.totale_destinatari) { setMsg({ tipo: "errore", testo: "Prima prepara i destinatari." }); return; }
@@ -316,39 +356,47 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
     setSalvando(true); setMsg(null); fermati.current = false;
     try {
       const salvata = await assicuraCampagna();
-      let inviate = 0, fallite = 0, restanti = salvata.totale_destinatari;
-      let rifiutiDiFila = 0;
-      setInvio({ inCorso: true, inviate, fallite, restanti, totale: salvata.totale_destinatari });
-      for (let giro = 0; giro < 10000 && !fermati.current; giro++) {
-        const { data, error } = await supabase.functions.invoke("crm-campagna-invia", { body: { campagna_id: salvata.id, lotto: 100 } });
-        // rifiuto TEMPORANEO di Resend (limite di velocita', servizio giu'): le
-        // righe sono tornate in coda, si aspetta e si riprova; dopo cinque
-        // volte di fila ci si ferma e la campagna si riprende da Campagne
-        if (data?.temporaneo) {
-          if (++rifiutiDiFila >= 5) throw new Error(data.errore || "Resend non risponde.");
-          setInvio((x) => x ? { ...x, restanti: data.restanti ?? x.restanti, attendo: true } : x);
-          await new Promise((ok) => setTimeout(ok, (data.riprova_tra || 20) * 1000));
-          continue;
-        }
-        rifiutiDiFila = 0;
-        // un'altra chiamata sta spedendo le righe rimaste: si aspetta
-        if (data?.attesa) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
-        // il motivo vero sta nel CORPO della risposta, non in error.message:
-        // «Edge Function returned a non-2xx status code» ha mandato a cercare
-        // un guasto nella funzione quando era il database a rifiutare (24/11)
-        if (error || (!data?.ok && !data?.stato)) throw new Error(data?.errore || (error ? await testoErroreFunzione(error) : "Invio interrotto."));
-        inviate += data.inviate || 0; fallite += data.fallite || 0; restanti = data.restanti || 0;
-        setInvio({ inCorso: restanti > 0, inviate, fallite, restanti, totale: salvata.totale_destinatari });
-        if (!data.ok) throw new Error(data.errore || "Resend ha rifiutato un lotto.");
-        if (!restanti) break;
-      }
-      const { data: agg } = await supabase.from("crm_campagne").select("*").eq("id", salvata.id).maybeSingle();
-      if (agg) setCampagna(agg);
+      const { inviate, fallite } = await spedisciLotti(salvata.id, salvata.totale_destinatari);
       setMsg(fallite
         ? { tipo: "errore", testo: `Spedite ${numero(inviate)}, non riuscite ${numero(fallite)}. Le non riuscite restano segnate nei destinatari.` }
         : { tipo: "ok", testo: `Spedite ${numero(inviate)} mail. Consegne, aperture e rimbalzi arrivano da soli nelle prossime ore.` });
     } catch (e) {
       setMsg({ tipo: "errore", testo: `${e.message} La campagna resta «in invio»: da Campagne si riprende da dove era.` });
+      setInvio((x) => x ? { ...x, inCorso: false } : x);
+    }
+    setSalvando(false);
+  }
+
+  // IL RINVIO AGLI INDIRIZZI CORRETTI. Il pannello dei rimbalzi raccoglie
+  // le correzioni, il database decide quali valgono (vedi
+  // `crm_campagna_correggi_rimbalzi`: l'indirizzo che ha gia' rimbalzato,
+  // un disiscritto e un doppione restano fuori col loro perche'), e da li'
+  // parte lo stesso invio di sempre — stessa campagna, stesso testo, e le
+  // 437 mail gia' spedite non si rispediscono perche' sono fuori dalla coda.
+  async function rinviaCorretti(correzioni) {
+    if (!campagna?.id || !correzioni.length) return;
+    if (!window.confirm(`Rinviare «${oggetto.trim()}» a ${numero(correzioni.length)} ${correzioni.length === 1 ? "indirizzo corretto" : "indirizzi corretti"}?\n\nChi aveva già ricevuto questa campagna non la riceve una seconda volta.`)) return;
+    setSalvando(true); setMsg(null); fermati.current = false;
+    try {
+      const { data, error } = await supabase.rpc("crm_campagna_correggi_rimbalzi", {
+        p_campagna: campagna.id, p_correzioni: correzioni,
+      });
+      if (error) throw new Error(error.message);
+      const corrette = data?.corrette || 0;
+      const rifiutate = Array.isArray(data?.rifiutate) ? data.rifiutate : [];
+      if (!corrette) {
+        setMsg({ tipo: "errore", testo: `Nessun indirizzo è stato corretto. ${rifiutate.map((x) => `${x.vecchia || x.email}: ${x.motivo}`).join(" · ")}` });
+        setSalvando(false);
+        return setRimbalziAggiornati((n) => n + 1);
+      }
+      const { inviate, fallite } = await spedisciLotti(campagna.id, data.in_coda || corrette);
+      const coda = rifiutate.length ? ` ${numero(rifiutate.length)} non sono state corrette: ${rifiutate.map((x) => `${x.vecchia || x.email} (${x.motivo})`).join(" · ")}.` : "";
+      setMsg(fallite
+        ? { tipo: "errore", testo: `Corretti ${numero(corrette)}, spedite ${numero(inviate)}, non riuscite ${numero(fallite)}.${coda}` }
+        : { tipo: "ok", testo: `Corretti ${numero(corrette)} indirizzi e rispedita la mail. L'indirizzo di prima resta segnato come rimbalzato, e la correzione è scritta anche sulla scheda del contatto: le prossime campagne useranno quello giusto.${coda}` });
+      setRimbalziAggiornati((n) => n + 1);
+    } catch (e) {
+      setMsg({ tipo: "errore", testo: e.message });
       setInvio((x) => x ? { ...x, inCorso: false } : x);
     }
     setSalvando(false);
@@ -468,6 +516,7 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
             )}
           </div>
         </div>
+        {campagna?.id && <IndirizziRimbalzati campagnaId={campagna.id} aggiornamento={(campagna.inviate || 0) + (invio?.inviate || 0) + rimbalziAggiornati} occupato={salvando} onRinvia={rinviaCorretti} />}
         {campagna?.id && campagna.totale_destinatari > 0 && <DestinatariCampagna campagnaId={campagna.id} aggiornamento={(campagna.inviate || 0) + (invio?.inviate || 0)} />}
       </div>
     </div>
@@ -562,6 +611,127 @@ export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
               <Button variant="ghost" onClick={() => setDa(da + PER_PAGINA_DESTINATARI)} disabled={da + PER_PAGINA_DESTINATARI >= totale} style={{ padding: "6px 12px", fontSize: 12 }}>Successivi →</Button>
             </div>
           )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------- gli indirizzi rimbalzati
+//
+// «I 20 INDIRIZZI RIMBALZATI LI VOGLIO VEDERE DA QUALCHE PARTE PER
+// VALUTARLI» (24/11/2026, il titolare dopo la prima campagna vera, con la
+// forma dettata da lui: «a sinistra l'indirizzo rimbalzato, a destra un
+// campo pulito dove posso mettere la correzione, e alla fine un tasto
+// rinvia la mail agli indirizzi corretti»).
+//
+// Un rimbalzo contato non serve a niente, un rimbalzo LETTO sì: dei venti
+// di oggi, tre erano un tasto sbagliato — «libero.ti», «gmail.con» — e
+// quelle tre persone non hanno ricevuto niente per una lettera.
+//
+// IL SUGGERIMENTO SI OFFRE, NON SI SCRIVE. La casella nasce vuota come
+// l'ha chiesta, e la correzione evidente compare accanto come pastiglia da
+// premere: così nessuna mail parte verso un indirizzo che l'app ha
+// indovinato e nessuno ha guardato. Chi propone è `correzioneEmail`, la
+// stessa tabella di errori che avvisa chi scrive un'email nel modulo di
+// iscrizione — un secondo elenco vorrebbe dire una casella che segnala
+// «.ti» e una proposta che non lo sa correggere.
+//
+// E DOVE NON C'È NIENTE DA PROPORRE LO DICE, invece di tacere: su
+// «no@claa.com» o su un nome di battesimo appoggiato a gmail la
+// correzione non esiste — quella persona si chiama al telefono.
+function IndirizziRimbalzati({ campagnaId, aggiornamento = 0, occupato = false, onRinvia }) {
+  const [righe, setRighe] = useState([]);
+  const [scritte, setScritte] = useState({});
+  const [aperto, setAperto] = useState(true);
+
+  useEffect(() => {
+    if (!campagnaId) return;
+    let vivo = true;
+    supabase.from("crm_campagne_destinatari")
+      .select("id, nome, email, stato, ultimo_evento, ultimo_evento_il")
+      .eq("campagna_id", campagnaId).in("stato", ["rimbalzata", "segnalata"])
+      .order("ultimo_evento_il", { ascending: true }).limit(500)
+      .then(({ data }) => { if (vivo) { setRighe(Array.isArray(data) ? data : []); setScritte({}); } });
+    return () => { vivo = false; };
+  }, [campagnaId, aggiornamento]);
+
+  if (!campagnaId || righe.length === 0) return null;
+
+  // una correzione conta solo se è scritta E diversa da quella che ha
+  // rimbalzato: il database la rifiuterebbe comunque, ma un tasto che
+  // promette di rinviare due mail e ne manda una è un tasto che mente
+  const pronte = righe
+    .map((r) => ({ id: r.id, email: String(scritte[r.id] || "").trim().toLowerCase(), vecchia: String(r.email || "").toLowerCase() }))
+    .filter((x) => x.email && x.email !== x.vecchia)
+    .map(({ id, email }) => ({ id, email }));
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #F0C8C2", borderRadius: 14, padding: 16, marginTop: 16 }} data-rimbalzati>
+      <button type="button" onClick={() => setAperto((a) => !a)}
+        style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>
+        {aperto ? "▾" : "▸"} Indirizzi rimbalzati ({numero(righe.length)})
+      </button>
+      {!aperto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 4 }}>Premi per guardarli uno per uno e correggere quelli recuperabili.</div>}
+      {aperto && (
+        <>
+          <div style={{ ...fontBody, fontSize: 12, color: GRAFITE, margin: "8px 0 12px", lineHeight: 1.5 }}>
+            Questi non sono arrivati. Dove l’indirizzo è scritto storto — una coda «.ti» per «.it», «gmail.con» per
+            «gmail.com» — la correzione si scrive a destra e la mail riparte. Dove invece l’indirizzo è messo per
+            riempire un campo, o la casella è chiusa, non c’è niente da correggere: quella persona si chiama.
+            <br />
+            <b style={{ color: NAVY }}>L’indirizzo di prima resta segnato come rimbalzato</b>, quindi non lo userà più
+            nessuna campagna; la correzione finisce anche sulla scheda del contatto.
+          </div>
+          {righe.map((r) => {
+            const proposta = correzioneEmail(r.email);
+            const avviso = avvisoEmail(r.email);
+            const scritto = scritte[r.id] || "";
+            const corretto = scritto.trim() && scritto.trim().toLowerCase() !== String(r.email || "").toLowerCase();
+            return (
+              <div key={r.id} data-rimbalzato={r.email}
+                style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13, color: NAVY, overflowWrap: "anywhere" }}>
+                    <b>{r.nome || "(senza nome)"}</b>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", overflowWrap: "anywhere" }}>{r.email}</div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: avviso ? GOLD : MUTED, marginTop: 2 }}>
+                    {avviso || "Indirizzo di forma giusta: forse la casella è piena o chiusa, oppure non è mai esistita."}
+                  </div>
+                  {String(r.ultimo_evento || "").startsWith("corretto in ") && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", marginTop: 2 }}>Già {r.ultimo_evento}</div>
+                  )}
+                </div>
+                <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+                  <input value={scritto} onChange={(e) => setScritte((x) => ({ ...x, [r.id]: e.target.value }))}
+                    placeholder="indirizzo corretto" inputMode="email" data-correzione={r.email}
+                    style={{ ...inputStyle, width: "100%", minWidth: 0, borderColor: corretto ? "#2E7D32" : CREAM_BORDER }} />
+                  {proposta && !scritto && (
+                    <button type="button" onClick={() => setScritte((x) => ({ ...x, [r.id]: proposta }))} data-proposta={proposta}
+                      style={{ ...fontBody, fontSize: 11.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}`, borderRadius: 999, padding: "3px 10px", marginTop: 5, cursor: "pointer", overflowWrap: "anywhere", textAlign: "left" }}>
+                      usa «{proposta}»
+                    </button>
+                  )}
+                  {!proposta && !scritto && (
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 5 }}>Nessuna correzione evidente da proporre.</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <Button onClick={() => onRinvia?.(pronte)} disabled={occupato || pronte.length === 0}>
+              {pronte.length
+                ? `Rinvia la mail a ${numero(pronte.length)} ${pronte.length === 1 ? "indirizzo corretto" : "indirizzi corretti"}`
+                : "Rinvia la mail agli indirizzi corretti"}
+            </Button>
+            <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+              {pronte.length
+                ? "Parte lo stesso testo di questa campagna, solo a chi hai corretto."
+                : "Scrivi almeno una correzione: il tasto si accende da sé."}
+            </span>
+          </div>
         </>
       )}
     </div>

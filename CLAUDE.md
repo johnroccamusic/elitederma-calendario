@@ -1557,6 +1557,95 @@ tutte e 18 da sola in 14 secondi — è il banco sotto carico, non il codice.
 Resta la regola: davanti a una prova rossa si guarda prima se era rossa
 anche prima.
 
+### I venti rimbalzi si leggono, e quelli recuperabili si correggono (24/11/2026)
+
+Il titolare, dopo la prima campagna vera — 437 mail, **20 rimbalzi**:
+«clicco sui 20 indirizzi rimbalzati e vedo se sono recuperabili, del tipo
+Gmail, se fossero scritti in un modo inappropriato… a sinistra
+l'indirizzo rimbalzato, a destra un campo pulito dove posso mettere la
+correzione, e alla fine un tasto rinvia la mail agli indirizzi corretti».
+
+**I venti letti uno per uno sono TRE famiglie, e per questo contarli non
+serviva a niente:**
+
+| | quanti | cosa si può fare |
+|---|---|---|
+| un tasto sbagliato — `libero.ti`, `gmail.con`, `ggmail.con` | 3 | si corregge, e la mail arriva |
+| indirizzi messi per riempire un campo obbligatorio — `no@claa.com`, `no@francesca.com`, un nome di battesimo su gmail | ~8 | niente: non esistono. Quella persona ha un telefono |
+| forma giusta, casella piena o chiusa | il resto | niente da correggere |
+
+Tre persone non hanno ricevuto niente **per una lettera**, e nessuno
+poteva saperlo senza aprire l'elenco.
+
+**IL SUGGERIMENTO SI OFFRE, NON SI SCRIVE.** La casella nasce vuota —
+come l'ha chiesta — e la correzione evidente compare accanto come
+pastiglia «usa «carmen.riccic@libero.it»» da premere. Precompilarla
+vorrebbe dire una mail che parte verso un indirizzo indovinato dall'app e
+guardato da nessuno. Dove non c'è niente da proporre **lo dice**
+(«Nessuna correzione evidente da proporre») invece di tacere: una riga
+muta si legge come un'app che non ha capito.
+
+**Chi propone è `correzioneEmail`, dentro `src/iscrizione/email.js`**, che
+legge **le stesse due tabelle** di `avvisoEmail` — le code che non
+esistono e i fornitori scritti storti, dal 22/10/2026. Un secondo elenco
+vorrebbe dire una casella che segnala «.ti» nel modulo di iscrizione e una
+proposta che non lo sa correggere nelle campagne, sullo stesso indirizzo.
+E non indovina: su `.co` (Colombia, e la usano molte aziende) tace, come
+ha sempre fatto.
+
+**PERCHÉ LA RIGA RIMBALZATA NON SI RISCRIVE**, ed è la decisione di fondo.
+Nasce una riga **nuova** con l'indirizzo corretto e quella vecchia resta
+dov'è, con scritto «corretto in …». Non è prudenza:
+`crm_campagna_prepara` tiene fuori dalle campagne future chi ha una riga
+`rimbalzata` **confrontando l'email**, e quella riga è l'unica cosa che
+impedisce di riscrivere all'indirizzo morto — sovrascrivendola si
+perderebbe il blocco insieme alla storia. E siccome il confronto è per
+email, l'indirizzo corretto, che non ha mai rimbalzato, **rientra da sé**.
+Il vincolo `UNIQUE (campagna_id, email)` fa il resto: lo stesso indirizzo
+non entra due volte nella stessa campagna.
+
+**E IL CONTATTO SI CORREGGE**, o la campagna di domani ripete lo stesso
+errore. Ma solo se porta **ancora** l'indirizzo che ha rimbalzato: uno
+cambiato a mano nel frattempo non si tocca — è la regola del codice
+fiscale, si rifà solo quello che abbiamo scritto noi.
+
+**Le cinque cose che il database rifiuta**, una per volta e col motivo
+scritto (le altre correzioni passano comunque): la stessa email che ha
+appena rimbalzato, un indirizzo che ha rimbalzato **in un'altra
+campagna**, uno che si è **disiscritto**, uno già fra i destinatari di
+questa campagna, e qualunque cosa che non abbia la forma di un indirizzo.
+Senza il secondo, correggere un indirizzo con un altro già morto
+rimanderebbe la mail nel vuoto — provato: `maria@gmail.com` →
+`tosy@libero.it` **rifiutato**.
+
+**Il rinvio passa dalla macchina d'invio che c'è già**: stessa campagna,
+stesso testo, stessi lotti. Una campagna `inviata` torna **`in_invio`** —
+senza, l'invio la rifiuterebbe e le righe appena create resterebbero in
+coda per sempre — e le 437 mail già spedite non si rispediscono perché
+sono fuori dalla coda. Il ciclo dei lotti è stato estratto in
+`spedisciLotti`, usato da «Invia» e dal rinvio: due copie vorrebbero dire
+due idee di cosa fare quando Resend rifiuta un lotto, e quella sbagliata
+si scoprirebbe con delle mail a metà strada.
+
+**Il tasto dice QUANTI** («Rinvia la mail a 1 indirizzo corretto») e nasce
+spento con sotto il perché: un tasto che promette di rinviare due mail e
+ne manda una è un tasto che mente — una correzione uguale a quella che ha
+rimbalzato non conta, anche scritta in maiuscolo.
+
+Migrazione `20261124180000_i_rimbalzi_si_correggono.sql`
+(`crm_campagna_correggi_rimbalzi`, `revoke` ad `anon`, rollback dentro e
+non tocca nessun dato). **Provata in transazione annullata sui rimbalzi
+veri**: 2 corrette, **tutti e cinque i rifiuti** col loro motivo, e dopo
+il rollback 437 righe, zero in coda, campagna ancora `inviata`, contatto
+ancora con l'indirizzo storto. Prove in
+`prove/rimbalzi-si-correggono.test.jsx` (18), col pannello montato e
+premuto, più la guardia che rilegge la migrazione e pretende che i cinque
+rifiuti ci siano e che la riga rimbalzata non venga **cancellata**.
+**Provata rossa** togliendo il filtro «diversa da quella che ha
+rimbalzato» — e al primo giro era verde per il motivo sbagliato: scrivere
+in un campo controllato da React vuole il setter nativo, cioè `scrivi()`
+del banco, e senza quello la casella restava vuota e il tasto spento da sé.
+
 ### Due master su una classe la vedono tutte e due (24/11/2026)
 
 Il titolare: «se associo 2 master a un corso entrambe devono vedere il

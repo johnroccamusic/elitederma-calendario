@@ -94,3 +94,41 @@ export function avvisoEmail(valore) {
 
   return "";
 }
+
+/**
+ * L'INDIRIZZO COME SAREBBE SE L'ERRORE FOSSE QUELLO CHE SEMBRA.
+ *
+ * Nata il 24/11/2026 per i rimbalzi delle campagne: li' non si avvisa
+ * nessuno mentre scrive — la mail e' gia' tornata indietro — e serve la
+ * CORREZIONE pronta da confermare, non la frase che la descrive.
+ *
+ * Legge le stesse due tabelle di `avvisoEmail`, ed e' il punto: due
+ * elenchi vorrebbero dire una casella che segnala «.ti» e una proposta
+ * che non lo sa correggere, sullo stesso indirizzo.
+ *
+ * Torna "" quando non c'e' niente di evidente da proporre, e non
+ * indovina mai: su `no@claa.com` o su un nome di battesimo su gmail —
+ * indirizzi messi per riempire una casella obbligatoria — non c'e' una
+ * correzione, c'e' una persona da chiamare.
+ */
+export function correzioneEmail(valore) {
+  const scritto = String(valore ?? "").trim().toLowerCase();
+  if (!scritto) return "";
+  const pezzi = scritto.split("@");
+  if (pezzi.length !== 2 || !pezzi[0] || !pezzi[1]) return "";
+
+  const parti = pezzi[1].split(".");
+  if (parti.length < 2 || parti.some((p) => !p)) return "";
+
+  let cambiato = false;
+  const coda = CODE_SBAGLIATE[parti[parti.length - 1]];
+  if (coda) { parti[parti.length - 1] = coda; cambiato = true; }
+  const nome = parti[parti.length - 2];
+  const fornitore = Object.prototype.hasOwnProperty.call(FORNITORI_STORTI, nome)
+    ? FORNITORI_STORTI[nome] : undefined;
+  if (fornitore) { parti[parti.length - 2] = fornitore; cambiato = true; }
+
+  if (!cambiato) return "";
+  const proposta = `${pezzi[0]}@${parti.join(".")}`;
+  return proposta === scritto ? "" : proposta;
+}
