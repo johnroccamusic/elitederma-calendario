@@ -184,7 +184,7 @@ export default function CalcoloConsumi({
 
       const p = proiezione({
         storico, classiFuture: future, daMese, aMese: finoAl,
-        venditeAlMese, giacenza, trend, classiPerMeseMisurato,
+        venditeAlMese, giacenza, trend, classiPerMeseMisurato, oggi,
       });
       setEsito({
         storico, proiezione: p, misurate: misurate.length, mesiMisurati,
@@ -326,7 +326,7 @@ export default function CalcoloConsumi({
 
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", marginTop: 14 }}>
           <div>
-            <span style={etichetta}>Misura i consumi dal</span>
+            <span style={etichetta}>Misura i consumi gia' avvenuti dal</span>
             <input type="date" value={dal} max={oggiIso()} onChange={(e) => setDal(e.target.value)} data-dal style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
           </div>
           <div>
@@ -363,8 +363,21 @@ export default function CalcoloConsumi({
             </div>
           </div>
         </div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>
-          I movimenti di magazzino partono dal <b>27 agosto 2026</b>: prima di quella data non c’è niente da misurare.
+        {/* LE DUE DATE NON SONO L'INIZIO DELLA STIMA, e il titolare ce
+            l'ha chiesto il 24/11/2026 davanti alla tabella: «perche',
+            nonostante io chieda di iniziare la stima da settembre,
+            l'elenco parte da novembre?». Le due date guardano INDIETRO —
+            quanto si e' consumato — e la stima guarda AVANTI, da oggi:
+            proiettare settembre vorrebbe dire far ordinare il materiale
+            di corsi gia' fatti e gia' serviti. Era scritto solo nelle
+            etichette, e nessuno deve doverlo dedurre. */}
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>
+          Le due date dicono <b>quale passato misurare</b>, non da dove parte la stima: la stima parte sempre da{" "}
+          <b style={{ color: NAVY }}>oggi</b> e arriva al mese scritto in «Stima fino a». I mesi già passati non compaiono
+          nell’elenco perché il loro materiale è già uscito dal magazzino.
+          <span style={{ display: "block", marginTop: 3 }}>
+            I movimenti di magazzino partono dal <b>27 agosto 2026</b>: prima di quella data non c’è niente da misurare.
+          </span>
         </div>
 
         <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 12, cursor: "pointer" }} data-con-vendite>
@@ -544,7 +557,9 @@ function Risultato({ esito, corsoById, isMobile }) {
                     <td style={{ ...cella, color: r.fonteAttese === "storico" ? "#2E7D32" : MUTED }} data-attese={r.fonteAttese}>
                       {num(r.classiAttese)}
                       <span style={{ ...fontBody, fontSize: 10, display: "block", lineHeight: 1.1 }}>
-                        {r.fonteAttese === "storico" ? "da storico" : `${r.percentualeTrend}%`}
+                        {r.restaDelMese < 1
+                          ? `di ${num(r.classiAttesePieneDelMese)}: resta il ${Math.round(r.restaDelMese * 100)}% del mese`
+                          : r.fonteAttese === "storico" ? "da storico" : `${r.percentualeTrend}%`}
                       </span>
                     </td>
                     <td style={cella}>{num(r.daiCorsiCalendario)}</td>
@@ -565,7 +580,9 @@ function Risultato({ esito, corsoById, isMobile }) {
           misurato in un altro anno</span> sono il numero vero di quel mese; per gli altri è un mese di punta ridotto
           dalla percentuale del trend. Le allieve di una classe futura sono le iscritte di oggi, o la
           media di quel corso se è più alta — mai più dei posti: le classi di marzo si riempiono a marzo, e contare le
-          iscritte di oggi farebbe ordinare troppo poco.
+          iscritte di oggi farebbe ordinare troppo poco. Nel <b>mese in corso</b> si attende solo quello che il mese ha
+          ancora da dare: quello che e' gia' partito e' gia' uscito dal magazzino, e contarlo di nuovo gonfierebbe
+          l'ordine.
           {p.righe.some((r) => r.corsiSenzaMisura > 0) && " Dove un corso futuro non compare nel periodo misurato si usa la media di tutti i corsi."}
         </div>
       </div>

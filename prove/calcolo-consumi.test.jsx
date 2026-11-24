@@ -17,7 +17,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import CalcoloConsumi from "../src/magazzino/CalcoloConsumi.jsx";
-import { consumoPerAllieva, proiezione, allievePreviste, mesiFra, nomeMese, livelloPieno, percentualeDelMese, TREND_PIENO } from "../src/magazzino/consumi-previsti.js";
+import { consumoPerAllieva, proiezione, allievePreviste, mesiFra, nomeMese, livelloPieno, percentualeDelMese, frazioneDiMeseRestante, TREND_PIENO } from "../src/magazzino/consumi-previsti.js";
 import { act } from "react";
 import { monta, attendi, clicca, scrivi, scegli } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
@@ -73,6 +73,29 @@ describe("le allieve che avrà una classe futura", () => {
   it("e se gli iscritti superano i posti si tiene il numero vero, non il tetto", () => {
     // è già successo: una classe con un posto in più aggiunto a mano
     expect(allievePreviste({ iscritteOra: 6, mediaPerClasse: 2, postiMax: 4 })).toBe(6);
+  });
+});
+
+describe("quanta parte del mese resta", () => {
+  it("il mese di oggi vale per i giorni che restano, e il giorno di oggi non conta", () => {
+    // le classi future sono quelle con data_inizio > oggi: le due regole
+    // devono guardare lo stesso pezzo di calendario
+    expect(frazioneDiMeseRestante("2026-11", "2026-11-24")).toBeCloseTo(6 / 30, 4);
+    expect(frazioneDiMeseRestante("2026-11", "2026-11-01")).toBeCloseTo(29 / 30, 4);
+    expect(frazioneDiMeseRestante("2026-11", "2026-11-30")).toBe(0);
+  });
+
+  it("un mese diverso da quello di oggi vale per intero, in avanti e indietro", () => {
+    expect(frazioneDiMeseRestante("2026-12", "2026-11-24")).toBe(1);
+    expect(frazioneDiMeseRestante("2026-09", "2026-11-24")).toBe(1);
+  });
+
+  it("senza una data di oggi non si riduce niente", () => {
+    expect(frazioneDiMeseRestante("2026-11", null)).toBe(1);
+  });
+
+  it("i giorni del mese sono quelli veri, febbraio compreso", () => {
+    expect(frazioneDiMeseRestante("2027-02", "2027-02-14")).toBeCloseTo(14 / 28, 4);
   });
 });
 
@@ -137,6 +160,63 @@ describe("la proiezione mese per mese", () => {
     });
     expect(p.finisceCalendario).toBe("2027-03"); // 10+10+10 = 30 > 25
     expect(p.daOrdinareCalendario).toBe(15); // 40 attesi − 25 in casa
+  });
+
+  // IL MESE IN CORSO E' MEZZO PASSATO (24/11/2026). Il titolare: «perche'
+  // la stima parte da novembre e non da settembre?». La risposta e' che
+  // le date misurano il passato — ma la riga di novembre ha fatto venire
+  // fuori un difetto: 13 classi gia' partite, 5 ancora da partire, e il
+  // ritmo ne aggiungeva OTTO che erano gia' state servite.
+  it("il mese in corso si attende solo per la parte che resta", () => {
+    const p = proiezione({
+      storico,
+      classiFuture: [
+        { corsoId: "pmu", dataInizio: "2026-11-25", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-26", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-27", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-28", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-30", iscritteOra: 0, postiMax: 8 },
+      ],
+      daMese: "2026-11", aMese: "2026-11", giacenza: 0,
+      classiPerMeseMisurato: { "2026-11": 13 },
+      oggi: "2026-11-24",
+    });
+    const r = p.righe[0];
+    // 13 classi × (6 giorni su 30) = 2,6 attese in quello che resta
+    expect(r.classiAttese).toBeCloseTo(2.6, 1);
+    expect(r.classiAttesePieneDelMese).toBe(13);
+    // a calendario ce ne sono 5: non si aggiunge niente
+    expect(r.classiStimateInPiu).toBe(0);
+    expect(r.daiCorsiAlRitmo).toBe(r.daiCorsiCalendario);
+  });
+
+  it("senza la riduzione il ritmo aggiungerebbe classi gia' fatte", () => {
+    const comune = {
+      storico,
+      classiFuture: [
+        { corsoId: "pmu", dataInizio: "2026-11-25", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-26", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-27", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-28", iscritteOra: 0, postiMax: 8 },
+        { corsoId: "pmu", dataInizio: "2026-11-30", iscritteOra: 0, postiMax: 8 },
+      ],
+      daMese: "2026-11", aMese: "2026-11", giacenza: 0,
+      classiPerMeseMisurato: { "2026-11": 13 },
+    };
+    const senzaOggi = proiezione(comune);               // com'era prima
+    const conOggi = proiezione({ ...comune, oggi: "2026-11-24" });
+    expect(senzaOggi.righe[0].classiStimateInPiu).toBe(8); // le otto gia' fatte
+    expect(conOggi.totaleAlRitmo).toBeLessThan(senzaOggi.totaleAlRitmo);
+  });
+
+  it("un mese futuro non si tocca: la riduzione vale solo per il mese di oggi", () => {
+    const p = proiezione({
+      storico, classiFuture: [], daMese: "2027-03", aMese: "2027-03", giacenza: 0,
+      classiPerMeseMisurato: { "2026-03": 9 },
+      oggi: "2026-11-24",
+    });
+    expect(p.righe[0].restaDelMese).toBe(1);
+    expect(p.righe[0].classiAttese).toBe(9);
   });
 
   it("un corso futuro mai misurato non vale zero in silenzio: si conta e si dichiara", () => {

@@ -1678,6 +1678,48 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### «Perché la stima parte da novembre se gliel'ho chiesta da settembre?» (24/11/2026)
+
+Il titolare, con la schermata della tabella: le due date dicevano «dal
+01/09/2026», e l'elenco dei mesi cominciava da **novembre**.
+
+**La risposta è che le due date non sono l'inizio della stima.** Guardano
+**indietro** — quanto si è consumato — mentre la stima guarda **avanti**,
+da oggi al mese scritto in «Stima fino a». Settembre e ottobre il
+magazzino li ha già serviti: metterli nella proiezione vorrebbe dire far
+ordinare il materiale di corsi già fatti. Era scritto solo nelle
+etichette dei campi, e nessuno deve doverlo dedurre: ora la pagina lo
+dice sotto le tre caselle, e il campo si chiama «Misura i consumi **già
+avvenuti** dal».
+
+**E ACCANTO ALLA DOMANDA C'ERA UN DIFETTO VERO, nel mese in corso.** Le
+due colonne che si confrontano non parlavano dello stesso pezzo di mese:
+
+| | novembre 2026, misurato |
+|---|---|
+| «Attese» | **13** — il mese INTERO, cioè le 13 classi già partite |
+| «Classi a cal.» | **5** — solo quelle che devono ancora cominciare |
+| il ritmo aggiungeva | **+8** classi già fatte e già uscite dal magazzino |
+
+Otto classi fantasma nel primo mese dell'elenco, cioè quello che si ha
+sotto gli occhi. Adesso nel mese in corso le attese valgono per la
+**frazione di mese che resta** (`frazioneDiMeseRestante`): il 24 novembre
+sono 13 × 6/30 = **2,6**, meno delle 5 a calendario, quindi non si
+aggiunge niente. La riga lo scrive («di 13: resta il 20% del mese»)
+invece di mostrare un numero che non si capisce.
+
+**Il giorno di oggi non conta**, ed è il punto da non cambiare: una
+classe futura è quella con `data_inizio > oggi`, quindi le due regole
+devono guardare lo stesso pezzo di calendario — col `+1` si tornerebbe a
+contare due volte il giorno in cui si sta guardando.
+
+Nessuna migrazione: la pagina legge e non scrive niente. Prove in
+`prove/calcolo-consumi.test.jsx` (47): la funzione pura e i suoi bordi
+(primo del mese, ultimo giorno, febbraio, un mese che non è quello di
+oggi, nessuna data), il caso vero di novembre con le sue 13 e le sue 5, e
+**la prova che inchioda il difetto** — lo stesso conto senza `oggi`
+aggiunge 8 classi e dà un totale più alto.
+
 ### Il campo «mese» che metà dei browser non disegna, e le magliette che non erano nei kit (24/11/2026)
 
 Due cose trovate dalla stessa schermata del titolare: «qualcosa non

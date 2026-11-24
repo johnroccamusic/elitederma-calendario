@@ -95,6 +95,36 @@ export function livelloPieno(classiPerMeseMisurato, trend = TREND_PIENO) {
 }
 
 
+/**
+ * QUANTA PARTE DEL MESE RESTA ANCORA DA FARE.
+ *
+ * Nata il 24/11/2026, da una domanda del titolare — «perche' la stima
+ * parte da novembre e non da settembre» — che guardando la riga di
+ * novembre ha fatto venire fuori un difetto vero accanto alla risposta.
+ *
+ * Il mese in corso e' mezzo passato, e le due colonne che si confrontano
+ * NON parlano dello stesso pezzo di mese: le «attese» sono il mese
+ * INTERO (a novembre 2026: 13 classi, tutte gia' partite), mentre «a
+ * calendario» sono solo le classi che devono ancora cominciare (5).
+ * Colmare quella differenza vuol dire aggiungere OTTO classi che sono
+ * gia' state fatte e il cui materiale e' gia' uscito dal magazzino: un
+ * ordine gonfiato, e gonfiato proprio nel mese che si ha sotto gli
+ * occhi. Quindi nel mese in corso le attese valgono per la frazione di
+ * mese che resta.
+ *
+ * Il giorno di oggi NON conta, perche' una classe futura e' quella con
+ * `data_inizio > oggi`: le due regole devono guardare lo stesso pezzo di
+ * calendario, o si torna a contare due volte.
+ */
+export function frazioneDiMeseRestante(m, oggi) {
+  if (!oggi || mese(oggi) !== m) return 1;
+  const [y, mm] = String(m).split("-").map(Number);
+  const giorniDelMese = new Date(Date.UTC(y, mm, 0)).getUTCDate();
+  const giorno = Number(String(oggi).slice(8, 10)) || 0;
+  if (!giorniDelMese) return 1;
+  return Math.max(0, Math.min(1, (giorniDelMese - giorno) / giorniDelMese));
+}
+
 /** I mesi da `daMese` a `aMese` compresi, come "2026-12". */
 export function mesiFra(daMese, aMese) {
   const fuori = [];
@@ -187,6 +217,7 @@ export function proiezione({
   classiAlMeseStoriche = null,
   trend = null,
   classiPerMeseMisurato = null,
+  oggi = null,
 } = {}) {
   const mesi = mesiFra(daMese, aMese);
   const perMese = Object.fromEntries(mesi.map((m) => [m, { mese: m, classiACalendario: 0, daCalendario: 0, corsiSenzaMisura: 0 }]));
@@ -260,7 +291,12 @@ export function proiezione({
   const righe = mesi.map((m) => {
     const r = perMese[m];
     const daCalendario = Math.round(r.daCalendario * 10) / 10;
-    const attese = classiAttesePerMese(m);
+    // nel mese in corso si attende solo quello che il mese ha ancora da
+    // dare: il resto e' gia' uscito dal magazzino (vedi
+    // `frazioneDiMeseRestante`)
+    const restaDelMese = frazioneDiMeseRestante(m, oggi);
+    const attesePiene = classiAttesePerMese(m);
+    const attese = { ...attesePiene, valore: attesePiene.valore * restaDelMese };
     const classiMancanti = Math.max(0, attese.valore - r.classiACalendario);
     const alRitmo = Math.round((r.daCalendario + classiMancanti * perClasseMedia) * 10) / 10;
     cumCal += daCalendario + venditeAlMese;
@@ -271,6 +307,8 @@ export function proiezione({
       mese: m,
       classiACalendario: r.classiACalendario,
       classiAttese: Math.round(attese.valore * 10) / 10,
+      classiAttesePieneDelMese: Math.round(attesePiene.valore * 10) / 10,
+      restaDelMese,
       fonteAttese: attese.fonte,
       percentualeTrend: Math.round(percentualeDelMese(trend || TREND_PIENO, m) * 100),
       classiStimateInPiu: Math.round(classiMancanti * 10) / 10,
