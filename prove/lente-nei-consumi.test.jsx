@@ -14,8 +14,10 @@
 // un campo nudo accanto a una tendina, e si finiva a scorrere la tendina.
 import { describe, it, expect } from "vitest";
 import React from "react";
+import { act } from "react";
 import { SezioneConsumoProdottiKit } from "../src/App.jsx";
 import CalcoloConsumi from "../src/magazzino/CalcoloConsumi.jsx";
+import { combaciaPerParole } from "../src/cerca-testo.js";
 import { monta, attendi, clicca, scrivi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
@@ -26,6 +28,10 @@ const PRODOTTI = [
   { id: "p1", nome: "Pelle sintetica Premium High Quality - 1pz", quantita: 100, attivo: true, costo_acquisto: 2, aliquota_iva_acquisto: 22 },
   { id: "p2", nome: "Pigmento Arizona", quantita: 50, attivo: true, costo_acquisto: 10, aliquota_iva_acquisto: 22 },
   { id: "p3", nome: "Ago 1RL", quantita: 200, attivo: true, costo_acquisto: 1, aliquota_iva_acquisto: 22 },
+  // i due della schermata del titolare: cercando «ma» deve tornare la
+  // matita e NON il burro dermatologico
+  { id: "p4", nome: "Matita professionale nera - media durezza", quantita: 30, attivo: true, costo_acquisto: 3, aliquota_iva_acquisto: 22 },
+  { id: "p5", nome: "Burro dermatologico 125ml", quantita: 20, attivo: true, costo_acquisto: 5, aliquota_iva_acquisto: 22 },
 ];
 const CORSI = [{ id: "c1", nome: "PMU BASE", posti_max: 8 }];
 const CORSI_DATE = [{ id: "e1", corso_id: "c1", data_inizio: fra(-20), data_fine: fra(-18) }];
@@ -42,6 +48,8 @@ const KIT_PRODOTTI = [
   { id: "r1", kit_id: "k1", tipo: "kit", prodotto_id: "p1", quantita: 3 },
   { id: "r2", kit_id: "k1", tipo: "kit", prodotto_id: "p2", quantita: 1 },
   { id: "r3", kit_id: "k1", tipo: "kit", prodotto_id: "p3", quantita: 2 },
+  { id: "r4", kit_id: "k1", tipo: "kit", prodotto_id: "p4", quantita: 1 },
+  { id: "r5", kit_id: "k1", tipo: "kit", prodotto_id: "p5", quantita: 1 },
 ];
 const prodottiPerId = Object.fromEntries(PRODOTTI.map((p) => [p.id, p]));
 
@@ -106,7 +114,7 @@ describe("«Consumo prodotti»: la lente", () => {
     rispondiCon({});
     const { nodo } = await monta(consumo());
     await scrivi(nodo.querySelector("[data-cerca-consumo] input"), "zzz");
-    expect(nodo.textContent).toMatch(/Nessun prodotto con «zzz»/);
+    expect(nodo.textContent).toMatch(/Nessun prodotto comincia per «zzz»/);
     expect(nodo.textContent).toContain("svuota la ricerca");
   });
 
@@ -123,7 +131,51 @@ describe("«Consumo prodotti»: la lente", () => {
   });
 });
 
-describe("«Calcolo consumi»: la ricerca si riconosce", () => {
+// ------------------------------------------------- come si cerca un nome
+//
+// IL CASO VERO, con la schermata (24/11/2026): «quando faccio scegli
+// prodotto la ricerca non funziona e nella tendina di destra non ci sono
+// neppure tutti i prodotti». Il filtro funzionava — faceva `includes` —
+// e per questo «ma» tornava «Burro der(ma)tologico», «Consenso
+// infor(ma)to», «Gem(ma) swaroski»: giusto per il codice, sbagliato per
+// chi sta cercando Matita.
+describe("si cerca per INIZIO di parola, non per pezzo in mezzo", () => {
+  it("«ma» trova Matita e Mascara, non Burro dermatologico", () => {
+    expect(combaciaPerParole("Matita professionale nera", "ma")).toBe(true);
+    expect(combaciaPerParole("Mascara Kerafill Daily Care", "ma")).toBe(true);
+    expect(combaciaPerParole("Manipolo autoclavabile", "ma")).toBe(true);
+    expect(combaciaPerParole("Burro dermatologico 125ml", "ma")).toBe(false);
+    expect(combaciaPerParole("Consenso informato", "ma")).toBe(false);
+    expect(combaciaPerParole("Gemma swaroski ss4", "ma")).toBe(false);
+  });
+
+  it("i nomi coi trattini si fanno trovare a pezzi: sono quasi tutti così", () => {
+    const n = "Gold Master - FineArt - 1RL 0.25 LT-T - 20pz";
+    expect(combaciaPerParole(n, "fine")).toBe(true);
+    expect(combaciaPerParole(n, "20pz")).toBe(true);
+    expect(combaciaPerParole(n, "gold fine")).toBe(true);
+    expect(combaciaPerParole(n, "zzz")).toBe(false);
+  });
+
+  it("niente scritto non nasconde niente", () => {
+    expect(combaciaPerParole("qualunque cosa", "")).toBe(true);
+    expect(combaciaPerParole("qualunque cosa", "   ")).toBe(true);
+  });
+
+  it("nella tabella dei consumi «ma» porta la matita e lascia fuori il burro", async () => {
+    rispondiCon({});
+    const { nodo } = await monta(consumo());
+    await scrivi(nodo.querySelector("[data-cerca-consumo] input"), "ma");
+    expect(nodo.textContent).toContain("Matita professionale");
+    expect(nodo.textContent).not.toContain("Burro dermatologico");
+  });
+});
+
+describe("«Calcolo consumi»: una casella sola, e i risultati si vedono lì", () => {
+  // IL CASO VERO (24/11/2026): due caselle affiancate — «cerca» a
+  // sinistra e la tendina a destra — e il titolare, provandola: «la
+  // ricerca non funziona», «non esce nessuna ricerca». Chi scrive in una
+  // casella si aspetta i risultati SOTTO QUELLA CASELLA.
   const pagina = () => (
     <CalcoloConsumi
       prodottiShop={PRODOTTI} corsi={CORSI} corsiDate={CORSI_DATE} iscritti={ISCRITTI}
@@ -133,24 +185,41 @@ describe("«Calcolo consumi»: la ricerca si riconosce", () => {
     />
   );
 
-  it("la casella è la barra dell'app, non un campo nudo", async () => {
+  it("non c'è più nessuna tendina da scorrere", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
     await attendi();
-    const campo = [...nodo.querySelectorAll("input")].find((i) => /magliette/.test(i.placeholder || ""));
-    expect(campo).toBeTruthy();
-    await scrivi(campo, "arizona");
-    // il tasto per svuotare è quello dell'app: se c'è, è CampoRicerca
-    expect(nodo.querySelector('[data-campo="svuota-ricerca"]')).toBeTruthy();
+    expect(nodo.querySelector("[data-prodotto]"), "la tendina dei prodotti non deve esserci più").toBeNull();
+    expect(nodo.textContent).toMatch(/5 prodotti in listino/);
   });
 
-  it("la tendina dice quanti prodotti sta mostrando, invece di tacere", async () => {
+  it("scrivendo «ma» l'elenco si apre lì sotto, con la matita e senza il burro", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
     await attendi();
-    expect(nodo.textContent).toMatch(/3 prodotti in listino/);
-    const campo = [...nodo.querySelectorAll("input")].find((i) => /magliette/.test(i.placeholder || ""));
+    const campo = [...nodo.querySelectorAll("input")].find((i) => /scrivi il nome/.test(i.placeholder || ""));
+    expect(campo, "manca la casella di ricerca del prodotto").toBeTruthy();
+    await scrivi(campo, "ma");
+    const testo = nodo.textContent;
+    expect(testo).toContain("Matita professionale");
+    expect(testo).not.toContain("Burro dermatologico");
+  });
+
+  it("toccata una voce, il prodotto è scelto e si può calcolare", async () => {
+    rispondiCon({});
+    const { nodo } = await monta(pagina());
+    await attendi();
+    const campo = [...nodo.querySelectorAll("input")].find((i) => /scrivi il nome/.test(i.placeholder || ""));
     await scrivi(campo, "arizona");
-    expect(nodo.textContent).toMatch(/1 prodotto trovato/);
+    // la PIU' INTERNA: i contenitori hanno lo stesso testo, e il
+    // gestore sta sulla riga, non sulla scatola che la contiene
+    const voce = [...nodo.querySelectorAll("div")].filter((d) => d.textContent.trim() === "Pigmento Arizona" && !d.querySelector("div")).pop();
+    expect(voce, "la voce trovata deve comparire nell'elenco").toBeTruthy();
+    // le voci rispondono a MOUSEDOWN e non a click, apposta: il click
+    // arriverebbe dopo il blur del campo e l'elenco sarebbe gia' chiuso
+    await act(async () => { voce.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true })); });
+    await attendi();
+    const tasto = [...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent));
+    expect(tasto.disabled).toBe(false);
   });
 });

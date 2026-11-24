@@ -1678,6 +1678,63 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### «Non esce nessuna ricerca»: due caselle erano una di troppo (24/11/2026)
+
+Seguito immediato del punto qui sotto, e **la correzione giusta era
+un'altra**. Messa la lente, il titolare ha provato e ha mandato una
+schermata: «quando faccio scegli prodotto la ricerca non funziona e nella
+tendina di destra non ci sono neppure tutti i prodotti». Poi: «in questo
+caso "ma" non trova proprio niente». Poi: «non esce nessuna ricerca».
+
+**Tre difetti, e ognuno è una lezione diversa.**
+
+**1. Si cercava per pezzo in mezzo, non per inizio di parola.** Scrivendo
+«ma» tornavano «Bur**ro der(ma)tologico**», «Consenso infor(ma)to»,
+«Gem(ma) swaroski»: giusti per un `includes`, sbagliati per chi cerca
+Matita. Il resto dell'app cerca per **inizio di parola** — `cercaComuni`,
+i prezzi al banco, le locandine — e **i miei commenti lo promettevano
+mentre il codice faceva un'altra cosa**. La regola ora sta in
+`src/cerca-testo.js` (`combaciaPerParole`), spezza anche su trattini e
+punteggiatura (i nomi ne sono pieni: «Gold Master - FineArt - 1RL 0.25
+LT-T - 20pz» si trova con «fine», «lt», «20pz») e la usano tutte e due le
+pagine nuove. Le tre ricerche che c'erano già non sono state riscritte:
+hanno in più un ordinamento per pertinenza, e un refactor non chiesto su
+una ricerca che funziona è un rischio senza guadagno.
+
+**2. La tendina ne mostrava quaranta su duecento.** Era prudenza mia, e
+lui l'ha vissuta per quello che è: «non ci sono neppure tutti i
+prodotti». Quaranta voci senza dire quali fanno credere che il prodotto
+non esista.
+
+**3. E LA FORMA ERA SBAGLIATA IN PARTENZA**, che è la lezione vera. Due
+caselle affiancate — «cerca» a sinistra, la tendina a destra — chiedono a
+chi guarda di **capire che la prima filtra la seconda**. Chi non lo
+capisce scrive, non vede succedere niente lì dove sta scrivendo, e torna
+a scorrere la tendina: cioè il difetto da cui eravamo partiti. «Non esce
+nessuna ricerca» non voleva dire che il filtro non funzionasse: voleva
+dire **che i risultati non erano dove li stava cercando**.
+
+Ora è **una casella sola**, `CampoCerca` — la stessa ricerca del comune di
+nascita e dello Stato di residenza: si scrive, l'elenco si apre **sotto
+quella casella**, si tocca una voce. Niente tendina, niente limite,
+niente legame da indovinare fra due campi.
+
+**Due cose imparate rifacendola**, e servono a chi tocca `CampoCerca`:
+`onScegli` riceve **solo il valore** (non `(chiave, valore)` come la
+cascata della residenza — leggendo il secondo argomento la scelta non
+arriva e il tasto resta spento), e le voci rispondono a **`mousedown`**
+e non a `click`, apposta: il click arriverebbe dopo il blur del campo,
+con l'elenco già chiuso. Una prova che preme `click` non sceglie niente
+e sembra accusare il codice.
+
+Prove: `prove/lente-nei-consumi.test.jsx` (13) — «ma» che dà Matita e
+Mascara e **non** il burro, i nomi coi trattini trovati a pezzi, e il
+gesto intero (si scrive, compare la voce, si preme, il tasto si accende)
+— e `prove/calcolo-consumi.test.jsx` riscritta sul gesto nuovo, con
+`scegliProdotto` scritto **una volta sola**: otto prove usavano la
+tendina, e una tendina che sparisce deve far cadere le prove che la
+premevano, non lasciarle verdi su un gesto che non esiste più.
+
 ### La lente dove si guarda quale prodotto è stato usato (24/11/2026)
 
 Il titolare: «nella barra di ricerca dei prodotti, quelli che per

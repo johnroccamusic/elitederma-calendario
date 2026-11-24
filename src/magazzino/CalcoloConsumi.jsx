@@ -21,9 +21,10 @@
 // il pavimento e il ritmo normale, e si ordina in mezzo.
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
-import { Button, CampoRicerca, TastoLivelloPrecedente } from "../ui/base.jsx";
+import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { consumoPerAllieva, proiezione, nomeMese, mesiFra, MESI_NOMI, TREND_PIENO } from "./consumi-previsti.js";
 import { leggiTrend, salvaTrend } from "./trend-dati.js";
+import CampoCerca from "../iscrizione/CampoCerca.jsx";
 
 const num = (n) => {
   const v = Number(n) || 0;
@@ -48,7 +49,6 @@ export default function CalcoloConsumi({
   const [modo, setModo] = useState("prodotto"); // prodotto | reparto
   const [prodottoId, setProdottoId] = useState("");
   const [reparto, setReparto] = useState("");
-  const [cerca, setCerca] = useState("");
   const [dal, setDal] = useState("2026-09-01");
   const [al, setAl] = useState(oggiIso());
   const [finoAl, setFinoAl] = useState(meseFraMesi(meseDi(oggiIso()), 12));
@@ -76,14 +76,11 @@ export default function CalcoloConsumi({
     () => (prodottiShop || []).filter(inListino).slice().sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "it", { numeric: true })),
     [prodottiShop],
   );
-  const prodottiTrovati = useMemo(() => {
-    const parole = cerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (!parole.length) return prodottiOrdinati.slice(0, 40);
-    return prodottiOrdinati.filter((p) => {
-      const testo = `${p.nome || ""} ${p.sku || ""}`.toLowerCase();
-      return parole.every((x) => testo.includes(x));
-    }).slice(0, 40);
-  }, [prodottiOrdinati, cerca]);
+  // LA TENDINA LI PORTA TUTTI, e la ricerca li restringe. Il taglio a
+  // quaranta era prudenza mia, e il titolare l'ha vissuto per quello che
+  // e': «nella tendina di destra non ci sono neppure tutti i prodotti».
+  // Duecento voci in una tendina si scorrono; quaranta su duecento, senza
+  // sapere quali, fanno credere che il prodotto non esista.
   const reparti = useMemo(() => {
     if (!repartoDi) return [];
     const nomi = new Set();
@@ -273,32 +270,34 @@ export default function CalcoloConsumi({
         </div>
 
         {modo === "prodotto" ? (
-          <div style={{ display: "grid", gap: 10, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
-            <div>
-              <span style={etichetta}>Cerca il prodotto</span>
-              {/* LA LENTE, come in tutte le trenta ricerche dell'app
-                  (`CampoRicerca`): la casella qui era un input nudo, e una
-                  ricerca che non si riconosce come tale la scavalca chi
-                  arriva — si finisce a scorrere la tendina. Chiesto dal
-                  titolare il 24/11/2026: «inserisci pure la lente di
-                  ricerca». */}
-              <CampoRicerca value={cerca} onChange={(e) => setCerca(e.target.value)}
-                placeholder="magliette, pigmento, ago…" />
-            </div>
-            <div>
-              <span style={etichetta}>Prodotto</span>
-              <select value={prodottoId} onChange={(e) => { setProdottoId(e.target.value); setEsito(null); }} data-prodotto
-                style={{ ...inputStyle, width: "100%", minWidth: 0 }}>
-                <option value="">— scegli il prodotto —</option>
-                {prodottiTrovati.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
-              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
-                {prodottiTrovati.length === 40
-                  ? `Ne mostro 40 su ${prodottiOrdinati.length}: scrivi qui accanto per trovare il tuo.`
-                  : cerca.trim()
-                  ? `${prodottiTrovati.length} ${prodottiTrovati.length === 1 ? "prodotto trovato" : "prodotti trovati"}.`
-                  : `${prodottiOrdinati.length} prodotti in listino.`}
-              </div>
+          <div style={{ maxWidth: 520 }}>
+            {/* UNA CASELLA SOLA, E LA RICERCA MOSTRA I RISULTATI LI'.
+                Prima erano due — «cerca» a sinistra e la tendina a
+                destra — e il titolare, provandola: «la ricerca non
+                funziona», «non esce nessuna ricerca». Aveva ragione: chi
+                scrive in una casella si aspetta di vedere i risultati
+                SOTTO QUELLA CASELLA, non che si restringa un'altra
+                casella accanto. Due caselle chiedevano di capire il
+                legame fra loro, e chi non lo capisce resta a scorrere la
+                tendina — che era il difetto di partenza.
+                `CampoCerca` e' la stessa ricerca del comune di nascita e
+                dello Stato: si scrive, l'elenco si apre sotto, si tocca
+                una voce. E cerca per INIZIO di parola, quindi «ma» da'
+                Matita e Mascara, non «Burro der(ma)tologico». */}
+            <span style={etichetta}>Prodotto</span>
+            {/* `onScegli` riceve SOLO il valore, non (chiave, valore) come
+                la cascata della residenza: leggendo il secondo argomento
+                la scelta non arrivava e il tasto restava spento — preso
+                dalla prova che preme la voce dell'elenco */}
+            <CampoCerca
+              chiave="prodotto-consumi"
+              valore={prodottoId}
+              voci={prodottiOrdinati.map((p) => ({ valore: p.id, testo: p.nome }))}
+              vuoto="scrivi il nome di un prodotto…"
+              onScegli={(valore) => { setProdottoId(valore); setEsito(null); }}
+            />
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
+              {prodottiOrdinati.length} prodotti in listino: scrivi due lettere e scegli dall’elenco.
             </div>
           </div>
         ) : (

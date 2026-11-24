@@ -14,6 +14,7 @@ import {
   FAMIGLIA_STRETTA, GRIGIO_LEGGIBILE,
 } from "./ui/stile.js";
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, CampoRicerca, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
+import { combaciaPerParole } from "./cerca-testo.js";
 import { qrSvg } from "./ui/qr.js";
 import { confermaCancellazione, confermaRimozione } from "./ui/conferma.js";
 import { nettoDaLordo } from "./prezzi/netto.js";
@@ -61954,15 +61955,15 @@ export function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, co
     })
     .filter((r) => r.quantita > 0)
     .sort((a, b) => b.quantita - a.quantita);
-  // si cerca come si scrive: ogni parola e' l'inizio di una parola del
-  // nome, come nel comune di nascita e nei prodotti al banco — «pelle
-  // prem» trova «Pelle sintetica Premium»
-  const parole = cerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const righe = parole.length
-    ? tutteLeRighe.filter((r) => {
-        const testo = String(r.nome || "").toLowerCase();
-        return parole.every((x) => testo.includes(x));
-      })
+  // si cerca come si scrive: ogni parola e' l'INIZIO di una parola del
+  // nome (`combaciaPerParole`), come nel comune di nascita e nei prodotti
+  // al banco — «pelle prem» trova «Pelle sintetica Premium», e «ma» non
+  // tira dentro «Burro dermatologico». Qui il commento diceva gia' cosi'
+  // mentre il codice faceva `includes`: l'ha visto il titolare da una
+  // schermata, il giorno stesso.
+  const cercaScritta = cerca.trim();
+  const righe = cercaScritta
+    ? tutteLeRighe.filter((r) => combaciaPerParole(r.nome, cercaScritta))
     : tutteLeRighe;
   // I TOTALI SEGUONO LA RICERCA, e non e' un dettaglio: tre schede che
   // dicono i numeri di tutto sopra una tabella che mostra un prodotto
@@ -62005,10 +62006,10 @@ export function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, co
       <div style={{ marginBottom: 12, maxWidth: 420 }} data-cerca-consumo>
         <CampoRicerca value={cerca} onChange={(e) => setCerca(e.target.value)}
           placeholder="cerca un prodotto per nome" />
-        {parole.length > 0 && (
+        {cercaScritta !== "" && (
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>
             {righe.length === 0
-              ? `Nessun prodotto con «${cerca.trim()}» fra quelli usati nel periodo.`
+              ? `Nessun prodotto comincia per «${cercaScritta}» fra quelli usati nel periodo.`
               : `${righe.length} ${righe.length === 1 ? "prodotto" : "prodotti"} su ${tutteLeRighe.length}: i totali qui sotto sono di questa ricerca.`}
           </div>
         )}
@@ -62048,8 +62049,8 @@ export function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, co
               ))}
               {righe.length === 0 && (
                 <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>
-                  {parole.length
-                    ? `Nessun prodotto con «${cerca.trim()}»: svuota la ricerca per vedere tutti quelli usati nel periodo.`
+                  {cercaScritta
+                    ? `Nessun prodotto comincia per «${cercaScritta}»: svuota la ricerca per vedere tutti quelli usati nel periodo.`
                     : "Nessun corso nel periodo selezionato."}
                 </td></tr>
               )}

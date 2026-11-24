@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import CalcoloConsumi from "../src/magazzino/CalcoloConsumi.jsx";
 import { consumoPerAllieva, proiezione, allievePreviste, mesiFra, nomeMese, livelloPieno, percentualeDelMese, TREND_PIENO } from "../src/magazzino/consumi-previsti.js";
+import { act } from "react";
 import { monta, attendi, clicca, scrivi, scegli } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
@@ -184,6 +185,26 @@ const QUANTITA = (cd) => (cd.corso_id === "pmu"
   ? { p2: 2 * ISCRITTI.filter((i) => i.corso_data_id === cd.id).length }
   : {});
 
+
+// SCEGLIERE UN PRODOTTO ADESSO E' UN GESTO SOLO: si scrive nella casella
+// e si preme la voce che compare sotto. Dal 24/11/2026 la tendina non
+// c'e' piu' — il titolare, provandola: «la ricerca non funziona», «non
+// esce nessuna ricerca»: due caselle affiancate chiedevano di capire che
+// la prima filtrava la seconda, e chi non lo capiva restava a scorrere.
+async function scegliProdotto(nodo, testo, nomeVoce) {
+  const campo = [...nodo.querySelectorAll("input")].find((i) => /scrivi il nome/.test(i.placeholder || ""));
+  if (!campo) throw new Error("manca la casella di ricerca del prodotto");
+  await scrivi(campo, testo);
+  // la riga piu' interna: i contenitori portano lo stesso testo, e il
+  // gestore sta sulla riga. E risponde a MOUSEDOWN, non a click: il
+  // click arriverebbe dopo il blur e l'elenco sarebbe gia' chiuso
+  const voce = [...nodo.querySelectorAll("div")]
+    .filter((d) => d.textContent.trim() === nomeVoce && !d.querySelector("div")).pop();
+  if (!voce) throw new Error(`la voce «${nomeVoce}» non compare nell'elenco`);
+  await act(async () => { voce.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true })); });
+  await attendi();
+}
+
 function pagina(extra = {}) {
   return (
     <CalcoloConsumi
@@ -197,10 +218,14 @@ function pagina(extra = {}) {
 }
 
 describe("la pagina Calcolo consumi", () => {
-  it("si apre con la tendina dei prodotti e il tasto spento finché non si scegli", async () => {
+  it("si apre con la casella di ricerca e il tasto spento finché non si scegli", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    expect(nodo.querySelector("[data-prodotto]")).toBeTruthy();
+    await attendi();
+    const campo = [...nodo.querySelectorAll("input")].find((i) => /scrivi il nome/.test(i.placeholder || ""));
+    expect(campo, "manca la casella di ricerca del prodotto").toBeTruthy();
+    // e nessuna tendina da scorrere: era il difetto di partenza
+    expect(nodo.querySelector("[data-prodotto]")).toBeNull();
     const tasto = [...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent));
     expect(tasto.disabled).toBe(true);
   });
@@ -208,15 +233,18 @@ describe("la pagina Calcolo consumi", () => {
   it("i prodotti fuori listino non si offrono: non si ordinano più", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    const voci = [...nodo.querySelector("[data-prodotto]").options].map((o) => o.textContent);
-    expect(voci.join(" ")).toContain("Pigmento Arizona");
-    expect(voci.join(" ")).not.toContain("Ago 1RL");
+    await attendi();
+    const campo = [...nodo.querySelectorAll("input")].find((i) => /scrivi il nome/.test(i.placeholder || ""));
+    await scrivi(campo, "a");
+    const testo = nodo.textContent;
+    expect(testo).toContain("Pigmento Arizona");
+    expect(testo).not.toContain("Ago 1RL");
   });
 
   it("scelto il prodotto, calcola il consumo per allieva e lo mostra per corso", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    await scegli(nodo.querySelector("[data-prodotto]"), "p2");
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
     await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
     await attendi();
     const misurato = nodo.querySelector("[data-misurato]");
@@ -230,7 +258,7 @@ describe("la pagina Calcolo consumi", () => {
   it("LA CLASSE FUTURA CONTA LE ALLIEVE ATTESE, non la sola iscritta di oggi", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    await scegli(nodo.querySelector("[data-prodotto]"), "p2");
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
     await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
     await attendi();
     const stima = nodo.querySelector("[data-stima]");
@@ -244,7 +272,7 @@ describe("la pagina Calcolo consumi", () => {
   it("mostra tutti e due gli scenari e dice che il calendario è un pavimento", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    await scegli(nodo.querySelector("[data-prodotto]"), "p2");
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
     await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
     await attendi();
     const stima = nodo.querySelector("[data-stima]");
@@ -256,7 +284,7 @@ describe("la pagina Calcolo consumi", () => {
   it("un prodotto che nei kit non c'è lo DICE, invece di mostrare zero e tacere", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    await scegli(nodo.querySelector("[data-prodotto]"), "p1"); // le magliette: QUANTITA non le dà
+    await scegliProdotto(nodo, "shirt", "T-Shirt EliteDerma taglia M"); // QUANTITA non le dà
     await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
     await attendi();
     expect(nodo.querySelector("[data-misurato]").textContent).toContain("non compare");
@@ -265,7 +293,7 @@ describe("la pagina Calcolo consumi", () => {
   it("un periodo senza classi non produce una stima inventata", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    await scegli(nodo.querySelector("[data-prodotto]"), "p2");
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
     await scrivi(nodo.querySelector("[data-dal]"), "2020-01-01");
     await scrivi(nodo.querySelector("[data-al]"), "2020-03-01");
     await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
@@ -277,7 +305,7 @@ describe("la pagina Calcolo consumi", () => {
   it("un periodo al rovescio si rifiuta e lo dice", async () => {
     rispondiCon({});
     const { nodo } = await monta(pagina());
-    await scegli(nodo.querySelector("[data-prodotto]"), "p2");
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
     await scrivi(nodo.querySelector("[data-dal]"), "2026-11-01");
     await scrivi(nodo.querySelector("[data-al]"), "2026-09-01");
     await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
