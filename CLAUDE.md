@@ -1495,6 +1495,15 @@ destinatari**, quindi non può partire niente per sbaglio. Il tasto ferma
 il tocco (`stopPropagation`): sta dentro una riga che si preme, e senza
 aprirebbe anche la campagna di prima — una prova lo inchioda.
 
+**E sta in due posti, non in uno** (corretto dal titolare con una
+schermata: «dovrebbe essere qui il tasto riusa testo»): nello storico e
+**dentro la campagna aperta**, che è dove il testo si ha davanti —
+compare solo su una campagna chiusa in scrittura (in invio, spedita,
+annullata), perché su una bozza il testo è quello che si sta scrivendo.
+Il gesto però è scritto **una volta sola** (`usaTesto` in
+`PaginaContatti`, passato a tutti e due): due copie vorrebbero dire due
+idee di cosa si porta dietro una campagna nata da un'altra.
+
 **E I CONTEGGI DI QUELL'AREA ERANO FALSI.** La pagina leggeva le righe dei
 destinatari con `.limit(100000)` e le contava nel browser, ma **PostgREST
 ne serve mille**: su 58.000 righe consegnate, aperte, rimbalzate e

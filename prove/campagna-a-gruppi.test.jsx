@@ -255,6 +255,23 @@ describe("«Usa questo testo» nello storico", () => {
     expect(aperta).toBeNull();
   });
 
+  it("c'è anche DENTRO la campagna aperta, dove il testo si ha davanti", async () => {
+    let usata = null;
+    rispondiCon({ intestazione_societa: {}, crm_campagne_destinatari: [] });
+    const { nodo: contenitore } = await monta(<ComponiMail campagnaIniziale={IN_CORSO} onUsaTesto={(c) => { usata = c.id; }} />);
+    const tasto = [...contenitore.querySelectorAll("button")].find((b) => b.textContent.trim() === "Usa questo testo");
+    expect(tasto, "il tasto non c'è nella campagna aperta").toBeTruthy();
+    await clicca(tasto);
+    expect(usata).toBe("c1");
+  });
+
+  it("ma non su una campagna che si sta ancora scrivendo: lì il testo è quello", async () => {
+    rispondiCon({ intestazione_societa: {}, crm_campagne_destinatari: [] });
+    const { nodo: contenitore } = await monta(<ComponiMail campagnaIniziale={CAMPAGNA} onUsaTesto={() => {}} />);
+    const tasto = [...contenitore.querySelectorAll("button")].find((b) => b.textContent.trim() === "Usa questo testo");
+    expect(tasto).toBeFalsy();
+  });
+
   it("senza la prop il tasto non c'è: chi monta l'elenco decide se quel gesto esiste", async () => {
     rispondiCon({ "rest/v1/crm_campagne_riepilogo": [], "rest/v1/crm_campagne": [SPEDITA] });
     const { nodo: contenitore } = await monta(<ElencoCampagne onApri={() => {}} onChiudi={() => {}} />);

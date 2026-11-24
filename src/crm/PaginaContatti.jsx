@@ -582,26 +582,30 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
     setCongelando(false);
   }
 
+  // «Usa questo testo»: nasce una campagna nuova con lo stesso oggetto e
+  // lo stesso testo, senza destinatari, e si apre subito — un testo
+  // copiato che resta in un elenco non lo ritrova nessuno. Sta qui, in un
+  // posto solo, perché il gesto si preme da DUE parti: dallo storico e
+  // dalla campagna aperta, che è dove il testo si ha davanti.
+  async function usaTesto(c) {
+    try {
+      const nuova = await creaCampagnaDaTesto(c, utente);
+      setVista({
+        nome: "componi",
+        campagna: nuova,
+        messaggio: { tipo: "ok", testo: `Testo copiato da «${c.nome}». Scegli a chi mandarla: chi ha già ricevuto resta fuori.` },
+      });
+    } catch (e) {
+      window.alert(e.message);
+    }
+  }
+
   if (vista.nome === "campagne") {
     return (
       <ElencoCampagne
         onChiudi={() => setVista({ nome: "lista" })}
         onApri={(c) => setVista({ nome: "componi", campagna: c })}
-        // «Usa questo testo»: nasce una campagna nuova con lo stesso
-        // oggetto e lo stesso testo, senza destinatari, e si apre subito —
-        // un testo copiato che resta in un elenco non lo ritrova nessuno
-        onUsaTesto={async (c) => {
-          try {
-            const nuova = await creaCampagnaDaTesto(c, utente);
-            setVista({
-              nome: "componi",
-              campagna: nuova,
-              messaggio: { tipo: "ok", testo: `Testo copiato da «${c.nome}». Scegli a chi mandarla: chi ha già ricevuto resta fuori.` },
-            });
-          } catch (e) {
-            window.alert(e.message);
-          }
-        }}
+        onUsaTesto={usaTesto}
       />
     );
   }
@@ -614,6 +618,7 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
         messaggioIniziale={vista.messaggio || null}
         onChiudi={() => setVista({ nome: "lista" })}
         onApriCampagne={() => setVista({ nome: "campagne" })}
+        onUsaTesto={usaTesto}
         onSelezionaDestinatari={(c) => {
           // si riparte dai filtri che la campagna ha gia', se ne ha
           const f = { ...FILTRI_VUOTI, ...(c.filtri || {}) };

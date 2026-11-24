@@ -132,7 +132,7 @@ function Editor({ htmlIniziale, onCambia, disabilitato }) {
   );
 }
 
-export default function ComponiMail({ campagnaIniziale = null, filtri = {}, riassunto = "", totale = 0, utente = "", onChiudi, onSalvata, onSelezionaDestinatari = null, onApriCampagne = null, messaggioIniziale = null }) {
+export default function ComponiMail({ campagnaIniziale = null, filtri = {}, riassunto = "", totale = 0, utente = "", onChiudi, onSalvata, onSelezionaDestinatari = null, onApriCampagne = null, onUsaTesto = null, messaggioIniziale = null }) {
   const [campagna, setCampagna] = useState(campagnaIniziale);
   const [nome, setNome] = useState(campagnaIniziale?.nome || nomeProposto(riassunto));
   const [oggetto, setOggetto] = useState(campagnaIniziale?.oggetto || "");
@@ -395,6 +395,15 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {!bloccata && <Button variant="ghost" onClick={salva} disabled={salvando}>Salva campagna</Button>}
               {onApriCampagne && <Button variant="ghost" onClick={onApriCampagne} disabled={invio?.inCorso} title="Le campagne in corso, anche sospese: da lì si rientra e si finisce">Campagne</Button>}
+              {/* su una campagna CHIUSA in scrittura (in invio, spedita,
+                  annullata) il testo si legge e non si tocca: l'unico modo
+                  di riusarlo e' portarselo in una campagna nuova, e il
+                  tasto sta qui perche' qui il testo si ha davanti */}
+              {bloccata && onUsaTesto && campagna?.id && (
+                <Button variant="ghost" onClick={() => onUsaTesto(campagna)} disabled={invio?.inCorso} title="Scrive una campagna nuova con questo oggetto e questo testo, da mandare a un altro gruppo" data-usa-testo-qui>
+                  Usa questo testo
+                </Button>
+              )}
               {!bloccata && <Button variant="ghost" onClick={prova} disabled={salvando}>Mandami una prova</Button>}
               {!bloccata && onSelezionaDestinatari && <Button variant="ghost" onClick={scegliDestinatari} disabled={salvando} title="Scegli dalla lista contatti, con i filtri">Seleziona destinatari</Button>}
               {!bloccata && <Button variant="ghost" onClick={prepara} disabled={salvando} title={campagna?.riassunto_filtri || riassunto ? `Con i filtri: ${campagna?.riassunto_filtri || riassunto}` : "Tutti i contatti con un'email"}>{campagna?.totale_destinatari ? "Rifai i destinatari" : "Prepara i destinatari"}</Button>}
