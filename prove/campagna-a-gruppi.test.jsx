@@ -19,7 +19,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { act } from "react";
-import ComponiMail, { fraseEsclusi, ElencoCampagne } from "../src/crm/ComponiMail.jsx";
+import ComponiMail, { fraseEsclusi, ElencoCampagne, creaCampagnaDaTesto } from "../src/crm/ComponiMail.jsx";
 import { monta, attendi, clicca } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 
@@ -189,6 +189,77 @@ describe("l'elenco delle campagne", () => {
     await attendi();
     await clicca(contenitore.querySelector('[data-campagna="c1"]'));
     expect(apertaId).toBe("c1");
+  });
+});
+
+// «USA QUESTO TESTO PER UNA CAMPAGNA NUOVA» (chiesto dal titolare lo
+// stesso giorno: «nelle campagne già usate… nello storico delle
+// campagne»). E' il gesto che rende praticabile lo spedire a gruppi: lo
+// stesso testo a scaglioni diversi, senza riscriverlo e senza rimetterlo
+// dentro una campagna gia' partita, che e' chiusa in scrittura apposta.
+describe("«Usa questo testo» nello storico", () => {
+  const SPEDITA = {
+    id: "c2", nome: "Campagna di ottobre", oggetto: "Bologna, nuove date",
+    corpo_html: "<p>Ciao {nome}</p>", stato: "inviata", inviate: 120, fallite: 0,
+    totale_destinatari: 120, filtri: { trattato_da: "Katia" }, creata_il: "2026-10-30T20:23:23Z",
+  };
+  const VUOTA = { id: "c3", nome: "Mai scritta", oggetto: "", corpo_html: "", stato: "bozza", inviate: 0, fallite: 0, totale_destinatari: 0, creata_il: "2026-10-01T10:00:00Z" };
+
+  it("copia SOLO oggetto e testo, nasce bozza e con l'esclusione accesa", async () => {
+    const scritte = [];
+    rispondiCon({
+      "rest/v1/crm_campagne": (corpo) => {
+        if (corpo) { scritte.push(corpo); return [{ id: "nuova", ...corpo }]; }
+        return [];
+      },
+    });
+    const nuova = await creaCampagnaDaTesto(SPEDITA, "Elena");
+    expect(scritte.length).toBe(1);
+    const scritta = scritte[0];
+    expect(scritta.oggetto).toBe("Bologna, nuove date");
+    expect(scritta.corpo_html).toBe("<p>Ciao {nome}</p>");
+    expect(scritta.nome).toContain("Copia di");
+    // il pubblico NON si porta dietro: il senso e' mandarla a un altro gruppo
+    expect(scritta.filtri.trattato_da).toBeUndefined();
+    expect(scritta.filtri.escludi_gia_spedite).toBe(true);
+    // e non puo' partire niente per sbaglio: nessun destinatario, nessuno stato
+    expect(scritta.totale_destinatari).toBeUndefined();
+    expect(scritta.stato).toBeUndefined();
+    expect(nuova.id).toBe("nuova");
+  });
+
+  it("se il database non scrive niente lo dice, invece di aprire una campagna che non esiste", async () => {
+    rispondiCon({ "rest/v1/crm_campagne": () => null });
+    await expect(creaCampagnaDaTesto(SPEDITA, "Elena")).rejects.toThrow(/non è stata scritta/);
+  });
+
+  it("il tasto c'è su una campagna con un testo, e non su una mai scritta", async () => {
+    rispondiCon({ "rest/v1/crm_campagne_riepilogo": [], "rest/v1/crm_campagne": [SPEDITA, VUOTA] });
+    const { nodo: contenitore } = await monta(<ElencoCampagne onApri={() => {}} onChiudi={() => {}} onUsaTesto={() => {}} />);
+    await attendi();
+    expect(contenitore.querySelector('[data-usa-testo="c2"]')).toBeTruthy();
+    expect(contenitore.querySelector('[data-usa-testo="c3"]')).toBeNull();
+  });
+
+  it("premerlo chiede il testo di QUELLA campagna e non apre quella vecchia", async () => {
+    let usata = null; let aperta = null;
+    rispondiCon({ "rest/v1/crm_campagne_riepilogo": [], "rest/v1/crm_campagne": [SPEDITA] });
+    const { nodo: contenitore } = await monta(
+      <ElencoCampagne onApri={(c) => { aperta = c.id; }} onChiudi={() => {}} onUsaTesto={(c) => { usata = c.id; }} />,
+    );
+    await attendi();
+    await clicca(contenitore.querySelector('[data-usa-testo="c2"]'));
+    expect(usata).toBe("c2");
+    // il tasto sta dentro una riga che si preme: senza fermare il tocco
+    // si aprirebbe anche la campagna di prima
+    expect(aperta).toBeNull();
+  });
+
+  it("senza la prop il tasto non c'è: chi monta l'elenco decide se quel gesto esiste", async () => {
+    rispondiCon({ "rest/v1/crm_campagne_riepilogo": [], "rest/v1/crm_campagne": [SPEDITA] });
+    const { nodo: contenitore } = await monta(<ElencoCampagne onApri={() => {}} onChiudi={() => {}} />);
+    await attendi();
+    expect(contenitore.querySelector("[data-usa-testo]")).toBeNull();
   });
 });
 

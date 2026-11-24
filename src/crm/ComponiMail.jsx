@@ -525,10 +525,42 @@ export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
 
 // ------------------------------------------------------- le campagne fatte
 
+// «USA QUESTO TESTO PER UNA CAMPAGNA NUOVA» (24/11/2026, chiesto dal
+// titolare: «nelle campagne già usate… nello storico delle campagne»).
+// Serve a mandare la STESSA mail a un altro gruppo: si scrive una volta e
+// si spedisce a scaglioni — i clienti, poi chi è da richiamare, poi gli
+// altri — invece di riscrivere il testo ogni volta o di rimetterlo in
+// mezzo a una campagna già partita, che è chiusa in scrittura apposta.
+//
+// Tre decisioni:
+//   * si copiano SOLO oggetto e testo. Il pubblico no: il senso del gesto
+//     è cambiare gruppo, e portarsi dietro i filtri di prima vorrebbe
+//     dire ritrovarsi davanti le stesse persone;
+//   * nasce con «escludi quelle già spedite» ACCESA. È l'unico caso in
+//     cui accenderla da sé è giusto: il testo è lo stesso di una mail già
+//     partita, e riceverla due volte non è mai quello che si vuole. Si
+//     spegne con un tocco;
+//   * nasce BOZZA e senza destinatari, quindi non può partire niente per
+//     sbaglio: prima si scelgono le persone, poi si prepara, poi si manda.
+export async function creaCampagnaDaTesto(c, utente = "") {
+  const campi = {
+    nome: `Copia di ${c?.nome || "campagna"}`.slice(0, 200),
+    oggetto: c?.oggetto || "",
+    corpo_html: c?.corpo_html || "",
+    filtri: { escludi_gia_spedite: true },
+    creata_da: utente || null,
+    aggiornata_il: new Date().toISOString(),
+  };
+  const { data, error } = await supabase.from("crm_campagne").insert(campi).select("*").maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("La campagna non è stata scritta: ricarica la pagina e riprova.");
+  return data;
+}
+
 // La riga di una campagna, scritta una volta sola: la usano l'elenco «da
 // finire» e quello delle altre. Due copie si scosterebbero al primo
 // ritocco, e stanno una sotto l'altra nella stessa schermata.
-function RigaCampagna({ c, e, onApri, daFinire = false }) {
+function RigaCampagna({ c, e, onApri, onUsaTesto = null, daFinire = false }) {
   const consegnate = (e.consegnate || 0) + (e.aperte || 0);
   return (
     <div onClick={() => onApri(c)} role="button" style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }} data-campagna={c.id}>
@@ -546,11 +578,24 @@ function RigaCampagna({ c, e, onApri, daFinire = false }) {
       {/* il tasto NON spedisce: apre. Spedire da un elenco con un tocco
           vorrebbe dire far partire mail vere senza vedere il testo */}
       {daFinire && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 999, padding: "5px 12px", whiteSpace: "nowrap" }}>Riprendi →</span>}
+      {/* il tasto sta DENTRO una riga che si preme: senza fermare il
+          tocco, premerlo aprirebbe anche la campagna di prima */}
+      {onUsaTesto && !!String(c.corpo_html || c.oggetto || "").trim() && (
+        <button
+          type="button"
+          onClick={(ev) => { ev.stopPropagation(); onUsaTesto(c); }}
+          title="Scrive una campagna nuova con questo oggetto e questo testo, da mandare a un altro gruppo"
+          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 999, padding: "5px 12px", whiteSpace: "nowrap", cursor: "pointer" }}
+          data-usa-testo={c.id}
+        >
+          Usa questo testo
+        </button>
+      )}
     </div>
   );
 }
 
-export function ElencoCampagne({ onApri, onChiudi }) {
+export function ElencoCampagne({ onApri, onChiudi, onUsaTesto = null }) {
   const [campagne, setCampagne] = useState(null);
   const [esiti, setEsiti] = useState({});
   useEffect(() => {
@@ -600,7 +645,7 @@ export function ElencoCampagne({ onApri, onChiudi }) {
               Da finire — {daFinire.length === 1 ? "una campagna" : `${daFinire.length} campagne`}, {numero(daFinire.reduce((t, c) => t + (esiti[c.id]?.in_coda || 0), 0))} mail ancora in coda
             </div>
             <div style={{ background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "4px 16px" }}>
-              {daFinire.map((c) => <RigaCampagna key={c.id} c={c} e={esiti[c.id] || {}} onApri={onApri} daFinire />)}
+              {daFinire.map((c) => <RigaCampagna key={c.id} c={c} e={esiti[c.id] || {}} onApri={onApri} onUsaTesto={onUsaTesto} daFinire />)}
             </div>
           </div>
         )}
@@ -609,7 +654,7 @@ export function ElencoCampagne({ onApri, onChiudi }) {
           <>
             {!!daFinire.length && <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Le altre</div>}
             <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "4px 16px" }}>
-              {finite.map((c) => <RigaCampagna key={c.id} c={c} e={esiti[c.id] || {}} onApri={onApri} />)}
+              {finite.map((c) => <RigaCampagna key={c.id} c={c} e={esiti[c.id] || {}} onApri={onApri} onUsaTesto={onUsaTesto} />)}
             </div>
           </>
         )}

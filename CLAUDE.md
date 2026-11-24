@@ -1481,6 +1481,20 @@ dimenticanza:** duecento persone hanno ricevuto *quel* testo, e cambiarlo
 a metà vorrebbe dire due mail diverse spedite con lo stesso nome. Una
 prova lo inchioda.
 
+**«USA QUESTO TESTO PER UNA CAMPAGNA NUOVA»**, nello storico (chiesto lo
+stesso giorno: «nelle campagne già usate… nello storico delle campagne»).
+È il gesto che rende praticabile spedire a gruppi — lo stesso testo ai
+clienti, poi a chi è da richiamare, poi agli altri — senza riscriverlo e
+senza rimetterlo dentro una campagna già partita, che è chiusa in
+scrittura apposta. Tre decisioni: si copiano **solo oggetto e testo** (il
+pubblico no: il senso è cambiare gruppo, e portarsi i filtri di prima
+vorrebbe dire ritrovarsi le stesse persone); nasce con **«escludi quelle
+già spedite» ACCESA**, ed è l'unico caso in cui accenderla da sé è giusto,
+perché quel testo è già partito a qualcuno; nasce **bozza e senza
+destinatari**, quindi non può partire niente per sbaglio. Il tasto ferma
+il tocco (`stopPropagation`): sta dentro una riga che si preme, e senza
+aprirebbe anche la campagna di prima — una prova lo inchioda.
+
 **E I CONTEGGI DI QUELL'AREA ERANO FALSI.** La pagina leggeva le righe dei
 destinatari con `.limit(100000)` e le contava nel browser, ma **PostgREST
 ne serve mille**: su 58.000 righe consegnate, aperte, rimbalzate e
