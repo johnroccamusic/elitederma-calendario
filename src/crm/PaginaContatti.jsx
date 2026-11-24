@@ -459,11 +459,22 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
     return undefined;
   }, [vista, registraInterceptaIndietro]);
 
+  // I valori dei filtri (operatori, corsi, regioni…) si contano su tutto
+  // l'archivio: a database freddo la prima chiamata puo' superare gli 8
+  // secondi e cadere per timeout (24/11/2026, la tendina «Operatore» con
+  // dentro solo «Chiunque»). Alla seconda risponde in meno di un secondo,
+  // quindi si riprova da soli invece di lasciare le tendine vuote.
   useEffect(() => {
-    supabase.rpc("crm_filtri_valori").then(({ data, error }) => {
-      if (error) { setErrore("Non riesco a leggere i filtri: " + error.message); return; }
-      setValori(data || {});
-    });
+    let vivo = true;
+    const prova = async (tentativo) => {
+      const { data, error } = await supabase.rpc("crm_filtri_valori");
+      if (!vivo) return;
+      if (!error) { setValori(data || {}); return; }
+      if (tentativo < 3) { setTimeout(() => vivo && prova(tentativo + 1), 1500 * tentativo); return; }
+      setErrore("Non riesco a leggere i filtri: " + error.message);
+    };
+    prova(1);
+    return () => { vivo = false; };
   }, []);
 
   // la ricerca libera aspetta che si smetta di scrivere
