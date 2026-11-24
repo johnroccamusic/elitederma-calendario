@@ -118,7 +118,10 @@ describe("Componi mail", () => {
   it("l'elenco delle campagne mostra stato e conteggi", async () => {
     rispondiCon({
       "rest/v1/crm_campagne?": [{ id: "c1", nome: "Microblading · LAZIO · 30/10/2026", oggetto: "Ciao", stato: "inviata", totale_destinatari: 230, inviate: 228, fallite: 2, creata_il: "2026-10-30T10:00:00Z", creata_da: "Elena" }],
-      "rest/v1/crm_campagne_destinatari": [{ campagna_id: "c1", stato: "consegnata" }, { campagna_id: "c1", stato: "aperta" }, { campagna_id: "c1", stato: "rimbalzata" }],
+      // dal 24/11/2026 i conteggi li fa il database (`crm_campagne_riepilogo`):
+      // leggendo le righe, PostgREST ne serviva mille su 58.000 e i numeri
+      // di questa pagina erano falsi senza dirlo
+      "rest/v1/crm_campagne_riepilogo": [{ campagna_id: "c1", in_coda: 0, in_spedizione: 0, inviate: 0, consegnate: 1, aperte: 1, rimbalzate: 1, segnalate: 0, fallite: 0, destinatari: 3 }],
     });
     const p = await monta(<ElencoCampagne onApri={() => {}} onChiudi={() => {}} />);
     await attendi(200);

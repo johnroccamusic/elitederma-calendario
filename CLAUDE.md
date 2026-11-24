@@ -1396,6 +1396,116 @@ chiamata, che è esattamente quello che la funzione manda — gli allegati no,
 e non ce ne sono. Quindi i 5.291 destinatari partono in 53 lotti dalla
 pagina aperta.
 
+### La prima campagna vera: 200 mail, il tetto di Resend e l'invio a gruppi (24/11/2026)
+
+Seguito del punto qui sopra, nello stesso pomeriggio. Sbloccato il
+vincolo, la campagna è partita per davvero: **200 mail spedite e
+consegnate alle 11:49** (3 rimbalzi). Poi Resend ha risposto **429, «you
+have reached your daily email sending quota»**, e la pagina l'ha riportato
+così com'era — che è la correzione dell'ora prima che funziona.
+
+**Il tetto non è nostro, è del piano.** Letto dall'account Resend lo
+stesso giorno: **207 mail su 100 al giorno**, 230 su 3.000 al mese, piano
+**gratuito**. Due lotti da cento accettati e poi la porta chiusa. Non è
+aggirabile dal codice — il conto lo tiene il fornitore — e **non va
+aggirato**: più account o più domini sono contro i termini (sospensione
+dell'account, cioè anche le conferme di iscrizione) e bruciano la
+reputazione del mittente, che è il contrario dell'obiettivo. La strada è
+il piano **Pro a 20 $/mese: 50.000 mail al mese e nessun tetto
+giornaliero**, e ci basta quello (i piani «marketing» da 40 $ servono per
+i contatti ospitati su Resend, e la lista è in casa). **Lo attiva il
+titolare**: nei dati di Resend si legge, non si compra.
+
+**E il tetto, oggi, ci ha fatto un favore.** `elitederma.net` ha 230 mail
+di storico in tutto; su 200 partite ci sono **3 rimbalzi, l'1,5%**, mentre
+Gmail inizia a filtrare intorno allo 0,3% di segnalazioni. Dallo stesso
+dominio parte la posta che non si può perdere — conferme, moduli firmati,
+contratti. Quindi l'invio va **spalmato e crescente** (500 → 1.000 →
+1.500 → 2.000 copre i 5.091 restanti in quattro giorni), non tutto in
+un'ora. Resta una scelta del titolare, non un divieto.
+
+**Due campagne con lo stesso testo, e una annullata su sua parola.**
+Quella delle 11:06 era morta sul vincolo; ricaricando la pagina alle 11:48
+ne è nata una nuova, ed è quella che ha spedito. La vecchia è stata messa
+ad **`annullata`** (una riga cambiata, il `returning` lo prova): da lì non
+si spedisce più, e la funzione d'invio la rifiuta comunque. **Annullata,
+non cancellata**: le sue 5.291 righe restano come traccia e le campagne
+non hanno un cestino.
+
+**«ESCLUDI QUELLE GIÀ SPEDITE»** (chiesto subito dopo: «così non mando
+doppioni se dovessi sospendere e riprendere»). Prima di costruire, cosa
+c'era già: **dentro la stessa campagna il doppione era impossibile** — la
+ri-preparazione cancella le sole righe `in_coda` e l'inserimento salta le
+email già presenti (`where not exists`), e il lotto prende solo `in_coda`.
+Il buco era **fra campagne diverse**, cioè esattamente il caso di oggi:
+una terza campagna sullo stesso pubblico avrebbe riscritto a quelle 200,
+perché la preparazione esclude disiscritti, da verificare, chi ha
+rimbalzato e i doppioni di email — **ma non chi ha già ricevuto**.
+
+Adesso lo fa se glielo si chiede: la chiave `escludi_gia_spedite` nei
+filtri della campagna, letta da `crm_campagna_prepara`. Tre decisioni:
+
+- si escludono `inviata`, `consegnata`, `aperta` di **altre** campagne.
+  **`fallita` no**: quella mail non è arrivata, e trattarla come spedita
+  vorrebbe dire non riprovare mai più con quella persona;
+- **nasce spenta**, ed è voluto: una campagna nuova con un testo nuovo
+  deve poter arrivare a tutti. Accesa di suo salterebbe in silenzio
+  chiunque abbia ricevuto la prima mail della storia dell'Accademia;
+- la regola sta **in SQL**, come le altre esclusioni. La pagina mostra una
+  spunta e il numero di quante mail risultano già spedite; chi entra fra i
+  destinatari lo decide un posto solo. Provata in transazione annullata su
+  una campagna di prova: **24 escluse** perché già servite oggi.
+
+E la spunta **dice anche cosa non serve**: sotto c'è scritto che dentro
+quella campagna chi ha già ricevuto è segnato uno per uno e riprendendo
+l'invio non riceve due volte. La paura era quella, e una spunta non la
+toglie se nessuno spiega come funziona.
+
+**«SALVA CAMPAGNA», E L'AREA DA CUI SI RIENTRA** (sempre suo: «un tasto
+salva campagna, che non è bozza… un'area in cui ci sono le campagne in
+corso, anche se stoppate»). L'area **c'era** — «Campagne» nella lista
+contatti — e da lì si riapriva una campagna e si premeva «Riprendi
+l'invio». Quello che mancava:
+
+- il tasto si chiamava **«Salva bozza»**, e una campagna a metà invio non
+  è una bozza. Ora è **«Salva campagna»** e dice dove la si ritrova;
+- dalla composizione non si arrivava alle Campagne senza passare da
+  Contatti: ora c'è il tasto, anche a invio iniziato;
+- in cima all'elenco c'è **«Da finire»**, con quante mail restano in coda
+  e un **«Riprendi →»** per riga. Il tasto **apre**, non spedisce:
+  spedire da un elenco con un tocco vorrebbe dire far partire mail vere
+  senza vedere il testo.
+
+**Una campagna in invio resta chiusa in scrittura, e non è una
+dimenticanza:** duecento persone hanno ricevuto *quel* testo, e cambiarlo
+a metà vorrebbe dire due mail diverse spedite con lo stesso nome. Una
+prova lo inchioda.
+
+**E I CONTEGGI DI QUELL'AREA ERANO FALSI.** La pagina leggeva le righe dei
+destinatari con `.limit(100000)` e le contava nel browser, ma **PostgREST
+ne serve mille**: su 58.000 righe consegnate, aperte, rimbalzate e
+«quante restano in coda» erano i numeri delle prime mille — falsi senza
+dirlo, proprio nella schermata da cui si decide se riprendere una
+spedizione. È la regola «PostgREST tronca a mille», pagata un'altra volta.
+Il conto lo fa il database: **`crm_campagne_riepilogo`**, una riga per
+campagna, `security_invoker` e niente SELECT ad `anon`.
+
+Migrazione `20261124140000_campagne_escludi_gia_spedite_e_riepilogo.sql`
+(rollback dentro). Prove in `prove/campagna-a-gruppi.test.jsx` (13), con
+le pagine montate: la spunta che nasce spenta e finisce **nei filtri**
+senza perdere quelli di prima, la frase degli esclusi, «Salva campagna»
+che non si chiama più bozza, il tasto per l'area, «Da finire» in cima col
+conto in coda, la riga che premuta apre, i numeri che arrivano dal
+riepilogo **e non dalle righe** — e la guardia che rilegge la migrazione e
+pretende che l'esclusione guardi solo le *altre* campagne e non conti
+`fallita`.
+
+**Due prove rosse trovate per strada, e nessuna delle due era un guasto:**
+`registrazione-clienti` è caduta due volte nel giro completo e passa
+tutte e 18 da sola in 14 secondi — è il banco sotto carico, non il codice.
+Resta la regola: davanti a una prova rossa si guarda prima se era rossa
+anche prima.
+
 ### Un ordine che non è stato pagato non è un incasso (18/11/2026)
 
 Il titolare, davanti a «Clienti shop»: «come è possibile che questi

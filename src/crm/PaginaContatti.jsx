@@ -593,6 +593,7 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
         filtri={vista.filtri || {}} riassunto={vista.riassunto || ""} totale={vista.totale || 0} utente={utente}
         messaggioIniziale={vista.messaggio || null}
         onChiudi={() => setVista({ nome: "lista" })}
+        onApriCampagne={() => setVista({ nome: "campagne" })}
         onSelezionaDestinatari={(c) => {
           // si riparte dai filtri che la campagna ha gia', se ne ha
           const f = { ...FILTRI_VUOTI, ...(c.filtri || {}) };

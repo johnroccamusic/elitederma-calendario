@@ -75,6 +75,7 @@ export function fraseEsclusi(e) {
   if (e.da_verificare) pezzi.push(`${numero(e.da_verificare)} da verificare`);
   if (e.rimbalzate_prima) pezzi.push(`${numero(e.rimbalzate_prima)} con un rimbalzo in passato`);
   if (e.doppioni_email) pezzi.push(`${numero(e.doppioni_email)} con la stessa email di un altro`);
+  if (e.gia_ricevute) pezzi.push(`${numero(e.gia_ricevute)} che hanno già ricevuto un'altra campagna`);
   return pezzi.length ? `Fuori: ${pezzi.join(", ")}.` : "Nessuno escluso.";
 }
 
@@ -131,7 +132,7 @@ function Editor({ htmlIniziale, onCambia, disabilitato }) {
   );
 }
 
-export default function ComponiMail({ campagnaIniziale = null, filtri = {}, riassunto = "", totale = 0, utente = "", onChiudi, onSalvata, onSelezionaDestinatari = null, messaggioIniziale = null }) {
+export default function ComponiMail({ campagnaIniziale = null, filtri = {}, riassunto = "", totale = 0, utente = "", onChiudi, onSalvata, onSelezionaDestinatari = null, onApriCampagne = null, messaggioIniziale = null }) {
   const [campagna, setCampagna] = useState(campagnaIniziale);
   const [nome, setNome] = useState(campagnaIniziale?.nome || nomeProposto(riassunto));
   const [oggetto, setOggetto] = useState(campagnaIniziale?.oggetto || "");
@@ -141,11 +142,35 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
   const [salvando, setSalvando] = useState(false);
   const [preparazione, setPreparazione] = useState(null);
   const [invio, setInvio] = useState(null); // { inCorso, inviate, fallite, restanti, totale }
+  // «ESCLUDI QUELLE GIA' SPEDITE» (24/11/2026, chiesto dal titolare per
+  // dividere il pubblico a gruppi). La regola vive in
+  // `crm_campagna_prepara`: qui si accende e si spegne, e si scrive nei
+  // filtri della campagna perche' deve restare insieme a lei.
+  // NASCE SPENTA: una campagna nuova, con un testo nuovo, deve poter
+  // arrivare a tutti — accesa di suo salterebbe in silenzio chiunque
+  // abbia ricevuto la mail di prima.
+  const [escludiGiaSpedite, setEscludiGiaSpedite] = useState(!!campagnaIniziale?.filtri?.escludi_gia_spedite);
+  const [giaServiti, setGiaServiti] = useState(null);   // quante mail risultano spedite in altre campagne
   const fermati = useRef(false);
 
   useEffect(() => {
     supabase.from("intestazione_societa").select("nome, indirizzo, indirizzo_2").limit(1).maybeSingle().then(({ data }) => setSocieta(data || null));
   }, []);
+
+  // il numero accanto alla spunta: quante mail risultano GIA' SPEDITE in
+  // altre campagne. Si chiede il conto al database (`head: true`) e non le
+  // righe: sono decine di migliaia, e PostgREST ne servirebbe mille
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      let q = supabase.from("crm_campagne_destinatari").select("id", { count: "exact", head: true })
+        .in("stato", ["inviata", "consegnata", "aperta"]);
+      if (campagna?.id) q = q.neq("campagna_id", campagna.id);
+      const { count } = await q;
+      if (vivo) setGiaServiti(typeof count === "number" ? count : null);
+    })();
+    return () => { vivo = false; };
+  }, [campagna?.id]);
   // una campagna gia' esistente si rilegge dal database: conteggi e stato veri
   useEffect(() => {
     if (!campagnaIniziale?.id) return;
@@ -161,23 +186,34 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
   // la campagna si scrive al primo gesto che ne ha bisogno, non all'apertura:
   // chi apre e chiude senza scrivere niente non lascia bozze in giro
   async function assicuraCampagna() {
-    const campi = { nome: nome.trim() || nomeProposto(riassunto), oggetto: oggetto.trim(), corpo_html: corpoHtml, aggiornata_il: new Date().toISOString() };
+    // i filtri si riscrivono perche' la spunta «escludi quelle gia'
+    // spedite» vive la' dentro: la legge `crm_campagna_prepara`, che e'
+    // l'unico posto in cui si decide chi entra fra i destinatari
+    const filtriVivi = { ...(campagna?.filtri || filtri || {}), escludi_gia_spedite: escludiGiaSpedite };
+    const campi = { nome: nome.trim() || nomeProposto(riassunto), oggetto: oggetto.trim(), corpo_html: corpoHtml, filtri: filtriVivi, aggiornata_il: new Date().toISOString() };
     if (campagna?.id) {
       const { data, error } = await supabase.from("crm_campagne").update(campi).eq("id", campagna.id).select("*").maybeSingle();
       if (error) throw new Error(error.message);
       setCampagna(data); return data;
     }
     const { data, error } = await supabase.from("crm_campagne")
-      .insert({ ...campi, filtri: filtri || {}, riassunto_filtri: riassunto || null, creata_da: utente || null })
+      .insert({ ...campi, riassunto_filtri: riassunto || null, creata_da: utente || null })
       .select("*").maybeSingle();
     if (error) throw new Error(error.message);
     setCampagna(data); onSalvata?.(data); return data;
   }
 
+  // SALVARE UNA CAMPAGNA NON E' SALVARE UNA BOZZA (24/11/2026, il
+  // titolare: «un tasto salva campagna, che non e' bozza»). Una campagna a
+  // meta' invio e' una cosa viva, e il tasto deve dire dove la si ritrova:
+  // l'area «Campagne» tiene anche quelle sospese, da cui si rientra e si
+  // finisce la spedizione.
   async function salva() {
     setSalvando(true); setMsg(null);
-    try { await assicuraCampagna(); setMsg({ tipo: "ok", testo: "Bozza salvata." }); }
-    catch (e) { setMsg({ tipo: "errore", testo: e.message }); }
+    try {
+      const c = await assicuraCampagna();
+      setMsg({ tipo: "ok", testo: `Campagna salvata${c?.nome ? `: «${c.nome}»` : ""}. La ritrovi in «Campagne», anche a invio sospeso.` });
+    } catch (e) { setMsg({ tipo: "errore", testo: e.message }); }
     setSalvando(false);
   }
 
@@ -338,8 +374,27 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
                 {invio.inCorso && <button type="button" onClick={() => { fermati.current = true; }} style={{ ...fontBody, fontSize: 12, color: "#C0392B", background: "none", border: "none", cursor: "pointer", marginLeft: 8 }}>Ferma dopo questo lotto</button>}
               </div>
             )}
+            {/* IL FILTRO IN PIU', chiesto il 24/11/2026: dividere il pubblico a
+                gruppi senza riscrivere a chi e' gia' stato servito. Dentro la
+                STESSA campagna il doppione era gia' impossibile, e la riga
+                sotto lo dice: la paura era quella, e una spunta non la toglie
+                se nessuno spiega come funziona. */}
+            {!bloccata && (
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", background: "#FCFBF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 11px" }} data-escludi-gia-spedite>
+                <input type="checkbox" checked={escludiGiaSpedite} onChange={(e) => setEscludiGiaSpedite(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1, flex: "0 0 auto" }} />
+                <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
+                  <b>Escludi quelle già spedite</b>
+                  {giaServiti ? <span style={{ color: MUTED }}> — {numero(giaServiti)} mail già spedite in altre campagne</span> : null}
+                  <span style={{ display: "block", color: MUTED, fontSize: 11.5 }}>
+                    Chi ha già ricevuto un’altra campagna resta fuori quando prepari i destinatari. Serve a mandarla a gruppi.
+                    Dentro <i>questa</i> campagna non serve: chi ha già ricevuto è segnato uno per uno, e riprendendo l’invio non riceve due volte.
+                  </span>
+                </span>
+              </label>
+            )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {!bloccata && <Button variant="ghost" onClick={salva} disabled={salvando}>Salva bozza</Button>}
+              {!bloccata && <Button variant="ghost" onClick={salva} disabled={salvando}>Salva campagna</Button>}
+              {onApriCampagne && <Button variant="ghost" onClick={onApriCampagne} disabled={invio?.inCorso} title="Le campagne in corso, anche sospese: da lì si rientra e si finisce">Campagne</Button>}
               {!bloccata && <Button variant="ghost" onClick={prova} disabled={salvando}>Mandami una prova</Button>}
               {!bloccata && onSelezionaDestinatari && <Button variant="ghost" onClick={scegliDestinatari} disabled={salvando} title="Scegli dalla lista contatti, con i filtri">Seleziona destinatari</Button>}
               {!bloccata && <Button variant="ghost" onClick={prepara} disabled={salvando} title={campagna?.riassunto_filtri || riassunto ? `Con i filtri: ${campagna?.riassunto_filtri || riassunto}` : "Tutti i contatti con un'email"}>{campagna?.totale_destinatari ? "Rifai i destinatari" : "Prepara i destinatari"}</Button>}
@@ -470,6 +525,31 @@ export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
 
 // ------------------------------------------------------- le campagne fatte
 
+// La riga di una campagna, scritta una volta sola: la usano l'elenco «da
+// finire» e quello delle altre. Due copie si scosterebbero al primo
+// ritocco, e stanno una sotto l'altra nella stessa schermata.
+function RigaCampagna({ c, e, onApri, daFinire = false }) {
+  const consegnate = (e.consegnate || 0) + (e.aperte || 0);
+  return (
+    <div onClick={() => onApri(c)} role="button" style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }} data-campagna={c.id}>
+      <span style={{ flex: "1 1 240px", minWidth: 0 }}>
+        <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{c.nome}</span>
+        <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED }}>{c.oggetto || "(senza oggetto)"} · {dataOraIt(c.creata_il)}{c.creata_da ? ` · ${c.creata_da}` : ""}</span>
+      </span>
+      <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: c.stato === "inviata" ? "#2E7D32" : c.stato === "in_invio" ? "#8A6D1D" : GRAFITE, background: "#F3F0E8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "3px 10px" }}>{STATI_CAMPAGNA[c.stato] || c.stato}</span>
+      <span style={{ ...fontBody, fontSize: 12, color: GRAFITE, whiteSpace: "nowrap" }}>
+        {numero(c.totale_destinatari)} destinatari · {numero(c.inviate)} spedite
+        {consegnate ? ` · ${numero(consegnate)} consegnate` : ""}{e.aperte ? ` · ${numero(e.aperte)} aperte` : ""}
+        {e.rimbalzate ? ` · ${numero(e.rimbalzate)} rimbalzate` : ""}{c.fallite ? ` · ${numero(c.fallite)} non riuscite` : ""}
+        {e.in_coda ? ` · ${numero(e.in_coda)} ancora in coda` : ""}
+      </span>
+      {/* il tasto NON spedisce: apre. Spedire da un elenco con un tocco
+          vorrebbe dire far partire mail vere senza vedere il testo */}
+      {daFinire && <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 999, padding: "5px 12px", whiteSpace: "nowrap" }}>Riprendi →</span>}
+    </div>
+  );
+}
+
 export function ElencoCampagne({ onApri, onChiudi }) {
   const [campagne, setCampagne] = useState(null);
   const [esiti, setEsiti] = useState({});
@@ -477,16 +557,27 @@ export function ElencoCampagne({ onApri, onChiudi }) {
     supabase.from("crm_campagne").select("*").order("creata_il", { ascending: false }).limit(200)
       .then(({ data }) => setCampagne(Array.isArray(data) ? data : []));
   }, []);
-  // consegne, aperture e rimbalzi, contati dai destinatari
+  // IL CONTO LO FA IL DATABASE (24/11/2026). Prima si leggevano le righe
+  // dei destinatari con `.limit(100000)` e si contavano qui: ma PostgREST
+  // ne serve MILLE, e su 58.000 righe consegnate, aperte, rimbalzate e
+  // «quante restano in coda» erano i numeri delle prime mille — falsi
+  // senza dirlo, proprio nella pagina da cui si riprende una spedizione.
   useEffect(() => {
     if (!campagne?.length) return;
-    supabase.from("crm_campagne_destinatari").select("campagna_id, stato").in("campagna_id", campagne.map((c) => c.id)).limit(100000)
+    supabase.from("crm_campagne_riepilogo").select("*").in("campagna_id", campagne.map((c) => c.id))
       .then(({ data }) => {
         const per = {};
-        (data || []).forEach((d) => { const e = (per[d.campagna_id] ||= {}); e[d.stato] = (e[d.stato] || 0) + 1; });
+        (data || []).forEach((r) => { per[r.campagna_id] = r; });
         setEsiti(per);
       });
   }, [campagne]);
+
+  // UNA CAMPAGNA «DA FINIRE» ha ancora gente in coda e non e' chiusa.
+  // `annullata` e `inviata` restano fuori per definizione; una bozza senza
+  // destinatari non e' «da finire», e' da scrivere.
+  const daFinire = (campagne || []).filter((c) => ["pronta", "in_invio"].includes(c.stato) && (esiti[c.id]?.in_coda || 0) > 0);
+  const finite = (campagne || []).filter((c) => !daFinire.includes(c));
+
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 16px 80px" }}>
@@ -494,28 +585,34 @@ export function ElencoCampagne({ onApri, onChiudi }) {
           <button type="button" onClick={onChiudi} style={{ ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "6px 12px", cursor: "pointer" }}>← Contatti</button>
           <div style={{ ...stileTitoloPagina, color: NAVY }}>Campagne</div>
         </div>
-        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "4px 16px" }}>
-          {campagne === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 0" }}>Carico…</div>}
-          {campagne?.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 0" }}>Nessuna campagna ancora. Si parte da «Componi mail» nella lista contatti.</div>}
-          {(campagne || []).map((c) => {
-            const e = esiti[c.id] || {};
-            const consegnate = (e.consegnata || 0) + (e.aperta || 0);
-            return (
-              <div key={c.id} onClick={() => onApri(c)} role="button" style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }} data-campagna={c.id}>
-                <span style={{ flex: "1 1 240px", minWidth: 0 }}>
-                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{c.nome}</span>
-                  <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED }}>{c.oggetto || "(senza oggetto)"} · {dataOraIt(c.creata_il)}{c.creata_da ? ` · ${c.creata_da}` : ""}</span>
-                </span>
-                <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: c.stato === "inviata" ? "#2E7D32" : c.stato === "in_invio" ? "#8A6D1D" : GRAFITE, background: "#F3F0E8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "3px 10px" }}>{STATI_CAMPAGNA[c.stato] || c.stato}</span>
-                <span style={{ ...fontBody, fontSize: 12, color: GRAFITE, whiteSpace: "nowrap" }}>
-                  {numero(c.totale_destinatari)} destinatari · {numero(c.inviate)} spedite
-                  {consegnate ? ` · ${numero(consegnate)} consegnate` : ""}{e.aperta ? ` · ${numero(e.aperta)} aperte` : ""}
-                  {e.rimbalzata ? ` · ${numero(e.rimbalzata)} rimbalzate` : ""}{c.fallite ? ` · ${numero(c.fallite)} non riuscite` : ""}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {campagne === null && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 2px" }}>Carico…</div>}
+        {campagne?.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "14px 2px" }}>Nessuna campagna ancora. Si parte da «Componi mail» nella lista contatti.</div>}
+
+        {/* DA FINIRE IN CIMA (24/11/2026, il titolare: «un'area in cui ci
+            sono le campagne in corso, anche se stoppate, dove posso
+            rientrare e terminare la spedizione»). L'area c'era: quello che
+            mancava era che una campagna a meta' si riconoscesse a colpo
+            d'occhio, invece di stare in mezzo alle altre con la sola
+            pastiglia dello stato. */}
+        {!!daFinire.length && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }} data-da-finire>
+              Da finire — {daFinire.length === 1 ? "una campagna" : `${daFinire.length} campagne`}, {numero(daFinire.reduce((t, c) => t + (esiti[c.id]?.in_coda || 0), 0))} mail ancora in coda
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${GOLD}`, borderRadius: 14, padding: "4px 16px" }}>
+              {daFinire.map((c) => <RigaCampagna key={c.id} c={c} e={esiti[c.id] || {}} onApri={onApri} daFinire />)}
+            </div>
+          </div>
+        )}
+
+        {!!finite.length && (
+          <>
+            {!!daFinire.length && <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Le altre</div>}
+            <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "4px 16px" }}>
+              {finite.map((c) => <RigaCampagna key={c.id} c={c} e={esiti[c.id] || {}} onApri={onApri} />)}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
