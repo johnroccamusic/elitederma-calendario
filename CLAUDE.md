@@ -1557,6 +1557,162 @@ tutte e 18 da sola in 14 secondi — è il banco sotto carico, non il codice.
 Resta la regola: davanti a una prova rossa si guarda prima se era rossa
 anche prima.
 
+### «Calcolo consumi»: quanto servirà, in funzione dei corsi (24/11/2026)
+
+Il titolare: «in gestione magazzino un nuovo tasto che si chiama calcolo
+consumi: si seleziona uno dei prodotti del magazzino e gli diciamo calcola
+i consumi teorici dal al, in modo che in base ai consumi che ci sono stati
+ci fa una stima delle necessità fino ad arrivare a X mesi — da settembre
+2026 a settembre 2027 — **in funzione dei corsi che ci sono stati**, il
+consumo medio che potrebbe esserci di quel prodotto, delle magliette
+taglia M o di tutta la categoria».
+
+**PERCHÉ NON SI PROIETTA UNA MEDIA AL MESE.** Misurato prima di scrivere
+una riga: a settembre sono partite 15 classi, a ottobre 23, a dicembre 3.
+Una media spalmata su dodici mesi direbbe lo stesso numero per dicembre e
+per ottobre, cioè un numero che non vale per nessuno dei due. Il consumo
+dei kit segue le **allieve**, e le allieve seguono le classi: si misura
+quanto consuma una allieva e si moltiplica per le allieve che ci saranno.
+
+**E LE ALLIEVE CHE CI SARANNO NON SONO QUELLE GIÀ ISCRITTE.** Il dato che
+ha deciso l'impianto: gennaio 2027 ha **19 classi a calendario e 38
+iscritte** (2 per classe), febbraio 10 classi e 7 iscritte, da giugno 2027
+zero — mentre nei mesi misurati la media era **4,8 per classe**. Le classi
+di marzo si riempiono a marzo. Proiettare sulle iscritte di oggi direbbe
+«a marzo non serve quasi niente» e qualcuno ordinerebbe troppo poco: è il
+modo peggiore di sbagliare, perché il numero sembra un dato. Le allieve di
+una classe futura sono quindi **la più alta fra le iscritte di oggi e la
+media di quel corso**, e mai più dei posti.
+
+**E ANCHE IL CALENDARIO LONTANO È MEZZO VUOTO:** settembre 2027 ha **una**
+classe a calendario, settembre 2026 ne aveva **quindici**. Per questo la
+pagina mostra **sempre due numeri**, e li legge una persona:
+
+| | cosa conta | come si legge |
+|---|---|---|
+| **Con quello che è a calendario** | solo le classi già scritte, riempite come si riempivano | un **pavimento** |
+| **Al ritmo dei mesi misurati** | aggiunge, mese per mese, le classi che mancano per arrivare a quante ce ne si aspetta | un **ritmo normale** |
+
+Il numero vero sta in mezzo, e chi ordina deve vedere i due estremi invece
+di un numero solo che non sa di essere incerto.
+
+**IL TREND DEI MESI, SCRITTO DAL TITOLARE** (chiesto lo stesso giorno,
+mentre la pagina si scriveva): «devi farmi esprimere la percentuale di
+iscrizioni rispetto agli altri mesi — settembre 90%, ottobre 100%,
+dicembre 60%, gennaio 60%, febbraio 70% — in modo che definisco il trend
+dei mesi… una sezione all'inizio della pagina in cui si definisce
+annualmente qual è il trend mensile. **Per i mesi per cui esiste una
+statistica valgono i mesi, per i mesi che non esiste valgono le
+percentuali che esprimo io.**»
+
+E, sul significato della percentuale (sua precisazione, e cambia il
+conto): «è espressa rispetto al fatturato medio, quindi **100% dei mesi in
+cui si lavora di più**, 40% è rispetto al 100%». Quindi 100 non vuol dire
+«come la media»: vuol dire «come un mese di punta».
+
+Da cui **il livello pieno**, che è il passaggio che rende i due numeri
+confrontabili: i mesi misurati non sono per forza mesi pieni, quindi
+settembre al 90% con 15 classi vale **16,7** classi piene, e il livello
+risulta **19,2 classi** in un mese di punta. Senza questa normalizzazione
+un dicembre al 60% verrebbe calcolato sul 90% di settembre preso per 100,
+e tutta la scala slitterebbe. L'ordine di priorità per un mese futuro è
+quello dettato da lui: **1.** lo stesso mese se è fra i misurati —
+settembre 2027 lo sa da settembre 2026, ed è un dato che batte qualunque
+stima; **2.** altrimenti il livello pieno per la percentuale di quel mese.
+In tutti e due i casi le classi già a calendario restano il pavimento.
+
+**La tabella nasce con tutti i mesi al 100%, ed è voluto:** finché nessuno
+la tocca la stima è identica a quella che sarebbe senza di lei. Una
+tabella che nascesse con delle percentuali indovinate da me cambierebbe i
+numeri senza che nessuno l'abbia deciso. Sta in
+`impostazioni_layout_tabelle` (`consumi_trend_mensile`), quindi si cambia
+senza pubblicare niente, e **niente si salva da sé**: si scrive e si preme
+Salva, come le clausole del contratto — una percentuale cambiata uscendo
+da un campo è una cosa di cui nessuno si accorge.
+
+**LA PAGINA NON PORTA NESSUN CONTO PROPRIO**, e questa è la parte da non
+rompere. I pezzi di ogni classe li conta **`quantitaInviataPerProdotto`**
+— la stessa funzione che riempie la lista di allestimento, che scarica il
+magazzino e che alimenta «Consumo prodotti» — e i pezzi venduti passano da
+`venditaIncassata` e `prodottoDellaRiga`, cioè dalle regole che decidono
+ogni altra statistica (solo ordini pagati, per id e mai per nome quando un
+id c'è). Un secondo conto qui direbbe un consumo diverso da quello che il
+magazzino ha visto uscire. I conti della proiezione stanno in
+`src/magazzino/consumi-previsti.js`, puri e provati senza database.
+
+**Le vendite si leggono dalle VENDITE e non dai movimenti di magazzino**, e
+il motivo è il difetto trovato strada facendo (vedi il punto qui sotto):
+dal 31/10 gli ordini dello shop non scrivono più il loro movimento, quindi
+i movimenti direbbero «lo shop non vende». Entrano come media al mese, in
+una colonna loro: le vendite non seguono i corsi, seguono il tempo.
+
+Quattro cose che la pagina **dice invece di tacere**, perché ognuna è un
+modo in cui una stima mente: un prodotto che nei kit **non compare**
+(«la stima sui corsi è zero, se dovrebbe esserci va messo nella distinta»);
+un periodo **senza classi** (non produce nessuna stima, invece di una media
+su niente); un corso futuro **mai misurato** nel periodo (si usa la media
+di tutti e si segnala); e una media fatta su **una classe sola**, marcata
+debole — la stessa soglia di `consumi.ts`. Più il promemoria che i
+movimenti partono dal **27 agosto 2026**: prima non c'è niente da misurare.
+
+**«O di tutta la categoria»** è il secondo modo del selettore, e la
+categoria è il **reparto**, cioè la radice (la regola del 9/11/2026): è lo
+scaffale, e un pigmento sta in «TUTTI I PIGMENTI» e non in quattro
+sottocategorie che lo spezzerebbero in quattro righe.
+
+**Dove sta, e la differenza con le due pagine vicine:** tessera «Calcolo
+consumi» in Gestione magazzino e shop, accanto a «Consumi ai corsi».
+Rispondono a tre domande diverse e nessuna sostituisce le altre —
+«Consumi ai corsi» (`consumi.ts`, dagli inventari chiusi) dice **quanto si
+consuma in aula e chi si discosta**; l'**Advisor** dice «con le iscritte
+di oggi e lo stock di oggi arrivi fino a…»; questa dice «se i corsi si
+riempiono come si sono riempiti finora, da qui a settembre 2027 ti servono
+N pezzi».
+
+Nessuna migrazione: la pagina legge e non scrive niente, tranne la riga
+del trend. Prove in `prove/calcolo-consumi.test.jsx` (32): il motore e i
+suoi bordi, le due regole misurate (le iscritte di oggi, il calendario
+vuoto), il livello pieno sui numeri veri di settembre-novembre, il mese
+misurato che batte la percentuale, e la pagina montata e premuta —
+compreso il salvataggio del trend, che manda al database **solo** quella
+chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
+dello storico.
+
+### Dal 31/10/2026 gli ordini dello shop non scaricano più il magazzino (24/11/2026)
+
+**Trovato misurando i consumi, non cercandolo**, ed è il motivo per cui il
+calcolo consumi legge le vendite e non i movimenti.
+
+| | |
+|---|---|
+| ultimo movimento `ordine_online` | **31/10/2026, 15:00** |
+| ultimo ordine shop pagato | **23/11/2026** |
+| ordini `completed` a novembre | **61** (su 75 arrivati) |
+| movimenti di magazzino che hanno scritto | **zero** |
+
+A settembre 75 ordini avevano prodotto 202 movimenti, a ottobre 93 ne
+avevano prodotti 371. Da novembre niente: **ventiquattro giorni di vendite
+online che non scendono dalle giacenze.** Quindi il registro è più alto del
+fisico di tutto quello che lo shop ha venduto a novembre — ed è coerente
+con i 74 scostamenti su 84 del 20/11 che dicevano «in magazzino ce n'è
+meno di quanto risulta a registro».
+
+**Quello che ho verificato:** lo scarico lo fanno `woo-webhook` e
+`woo-import-storico`, tutti e due con la stessa condizione
+(`!eraVivo && oraVivo` → scarica), e nel **repo quella logica è giusta**;
+`STATI_VIVI` contiene ancora `processing` e `completed`. Quindi il difetto
+non è nel codice che si legge qui: va guardata la **versione pubblicata**
+delle due funzioni e i loro log. La data — 31 ottobre — è lo stesso giorno
+delle migrazioni dello stock (`20261031190000`, `20261031200000`) e del
+giro di sicurezza, e quella coincidenza è il primo posto da guardare.
+
+**Non toccato niente**: le edge function si pubblicano quando lo dice il
+titolare, e una correzione allo scarico del magazzino è una decisione sua.
+Da decidere anche cosa fare dei pezzi usciti e mai scalati: si contano
+allo scaffale col tasto «Verificato» del 20/11, oppure si ricostruiscono
+dagli ordini di novembre — e la seconda strada vuole un conto fatto una
+volta sola, perché applicata due volte sbaglia nel verso opposto.
+
 ### I venti rimbalzi si leggono, e quelli recuperabili si correggono (24/11/2026)
 
 Il titolare, dopo la prima campagna vera — 437 mail, **20 rimbalzi**:

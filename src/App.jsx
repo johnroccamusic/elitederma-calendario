@@ -42,6 +42,7 @@ import { pezzo } from "./pezzo.js";
 import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rientri/rientro";
 const MagazzinoGuasti = pezzo(() => import("./rientri/MagazzinoGuasti.jsx"));
 const AnalisiConsumi = pezzo(() => import("./rientri/AnalisiConsumi.jsx"));
+const CalcoloConsumi = pezzo(() => import("./magazzino/CalcoloConsumi.jsx"));
 import { analizzaConsumi, consumoRealePerAllievo } from "./rientri/consumi";
 const AnomalieRientri = pezzo(() => import("./rientri/AnomalieRientri.jsx"));
 import { edizioniConSpedizione } from "./rientri/scorte";
@@ -42831,7 +42832,7 @@ function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonne
   );
 }
 
-function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriProdottiFuoriListino, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, onApriListiniRivenditori, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsiDate = [], location = [], onEntraNelPosCome, onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriProdottiFuoriListino, onApriMagazzinoGuasti, onApriAnalisiConsumi, onApriCalcoloConsumi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, onApriPrezziListini, onApriListinoPrivato, onApriListiniRivenditori, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   // i carrelli sospesi di TUTTI gli utenti del POS: un carrello
   // dimenticato tiene fermo materiale che nessuno puo' vendere, e da qui
@@ -42894,6 +42895,7 @@ function PaginaMagazzinoShop({ prodottiShop = [], coupon = [], corsi = [], corsi
             { chiave: "prodottifuorilistino", title: "Prodotti fuori listino", descrizione: "Quelli che non si vendono più: fuori dai listini, con le loro vendite intatte.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiFuoriListino },
             { chiave: "magazzinoguasti", title: "Magazzino guasti", descrizione: "Quello che torna rotto dai corsi: fuori giacenza, e quali prodotti si rompono più spesso.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriMagazzinoGuasti },
             { chiave: "analisiconsumi", title: "Consumi ai corsi", descrizione: "Quanto si consuma per allievo, chi si discosta dalla media e quali corsi vanno fuori riga.", Icona: IconaElencoRighe, attivo: true, onClick: onApriAnalisiConsumi },
+            { chiave: "calcoloconsumi", title: "Calcolo consumi", descrizione: "Quanto servirà di un prodotto da qui a X mesi, in funzione dei corsi a calendario.", Icona: IconaElencoRighe, attivo: true, onClick: onApriCalcoloConsumi },
             // i carrelli sospesi come tasto vero, con icona e disco, al posto
             // del tastino accanto al titolo (16/09/2026); solo per chi amministra
             { chiave: "carrellisospesi", title: "Carrelli sospesi", descrizione: "I carrelli salvati e non pagati di tutti gli operatori: materiale fermo che nessuno può vendere.", Icona: IconaCarrelloPos, attivo: true, onClick: () => setMostraSospesi(true), badge: sospesiTutti.length || undefined },
@@ -91010,6 +91012,7 @@ function Gestionale() {
     progettiincorso: ["master", "utenti_app"],
     rientridaverificare: ["corsi", "corsi_date", "location", "master"],
     analisiconsumi: ["corsi", "corsi_date", "location", "master"],
+    calcoloconsumi: ["corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "prodotti_shop", "categorie_prodotti", "prodotti_categorie", "vendite_shop"],
     magazzinoguasti: ["corsi", "corsi_date", "location"],
     inventariofinecorso: ["iscritti", "kit_definizioni", "location"],
     cambiintegrazioni: ["iscritti", "kit_definizioni", "location"],
@@ -93042,6 +93045,43 @@ function Gestionale() {
         />
       )}
 
+      {/* CALCOLO CONSUMI. Non porta nessun conto proprio: i pezzi di una
+          classe li conta `quantitaInviataPerProdotto` — la stessa funzione
+          che riempie la lista di allestimento e che scarica il magazzino —
+          e i pezzi venduti passano da `venditaIncassata` e
+          `prodottoDellaRiga`, cioe' dalle regole che decidono ogni altra
+          statistica (solo ordini pagati, mai per nome quando c'e' un id).
+          Un secondo conto qui direbbe un consumo diverso da quello che il
+          magazzino ha visto uscire. */}
+      {view === "calcoloconsumi" && (
+        <CalcoloConsumi
+          prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} iscritti={iscritti}
+          repartoDi={repartoPerProdotto(prodottiCategorie, categorieProdotti)}
+          utente={utenteLoggato?.nome || ""}
+          quantitaPerEdizione={(cd, corso) => quantitaInviataPerProdotto(cd, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti)}
+          pezziVendutiNelPeriodo={(prodottoIds, dal, al) => {
+            const scelti = new Set(prodottoIds || []);
+            const indici = indiciProdotti(prodottiShop);
+            let pezzi = 0;
+            (venditeShop || []).forEach((v) => {
+              if (!venditaIncassata(v)) return;
+              const giorno = String(v.data_ordine || "").slice(0, 10);
+              if (!giorno || giorno < dal || giorno > al) return;
+              (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
+                const prod = prodottoDellaRiga(riga, indici);
+                if (prod && scelti.has(prod.id)) pezzi += Number(riga?.quantita) || 0;
+              });
+            });
+            return pezzi;
+          }}
+          giacenzaDi={(pid) => {
+            const prod = (prodottiShop || []).find((x) => x.id === pid);
+            return prod ? disponibileProdotto(prod) : 0;
+          }}
+          isMobile={isMobile} onBack={() => setView("magazzinoshop")}
+        />
+      )}
+
       {view === "magazzinoguasti" && (
         <MagazzinoGuasti
           prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} location={location}
@@ -93067,6 +93107,7 @@ function Gestionale() {
           onApriProdottiFuoriListino={apriProdottiFuoriListino}
           onApriMagazzinoGuasti={() => setView("magazzinoguasti")}
           onApriAnalisiConsumi={() => setView("analisiconsumi")}
+          onApriCalcoloConsumi={() => setView("calcoloconsumi")}
           onApriClassificazioneVoci={apriClassificazioneVoci}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
