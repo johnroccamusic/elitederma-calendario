@@ -13,7 +13,7 @@ import {
   inputStyle, campoCompattoStyle, round2, numeroFascia,
   FAMIGLIA_STRETTA, GRIGIO_LEGGIBILE,
 } from "./ui/stile.js";
-import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
+import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, CampoRicerca, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { qrSvg } from "./ui/qr.js";
 import { confermaCancellazione, confermaRimozione } from "./ui/conferma.js";
 import { nettoDaLordo } from "./prezzi/netto.js";
@@ -27643,63 +27643,6 @@ function TendinaCercabile({ valore, onCambia, voci, placeholder = "Tutti", style
   );
 }
 
-function CampoRicerca({ value, onChange, placeholder, style }) {
-  const ref = React.useRef(null);
-  const scritto = String(value ?? "") !== "";
-  // SVUOTARE LA RIGA E' UN TASTO, non venti tocchi su «cancella».
-  // Chiesto dal titolare al banco della fiera: si cerca un prodotto, si
-  // mette nel carrello, e per cercare il prossimo il nome di prima e'
-  // ancora li'. Su un telefono quella casella si svuota tenendo premuto
-  // il tasto di cancellazione, col prodotto appena venduto in mano.
-  //
-  // Il tasto chiama `onChange` con una riga vuota, cosi' chi usa il campo
-  // non deve sapere niente di questo: i trenta punti dell'app che lo
-  // montano leggono tutti e solo `e.target.value`, e il loro «ricerca
-  // cambiata» si svuota per la strada che gia' conoscono — filtri che si
-  // riazzerano e pagina che torna alla prima compresi.
-  function svuota() {
-    onChange?.({ target: { value: "" }, currentTarget: { value: "" }, preventDefault() {}, stopPropagation() {} });
-    // e si torna nella casella: si svuota per scrivere un altro nome,
-    // non per guardarla vuota. Sul telefono riapre la tastiera.
-    ref.current?.focus();
-  }
-  return (
-    <div style={{ position: "relative", ...style }}>
-      <input
-        ref={ref}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        enterKeyHint="search"
-        onKeyDown={(e) => { if (e.key === "Enter") ref.current?.blur(); }}
-        style={{ ...inputStyle, paddingRight: scritto ? 82 : 44, width: "100%", boxSizing: "border-box", border: "none", boxShadow: INCAVO_LEGGERO, background: "#fff" }}
-      />
-      {/* la × compare solo con qualcosa scritto: su una casella vuota
-          sarebbe un tasto che non fa niente, cioe' un dubbio */}
-      {scritto && (
-        <button
-          type="button"
-          onClick={svuota}
-          data-campo="svuota-ricerca"
-          title="Svuota la ricerca"
-          aria-label="Svuota la ricerca"
-          style={{ position: "absolute", right: 42, top: "50%", transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: GRIGIO_LEGGIBILE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={() => ref.current?.blur()}
-        title="Cerca"
-        aria-label="Cerca"
-        style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", border: "none", background: NAVY, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-      </button>
-    </div>
-  );
-}
 // sostituto drop-in di <input type="file">, ovunque nell'app: stesso
 // "Sfoglia..." nativo del browser (stesso onChange, stesso e.target.files),
 // ma l'area attorno accetta anche un file trascinato dal Finder/Explorer.
@@ -61963,10 +61906,16 @@ const stileTdKit = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}
 // rapidi restano; il quarto, "Da... a...", apre due date scelte a mano,
 // perche' "quanto ho speso per i kit di ottobre" non e' ne' un trimestre
 // ne' un anno scolastico.
-function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiPerId, costoUnitario }) {
+export function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiPerId, costoUnitario }) {
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("annoscolastico");
+  // LA LENTE, chiesta dal titolare (24/11/2026): «non posso scrivere con
+  // la lente di ingrandimento la ricerca di un prodotto specifico, devo
+  // scorrere una lista». Duecento righe ordinate per quantita' sono
+  // perfette per sapere cosa si consuma di piu', e inutili per sapere
+  // quante pelli sintetiche sono uscite: quella domanda si fa col nome.
+  const [cerca, setCerca] = useState("");
   const oggi = new Date();
   const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   // le date scelte a mano partono dall'anno scolastico in corso: sono il
@@ -61992,7 +61941,7 @@ function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitP
       perProdottoId[prodottoId] = (perProdottoId[prodottoId] || 0) + qta;
     });
   });
-  const righe = Object.entries(perProdottoId)
+  const tutteLeRighe = Object.entries(perProdottoId)
     .map(([prodottoId, quantita]) => {
       const costo = costoUnitario(prodottoId);
       return {
@@ -62005,6 +61954,20 @@ function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitP
     })
     .filter((r) => r.quantita > 0)
     .sort((a, b) => b.quantita - a.quantita);
+  // si cerca come si scrive: ogni parola e' l'inizio di una parola del
+  // nome, come nel comune di nascita e nei prodotti al banco — «pelle
+  // prem» trova «Pelle sintetica Premium»
+  const parole = cerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const righe = parole.length
+    ? tutteLeRighe.filter((r) => {
+        const testo = String(r.nome || "").toLowerCase();
+        return parole.every((x) => testo.includes(x));
+      })
+    : tutteLeRighe;
+  // I TOTALI SEGUONO LA RICERCA, e non e' un dettaglio: tre schede che
+  // dicono i numeri di tutto sopra una tabella che mostra un prodotto
+  // solo sono tre numeri che non c'entrano con quello che si sta
+  // guardando — e nessuno saprebbe quale dei due leggere.
   const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
   const spesaNettaTotale = round2(righe.reduce((s, r) => s + (r.spesaNetta || 0), 0));
   const spesaLordaTotale = round2(righe.reduce((s, r) => s + (r.spesaLorda || 0), 0));
@@ -62035,6 +61998,18 @@ function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitP
             <input type="date" value={da} max={a || undefined} onChange={(e) => setDa(e.target.value)} style={{ ...inputStyle, ...fontBody, fontSize: 13, width: "auto", padding: "6px 8px" }} />
             <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>al</span>
             <input type="date" value={a} min={da || undefined} onChange={(e) => setA(e.target.value)} style={{ ...inputStyle, ...fontBody, fontSize: 13, width: "auto", padding: "6px 8px" }} />
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 12, maxWidth: 420 }} data-cerca-consumo>
+        <CampoRicerca value={cerca} onChange={(e) => setCerca(e.target.value)}
+          placeholder="cerca un prodotto per nome" />
+        {parole.length > 0 && (
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>
+            {righe.length === 0
+              ? `Nessun prodotto con «${cerca.trim()}» fra quelli usati nel periodo.`
+              : `${righe.length} ${righe.length === 1 ? "prodotto" : "prodotti"} su ${tutteLeRighe.length}: i totali qui sotto sono di questa ricerca.`}
           </div>
         )}
       </div>
@@ -62072,7 +62047,11 @@ function SezioneConsumoProdottiKit({ corsi, corsiDate, kitDefinizioni, corsiKitP
                 </tr>
               ))}
               {righe.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun corso nel periodo selezionato.</td></tr>
+                <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>
+                  {parole.length
+                    ? `Nessun prodotto con «${cerca.trim()}»: svuota la ricerca per vedere tutti quelli usati nel periodo.`
+                    : "Nessun corso nel periodo selezionato."}
+                </td></tr>
               )}
             </tbody>
           </table>

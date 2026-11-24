@@ -1678,6 +1678,64 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### La lente dove si guarda quale prodotto è stato usato (24/11/2026)
+
+Il titolare: «nella barra di ricerca dei prodotti, quelli che per
+calcolare le statistiche di quale prodotto è stato usato, non posso
+scrivere con la lente di ingrandimento la ricerca di un prodotto
+specifico, devo scorrere una lista. Inserisci pure la lente di ricerca.»
+
+**Due pagine rispondono a quella domanda, e nessuna delle due si
+cercava.** Sono state sistemate tutte e due, perché la frase vale per
+entrambe e correggerne una sola sarebbe stata una pubblicazione a metà —
+la lezione dell'11/11 («si fa dire quale tasto si preme») vale anche al
+contrario: quando lo stesso gesto manca in due posti, si guardano tutti e
+due.
+
+- **«Prodotti usati per i kit» → Consumo prodotti** non aveva
+  **nessuna** ricerca: duecento righe ordinate per quantità, perfette per
+  sapere *cosa si consuma di più* e inutili per sapere *quante pelle
+  sintetiche sono uscite* — quella domanda si fa col nome;
+- **«Calcolo consumi»** (nato la mattina dello stesso giorno) ne aveva
+  una che **non si riconosceva**: un campo nudo accanto a una tendina, e
+  si finiva a scorrere la tendina. Adesso è la barra dell'app, e la
+  tendina **dice quanti prodotti sta mostrando** («40 su 224: scrivi qui
+  accanto») invece di tacere: quaranta voci senza una spiegazione fanno
+  credere che il prodotto non ci sia.
+
+**I TOTALI SEGUONO LA RICERCA**, ed è la decisione che conta. Sopra la
+tabella ci sono tre schede — pezzi usati, spesa netta, spesa lorda — e
+con un prodotto cercato dicono i numeri **di quel prodotto**, con scritto
+che sono di quella ricerca. Lasciarle sui totali di tutto vorrebbe dire
+tre numeri grandi che non c'entrano con le righe sotto, e nessuno
+saprebbe quale dei due leggere.
+
+**`CampoRicerca` è uscito da App.jsx ed è andato fra i mattoni
+condivisi** (`src/ui/base.jsx`): le pagine staccate — il calcolo consumi
+sta in `src/magazzino/` — non possono importare da App.jsx, sarebbe un
+giro chiuso. Lo spostamento non ha cambiato nessuno dei trenta punti che
+lo montano: stesso componente, importato da un altro posto.
+
+**E il guardiano delle cancellazioni l'ha preso al primo giro.** La
+funzione `svuota` della barra era scusata per iscritto come
+`App.jsx::svuota`; spostata in `ui/base.jsx` è diventata un gesto «mai
+guardato», e la prova dell'11/11 è andata rossa. Giustamente: **un gesto
+che cambia file e lascia la sua scusa di là non è più scusato.** La riga
+l'ha seguito, e quella del `svuota` rimasto in App.jsx ora nomina solo
+quello che fa davvero (la cache del sito).
+
+**Una cosa imparata scrivendo le prove**, e serve a chi ne scriverà
+altre su questa pagina: il legame fra un'allieva e il suo kit è il
+**nome** del pacchetto (`iscritti.pacchetto_kit`), non un id, e le righe
+della distinta vogliono `tipo: "kit"`. Senza una di queste due cose
+`quantitaInviataPerProdotto` torna una mappa vuota, la tabella resta
+vuota, e la prova sembra accusare il filtro appena scritto.
+
+Prove in `prove/lente-nei-consumi.test.jsx` (8), con le due pagine
+montate: la lente c'è, filtra, cerca a parole spezzate («pelle prem»), i
+totali seguono, la ricerca a vuoto lo dice e dice come tornare indietro,
+e svuotandola tornano tutti.
+
 ### «Test di sistema»: ripassare i guasti vecchi per vedere se sono tornati (24/11/2026)
 
 Il titolare, dopo il guasto dello shop: «creiamo una funzione di test in

@@ -172,7 +172,13 @@ const DICHIARA = new RegExp(
 // niente che si debba poter rimpiangere.
 const SCUSATE = {
   // non cancellano niente: svuotano una casella, una scelta, un disegno
-  "App.jsx::svuota": "svuota la riga di ricerca e la lavagna della cache del sito: non si perde nessun dato",
+  "App.jsx::svuota": "svuota la lavagna della cache del sito: non si perde nessun dato",
+  // la barra di ricerca si e' spostata in `src/ui/base.jsx` il 24/11/2026,
+  // perche' la usano anche le pagine staccate (il calcolo consumi) e una
+  // pagina non puo' importare da App.jsx. La scusa l'ha seguita: un
+  // gesto che cambia file e lascia la sua riga di qua resta «mai
+  // guardato» per il guardiano, e giustamente — l'ha preso al primo giro
+  "ui/base.jsx::svuota": "svuota la riga di ricerca: non si perde nessun dato, e il tasto esiste per riscrivere subito",
   "App.jsx::svuotaCampiFattura": "azzera i campi della fattura quando si cambia tipo di cliente: nessuna riga scritta",
   "App.jsx::svuotaForm": "azzera il modulo del coupon in composizione",
   "App.jsx::svuotaSelezionePerFiltro": "toglie la spunta dalle righe quando cambia il filtro: la selezione, non le righe",

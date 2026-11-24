@@ -6,8 +6,8 @@
 // interna ad App.jsx. Portarlo via significava rifare quella macchina, e
 // non e' questo il momento.
 
-import { useState } from "react";
-import { NAVY, CREAM_BORDER, MUTED, fontBody, inputStyle, round2, numeroFascia } from "./stile.js";
+import { useRef, useState } from "react";
+import { NAVY, CREAM_BORDER, MUTED, GRIGIO_LEGGIBILE, fontBody, inputStyle, round2, numeroFascia } from "./stile.js";
 
 // `title` e' la spiegazione che compare fermando il dito (o il mouse) sul
 // tasto. Non c'era, e due tasti che la passavano se la vedevano buttare
@@ -278,6 +278,73 @@ export function ContatoreQuantita({ valore, onCambia, min = 0, max = null, passo
         }}
       />
       <button type="button" style={tasto(puoSalire)} onClick={() => puoSalire && onCambia(limita(n + passo))} aria-label="Uno in piu'">+</button>
+    </div>
+  );
+}
+
+// LA BARRA DI RICERCA DELL'APP. Sta qui, fra i mattoni condivisi, e non
+// piu' dentro App.jsx: dal 24/11/2026 la usano anche le pagine staccate
+// (il calcolo consumi in `src/magazzino/`), e una pagina non puo'
+// importare da App.jsx — sarebbe un giro chiuso.
+//
+// Spostarla non ha cambiato nessuno dei trenta punti che la montano: il
+// componente e' lo stesso, importato da un altro posto.
+const INCAVO_LEGGERO = "inset 0 3px 5px rgba(14,27,51,0.16), inset 0 1px 0 rgba(120,126,138,0.28), inset 0 -1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(120,126,138,0.18), 0 1px 0 rgba(255,255,255,0.7)";
+
+export function CampoRicerca({ value, onChange, placeholder, style }) {
+  const ref = useRef(null);
+  const scritto = String(value ?? "") !== "";
+  // SVUOTARE LA RIGA E' UN TASTO, non venti tocchi su «cancella».
+  // Chiesto dal titolare al banco della fiera: si cerca un prodotto, si
+  // mette nel carrello, e per cercare il prossimo il nome di prima e'
+  // ancora li'. Su un telefono quella casella si svuota tenendo premuto
+  // il tasto di cancellazione, col prodotto appena venduto in mano.
+  //
+  // Il tasto chiama `onChange` con una riga vuota, cosi' chi usa il campo
+  // non deve sapere niente di questo: i trenta punti dell'app che lo
+  // montano leggono tutti e solo `e.target.value`, e il loro «ricerca
+  // cambiata» si svuota per la strada che gia' conoscono — filtri che si
+  // riazzerano e pagina che torna alla prima compresi.
+  function svuota() {
+    onChange?.({ target: { value: "" }, currentTarget: { value: "" }, preventDefault() {}, stopPropagation() {} });
+    // e si torna nella casella: si svuota per scrivere un altro nome,
+    // non per guardarla vuota. Sul telefono riapre la tastiera.
+    ref.current?.focus();
+  }
+  return (
+    <div style={{ position: "relative", ...style }}>
+      <input
+        ref={ref}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        enterKeyHint="search"
+        onKeyDown={(e) => { if (e.key === "Enter") ref.current?.blur(); }}
+        style={{ ...inputStyle, paddingRight: scritto ? 82 : 44, width: "100%", boxSizing: "border-box", border: "none", boxShadow: INCAVO_LEGGERO, background: "#fff" }}
+      />
+      {/* la × compare solo con qualcosa scritto: su una casella vuota
+          sarebbe un tasto che non fa niente, cioe' un dubbio */}
+      {scritto && (
+        <button
+          type="button"
+          onClick={svuota}
+          data-campo="svuota-ricerca"
+          title="Svuota la ricerca"
+          aria-label="Svuota la ricerca"
+          style={{ position: "absolute", right: 42, top: "50%", transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: GRIGIO_LEGGIBILE, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => ref.current?.blur()}
+        title="Cerca"
+        aria-label="Cerca"
+        style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", border: "none", background: NAVY, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+      </button>
     </div>
   );
 }

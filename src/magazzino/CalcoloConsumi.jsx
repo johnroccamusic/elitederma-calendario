@@ -21,7 +21,7 @@
 // il pavimento e il ritmo normale, e si ordina in mezzo.
 import React, { useEffect, useMemo, useState } from "react";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
-import { Button, TastoLivelloPrecedente } from "../ui/base.jsx";
+import { Button, CampoRicerca, TastoLivelloPrecedente } from "../ui/base.jsx";
 import { consumoPerAllieva, proiezione, nomeMese, mesiFra, MESI_NOMI, TREND_PIENO } from "./consumi-previsti.js";
 import { leggiTrend, salvaTrend } from "./trend-dati.js";
 
@@ -276,8 +276,14 @@ export default function CalcoloConsumi({
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
             <div>
               <span style={etichetta}>Cerca il prodotto</span>
-              <input value={cerca} onChange={(e) => setCerca(e.target.value)} placeholder="magliette, pigmento, ago…"
-                data-cerca-prodotto style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
+              {/* LA LENTE, come in tutte le trenta ricerche dell'app
+                  (`CampoRicerca`): la casella qui era un input nudo, e una
+                  ricerca che non si riconosce come tale la scavalca chi
+                  arriva — si finisce a scorrere la tendina. Chiesto dal
+                  titolare il 24/11/2026: «inserisci pure la lente di
+                  ricerca». */}
+              <CampoRicerca value={cerca} onChange={(e) => setCerca(e.target.value)}
+                placeholder="magliette, pigmento, ago…" />
             </div>
             <div>
               <span style={etichetta}>Prodotto</span>
@@ -286,9 +292,13 @@ export default function CalcoloConsumi({
                 <option value="">— scegli il prodotto —</option>
                 {prodottiTrovati.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
-              {cerca.trim() && prodottiTrovati.length === 40 && (
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>Ne mostro 40: restringi la ricerca se non lo trovi.</div>
-              )}
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
+                {prodottiTrovati.length === 40
+                  ? `Ne mostro 40 su ${prodottiOrdinati.length}: scrivi qui accanto per trovare il tuo.`
+                  : cerca.trim()
+                  ? `${prodottiTrovati.length} ${prodottiTrovati.length === 1 ? "prodotto trovato" : "prodotti trovati"}.`
+                  : `${prodottiOrdinati.length} prodotti in listino.`}
+              </div>
             </div>
           </div>
         ) : (
