@@ -1504,6 +1504,34 @@ Il gesto però è scritto **una volta sola** (`usaTesto` in
 `PaginaContatti`, passato a tutti e due): due copie vorrebbero dire due
 idee di cosa si porta dietro una campagna nata da un'altra.
 
+**E SUBITO DOPO È SALTATO FUORI CHE «PREPARA I DESTINATARI» VOLEVA DIRE
+TUTTI.** Il titolare, con la campagna appena copiata: «quando vado a
+cliccare su prepara i destinatari non mi entra più nella schermata dove
+posso selezionare i filtri, ma mi rimane in quella schermata». I due tasti
+fanno due cose diverse e si chiamavano quasi uguale: **«Seleziona
+destinatari»** porta alla lista coi filtri, **«Prepara i destinatari»**
+congela chi i filtri *già scritti sulla campagna* dicono. Su una campagna
+nata da «Usa questo testo» quei filtri non ci sono — apposta — quindi quel
+tasto voleva dire **tutto l'archivio**: provato in transazione annullata,
+**23.213 destinatari** congelati in un colpo, e senza chiedere niente.
+
+Tre correzioni, e nessuna cambia cosa fanno i due tasti:
+
+- il tasto **si chiama come quello che farebbe**: senza filtri scelti
+  diventa **«Prepara: TUTTI i contatti»**, e prima di scrivere chiede
+  conferma **col numero** («Stai per congelare TUTTI i 24.866 contatti…
+  per mandarla a un gruppo, annulla e premi «Scegli i destinatari»»);
+- l'altro si chiama **«Scegli i destinatari»**, che è quello che si cerca,
+  e su una campagna senza pubblico è lui il tasto **in evidenza**;
+- un elenco così grande può far **scadere il tempo della richiesta**: il
+  messaggio di PostgREST non lo capisce nessuno e chi guarda resta sulla
+  pagina senza sapere perché, quindi ora si legge «sono troppi contatti
+  per una volta sola: restringi con «Scegli i destinatari» e riprova».
+
+E `escludi_gia_spedite` **non conta come un pubblico**: dice cosa
+togliere, non chi prendere — se contasse, una campagna copiata sembrerebbe
+avere dei filtri e quella domanda non comparirebbe mai.
+
 **E I CONTEGGI DI QUELL'AREA ERANO FALSI.** La pagina leggeva le righe dei
 destinatari con `.limit(100000)` e le contava nel browser, ma **PostgREST
 ne serve mille**: su 58.000 righe consegnate, aperte, rimbalzate e

@@ -593,7 +593,7 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
       setVista({
         nome: "componi",
         campagna: nuova,
-        messaggio: { tipo: "ok", testo: `Testo copiato da «${c.nome}». Scegli a chi mandarla: chi ha già ricevuto resta fuori.` },
+        messaggio: { tipo: "ok", testo: `Testo copiato da «${c.nome}». Adesso premi «Scegli i destinatari» per dire a chi mandarla: chi ha già ricevuto resta fuori.` },
       });
     } catch (e) {
       window.alert(e.message);

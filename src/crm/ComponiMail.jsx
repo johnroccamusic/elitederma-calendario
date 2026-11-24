@@ -179,6 +179,19 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
 
   const stato = campagna?.stato || "bozza";
   const bloccata = stato === "inviata" || stato === "annullata" || stato === "in_invio";
+  // i filtri che scelgono il PUBBLICO: `escludi_gia_spedite` non lo e' —
+  // dice cosa togliere, non chi prendere
+  const filtriPubblico = Object.entries({ ...(campagna?.filtri || filtri || {}) })
+    .filter(([k, v]) => k !== "escludi_gia_spedite" && v !== null && v !== "" && v !== false
+      && !(Array.isArray(v) && !v.length));
+  const senzaPubblico = filtriPubblico.length === 0;
+  async function quantiSarebbero() {
+    const { data } = await supabase.rpc("crm_cerca_contatti", {
+      filtri: { ...(campagna?.filtri || filtri || {}) }, da: 0, quanti: 1, ordina: null, verso: null,
+    });
+    const riga = Array.isArray(data) ? data[0] : data;
+    return Number(riga?.totale) || 0;
+  }
   const anteprima = useMemo(() => componiCampagna({
     oggetto, corpoHtml, valori: VALORI_ANTEPRIMA, societa, linkDisiscrizione: "#anteprima",
   }), [oggetto, corpoHtml, societa]);
@@ -232,11 +245,30 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
     setSalvando(false);
   }
 
+  // «Prepara i destinatari» congela chi i FILTRI della campagna dicono.
+  // Se di filtri non ce n'e' nessuno — ed e' il caso di una campagna nata
+  // da «Usa questo testo», che il pubblico non se lo porta dietro — quel
+  // tasto vuol dire TUTTO L'ARCHIVIO: 23.213 persone il 24/11/2026.
+  // Succedeva senza dire niente, e chi lo premeva credeva di andare a
+  // scegliere i filtri (quello e' «Scegli i destinatari», qui accanto).
   async function prepara() {
+    if (senzaPubblico) {
+      const quanti = await quantiSarebbero();
+      const frase = quanti
+        ? `Stai per congelare TUTTI i ${numero(quanti)} contatti dell'archivio, non un gruppo.`
+        : "Stai per congelare TUTTI i contatti dell'archivio, non un gruppo.";
+      if (!window.confirm(`${frase}\n\nPer mandarla a un gruppo, annulla e premi «Scegli i destinatari».\n\nVuoi continuare con tutti?`)) return;
+    }
     setSalvando(true); setMsg(null);
     try {
       const c = await assicuraCampagna();
       const { data, error } = await supabase.rpc("crm_campagna_prepara", { p_campagna: c.id });
+      // un elenco troppo grande puo' far scadere il tempo della richiesta:
+      // il messaggio di PostgREST non lo capisce nessuno, e chi guarda
+      // resta sulla pagina senza sapere perche'
+      if (error && /timeout|57014/i.test(error.message || "")) {
+        throw new Error("Sono troppi contatti per una volta sola: restringi con «Scegli i destinatari» e riprova.");
+      }
       if (error) throw new Error(error.message);
       setPreparazione(data);
       const { data: agg } = await supabase.from("crm_campagne").select("*").eq("id", c.id).maybeSingle();
@@ -405,8 +437,12 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
                 </Button>
               )}
               {!bloccata && <Button variant="ghost" onClick={prova} disabled={salvando}>Mandami una prova</Button>}
-              {!bloccata && onSelezionaDestinatari && <Button variant="ghost" onClick={scegliDestinatari} disabled={salvando} title="Scegli dalla lista contatti, con i filtri">Seleziona destinatari</Button>}
-              {!bloccata && <Button variant="ghost" onClick={prepara} disabled={salvando} title={campagna?.riassunto_filtri || riassunto ? `Con i filtri: ${campagna?.riassunto_filtri || riassunto}` : "Tutti i contatti con un'email"}>{campagna?.totale_destinatari ? "Rifai i destinatari" : "Prepara i destinatari"}</Button>}
+              {!bloccata && onSelezionaDestinatari && (
+                <Button variant={senzaPubblico && !campagna?.totale_destinatari ? undefined : "ghost"} onClick={scegliDestinatari} disabled={salvando} title="Porta alla lista contatti, con i filtri: regione, corso, operatore, esito…">
+                  Scegli i destinatari
+                </Button>
+              )}
+              {!bloccata && <Button variant="ghost" onClick={prepara} disabled={salvando} title={campagna?.riassunto_filtri || riassunto ? `Con i filtri: ${campagna?.riassunto_filtri || riassunto}` : "Nessun filtro scelto: sarebbero tutti i contatti dell'archivio"}>{campagna?.totale_destinatari ? "Rifai i destinatari" : senzaPubblico ? "Prepara: TUTTI i contatti" : "Prepara i destinatari"}</Button>}
               {!bloccata && campagna?.totale_destinatari > 0 && <Button variant="danger" onClick={cancellaDestinatari} disabled={salvando}>Cancella destinatari</Button>}
               {stato !== "inviata" && stato !== "annullata" && (
                 <Button onClick={invia} disabled={salvando || !campagna?.totale_destinatari || invio?.inCorso}>

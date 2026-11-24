@@ -146,13 +146,13 @@ describe("scegliere i destinatari di una campagna dalla lista", () => {
 
     const p = await monta(<PaginaContatti onBack={() => {}} />);
     await attendi(200);
-    // si apre una campagna esistente dall'elenco, poi «Seleziona destinatari»
+    // si apre una campagna esistente dall'elenco, poi «Scegli i destinatari»
     await clicca(p.tasto("Campagne"));
     await attendi(200);
     const riga = p.nodo.querySelector('[data-campagna="c5"]');
     await clicca(riga);
     await attendi(200);
-    await clicca(p.tasto("Seleziona destinatari"));
+    await clicca(p.tasto("Scegli i destinatari"));
     await attendi(200);
     expect(p.nodo.querySelector("[data-scelta-destinatari]").textContent).toContain("Stai scegliendo i destinatari di «Scritta prima»");
     const tendina = p.nodo.querySelector('select[data-filtro="Regione"]');

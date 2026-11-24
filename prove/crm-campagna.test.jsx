@@ -178,7 +178,9 @@ describe("i destinatari si scelgono anche dopo, e si cancellano", () => {
     const p = await monta(<ComponiMail campagnaIniziale={campagna} onChiudi={() => {}} onSelezionaDestinatari={() => {}} />);
     await attendi(200);
     expect(p.tasto("Cancella destinatari")).toBeTruthy();
-    expect(p.tasto("Seleziona destinatari")).toBeTruthy();
+    // dal 24/11/2026 si chiama «Scegli i destinatari»: il titolare, davanti
+    // a una campagna copiata, non capiva quale dei due tasti portasse ai filtri
+    expect(p.tasto("Scegli i destinatari")).toBeTruthy();
     await clicca(p.tasto("Cancella destinatari"));
     await attendi(200);
     expect(cancellazioni.some((u) => u.includes("stato=eq.in_coda"))).toBe(true);

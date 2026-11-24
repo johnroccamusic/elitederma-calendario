@@ -101,6 +101,62 @@ describe("il filtro «escludi quelle già spedite»", () => {
   });
 });
 
+// UNA CAMPAGNA NATA DA «USA QUESTO TESTO» NON HA UN PUBBLICO, ed e'
+// voluto. Ma allora «Prepara i destinatari» vuol dire TUTTO L'ARCHIVIO —
+// 23.213 persone il 24/11/2026 — e succedeva senza dire niente, mentre
+// chi lo premeva credeva di andare a scegliere i filtri. Il titolare:
+// «quando vado a cliccare su prepara i destinatari non mi entra più nella
+// schermata dove posso selezionare i filtri».
+describe("senza filtri, «prepara» vuol dire tutti — e lo dice", () => {
+  const COPIATA = { ...CAMPAGNA, id: "c9", stato: "bozza", totale_destinatari: 0, filtri: { escludi_gia_spedite: true } };
+
+  it("il tasto si chiama «Prepara: TUTTI i contatti»", async () => {
+    rispondiCon({ intestazione_societa: {}, crm_campagne_destinatari: [] });
+    const { nodo: contenitore } = await monta(<ComponiMail campagnaIniziale={COPIATA} onSelezionaDestinatari={() => {}} />);
+    const testi = [...contenitore.querySelectorAll("button")].map((b) => b.textContent.trim());
+    expect(testi).toContain("Prepara: TUTTI i contatti");
+    expect(testi).toContain("Scegli i destinatari");
+  });
+
+  it("con un pubblico scelto torna a chiamarsi «Prepara i destinatari»", async () => {
+    rispondiCon({ intestazione_societa: {}, crm_campagne_destinatari: [] });
+    const { nodo: contenitore } = await monta(
+      <ComponiMail campagnaIniziale={{ ...COPIATA, filtri: { escludi_gia_spedite: true, trattato_da: "Katia" } }} onSelezionaDestinatari={() => {}} />,
+    );
+    const testi = [...contenitore.querySelectorAll("button")].map((b) => b.textContent.trim());
+    expect(testi).toContain("Prepara i destinatari");
+    expect(testi).not.toContain("Prepara: TUTTI i contatti");
+  });
+
+  it("premuto chiede conferma col numero, e col «no» non congela niente", async () => {
+    const chiamate = [];
+    rispondiCon({
+      intestazione_societa: {},
+      "rpc/crm_cerca_contatti": () => [{ totale: 24866 }],
+      "rpc/crm_campagna_prepara": (corpo) => { chiamate.push(corpo); return { inseriti: 23213 }; },
+      crm_campagne_destinatari: [],
+    });
+    let domanda = "";
+    window.confirm = (t) => { domanda = t; return false; };
+    const { nodo: contenitore } = await monta(<ComponiMail campagnaIniziale={COPIATA} onSelezionaDestinatari={() => {}} />);
+    await clicca([...contenitore.querySelectorAll("button")].find((b) => b.textContent.trim() === "Prepara: TUTTI i contatti"));
+    await attendi();
+    expect(domanda).toContain("24.866");
+    expect(domanda).toContain("Scegli i destinatari");
+    expect(chiamate.length, "ha congelato i destinatari nonostante il «no»").toBe(0);
+    window.confirm = () => true;
+  });
+
+  it("«Scegli i destinatari» porta alla lista: è il gesto che si cercava", async () => {
+    let portata = null;
+    rispondiCon({ intestazione_societa: {}, crm_campagne: [COPIATA], crm_campagne_destinatari: [] });
+    const { nodo: contenitore } = await monta(<ComponiMail campagnaIniziale={COPIATA} onSelezionaDestinatari={(c) => { portata = c.id; }} />);
+    await clicca([...contenitore.querySelectorAll("button")].find((b) => b.textContent.trim() === "Scegli i destinatari"));
+    await attendi();
+    expect(portata).toBe("c9");
+  });
+});
+
 describe("«Salva campagna», e l'area da cui si riprende", () => {
   it("il tasto non si chiama più «Salva bozza» e dice dove la si ritrova", async () => {
     rispondiCon({
