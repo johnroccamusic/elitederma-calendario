@@ -1315,6 +1315,23 @@ Migrazione `20261117150000_la_mailing_list_dei_clienti_shop.sql`
 transazione — come `crm_campagna_prepara`, che ha lo stesso limite da
 sempre. In produzione è una chiamata per richiesta e non si vede.
 
+### Il filtro per operatore nei contatti CRM (24/11/2026)
+
+Il titolare: se un operatore esce, si deve poter scrivere a tutti i suoi
+lead. «Trattato da» c'era, ma leggeva `crm_contatti.trattato_da`, cioè
+l'operatore dell'**ultima** richiesta: chi aveva scritto a Katia e poi a
+Olga era solo di Olga. Ora `crm_contatti_filtrati` cerca fra **tutte** le
+richieste, e accanto c'è **«Esito con l'operatore»** (`esito_operatore`),
+letto dalla stessa richiesta: `chiusi` (CLIENTI o opportunità
+CLOSED_WON), `non_chiusi`, `da_richiamare`, `scartati`. **In Vetta un
+campo «non ha risposto» non esiste** (verificate le opzioni di categoria,
+gestione chiamata, qualità): il più vicino è «da richiamare», e la tendina
+lo dice. Al 24/11: Katia 5.631 lead, 554 chiusi; Olga 5.190 / 244; Simona
+Fiorenza 5.223 / 308. Migrazione `20261124090000_crm_filtro_per_operatore.sql`,
+prove in `prove/crm-filtro-operatore.test.jsx`. **La pagina va pubblicata
+solo dopo la migrazione**: senza, il database ignora `esito_operatore` e
+«chiusi da Katia» restituirebbe tutti i suoi lead.
+
 ### Un ordine che non è stato pagato non è un incasso (18/11/2026)
 
 Il titolare, davanti a «Clienti shop»: «come è possibile che questi

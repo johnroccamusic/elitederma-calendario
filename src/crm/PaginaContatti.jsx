@@ -47,12 +47,22 @@ export const COLLEGAMENTI = {
   dubbio: "Collegamento dubbio",
   nessuno: "Non in Genion",
 };
+// L'ESITO DEL LEAD CON UN OPERATORE (24/11/2026). Vale solo con
+// «Trattato da» scelto, e si legge dalla richiesta trattata da quella
+// persona, non dalla qualifica di oggi del contatto. «Non ha risposto» in
+// Vetta non esiste come campo: il piu' vicino e' «da richiamare».
+export const ESITI_OPERATORE = {
+  chiusi: "Chiusi (diventati clienti)",
+  non_chiusi: "Non chiusi",
+  da_richiamare: "Da richiamare (non risposti)",
+  scartati: "Scartati",
+};
 export const etichettaQualifica = (q) => QUALIFICHE[q] || (q ? q.replace(/_/g, " ").toLowerCase() : "—");
 export const etichettaStato = (s) => STATI[s] || s || "—";
 
 const FILTRI_VUOTI = {
   cerca: "", anno: "", dal: "", al: "", corso: "", regione: "", provincia: "", comune: "",
-  qualifica: "", stato: "", trattato_da: "", mestiere: "", collegamento: "",
+  qualifica: "", stato: "", trattato_da: "", esito_operatore: "", mestiere: "", collegamento: "",
   disiscritti: false, da_verificare: false, con_email: false, senza_data: false,
   // I CLIENTI DELLO SHOP (17/11/2026). Stanno nella stessa lista, e si
   // isolano con questi: le chiavi arrivano a `crm_contatti_filtrati`,
@@ -100,7 +110,10 @@ export function riassuntoFiltri(f) {
   else if (f.regione) pezzi.push(f.regione);
   if (f.qualifica) pezzi.push(etichettaQualifica(f.qualifica));
   if (f.stato) pezzi.push(etichettaStato(f.stato));
-  if (f.trattato_da) pezzi.push(`trattati da ${f.trattato_da}`);
+  if (f.trattato_da) {
+    const esito = f.esito_operatore && ESITI_OPERATORE[f.esito_operatore];
+    pezzi.push(esito ? `${esito.split(" (")[0].toLowerCase()} da ${f.trattato_da}` : `trattati da ${f.trattato_da}`);
+  }
   if (f.mestiere) pezzi.push(f.mestiere);
   if (f.collegamento) pezzi.push(COLLEGAMENTI[f.collegamento] || f.collegamento);
   if (f.cliente_shop) pezzi.push("clienti shop");
@@ -491,6 +504,8 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
       // scegliendo la regione si azzerano provincia e comune, e cosi' via
       if (k === "regione") { n.provincia = ""; n.comune = ""; }
       if (k === "provincia") n.comune = "";
+      // l'esito vale solo per un operatore: tolto l'operatore, va via anche lui
+      if (k === "trattato_da" && !v) n.esito_operatore = "";
       if (k === "anno" && v) { n.dal = ""; n.al = ""; }
       if ((k === "dal" || k === "al") && v) n.anno = "";
       return n;
@@ -629,7 +644,14 @@ export default function PaginaContatti({ onBack, titolo = "Contatti", utente = "
             <Tendina etichetta="Comune" valore={filtri.comune} onCambia={(v) => cambia("comune", v)} opzioni={comuni} tutto="Tutti" />
             <Tendina etichetta="Qualifica" valore={filtri.qualifica} onCambia={(v) => cambia("qualifica", v)} opzioni={(valori?.qualifiche || []).map((q) => ({ ...q, etichetta: etichettaQualifica(q.valore) }))} tutto="Tutte" />
             <Tendina etichetta="Stato trattativa" valore={filtri.stato} onCambia={(v) => cambia("stato", v)} opzioni={(valori?.stati || []).map((s) => ({ ...s, etichetta: etichettaStato(s.valore) }))} tutto="Tutti" />
-            <Tendina etichetta="Trattato da" valore={filtri.trattato_da} onCambia={(v) => cambia("trattato_da", v)} opzioni={valori?.trattati_da || []} tutto="Chiunque" />
+            {/* l'operatore e, accanto, come e' andata con lui: e' la
+                lista da scrivere quando un operatore esce */}
+            <Tendina etichetta="Operatore (trattato da)" valore={filtri.trattato_da}
+              onCambia={(v) => cambia("trattato_da", v)}
+              opzioni={valori?.trattati_da || []} tutto="Chiunque" />
+            <Tendina etichetta="Esito con l'operatore" larghezza={200} valore={filtri.esito_operatore} onCambia={(v) => cambia("esito_operatore", v)}
+              opzioni={Object.entries(ESITI_OPERATORE).map(([valore, etichetta]) => ({ valore, etichetta }))}
+              tutto={filtri.trattato_da ? "Tutti i lead trattati" : "Scegli prima l'operatore"} disabilitata={!filtri.trattato_da} />
             <Tendina etichetta="Mestiere" valore={filtri.mestiere} onCambia={(v) => cambia("mestiere", v)} opzioni={valori?.mestieri || []} tutto="Tutti" />
             <Tendina etichetta="Genion" larghezza={180} valore={filtri.collegamento} onCambia={(v) => cambia("collegamento", v)} opzioni={Object.entries(COLLEGAMENTI).map(([valore, etichetta]) => ({ valore, etichetta }))} tutto="Tutti" />
           </div>
