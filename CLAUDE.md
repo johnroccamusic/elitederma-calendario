@@ -1753,14 +1753,42 @@ fino a quel giorno **è già dentro la giacenza vera**. Restano quindi
 **58 pezzi su 29 prodotti**, cioè gli ordini successivi alla verifica di
 quel prodotto (o tutti, per i prodotti che nessuno ha contato).
 
-**Non sono stati scalati**, ed è una decisione del titolare: è una
-scrittura sulle giacenze di 29 prodotti, e va fatta **una volta sola** —
-applicata due volte sbaglia nel verso opposto. Tre righe andrebbero sotto
-zero e vanno guardate prima: *Aftercare 25pz* e *Kit laminazione
-essential* sono bundle (non hanno giacenza propria, si scalano i
-componenti), mentre **Batteria horus nero** è reale — zero in casa e due
-vendute, quindi lì i pezzi mancano davvero e si contano. Quando si fa, si
-passa da `stock_muovi` come ogni altro movimento, con l'origine scritta.
+**RECUPERATI IL 24/11/2026 ALLE 16:43, su «scala i 58» del titolare:**
+**75 movimenti, 300 pezzi, 41 prodotti.** Trecento e non cinquantotto
+perché i 58 erano **righe d'ordine**, e un kit venduto si apre nei suoi
+componenti: una confezione di Aftercare scala 25 bustine. I bundle non
+hanno giacenza propria, quindi si scalano i componenti — esattamente
+quello che avrebbe fatto `applicaMovimentoBundle`.
+
+Come, e ognuna di queste è una protezione:
+
+- **da `stock_muovi`**, il punto unico che scrive lo stock: blocca le
+  righe in ordine di id, **rifiuta l'intero blocco** se un prodotto
+  andrebbe sotto zero, e scrive giacenze e movimenti nella stessa
+  transazione. Provato prima in transazione annullata: `ok: true`, nessun
+  prodotto insufficiente;
+- **con i riferimenti che avrebbe scritto la funzione**
+  (`woo:<ordine>:scarico:<prodotto>`, e `…:scarico:kit:<bundle>:<comp>`
+  per i componenti). Non è un dettaglio: l'indice unico parziale li rende
+  **irripetibili**, quindi questo recupero non si può applicare due volte,
+  e se un domani quei webhook riarrivassero il database li rifiuterebbe.
+  Un recupero applicato due volte sbaglia nel verso opposto, e sarebbe
+  invisibile come il guasto che l'ha reso necessario;
+- **quello che non c'è non si inventa:** l'unico caso che non si poteva
+  scalare — **Batteria horus nero**, zero in casa e due vendute
+  sull'ordine 11047 — è finito in `scarichi_non_riusciti`, dove la
+  Logistica lo mostra: due pezzi da contare allo scaffale;
+- e **le giacenze sono state rispinte sul sito** (`woo-riallinea-shop`:
+  189 scritte, zero errori, cache svuotata). Senza, per una notte il
+  sito avrebbe venduto pezzi che non ci sono più.
+
+**Quello che il recupero NON ha toccato, ed è la ragione per cui i numeri
+tornano:** i **216 pezzi** degli ordini precedenti alla verifica di quel
+prodotto. L'inventario del 20-23/11 ha contato gli scaffali, quindi quei
+pezzi sono già dentro la giacenza vera: riscalarli avrebbe portato il
+magazzino **sotto** il reale. Il filtro è per prodotto, non per data
+globale (`l.data_ordine > v.verificato_il`, dove `v` è l'ultima verifica
+di QUEL prodotto), perché la conta non ha coperto tutto il catalogo.
 
 ### Dal 31/10/2026 gli ordini dello shop non scaricavano il magazzino — la misura (24/11/2026)
 
