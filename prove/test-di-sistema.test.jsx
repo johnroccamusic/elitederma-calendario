@@ -196,3 +196,68 @@ describe("la pagina del referto", () => {
     expect(nodo.textContent).toContain("non è potuto girare");
   });
 });
+
+// ---------------------------------------------- il giro di ogni notte
+//
+// «Fallo girare da solo ogni notte» (il titolare, poche ore dopo averlo
+// chiesto a mano). Queste prove difendono le tre decisioni che rendono un
+// sorvegliante utile invece di molesto.
+describe("il giro notturno", () => {
+  const notturno = migrazioni.find((m) => m.nome.includes("test_di_sistema_ogni_notte"));
+
+  it("c'è, e il cron gira DOPO i lavori che producono i numeri che legge", () => {
+    expect(notturno, "manca la migrazione del giro notturno").toBeTruthy();
+    // 06:20: dopo saldi (05:15), riallineamento (05:30) e termometro
+    // (05:45). Prima leggerebbe la fotografia di ieri
+    expect(notturno.testo).toMatch(/cron\.schedule\(\s*'test-di-sistema-notturno',\s*'20 6 \* \* \*'/);
+  });
+
+  it("SCRIVE IL REFERTO PRIMA DI AVVISARE: se la mail non parte, resta cosa guardare", () => {
+    const corpo = notturno.testo;
+    const posInsert = corpo.indexOf("insert into test_sistema_esiti");
+    const posAvviso = corpo.indexOf("net.http_post");
+    expect(posInsert).toBeGreaterThan(0);
+    expect(posAvviso).toBeGreaterThan(posInsert);
+  });
+
+  it("avvisa solo per quello che è NUOVO, e ricorda una volta a settimana", () => {
+    // «un avviso ripetuto ogni quarto d'ora è un avviso che si spegne»
+    expect(notturno.testo).toMatch(/rotti_nuovi/);
+    expect(notturno.testo).toMatch(/array_length\(nuovi, 1\) > 0/);
+    expect(notturno.testo).toMatch(/interval '7 days'/);
+  });
+
+  it("il referto resta come storico: da lì si vede il giorno in cui è cambiato", () => {
+    expect(notturno.testo).toMatch(/create table if not exists public\.test_sistema_esiti/);
+    expect(notturno.testo).toMatch(/referto jsonb not null/);
+    // e non è leggibile da fuori
+    expect(notturno.testo).toMatch(/enable row level security/);
+    expect(notturno.testo).toMatch(/to authenticated/);
+  });
+
+  it("un lavoro notturno APPENA CREATO non è un lavoro fermo", () => {
+    // trovato dal test su se stesso, un minuto dopo essere stato acceso:
+    // senza nessun giro registrato veniva contato come «fermo da tre
+    // giorni». Chi non ha nessuna esecuzione è nuovo e non si giudica
+    const test = migrazioni.find((m) => m.nome.includes("test_di_sistema.sql")).testo;
+    expect(test).toMatch(/create or replace function public\.test_di_sistema_cron_fermi/);
+    expect(test).toMatch(/exists \(select 1 from cron\.job_run_details r where r\.jobid = j\.jobid\)/);
+  });
+
+  it("l'avviso non decide niente da sé: legge il referto già scritto", () => {
+    const f = readFileSync("supabase/functions/test-di-sistema-avviso/index.ts", "utf8");
+    // nessuna soglia e nessun controllo duplicato nella edge function:
+    // due posti che decidono «cosa è rotto» darebbero due verdetti
+    expect(f).toMatch(/from\("test_sistema_esiti"\)/);
+    expect(f).not.toMatch(/interval|magazzino_scostamenti|pg_policies/);
+    // e si autentica col gettone nato in Postgres, come gli altri cron
+    expect(f).toMatch(/email_cron_ok/);
+    expect(f).toMatch(/x-cron-token/);
+  });
+
+  it("scrive se la mail è partita davvero, invece di dichiararlo", () => {
+    const f = readFileSync("supabase/functions/test-di-sistema-avviso/index.ts", "utf8");
+    expect(f).toMatch(/avvisato: mailMandata \|\| push > 0/);
+    expect(f).toMatch(/avviso_errore: erroreMail/);
+  });
+});

@@ -1767,10 +1767,77 @@ recente dell'ultimo ordine. Dice «lo scarico non è indietro», **non**
 ancora «il webhook ha scritto da sé»: quello lo prova il primo ordine
 nuovo, e se non scrivesse il controllo diventerebbe rosso entro il giorno.
 
-**Resta da decidere:** se farlo girare da solo ogni notte con una notifica
-sui soli `rotto`, come fa `sync-shop-vigilanza` per gli ordini. Non è
-stato fatto: un avviso automatico va deciso da chi lo riceve, e oggi il
-test si preme.
+**E DAL 24/11/2026 GIRA DA SOLO OGNI NOTTE**, su sua richiesta («fallo
+girare da solo ogni notte»): cron `test-di-sistema-notturno` alle **06:20**
+→ `test_di_sistema_notturno()`.
+
+**L'ora non è casuale:** dopo il controllo dei saldi (05:15), il
+riallineamento del sito (05:30) e il termometro (05:45), perché sono loro
+a produrre i numeri che il test legge. Girando prima leggerebbe la
+fotografia di ieri e direbbe «a posto» su un magazzino che nessuno ha
+ancora ricontato.
+
+Tre decisioni, e ognuna ha una prova che la difende:
+
+- **lo storico viene prima dell'avviso.** Ogni notte il referto intero
+  resta in **`test_sistema_esiti`**, e si scrive **prima** di provare a
+  mandare la mail: se la mail non parte, resta comunque cosa guardare —
+  e al contrario (avvisare senza registrare) si avrebbe un allarme senza
+  niente da leggere. Da quello storico si vede **il giorno** in cui un
+  controllo è passato da verde a rotto, che è la prima domanda davanti a
+  un guasto: «da quando?»;
+- **l'avviso parte solo per quello che è NUOVO** — un controllo che
+  *diventa* rotto — e per quello che dura si ricorda **una volta a
+  settimana**. È la lezione di `sync-shop-vigilanza`: «un avviso
+  ripetuto ogni quarto d'ora è un avviso che si spegne». Dieci
+  scostamenti di magazzino che durano da una settimana non devono
+  svegliare nessuno ogni mattina;
+- **l'avviso non decide niente.** La edge function
+  `test-di-sistema-avviso` (gettone nato in Postgres, come gli altri
+  cron) **legge il referto già scritto** e lo manda: nessuna soglia e
+  nessun controllo duplicato là dentro, perché due posti che decidono
+  «cosa è rotto» darebbero due verdetti sullo stesso database. Nella mail
+  ci va, per ogni controllo rosso, **il guasto da cui nasce**: un avviso
+  che dice solo «rosso» manda a cercare cosa.
+
+**Perché serve una edge function per una mail:** il cron ha solo la
+chiave pubblicabile, e `invia-email` non la accetta — giustamente, da lì
+esce posta a nome dell'Accademia. Serve la service role, che vive
+nell'ambiente delle edge function e non nel vault (quella del vault è di
+prima del passaggio alle chiavi nuove: provata, 403).
+
+**I destinatari sono quelli di `sync_shop_vigilanza`** (oggi
+`commerciale.elitederma@gmail.com` e le push di GianLuca Rocca), e non è
+pigrizia: sono già «chi riceve gli avvisi di sistema» e si cambiano da
+Vendite shop. Due liste vorrebbero dire due posti da aggiornare il giorno
+che una mail cambia, con la certezza che uno resta indietro.
+
+**Collaudato, non dichiarato (24/11/2026).** Il giro vero: referto
+scritto, 17 a posto, 5 da guardare, zero rotti, **nessun avviso** — che è
+il comportamento giusto quando non c'è niente da dire. Poi il ramo
+dell'avviso, con un controllo finto marcato «PROVA DEL COLLAUDO»: mail
+**consegnata** alle 17:16 e `avvisato = true` sul referto. La riga di
+prova è stata cancellata subito, perché nello storico sarebbe rimasta
+come un guasto che non c'è mai stato e avrebbe falsato il confronto della
+notte dopo.
+
+**E IL TEST HA TROVATO UN DIFETTO DI SE STESSO un minuto dopo essere
+stato acceso:** «ogni lavoro notturno è riuscito di recente» segnalava
+«1 fermo da oltre tre giorni», ed era **il cron appena creato**, che non
+aveva ancora mai girato. Un lavoro neonato non è un lavoro fermo: ora
+chi non ha **nessuna** esecuzione registrata non si giudica (è nuovo),
+mentre chi ha solo giri falliti resta rotto — `test_di_sistema_cron_fermi()`.
+È il genere di difetto che un sorvegliante ha il dovere di non avere:
+avrebbe mandato una mail di allarme ogni notte per sempre, e quella è la
+strada più breve per non leggere più nessun avviso.
+
+**Una trappola di plpgsql pagata DUE VOLTE in un giorno, e va ricordata:**
+una variabile che si chiama **come una colonna** rende la query ambigua
+(42702) e la funzione **si rifiuta di girare — non alla scrittura, al
+primo giro**. È successo con `esito` (che è anche una colonna di
+`sync_shop_esiti`) e con `referto` (colonna di `test_sistema_esiti`).
+Da cui il prefisso `v_` su quello che esiste anche come colonna, e
+l'alias su ogni tabella interrogata dentro una funzione.
 
 Migrazione `20261124200000_test_di_sistema.sql` (`revoke` ad `anon`,
 rollback dentro, nessun dato toccato). Prove in

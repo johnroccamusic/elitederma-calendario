@@ -33,6 +33,20 @@
 -- aggiusta da se' e' il modo di non sapere piu' cosa era rotto. Dice
 -- cosa guardare e dove.
 
+create or replace function public.test_di_sistema_cron_fermi()
+returns integer language sql stable set search_path = public, extensions, pg_temp as $$
+  select count(*)::integer from (
+    select j.jobid
+      from cron.job j
+     where j.active
+       and exists (select 1 from cron.job_run_details r where r.jobid = j.jobid)
+       and coalesce((select max(r.end_time) from cron.job_run_details r
+                      where r.jobid = j.jobid and r.status = 'succeeded'),
+                    '-infinity'::timestamptz) < now() - interval '3 days') z;
+$$;
+revoke all on function public.test_di_sistema_cron_fermi() from public, anon;
+grant execute on function public.test_di_sistema_cron_fermi() to authenticated;
+
 create or replace function public.test_di_sistema()
 returns table (
   area text,
@@ -260,13 +274,12 @@ begin
     'Guarda cron.job: uno spento non lo dice nessuno';
 
   -- 22. QUALCHE LAVORO NOTTURNO FALLISCE DA GIORNI
-  select count(*) into n from (
-    select j.jobname, max(r.end_time) as ultimo_ok
-      from cron.job j
-      left join cron.job_run_details r on r.jobid = j.jobid and r.status = 'succeeded'
-     where j.active
-     group by j.jobname
-    having max(r.end_time) is null or max(r.end_time) < now() - interval '3 days') z;
+  -- UN LAVORO APPENA CREATO NON E' UN LAVORO FERMO, e l'ha trovato il
+  -- test su se stesso un minuto dopo essere stato acceso (24/11/2026):
+  -- senza nessun giro registrato veniva contato come «fermo da tre
+  -- giorni». Chi non ha NESSUNA esecuzione e' nuovo e non si giudica;
+  -- chi ha solo giri falliti, invece, e' rotto.
+  n := test_di_sistema_cron_fermi();
   return query select 'Cron', 'Ogni lavoro notturno e'' riuscito di recente',
     case when n = 0 then 'ok' when n <= 2 then 'guarda' else 'rotto' end, n::text || ' fermi da oltre tre giorni', 'zero',
     '2/11/2026: pg_cron scrive «succeeded» appena ha SPEDITO la richiesta, non quando e'' andata bene — per questo l''esito vero di ogni giro si guarda nelle tabelle dell''app, non solo qui',
