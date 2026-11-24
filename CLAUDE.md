@@ -1678,6 +1678,50 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### Il campo «mese» che metà dei browser non disegna, e le magliette che non erano nei kit (24/11/2026)
+
+Due cose trovate dalla stessa schermata del titolare: «qualcosa non
+funziona nella ricerca per data», con «Stima fino a» **vuota** e sotto
+l'errore «il mese deve essere questo o uno successivo».
+
+**1. `<input type="month">` NON ESISTE SU META' DEI BROWSER.** Lo
+disegnano Chrome ed Edge; **Firefox e Safari lo mostrano come un campo di
+testo libero** — una casella vuota in cui nessuno sa cosa scrivere, e il
+valore di partenza non si vede nemmeno. Nella schermata si riconosce a
+colpo d'occhio: i due campi `type="date"` accanto hanno l'icona del
+calendario, quello no. Adesso sono **due tendine**, mese e anno, che
+tutti disegnano allo stesso modo. (Resta un `type="month"` in App.jsx,
+in un filtro delle statistiche: va cambiato quando qualcuno ci passa.)
+
+**2. E IL PERIODO DA MISURARE ANDAVA NEL FUTURO**: nella stessa
+schermata c'era «dal 01/09/2026 **al 01/09/2027**». Non rompeva niente
+(le classi misurate sono solo quelle già cominciate) ma si legge come se
+la stima partisse da lì. Le due date ora si fermano a oggi, e forzando il
+calcolo si legge perché, con l'indicazione di dove si imposta la stima in
+avanti.
+
+**3. E LE MAGLIETTE NON ERANO CONTATE**, che è la lacuna vera — scoperta
+misurando il suo caso: cercava **«T-Shirt Elitederma Tg. L»**, e la
+pagina gli avrebbe risposto «nei kit questo prodotto non compare». Vero,
+e inutile: **le magliette non stanno nelle distinte**, si contano dalla
+taglia che ogni allieva sceglie (`iscritti.taglia_divisa`, dal
+29/10/2026) — ed erano uno degli esempi della sua richiesta originale,
+«delle magliette taglia M o delle magliette taglia S».
+
+Il conto delle taglie **è uscito da dentro la lista di allestimento**
+(`contaTaglie`, era inline) e ora lo usano tutte e due: due conti delle
+stesse magliette darebbero due numeri sullo stesso scaffale. Il legame
+fra la taglia scelta e il prodotto è **il nome** (`tagliaDellaMaglietta`:
+«T-Shirt Elitederma Tg. L» → L), perché un altro aggancio non c'è — niente
+sku, e la variazione del sito ce l'ha una taglia sola su otto. Le regole
+restano quelle della lista: una maglietta per allieva, **«NO DIVISA» non
+è una taglia**, e una taglia senza prodotto in anagrafica non inventa un
+consumo.
+
+Al 24/11/2026 le classi già cominciate da settembre hanno **171 M, 38 L,
+10 XL, 1 S**, più 3 «NO DIVISA» e 2 ancora da scegliere: sono i numeri su
+cui girano le prove.
+
 ### «Non esce nessuna ricerca»: due caselle erano una di troppo (24/11/2026)
 
 Seguito immediato del punto qui sotto, e **la correzione giusta era

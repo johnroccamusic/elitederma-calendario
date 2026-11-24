@@ -494,3 +494,60 @@ describe("«Stima fino a»: due tendine, non un campo che metà browser non dise
     expect(nodo.textContent).toContain("Stima fino a");
   });
 });
+
+// ------------------------------------------- le magliette, per taglia
+//
+// IL CASO VERO (24/11/2026): il titolare cercava «T-Shirt Elitederma Tg.
+// L» e la pagina gli avrebbe risposto «nei kit questo prodotto non
+// compare» — vero, perché le magliette NON stanno nelle distinte: si
+// contano dalla taglia che ogni allieva ha scelto. Erano uno degli
+// esempi della sua richiesta («delle magliette taglia M o taglia S»), e
+// me n'ero accorto solo misurando il suo caso.
+import { contaTaglie, maglietteDellaClasse, tagliaDellaMaglietta } from "../src/App.jsx";
+
+describe("le magliette si contano dalle taglie, non dalle distinte", () => {
+  const MAGLIETTE = [
+    { id: "t-m", nome: "T-Shirt Elitederma Tg. M" },
+    { id: "t-l", nome: "T-Shirt Elitederma Tg. L" },
+    { id: "t-xl", nome: "T-Shirt Elitederma Tg. XL" },
+    { id: "altro", nome: "Pigmento Arizona" },
+  ];
+
+  it("riconosce la taglia dal nome, che è l'unico aggancio che c'è", () => {
+    expect(tagliaDellaMaglietta("T-Shirt Elitederma Tg. L")).toBe("L");
+    expect(tagliaDellaMaglietta("T-Shirt Elitederma Tg. XXL")).toBe("XXL");
+    expect(tagliaDellaMaglietta("T-Shirt EliteDerma")).toBe(null);
+    expect(tagliaDellaMaglietta("Pigmento Arizona")).toBe(null);
+  });
+
+  it("una maglietta per allieva, e «NO DIVISA» non è una taglia", () => {
+    const iscritte = [
+      { taglia_divisa: "M" }, { taglia_divisa: "M" }, { taglia_divisa: "L" },
+      { taglia_divisa: "NO DIVISA" }, { taglia_divisa: "" }, { taglia_divisa: null },
+    ];
+    const c = contaTaglie(iscritte);
+    expect(c.totale).toBe(3);
+    expect(c.senzaDivisa).toBe(1);
+    expect(c.senzaTaglia).toBe(2);
+    const pezzi = maglietteDellaClasse(iscritte, MAGLIETTE);
+    expect(pezzi["t-m"]).toBe(2);
+    expect(pezzi["t-l"]).toBe(1);
+    expect(pezzi["t-xl"]).toBeUndefined();
+  });
+
+  it("una taglia senza prodotto in anagrafica non inventa un consumo", () => {
+    const pezzi = maglietteDellaClasse([{ taglia_divisa: "XXXL" }], MAGLIETTE);
+    expect(Object.keys(pezzi)).toEqual([]);
+  });
+
+  it("i numeri veri del 24/11: su 171 M e 38 L escono 171 e 38 magliette", () => {
+    const iscritte = [
+      ...Array.from({ length: 171 }, () => ({ taglia_divisa: "M" })),
+      ...Array.from({ length: 38 }, () => ({ taglia_divisa: "L" })),
+      ...Array.from({ length: 3 }, () => ({ taglia_divisa: "NO DIVISA" })),
+    ];
+    const pezzi = maglietteDellaClasse(iscritte, MAGLIETTE);
+    expect(pezzi["t-m"]).toBe(171);
+    expect(pezzi["t-l"]).toBe(38);
+  });
+});

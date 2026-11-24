@@ -16077,6 +16077,64 @@ function RigaAttrezzaturaInventario({ riga, voce, onSalva, onRimuovi }) {
 // stessa identica logica di PannelloPreparazioneKit, riusata sia per
 // limitare le tendine di "Materiali rispediti" (Inventario di sede) sia
 // congruità dell'Inventario Post Corso
+// QUANTE MAGLIETTE, E DI CHE TAGLIA.
+//
+// Una per allieva, e la taglia la dice lei (`iscritti.taglia_divisa`,
+// dal 29/10/2026). «NO DIVISA» non e' una taglia: e' chi la divisa non
+// la vuole, e non consuma niente. Chi non l'ha ancora scelta si conta a
+// parte, perche' una maglietta le servira' comunque e chi prepara deve
+// sapere quante ne mancano all'appello.
+//
+// Stava dentro la lista di allestimento, inline. E' uscita il 24/11/2026
+// perche' la stessa domanda la fa il calcolo consumi — «quante magliette
+// taglia M serviranno», che il titolare aveva chiesto il giorno in cui
+// quella pagina e' nata — e due conti delle stesse magliette darebbero
+// due numeri sullo stesso scaffale.
+export function contaTaglie(iscrittiEdizione) {
+  const ordine = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+  const per = {};
+  let senzaTaglia = 0;
+  let senzaDivisa = 0;
+  (iscrittiEdizione || []).forEach((i) => {
+    const t = (i.taglia_divisa || "").trim();
+    if (!t) { senzaTaglia += 1; return; }
+    if (t.toUpperCase() === "NO DIVISA") { senzaDivisa += 1; return; }
+    per[t] = (per[t] || 0) + 1;
+  });
+  const righe = ordine.filter((t) => per[t]).map((t) => ({ taglia: t, quante: per[t] }));
+  // una taglia scritta a mano che non sta nell'elenco non si perde
+  Object.keys(per).filter((t) => !ordine.includes(t)).sort().forEach((t) => righe.push({ taglia: t, quante: per[t] }));
+  return { righe, totale: righe.reduce((n, r) => n + r.quante, 0), senzaTaglia, senzaDivisa };
+}
+
+// LA MAGLIETTA DI UNA TAGLIA, riconosciuta dal nome: in anagrafica sono
+// otto prodotti «T-Shirt Elitederma Tg. M», uno per taglia, e il legame
+// con quello che l'allieva ha scelto e' quella sigla. Non c'e' un altro
+// aggancio: niente sku, niente variazione del sito (tranne una).
+export function tagliaDellaMaglietta(nome) {
+  const m = String(nome || "").match(/t-?shirt.*\btg\.?\s*([a-z]{1,4})\b/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+// Le magliette che una classe consuma, per prodotto: una per allieva che
+// ne vuole una. Serve al calcolo consumi, perche' le magliette NON stanno
+// nelle distinte dei kit — si contano dalle taglie — e senza questo una
+// ricerca su «T-Shirt Tg. L» risponderebbe «nei kit non compare», che e'
+// vero e inutile.
+export function maglietteDellaClasse(iscrittiEdizione, prodottiShop) {
+  const perTaglia = {};
+  (prodottiShop || []).forEach((p) => {
+    const t = tagliaDellaMaglietta(p.nome);
+    if (t && !perTaglia[t]) perTaglia[t] = p.id;
+  });
+  const fuori = {};
+  contaTaglie(iscrittiEdizione).righe.forEach(({ taglia, quante }) => {
+    const prodottoId = perTaglia[String(taglia).toUpperCase()];
+    if (prodottoId) fuori[prodottoId] = (fuori[prodottoId] || 0) + quante;
+  });
+  return fuori;
+}
+
 function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti) {
   const mappa = {};
   if (!corsoData) return mappa;
@@ -84131,22 +84189,7 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
     return () => { vivo = false; };
   }, [corsoData?.id]);
 
-  const riepilogoTaglie = (() => {
-    const ordine = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-    const per = {};
-    let senzaTaglia = 0;
-    let senzaDivisa = 0;
-    (iscrittiEdizione || []).forEach((i) => {
-      const t = (i.taglia_divisa || "").trim();
-      if (!t) { senzaTaglia += 1; return; }
-      if (t.toUpperCase() === "NO DIVISA") { senzaDivisa += 1; return; }
-      per[t] = (per[t] || 0) + 1;
-    });
-    const righe = ordine.filter((t) => per[t]).map((t) => ({ taglia: t, quante: per[t] }));
-    // una taglia scritta a mano che non sta nell'elenco non si perde
-    Object.keys(per).filter((t) => !ordine.includes(t)).sort().forEach((t) => righe.push({ taglia: t, quante: per[t] }));
-    return { righe, totale: righe.reduce((n, r) => n + r.quante, 0), senzaTaglia, senzaDivisa };
-  })();
+  const riepilogoTaglie = contaTaglie(iscrittiEdizione);
 
   // La foto del prodotto accanto al nome.
   //
@@ -93040,7 +93083,18 @@ function Gestionale() {
           prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} iscritti={iscritti}
           repartoDi={repartoPerProdotto(prodottiCategorie, categorieProdotti)}
           utente={utenteLoggato?.nome || ""}
-          quantitaPerEdizione={(cd, corso) => quantitaInviataPerProdotto(cd, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti)}
+          quantitaPerEdizione={(cd, corso) => {
+            const dai = quantitaInviataPerProdotto(cd, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti);
+            // E LE MAGLIETTE, che nelle distinte non ci sono: si contano
+            // dalle taglie scelte dalle allieve. Senza, cercando «T-Shirt
+            // Tg. L» la pagina rispondeva «nei kit non compare» — vero, e
+            // inutile: erano uno degli esempi del titolare il giorno in
+            // cui ha chiesto questa pagina
+            const magliette = maglietteDellaClasse(
+              (iscritti || []).filter((i) => i.corso_data_id === cd.id), prodottiShop);
+            Object.entries(magliette).forEach(([pid, q]) => { dai[pid] = (dai[pid] || 0) + q; });
+            return dai;
+          }}
           pezziVendutiNelPeriodo={(prodottoIds, dal, al) => {
             const scelti = new Set(prodottoIds || []);
             const indici = indiciProdotti(prodottiShop);
