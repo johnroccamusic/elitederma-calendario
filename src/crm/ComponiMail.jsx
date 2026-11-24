@@ -17,6 +17,7 @@
 // quelli gia' spediti non si rispediscono.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase.js";
+import { testoErroreFunzione } from "../errore-funzione.js";
 import { Button } from "../ui/base.jsx";
 import { NAVY, MUTED, GOLD, CREAM_BORDER, GRAFITE, BG, fontBody, fontDisplay, inputStyle, stileTitoloPagina } from "../ui/stile.js";
 import { componiCampagna, SEGNAPOSTI_CAMPAGNA } from "../../supabase/functions/_shared/email.js";
@@ -28,8 +29,14 @@ export const STATI_CAMPAGNA = {
 // spedita, non riuscita) e poi il webhook di Resend (consegnata, aperta,
 // rimbalzata, segnalata). «Aperta» arriva solo se su Resend il
 // tracciamento delle aperture e' acceso sul dominio: lo e' dal 30/10/2026
+// `in_spedizione` e' lo stato che `crm_campagna_prendi_lotto` scrive sulle
+// cento righe che sta spedendo: dura dei secondi, ma va nominato comunque —
+// una riga senza etichetta mostrerebbe la chiave grezza a chi guarda, e per
+// quindici minuti (il tempo dopo cui torna in coda) e' quello che si legge
+// se la pagina si chiude a meta' invio
 export const STATI_DESTINATARIO = {
-  in_coda: "in coda", inviata: "spedita", consegnata: "consegnata", aperta: "aperta",
+  in_coda: "in coda", in_spedizione: "in spedizione", inviata: "spedita",
+  consegnata: "consegnata", aperta: "aperta",
   rimbalzata: "rimbalzata", segnalata: "segnalata come spam", fallita: "non riuscita",
 };
 export const COLORE_STATO_DESTINATARIO = {
@@ -37,6 +44,7 @@ export const COLORE_STATO_DESTINATARIO = {
   consegnata: { colore: "#1F4E8C", sfondo: "#EEF3FA", bordo: "#C9D7EC" },
   inviata: { colore: GRAFITE, sfondo: "#F3F0E8", bordo: CREAM_BORDER },
   in_coda: { colore: MUTED, sfondo: "#F7F6F2", bordo: CREAM_BORDER },
+  in_spedizione: { colore: GRAFITE, sfondo: "#F7F6F2", bordo: CREAM_BORDER },
   rimbalzata: { colore: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2" },
   segnalata: { colore: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2" },
   fallita: { colore: "#C0392B", sfondo: "#FBEBE9", bordo: "#F0C8C2" },
@@ -181,7 +189,7 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
     try {
       const c = await assicuraCampagna();
       const { data, error } = await supabase.functions.invoke("crm-campagna-invia", { body: { campagna_id: c.id, prova: { a: a.trim() } } });
-      if (error || !data?.ok) throw new Error(data?.errore || error?.message || "Invio di prova non riuscito.");
+      if (error || !data?.ok) throw new Error(data?.errore || (error ? await testoErroreFunzione(error) : "Invio di prova non riuscito."));
       setMsg({ tipo: "ok", testo: `Prova mandata a ${data.prova}. Guarda com'è arrivata prima di spedire.` });
       setCampagna((x) => ({ ...(x || c), prova_inviata_a: data.prova, prova_inviata_il: new Date().toISOString() }));
     } catch (e) { setMsg({ tipo: "errore", testo: e.message }); }
@@ -257,7 +265,10 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
         rifiutiDiFila = 0;
         // un'altra chiamata sta spedendo le righe rimaste: si aspetta
         if (data?.attesa) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
-        if (error || (!data?.ok && !data?.stato)) throw new Error(data?.errore || error?.message || "Invio interrotto.");
+        // il motivo vero sta nel CORPO della risposta, non in error.message:
+        // «Edge Function returned a non-2xx status code» ha mandato a cercare
+        // un guasto nella funzione quando era il database a rifiutare (24/11)
+        if (error || (!data?.ok && !data?.stato)) throw new Error(data?.errore || (error ? await testoErroreFunzione(error) : "Invio interrotto."));
         inviate += data.inviate || 0; fallite += data.fallite || 0; restanti = data.restanti || 0;
         setInvio({ inCorso: restanti > 0, inviate, fallite, restanti, totale: salvata.totale_destinatari });
         if (!data.ok) throw new Error(data.errore || "Resend ha rifiutato un lotto.");

@@ -1331,6 +1331,70 @@ Fiorenza 5.223 / 308. Migrazione `20261124090000_crm_filtro_per_operatore.sql`,
 prove in `prove/crm-filtro-operatore.test.jsx`. **La pagina va pubblicata
 solo dopo la migrazione**: senza, il database ignora `esito_operatore` e
 «chiusi da Katia» restituirebbe tutti i suoi lead.
+### Nessuna campagna poteva partire: «in spedizione» non era uno stato ammesso (24/11/2026)
+
+Il titolare, alla prima campagna vera: «ho provato a spedire una campagna
+con la mailing list… la prova ha funzionato ma l'invio massivo no: *Edge
+Function returned a non-2xx status code*».
+
+**Il difetto non stava nella funzione d'invio, stava fra lei e il
+database.** Il 30/10 `crm_campagne_destinatari.stato` è nato con sette
+stati; il **31/10** (`20261031180000`) il lotto ha smesso di essere *letto*
+e ha iniziato a essere **preso**: `crm_campagna_prendi_lotto` marca le cento
+righe **`in_spedizione`** con `for update skip locked`, ed è quello che
+impedisce i doppi invii. Il CHECK non è stato allargato. Quindi il database
+rifiutava con un **23514**, PostgREST lo restituiva come errore della RPC,
+e la funzione lo girava in un 500 — il «non-2xx» che si leggeva in pagina.
+La prova funzionava perché non passa da lì: manda una mail sola e non tocca
+i destinatari.
+
+**Misurato prima di toccare niente, e la misura dice quanto è vecchio:** in
+archivio c'erano **52.883 righe di destinatari, tutte `in_coda`**, con
+`ultimo_evento` vuoto su ognuna, e **nessuna campagna `inviata`**. Non si è
+rotto oggi: **dal 31/10/2026 una campagna non è mai potuta partire**, e non
+lo sapeva nessuno perché nessuno aveva ancora premuto «Spedisci» su una
+lista vera. Le 5.291 righe della campagna di oggi non sono state toccate,
+quindi non c'è nessuna mail partita a metà da recuperare.
+
+**Come si è trovato, ed è il metodo che vale la pena ricordare.** I log
+delle edge function dal canale MCP non rispondevano, quindi la diagnosi è
+venuta dal **dato**: campagna ancora `pronta`, righe tutte `in_coda` e
+`ultimo_evento` nullo vogliono dire una cosa sola — l'invio è morto **prima
+del primo gesto**, e in quella funzione fra l'ingresso e il lotto ci sono
+quattro righe. Poi `crm_campagna_prendi_lotto` chiamata **in una
+transazione annullata**, che ha stampato il vincolo per nome.
+
+**E L'ERRORE NON DICEVA IL PERCHÉ**, che è il motivo per cui questo è
+costato un giro. `supabase.functions.invoke`, davanti a una risposta non
+2xx, lascia `data` nullo e appende il corpo a `error.context`: un
+`data?.errore || error?.message` mostra sempre la frase inutile.
+`testoErroreFunzione` esiste dall'8/11/2026 apposta, e questa pagina non la
+usava — adesso la usano tutti e due gli invii, la prova e il lotto. Una
+prova pretende che `error?.message` nudo non torni.
+
+**La guardia è la parte che dura** (`prove/campagna-si-spedisce.test.js`,
+6): rilegge **le migrazioni**, ricava l'elenco degli stati che il database
+ammette *adesso* (l'ultima migrazione che definisce il vincolo, non una
+lista inchiodata nella prova) e pretende che ogni stato che il codice scrive
+o legge — la funzione d'invio e la funzione SQL del lotto — sia dentro
+quell'elenco, e che ogni stato ammesso abbia la sua etichetta e il suo
+colore in pagina. Gli stati della **campagna** sono un elenco a parte, nel
+loro vincolo: confonderli vorrebbe dire una prova che accusa `in_invio` di
+non esistere. Provata rossa rimettendo il CHECK di prima. **Una prova che
+monta una pagina questo guasto non l'avrebbe mai visto**: il componente
+mostrava fedelmente quello che gli arrivava.
+
+Migrazione `20261124120000_lo_stato_in_spedizione_non_era_ammesso.sql`
+(rollback dentro, e dice che tornare indietro rimette anche l'impossibilità
+di spedire). Nessun dato toccato. In pagina `in_spedizione` ha ora la sua
+etichetta — dura dei secondi, ma per quindici minuti è quello che si legge
+se la pagina si chiude a metà invio.
+
+**Controllato prima di dire che si può ripartire:** l'endpoint batch di
+Resend accetta `headers`, `tags` e `reply_to` e regge cento messaggi per
+chiamata, che è esattamente quello che la funzione manda — gli allegati no,
+e non ce ne sono. Quindi i 5.291 destinatari partono in 53 lotti dalla
+pagina aperta.
 
 ### Un ordine che non è stato pagato non è un incasso (18/11/2026)
 
