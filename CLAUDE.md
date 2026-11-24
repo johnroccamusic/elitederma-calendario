@@ -1506,6 +1506,79 @@ tutte e 18 da sola in 14 secondi — è il banco sotto carico, non il codice.
 Resta la regola: davanti a una prova rossa si guarda prima se era rossa
 anche prima.
 
+### Due master su una classe la vedono tutte e due (24/11/2026)
+
+Il titolare: «se associo 2 master a un corso entrambe devono vedere il
+corso nella loro dashboard come se fossero master tutte e due. Ci sono
+problemi che possono accadere?» E, sul caso: «lei è Debora Fumagalli».
+
+**Il caso era vivo mentre si scriveva questa riga:** PMU BASE a MILANO,
+**22-27 novembre 2026**, master STEFANIA SANNA e seconda master **DEBORA
+FUMAGALLI** — una riga di `corsi_date_docenti` con `tipo: "master"`, come
+le crea «Aggiungi docenti». In aula in quel momento, e la classe non le
+compariva da nessuna parte.
+
+**Il difetto non era un filtro sbagliato: era la stessa domanda scritta
+quattro volte.** «Quali classi sono di questa master» viveva in quattro
+punti, a mano, e tre rispondevano diverso:
+
+| chi se lo chiedeva | cosa rispondeva |
+|---|---|
+| calendario e Operativo corsi | principale **e** master aggiunte |
+| «Assegnazione Master» | principale **e** master aggiunte |
+| **dashboard della master** | solo la principale (più le classi dove assiste) |
+| **POS al banco** | **solo la principale** |
+
+Quindi Debora in dashboard non aveva la classe — e con essa niente slide,
+niente elenco allieve, niente QR dei consensi, niente scheda della busta —
+e al banco non la trovava, cioè non poteva vendere con lo sconto d'aula né
+far entrare quelle vendite nella contabilità della classe. **Un'assistente
+invece quel ramo ce l'aveva da sempre: fino a oggi un'assistente vedeva più
+di una seconda master.**
+
+Adesso la risposta è una, `edizioniDellaMaster(corsiDate,
+corsiDateDocenti, masterId)`, accanto a `edizioniComeAssistente` e scritta
+come lei: chi è `corsi_date.master_id` **o** ha una riga `tipo: "master"`
+su quella classe, senza contarla due volte se è tutt'e due. La chiamano la
+dashboard e il POS; il giorno che la regola cambia si cambia lì.
+
+**Una correzione che da sola non avrebbe funzionato, ed è il genere di cosa
+che si vede solo guardando il dato:** il POS chiedeva al database le righe
+dei docenti **solo per le assistenti** (`.eq("tipo", "assistente")`, e
+l'intera lettura dietro un `if` sul tipo dell'operatore). Per una master
+quell'elenco restava vuoto, quindi il filtro nuovo avrebbe risposto come
+quello vecchio — correzione invisibile e muta. Ora le due specie di riga si
+chiedono insieme.
+
+**E I PROBLEMI CHE RESTANO SONO DI DENARO, non di codice.** Messi davanti
+al titolare perché sono decisioni sue:
+
+- **il compenso.** `compensiMaster` conta già le master aggiunte, con le
+  quote scritte sulla loro riga, e prende le fasce dall'assegnazione
+  corso→master. Nel caso vero **Debora non ha nessuna assegnazione su PMU
+  BASE** e la sua riga non ha quote né giorni: quella classe oggi **non le
+  sta pagando niente**. Se le spetta, va scritto — non lo indovina nessuno.
+  Al contrario, con entrambe assegnate la classe si carica **due compensi
+  pieni**: con due master che si dividono i giorni, giorni di presenza e
+  quote vanno messi a mano;
+- **il deposito del contante è UNO per classe** (`corsi_date.deposito_master_il`,
+  `_da_id`, `_importo`): la prima che preme «Depositato» congela il
+  promemoria per tutta la classe, e il contante in mano all'altra non
+  risulta dichiarato da nessuno. Stessa cosa per la **busta**, che è una:
+  con due persone che incassano, le borse sono due;
+- **il rientro del materiale e l'inventario di fine corso** li dichiara chi
+  ha la classe in dashboard: da oggi sono due, e va deciso chi;
+- **punti e provvigioni invece seguono lo scontrino**, non la classe: quelli
+  tornano da sé.
+
+Prove in `prove/due-master-su-una-classe.test.jsx` (8): la funzione e i
+suoi bordi (la classe non contata due volte, un'assistente che non diventa
+master, l'elenco mancante che non inventa niente), la **dashboard montata
+per davvero** con Debora che vede il PMU BASE e non vede la classe di
+un'altra, e la guardia che rilegge `src/App.jsx` — i due filtri scritti a
+mano non devono tornare, e il POS deve chiedere al database anche le righe
+`master`. Provata rossa rimettendo il filtro di prima.
+
 ### Un ordine che non è stato pagato non è un incasso (18/11/2026)
 
 Il titolare, davanti a «Clienti shop»: «come è possibile che questi

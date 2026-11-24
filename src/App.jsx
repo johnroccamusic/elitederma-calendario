@@ -15351,7 +15351,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     // sfogliando un'assistente ci sono SOLO le classi dove assiste: di
     // corsi suoi non ne ha, e `masterSelId` qui dentro e' "ass:<id>",
     // che a nessuna edizione corrisponde
-    const dellaMaster = assistenteSfogliataId ? [] : corsiDate.filter((cd) => cd.master_id === masterSelId);
+    const dellaMaster = assistenteSfogliataId ? [] : edizioniDellaMaster(corsiDate, corsiDateDocenti, masterSelId);
     const gia = new Set(dellaMaster.map((cd) => cd.id));
     return [...dellaMaster, ...comeAssistente.filter((cd) => !gia.has(cd.id))];
   }, [corsiDate, masterSelId, comeAssistente, assistenteSfogliataId]);
@@ -24889,6 +24889,32 @@ function edizioniComeAssistente(corsiDate, corsiDateDocenti, assistenteId) {
     .filter((d) => d.tipo === "assistente" && String(d.persona_id) === String(assistenteId))
     .map((d) => d.corso_data_id));
   return (corsiDate || []).filter((cd) => sue.has(cd.id));
+}
+
+// LE CLASSI DI UNA MASTER, IN UN POSTO SOLO. 24/11/2026.
+//
+// Il titolare: «se associo 2 master a un corso entrambe devono vedere il
+// corso nella loro dashboard come se fossero master tutte e due».
+//
+// Una seconda master si aggiunge da «Aggiungi docenti» e vive in
+// `corsi_date_docenti` con `tipo: "master"` — col suo viaggio, il suo
+// hotel, la sua quota. Il guasto era che la domanda «quali classi sono di
+// questa master» era scritta A MANO IN QUATTRO PUNTI, e tre rispondevano
+// diverso: il calendario e «Assegnazione Master» contavano anche le master
+// aggiunte, la DASHBOARD della master e il POS no. Quindi Debora
+// Fumagalli, seconda master del PMU BASE di Milano del 22-27/11/2026, in
+// aula non vedeva la sua classe e al banco non la trovava — mentre
+// un'assistente, che quel ramo ce l'ha, la vedeva.
+//
+// Adesso la risposta e' una e la danno tutti: chi e' `corsi_date.master_id`
+// e chi ha una riga `tipo: "master"` su quella classe. Il giorno che la
+// regola cambia si cambia qui.
+export function edizioniDellaMaster(corsiDate, corsiDateDocenti, masterId) {
+  if (!masterId) return [];
+  const extra = new Set((corsiDateDocenti || [])
+    .filter((d) => d.tipo === "master" && String(d.persona_id) === String(masterId))
+    .map((d) => d.corso_data_id));
+  return (corsiDate || []).filter((cd) => String(cd.master_id) === String(masterId) || extra.has(cd.id));
 }
 
 function operatoreCorrente(utenteLoggato, venditoreLoggato) {
@@ -74264,10 +74290,16 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // sfilza, pagina mai aperta (Martina Tora, 28/10/2026). La build non
   // se ne accorge: e' un ordine di righe, non un nome sbagliato.
   const [corsiDateDocentiPos, setCorsiDateDocentiPos] = useState([]);
+  // SERVE ANCHE A UNA MASTER (24/11/2026): da qui si ricavano le classi
+  // dove e' la SECONDA master, che al banco non trovava. Le righe sono due
+  // tipi, `assistente` e `master`, e si chiedono insieme: chiederne una e
+  // poi l'altra vorrebbe dire due letture che un giorno si scostano.
   useEffect(() => {
     let vivo = true;
-    if (operatoreReale?.tipo !== "assistente" && operatoreImpersonato?.tipo !== "assistente") return undefined;
-    supabase.from("corsi_date_docenti").select("corso_data_id, tipo, persona_id").eq("tipo", "assistente")
+    const tipi = ["assistente", "master"];
+    const serve = tipi.includes(operatoreReale?.tipo) || tipi.includes(operatoreImpersonato?.tipo);
+    if (!serve) return undefined;
+    supabase.from("corsi_date_docenti").select("corso_data_id, tipo, persona_id").in("tipo", tipi)
       .then(({ data }) => { if (vivo) setCorsiDateDocentiPos(data || []); });
     return () => { vivo = false; };
   }, [operatoreReale?.tipo, operatoreImpersonato?.tipo]);
@@ -74276,7 +74308,12 @@ export function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, 
   // suo — vende al corso dov'e', con lo sconto di quella classe — quindi
   // fuori da quelle classi non le resta che la vendita senza sconti.
   const corsiEleggibiliPos = operatore?.tipo === "master"
-    ? corsiFinestraPos.filter((cd) => cd.master_id === operatore.id)
+    // anche le classi dove e' la SECONDA master: la stessa domanda del
+    // calendario e della dashboard, e la risposta la da' un posto solo
+    ? (() => {
+      const sue = new Set(edizioniDellaMaster(corsiDate, corsiDateDocentiPos, operatore.id).map((cd) => cd.id));
+      return corsiFinestraPos.filter((cd) => sue.has(cd.id));
+    })()
     : operatore?.tipo === "assistente"
       ? (() => {
         const sue = new Set(edizioniComeAssistente(corsiDate, corsiDateDocentiPos, operatore.id).map((cd) => cd.id));
