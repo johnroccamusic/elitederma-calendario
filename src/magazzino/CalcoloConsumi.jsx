@@ -70,6 +70,13 @@ export default function CalcoloConsumi({
     return () => { vivo = false; };
   }, []);
 
+  // da quest'anno a tre avanti: piu' in la' non c'e' niente a calendario
+  // e nemmeno un ritmo misurato che regga la proiezione
+  const anniPossibili = useMemo(() => {
+    const ora = Number(oggiIso().slice(0, 4));
+    return [ora, ora + 1, ora + 2, ora + 3].map(String);
+  }, []);
+
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const inListino = (p) => p?.attivo !== false;
   const prodottiOrdinati = useMemo(
@@ -111,6 +118,7 @@ export default function CalcoloConsumi({
   function calcola() {
     if (!prodottiScelti.length) { setEsito({ errore: "Scegli prima un prodotto o un reparto." }); return; }
     if (!dal || !al || dal > al) { setEsito({ errore: "Il periodo da misurare non è valido: la data «dal» deve venire prima della «al»." }); return; }
+    if (al > oggiIso()) { setEsito({ errore: "Il periodo da misurare non può finire nel futuro: si misura quello che è già stato consumato. La stima in avanti si imposta in «Stima fino a»." }); return; }
     const daMese = meseFraMesi(meseDi(oggiIso()), 0);
     if (!finoAl || finoAl < daMese) { setEsito({ errore: "Il mese fino a cui stimare deve essere questo o uno successivo." }); return; }
     setCalcolando(true);
@@ -319,15 +327,40 @@ export default function CalcoloConsumi({
         <div style={{ display: "grid", gap: 10, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", marginTop: 14 }}>
           <div>
             <span style={etichetta}>Misura i consumi dal</span>
-            <input type="date" value={dal} onChange={(e) => setDal(e.target.value)} data-dal style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
+            <input type="date" value={dal} max={oggiIso()} onChange={(e) => setDal(e.target.value)} data-dal style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
           </div>
           <div>
             <span style={etichetta}>al</span>
-            <input type="date" value={al} onChange={(e) => setAl(e.target.value)} data-al style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
+            {/* mai oltre oggi: di domani non c'e' niente da MISURARE, e
+                una data futura qui si legge come se la stima partisse da
+                la' — nella schermata del titolare c'era «dal 01/09/2026
+                al 01/09/2027», cioe' un periodo di misura nel futuro */}
+            <input type="date" value={al} max={oggiIso()} onChange={(e) => setAl(e.target.value)} data-al style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
           </div>
           <div>
             <span style={etichetta}>Stima fino a</span>
-            <input type="month" value={finoAl} onChange={(e) => setFinoAl(e.target.value)} data-fino-al style={{ ...inputStyle, width: "100%", minWidth: 0 }} />
+            {/* DUE TENDINE, NON `type="month"`. Il titolare l'ha trovato
+                con una schermata: la casella era VUOTA e il calcolo
+                rispondeva «il mese deve essere questo o uno successivo».
+                `<input type="month">` lo sanno disegnare Chrome ed Edge;
+                Firefox e Safari lo mostrano come testo libero, cioè una
+                casella vuota in cui nessuno sa cosa scrivere — e il
+                valore di partenza non si vede nemmeno. Due tendine le
+                disegnano tutti allo stesso modo. */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <select value={finoAl.slice(5, 7)} data-fino-mese
+                onChange={(e) => setFinoAl(`${finoAl.slice(0, 4)}-${e.target.value}`)}
+                style={{ ...inputStyle, flex: "1 1 auto", minWidth: 0 }}>
+                {MESI_NOMI.map((nome, i) => (
+                  <option key={nome} value={String(i + 1).padStart(2, "0")}>{nome}</option>
+                ))}
+              </select>
+              <select value={finoAl.slice(0, 4)} data-fino-anno
+                onChange={(e) => setFinoAl(`${e.target.value}-${finoAl.slice(5, 7)}`)}
+                style={{ ...inputStyle, width: 96, minWidth: 0 }}>
+                {anniPossibili.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6 }}>

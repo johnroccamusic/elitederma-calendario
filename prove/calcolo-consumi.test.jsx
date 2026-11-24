@@ -433,3 +433,64 @@ describe("la tabella del trend in pagina", () => {
     expect(riga.valore["3"] ?? riga.valore[3]).toBe(100);
   });
 });
+
+describe("«Stima fino a»: due tendine, non un campo che metà browser non disegna", () => {
+  // IL CASO VERO (24/11/2026, con la schermata): la casella era VUOTA e
+  // il calcolo rispondeva «il mese deve essere questo o uno successivo».
+  // `<input type="month">` lo disegnano Chrome ed Edge; Firefox e Safari
+  // lo mostrano come testo libero — una casella vuota in cui nessuno sa
+  // cosa scrivere, e il valore di partenza non si vede nemmeno.
+  it("non c'è nessun campo «month»: ci sono il mese e l'anno", async () => {
+    rispondiCon({});
+    const { nodo } = await monta(pagina());
+    await attendi();
+    expect(nodo.querySelector('input[type="month"]'), "il campo month non deve esserci").toBeNull();
+    expect(nodo.querySelector("[data-fino-mese]")).toBeTruthy();
+    expect(nodo.querySelector("[data-fino-anno]")).toBeTruthy();
+  });
+
+  it("nascono su un mese valido, dodici mesi avanti: il calcolo parte senza toccarle", async () => {
+    rispondiCon({});
+    const { nodo } = await monta(pagina());
+    await attendi();
+    const mese = nodo.querySelector("[data-fino-mese]").value;
+    const anno = nodo.querySelector("[data-fino-anno]").value;
+    expect(mese).toMatch(/^(0[1-9]|1[0-2])$/);
+    expect(Number(anno)).toBeGreaterThanOrEqual(new Date().getFullYear());
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
+    await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
+    await attendi();
+    // nessun errore sul mese: la stima esce
+    expect(nodo.textContent).not.toContain("deve essere questo o uno successivo");
+    expect(nodo.querySelector("[data-stima]")).toBeTruthy();
+  });
+
+  it("cambiando mese e anno la stima arriva fin lì", async () => {
+    rispondiCon({});
+    const { nodo } = await monta(pagina());
+    await attendi();
+    const anno = String(new Date().getFullYear() + 1);
+    await scegli(nodo.querySelector("[data-fino-anno]"), anno);
+    await scegli(nodo.querySelector("[data-fino-mese]"), "09");
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
+    await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
+    await attendi();
+    expect(nodo.querySelector("[data-stima]").textContent).toContain(`settembre ${anno}`);
+  });
+
+  it("IL PERIODO DA MISURARE NON VA NEL FUTURO, e lo dice", async () => {
+    rispondiCon({});
+    const { nodo } = await monta(pagina());
+    await attendi();
+    // nella schermata del titolare c'era «dal 01/09/2026 al 01/09/2027»:
+    // un periodo di MISURA nel futuro, dove non c'è niente da misurare
+    const domani = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    expect(nodo.querySelector("[data-al]").getAttribute("max")).toBe(new Date().toISOString().slice(0, 10));
+    await scrivi(nodo.querySelector("[data-al]"), domani);
+    await scegliProdotto(nodo, "arizona", "Pigmento Arizona");
+    await clicca([...nodo.querySelectorAll("button")].find((b) => /Calcola i consumi/.test(b.textContent)));
+    await attendi();
+    expect(nodo.textContent).toContain("non può finire nel futuro");
+    expect(nodo.textContent).toContain("Stima fino a");
+  });
+});
