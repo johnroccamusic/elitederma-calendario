@@ -1678,7 +1678,91 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
-### Dal 31/10/2026 gli ordini dello shop non scaricano più il magazzino (24/11/2026)
+### Lo shop non scaricava il magazzino: `ON CONFLICT` su un indice PARZIALE (24/11/2026)
+
+**Trovato misurando i consumi, non cercandolo**, e riparato lo stesso
+giorno su richiesta del titolare («verifica e aggiusta»).
+
+| | |
+|---|---|
+| ultimo movimento `ordine_online` | **31/10/2026, 15:00** |
+| ultimo ordine shop pagato | **24/11/2026, 16:13** |
+| ordini pagati nel mezzo | **64** |
+| movimenti di magazzino scritti | **zero** |
+
+**LA CAUSA, e il database la dice in una riga.** Ogni scarico passava da
+`scriviMovimentoOnline`, che scriveva così:
+
+```js
+.upsert(movimento, { onConflict: "prodotto_id,riferimento", ignoreDuplicates: true })
+```
+
+ma l'indice che protegge dal doppio scarico è **parziale**:
+
+```sql
+unique (prodotto_id, riferimento) where origine = 'ordine_online' and riferimento is not null
+```
+
+e **Postgres non può inferire un indice parziale** se la scrittura non
+ripete il suo predicato — cosa che PostgREST non manda. Provato in
+transazione annullata: **`42P10 — there is no unique or exclusion
+constraint matching the ON CONFLICT specification`**. Quindi la giacenza
+veniva scritta, il movimento **no**, e il codice si fermava a un
+`console.error`: un messaggio a nessuno.
+
+**Perché prima funzionava e dal 31/10 no:** quel ramo si usa solo quando
+il movimento porta un `riferimento`, che è nato col lavoro sui doppi
+scarichi. Finché il riferimento era nullo si passava dal ramo `insert`
+semplice. **È nato col riferimento, ed è morto in silenzio** — e in
+archivio si vede: **zero** movimenti `ordine_online` con un riferimento,
+in tutti i mesi.
+
+**LA CORREZIONE: si scrive e basta, e il doppione lo ferma l'indice.** Un
+`insert` normale; se torna **23505** quel movimento c'era già — un webhook
+rimandato non è un errore, è una ripetizione, e la risposta giusta è «l'ho
+già fatto». La protezione resta identica, solo che adesso il database
+rifiuta *la ripetizione* invece di rifiutare **tutto**. Provato in
+transazione annullata: primo insert passa, il secondo identico è fermato
+con 23505.
+
+**E un movimento non scritto non finisce più in un `console.error`:** va
+in `scarichi_non_riusciti`, che Logistica mostra in cima agli ordini. È
+esattamente così che questo guasto è vissuto ventiquattro giorni.
+
+Pubblicate `woo-webhook` **v41** e `woo-import-storico` **v41**, verificate
+rileggendo i file serviti.
+
+**Due errori miei in questo giro, e vanno scritti.** Ho pubblicato
+`woo-webhook` con un file **«placeholder»** (il canale MCP vuole il
+contenuto, non un percorso): per qualche minuto la funzione in produzione
+era vuota — gli ordini non si sono persi perché li recupera comunque il
+cron ogni quarto d'ora, ma è stato un guasto causato da me. E ho
+ripubblicato con `--no-verify-jwt` senza prima guardare com'era: per
+`woo-webhook` è il valore giusto (è un webhook pubblico che verifica la
+firma HMAC da sé, come `stripe-webhook`), ma non lo sapevo quando l'ho
+scritto. **La lezione: la CLI `supabase functions deploy` è autenticata su
+questa macchina** (`supabase projects list` risponde) e legge i file **dal
+disco** — è la strada giusta per pubblicare, e togliere di mezzo la
+trascrizione a mano toglie di mezzo questa classe di errori.
+
+**IL BUCO DEI 24 GIORNI, misurato, e la conta lo riduce quasi tutto.** Le
+218 righe d'ordine dal 31/10 si riconoscono **tutte** in anagrafica, e
+valgono **274 pezzi** mai scalati. Ma l'inventario del 20-23/11 ha già
+contato gli scaffali: per ogni prodotto verificato, quello che era uscito
+fino a quel giorno **è già dentro la giacenza vera**. Restano quindi
+**58 pezzi su 29 prodotti**, cioè gli ordini successivi alla verifica di
+quel prodotto (o tutti, per i prodotti che nessuno ha contato).
+
+**Non sono stati scalati**, ed è una decisione del titolare: è una
+scrittura sulle giacenze di 29 prodotti, e va fatta **una volta sola** —
+applicata due volte sbaglia nel verso opposto. Tre righe andrebbero sotto
+zero e vanno guardate prima: *Aftercare 25pz* e *Kit laminazione
+essential* sono bundle (non hanno giacenza propria, si scalano i
+componenti), mentre **Batteria horus nero** è reale — zero in casa e due
+vendute, quindi lì i pezzi mancano davvero e si contano. Quando si fa, si
+passa da `stock_muovi` come ogni altro movimento, con l'origine scritta.
+
+### Dal 31/10/2026 gli ordini dello shop non scaricavano il magazzino — la misura (24/11/2026)
 
 **Trovato misurando i consumi, non cercandolo**, ed è il motivo per cui il
 calcolo consumi legge le vendite e non i movimenti.

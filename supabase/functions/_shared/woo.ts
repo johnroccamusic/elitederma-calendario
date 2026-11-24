@@ -196,14 +196,40 @@ function riferimentoMovimento(contesto: any, direzione: 1 | -1, extra = "") {
 // riferimento (gli ordini di prima del 19/10/2026, e quelli che per
 // qualche motivo non hanno un numero) si scrive come sempre, perche'
 // NULL non si scontra con niente.
-async function scriviMovimentoOnline(supabase: any, movimento: Record<string, unknown>) {
-  if (!movimento.riferimento) {
-    await supabase.from("movimenti_magazzino").insert(movimento);
-    return;
-  }
-  const { error } = await supabase.from("movimenti_magazzino")
-    .upsert(movimento, { onConflict: "prodotto_id,riferimento", ignoreDuplicates: true });
-  if (error) console.error("Movimento online non scritto:", error.message);
+async function scriviMovimentoOnline(supabase: any, movimento: Record<string, unknown>, riga: any = null, contesto: any = {}) {
+  // NON SI USA `upsert` CON `onConflict`, E QUESTO E' IL PUNTO.
+  //
+  // Il 24/11/2026 e' venuto fuori che dal 31/10 nessun ordine dello shop
+  // scriveva il suo movimento: 61 ordini pagati a novembre, zero righe in
+  // `movimenti_magazzino`. La causa era qui, e il database la dice in una
+  // riga — provata: `on conflict (prodotto_id, riferimento)` risponde
+  // **42P10, there is no unique or exclusion constraint matching the ON
+  // CONFLICT specification**, perche' l'indice che protegge dal doppio
+  // scarico e' PARZIALE (`where origine = 'ordine_online' and riferimento
+  // is not null`) e Postgres non puo' inferire un indice parziale se la
+  // scrittura non ripete il suo predicato — cosa che PostgREST non manda.
+  //
+  // Prima non si vedeva perche' il `riferimento` era nullo e si passava
+  // dal ramo `insert`: e' nato col riferimento, ed e' morto in silenzio.
+  //
+  // Quindi si scrive e basta, e il doppione lo ferma l'indice: la
+  // protezione resta quella di sempre, solo che adesso e' il database a
+  // rifiutare la ripetizione (23505) invece di rifiutare TUTTO.
+  const { error } = await supabase.from("movimenti_magazzino").insert(movimento);
+  if (!error) return;
+  // 23505: quel movimento c'era gia'. Un webhook rimandato non e' un
+  // errore, e' una ripetizione, e la risposta giusta e' «l'ho gia' fatto».
+  if (error.code === "23505") return;
+  // E UN MOVIMENTO NON SCRITTO NON FINISCE PIU' IN UN `console.error`.
+  // E' esattamente cosi' che questo guasto e' vissuto ventiquattro
+  // giorni: il pacco partiva, la giacenza non scendeva, e il messaggio
+  // andava a nessuno. Ora si vede in Logistica, in cima agli ordini.
+  await segnalaScaricoNonRiuscito(
+    supabase,
+    riga || { nome: `prodotto ${movimento.prodotto_id}`, quantita: Math.abs(Number(movimento.delta) || 0) },
+    `La giacenza e' stata scritta ma il movimento NO: ${error.message} (${error.code || "senza codice"}). Il registro e la giacenza ora non coincidono su questo prodotto.`,
+    contesto,
+  );
 }
 
 export async function applicaMovimentoBundle(supabase: any, prodotti: any[], direzione: 1 | -1, contesto: any = {}): Promise<Set<string>> {
@@ -232,7 +258,7 @@ export async function applicaMovimentoBundle(supabase: any, prodotti: any[], dir
         prodotto_id: c.componente_id, delta, origine: "ordine_online",
         nota: `Componente di "${nome}" venduto online`, utente: "WooCommerce",
         riferimento: riferimentoMovimento(contesto, direzione, `kit:${prodotto.id}:${c.componente_id}`),
-      });
+      }, riga, contesto);
     }
     bundleToccati.add(prodotto.id);
   }
@@ -335,7 +361,7 @@ export async function applicaMovimentoProdottiSemplici(supabase: any, prodotti: 
       prodotto_id: prodotto.id, delta, origine: "ordine_online",
       nota: direzione < 0 ? "Venduto sullo shop online" : "Ordine online annullato/rimborsato", utente: "WooCommerce",
       riferimento: riferimentoMovimento(contesto, direzione, prodotto.id),
-    });
+    }, riga, contesto);
     toccati.add(prodotto.id);
   }
   return toccati;
