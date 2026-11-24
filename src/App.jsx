@@ -14174,9 +14174,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               </div>
               <div style={{ ...fontBody, fontSize: isMobile ? 11 : 11.5, color: MUTED, lineHeight: 1.45, marginTop: 2 }}>
                 {deposito.stato === "confermato"
-                  ? `L'amministrazione ha confermato di averli ricevuti il ${fmtData(deposito.dataConferma)}.`
+                  ? `L'amministrazione ha confermato di averli ricevuti il ${fmtData(deposito.dataConferma)}.${!deposito.daLei && deposito.daChi ? ` Li aveva lasciati ${deposito.daChi}.` : ""}`
                   : deposito.stato === "dichiarato"
-                    ? `Hai segnalato il deposito il ${fmtData(deposito.dataDichiarato)}. L'amministrazione deve ancora confermare di averli ricevuti.`
+                    ? `${deposito.daLei || !deposito.daChi ? "Hai segnalato" : `L'ha segnalato ${deposito.daChi}`} il deposito il ${fmtData(deposito.dataDichiarato)}. L'amministrazione deve ancora confermare di averli ricevuti.`
                     : deposito.premibile
                       ? "Quando li hai lasciati all'amministrazione premi «Depositato»: è un promemoria, non chiude niente e non mette niente in cassa."
                       : "Lo segnala la master dalla sua dashboard, quando lascia il contante all'amministrazione."}
@@ -15504,6 +15504,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
       dataDichiarato: promemoria.dataDichiarato,
       dataConferma: promemoria.dataConferma,
       daLei: !!promemoria.masterId && promemoria.masterId === masterLoggataId,
+      // CON DUE MASTER SULLA CLASSE il deposito lo fa «chi lo fa per
+      // prima» (deciso dal titolare il 24/11/2026), e allora l'altra deve
+      // leggere CHI: la frase diceva «Hai segnalato» a tutte e due, cioe'
+      // una cosa falsa a quella che non l'ha fatto
+      daChi: (master || []).find((m) => m.id === promemoria.masterId)?.nome || null,
       premibile: suaDashboard && !promemoria.dichiarato,
       // si disfa solo finche' nessuno ha confermato, e solo da lei
       annullabile: suaDashboard && promemoria.dichiarato && !promemoria.confermato,

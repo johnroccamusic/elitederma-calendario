@@ -92,6 +92,49 @@ describe("la dashboard della seconda master, montata per davvero", () => {
   });
 });
 
+// IL DEPOSITO LO FA «CHI LO FA PER PRIMA» (deciso dal titolare il
+// 24/11/2026: «lo fa o l'una o l'altra, chi lo fa per prima lo fa»).
+// Allora l'altra deve leggere CHI: la frase diceva «Hai segnalato» a
+// tutte e due, cioe' una cosa falsa a quella che non l'aveva fatto.
+describe("con due master, il deposito dice chi l'ha segnalato", () => {
+  const DEPOSITATA = {
+    ...CLASSE,
+    deposito_master_il: "2026-11-23T18:00:00Z",
+    deposito_master_da_id: "stefania",
+    deposito_master_importo: 350,
+  };
+  const dashboard = (masterLoggataId, classe) => (
+    <PaginaDashboardMaster
+      master={[{ id: "stefania", nome: "STEFANIA SANNA" }, { id: "debora", nome: "DEBORA FUMAGALLI" }]}
+      corsi={[{ id: "pmu", nome: "PMU BASE" }]}
+      location={[{ id: "loMI", nome: "MILANO" }]}
+      corsiDate={[classe]} hotel={[]} iscritti={[]}
+      masterLoggataId={masterLoggataId} ricarica={async () => {}}
+      venditeShop={[]} prodottiShop={[]} targetVenditeProdotti={[]} coupon={[]}
+      puntiMasterImpostazioni={{}} regoleReferralAutomatico={{}}
+      ruoloUtente="master" utenteLoggato={{ masterId: masterLoggataId }} venditoreLoggato={null}
+      assistenti={[]} corsiDateDocenti={DOCENTI} onBack={() => {}}
+    />
+  );
+
+  it("a Debora dice che l'ha segnalato Stefania, non «hai segnalato»", async () => {
+    rispondiCon({});
+    const p = await monta(dashboard("debora", DEPOSITATA));
+    await attendi(350);
+    expect(p.testo()).toContain("L'ha segnalato STEFANIA SANNA");
+    expect(p.testo()).not.toContain("Hai segnalato");
+    await p.smonta();
+  });
+
+  it("a Stefania, che l'ha fatto, continua a dire «hai segnalato»", async () => {
+    rispondiCon({});
+    const p = await monta(dashboard("stefania", DEPOSITATA));
+    await attendi(350);
+    expect(p.testo()).toContain("Hai segnalato");
+    await p.smonta();
+  });
+});
+
 describe("la guardia: la risposta sta in un posto solo", () => {
   it("dashboard e POS passano da `edizioniDellaMaster`, e il filtro a mano non torna", async () => {
     const fs = await import("node:fs");

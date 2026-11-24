@@ -1571,6 +1571,27 @@ al titolare perché sono decisioni sue:
 - **punti e provvigioni invece seguono lo scontrino**, non la classe: quelli
   tornano da sé.
 
+**LE DUE DECISIONI SONO ARRIVATE LO STESSO GIORNO, e sono queste.** Sul
+compenso: «Debora non avrà un compenso segnato, daremo a lei una parte del
+compenso di Sanna» — quindi **non si tocca niente**, ed è anche la cosa più
+semplice: la classe porta un compenso solo, quello della master con
+l'assegnazione, e come si divide fra loro due è un accordo che sta fuori
+dall'app. La riga «Costo Master — DEBORA FUMAGALLI» compare a **0,00 €**
+perché non ha fasce su quel corso né quote scritte, e quello zero dice il
+vero: dalla classe non esce un secondo compenso. Il giorno in cui qualcuno
+scrivesse una quota su quella riga, il costo della classe salirebbe —
+quindi va lasciata vuota.
+
+Sul deposito del contante e sul rientro del materiale: «lo fa o l'una o
+l'altra, idem il rientro del materiale. Chi lo fa per prima lo fa». È il
+comportamento che c'era, quindi niente da costruire — **ma una frase era
+falsa**: il riquadro diceva «**Hai** segnalato il deposito» a tutte e due,
+anche a quella che non l'aveva fatto. Il dato per dirlo c'era già
+(`deposito_master_da_id`, e il flag `daLei` nella dashboard), e non lo
+usava nessuno. Adesso l'altra legge «**L'ha segnalato STEFANIA SANNA** il
+23 novembre», e a deposito confermato «Li aveva lasciati Stefania Sanna».
+Due prove in più lo inchiodano, una per parte.
+
 Prove in `prove/due-master-su-una-classe.test.jsx` (8): la funzione e i
 suoi bordi (la classe non contata due volte, un'assistente che non diventa
 master, l'elenco mancante che non inventa niente), la **dashboard montata
