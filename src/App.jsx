@@ -43,6 +43,7 @@ import { calcolaRipristino, leggiListaRientro, registraDifettosi } from "./rient
 const MagazzinoGuasti = pezzo(() => import("./rientri/MagazzinoGuasti.jsx"));
 const AnalisiConsumi = pezzo(() => import("./rientri/AnalisiConsumi.jsx"));
 const CalcoloConsumi = pezzo(() => import("./magazzino/CalcoloConsumi.jsx"));
+const TestDiSistema = pezzo(() => import("./sistema/TestDiSistema.jsx"));
 import { analizzaConsumi, consumoRealePerAllievo } from "./rientri/consumi";
 const AnomalieRientri = pezzo(() => import("./rientri/AnomalieRientri.jsx"));
 import { edizioniConSpedizione } from "./rientri/scorte";
@@ -20613,7 +20614,7 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
       </div>
 
       <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, width: "fit-content", marginBottom: 22 }}>
-        {[{ v: "setting", l: "Setting" }, { v: "utenti", l: "Utenti" }, { v: "aspetto", l: "Aspetto dell'app" }].map((a) => (
+        {[{ v: "setting", l: "Setting" }, { v: "utenti", l: "Utenti" }, { v: "aspetto", l: "Aspetto dell'app" }, { v: "test", l: "Test di sistema" }].map((a) => (
           <button key={a.v} onClick={() => scegliArea(a.v)}
             style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, padding: "9px 22px", borderRadius: 16, border: "none", background: area === a.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
             {a.l}
@@ -20623,6 +20624,7 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
 
       {area === "setting" ? <Impostazioni {...propsSetting} senzaIntestazione />
         : area === "utenti" ? <PaginaPasswordMenu {...propsUtenti} senzaIntestazione />
+        : area === "test" ? <TestDiSistema isMobile={isMobile} />
         : <PaginaAspettoApp />}
     </div>
   );

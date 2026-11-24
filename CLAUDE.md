@@ -1678,6 +1678,104 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### «Test di sistema»: ripassare i guasti vecchi per vedere se sono tornati (24/11/2026)
+
+Il titolare, dopo il guasto dello shop: «creiamo una funzione di test in
+cui mandiamo tutte le verifiche da fare per testare l'app in base a tutti
+i malfunzionamenti che hai trovato nel tempo, in modo che se un giorno
+vogliamo ripassare tutto abbiamo un sistema che si basa su vecchi bug e
+sulla loro risoluzione. Si può fare e chiamarlo test di sistema?»
+
+**PERCHÉ LE 1.542 PROVE DEL BANCO NON BASTAVANO**, ed è la ragione che
+decide tutta la forma di questa cosa. Il guasto dello stesso giorno — lo
+shop che non scaricava il magazzino da ventiquattro giorni — **nessuna
+prova poteva vederlo**: il codice nel repo era giusto, l'indice parziale
+stava nel database, e il danno nasceva soltanto in produzione, dove
+nessuna prova arriva (e non deve: una prova che parla col database vero
+non è una prova, è un incidente in attesa su dati di allievi).
+
+Quindi il test ha **due metà**, e vanno tenute distinte:
+
+| | dove | cosa guarda |
+|---|---|---|
+| `public.test_di_sistema()` | database | lo **stato vivo**: dati, vincoli, permessi, cron, quanto tempo è passato da quando una catena ha funzionato l'ultima volta |
+| `prove/test-di-sistema.test.jsx` | repo | il **codice e le migrazioni**: le trappole che nel database non si vedono, perché là è tutto in regola |
+
+**I 22 CONTROLLI SONO GUASTI VERI, NON IDEE.** Ognuno porta dentro la sua
+storia e la sua data, e non è decorazione: è la sola cosa che permette,
+fra un anno, di capire perché quel numero va guardato. Alcuni esempi —
+«lo shop scala il magazzino» (24/11, ON CONFLICT su indice parziale), «la
+sincronizzazione degli ordini gira» (1-2/11, un giorno e mezzo di ordini
+mai arrivati), «nessun ordine del sito senza numero o data» (1/11, la riga
+vuota che azzerava il cursore), «ogni ordine porta uno stato» (18/11,
+717.712 € mai entrati contati come fatturato), «il registro e la giacenza
+coincidono» (19/10), «ogni vendita col QR ha il suo incasso» (19/10,
+117,13 € mai incassati e il pacco partito), «nessun codice di incasso su
+contanti» (9/11, il QR che restava nello stato del POS), «gli stati dei
+destinatari sono tutti ammessi» (24/11, nessuna campagna poteva partire),
+«nessuna tabella aperta ad anon» (18/10), «le funzioni di servizio non
+sono eseguibili da anon» (31/10, e la lezione che la migrazione che lo
+dichiara non basta: va letto il `proacl` vivo).
+
+**Tre esiti e non due**: `ok`, **`guarda`** — non è un guasto, ma quel
+numero merita l'occhio di una persona — e `rotto`, che vuol dire «questo è
+il guasto di allora, ed è tornato». Il gradino di mezzo serve: senza, dieci
+scostamenti di magazzino diventerebbero un allarme rosso che si impara a
+premere via.
+
+**NON CORREGGE NIENTE, e non è una dimenticanza:** un controllo che
+aggiusta da sé è il modo di non sapere più cosa era rotto. Dice la misura,
+cosa ci si aspetta, da quale guasto nasce e cosa fare. La funzione è
+`stable` e una prova pretende che nel suo corpo non ci sia nessun
+`update`, `insert` o `delete`.
+
+**Il referto si legge in app**, quarta linguetta di Impostazioni accanto a
+Setting, Utenti e Aspetto (`src/sistema/TestDiSistema.jsx`): i tre
+conteggi in cima, le righe ordinate col rotto per primo, e ogni riga che
+si apre sulla propria storia. Un referto che si legge solo via SQL non lo
+guarda nessuno.
+
+**LA GUARDIA CHE IL 24/11 È MANCATA**, e che è il motivo per cui la metà
+nel repo esiste: rilegge **tutti** gli `onConflict` del codice, ricava la
+tabella dall'ultimo `.from("…")` che li precede, e pretende che nessuno
+nomini le colonne di un indice unico **parziale** di quella tabella —
+perché Postgres risponde 42P10 e **la scrittura non avviene**. Provata
+rossa rimettendo l'upsert di prima: nomina il file della migrazione che
+contiene l'indice e dice cosa accadrà.
+
+**Due imprecisioni mie, prese dalla prova stessa al primo giro**, e
+valgono come regola: la guardia confrontava le **sole colonne** e
+accusava `magazzino-termometro`, che fa `onConflict: "prodotto_id"` su
+`magazzino_scarti_shop` dove quell'indice è la **chiave primaria** —
+`prodotto_id` ha un indice parziale su un'ALTRA tabella
+(`riordini_in_corso`), e senza la tabella si dà torto a chi non ha
+nessuna colpa. E due prove inciampavano **nei propri commenti** («for
+update skip locked» citato in una spiegazione, la parola `onConflict`
+dentro il commento che spiega perché non si usa): una prova che non
+distingue il codice dalla sua spiegazione protegge niente e accusa a caso.
+
+**Il primo giro, il 24/11/2026 alle 17:45: 22 controlli, 16 verdi, 6 da
+guardare, zero rotti.** I sei: 23 rimbalzi ancora da leggere, 2 impegni
+annullati da ricontrollare, 1 vincolo NOT VALID (quello dell'8/11, voluto),
+10 scostamenti di magazzino (erano 84: la conta del 20-23/11 ne ha chiusi
+74), 1 scarico a terra (la Batteria horus nero di oggi) e zero mail
+risultate aperte.
+
+**Una cosa da sapere leggendo il verde di «lo shop scala il magazzino»:**
+oggi è verde perché l'ultimo scarico (il recupero delle 17:43) è più
+recente dell'ultimo ordine. Dice «lo scarico non è indietro», **non**
+ancora «il webhook ha scritto da sé»: quello lo prova il primo ordine
+nuovo, e se non scrivesse il controllo diventerebbe rosso entro il giorno.
+
+**Resta da decidere:** se farlo girare da solo ogni notte con una notifica
+sui soli `rotto`, come fa `sync-shop-vigilanza` per gli ordini. Non è
+stato fatto: un avviso automatico va deciso da chi lo riceve, e oggi il
+test si preme.
+
+Migrazione `20261124200000_test_di_sistema.sql` (`revoke` ad `anon`,
+rollback dentro, nessun dato toccato). Prove in
+`prove/test-di-sistema.test.jsx` (10), col referto montato e premuto.
+
 ### Lo shop non scaricava il magazzino: `ON CONFLICT` su un indice PARZIALE (24/11/2026)
 
 **Trovato misurando i consumi, non cercandolo**, e riparato lo stesso
