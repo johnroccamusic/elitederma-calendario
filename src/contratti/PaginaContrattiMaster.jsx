@@ -190,6 +190,25 @@ export default function PaginaContrattiMaster({
     await ricarica();
   }
 
+  // LA SPUNTA «ESCLUDI» (25/11/2026, chiesta dal titolare: «fammi i flag
+  // vicino ai nomi in modo che io possa escludere chi non voglio che
+  // riceva il contratto»). Scrive lo stesso dato di «Togli una master dal
+  // contratto», ma senza pretendere il motivo: chi lo vuole scrivere lo
+  // scrive ancora da li'. Senza motivo la master legge la frase generica
+  // di `FirmaContratto`. Non si chiede conferma: si disfa con lo stesso
+  // dito, e il database rifiuta comunque la firma di chi e' fuori.
+  async function spunta(riga, escluso) {
+    setErrore(""); setAvviso("");
+    setAlLavoro(riga.master.id);
+    const e = await cambiaEsclusione(riga.master.id, escluso, "");
+    setAlLavoro("");
+    if (e) { setErrore(e); return; }
+    setAvviso(escluso
+      ? `${riga.master.nome} è fuori: non riceve il contratto.`
+      : `${riga.master.nome} può firmare il contratto.`);
+    await ricarica();
+  }
+
   async function muoviLaPorta(aperta) {
     // APRIRE LA FIRMA NON È UN DETTAGLIO: da quel momento diciotto
     // persone possono sottoscrivere un contratto. Si chiede, e la
@@ -326,16 +345,45 @@ export default function PaginaContrattiMaster({
           {!caricando && righe.length === 0 && (
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Non c'è nessuna master in anagrafica.</div>
           )}
-          {righe.filter((r) => !r.master.contratto_escluso).map((r) => {
+          {/* TUTTE LE MASTER, anche chi e' fuori: la spunta «Escludi» deve
+              restare dove la si e' messa, altrimenti la riga sparirebbe
+              sotto il dito e per toglierla bisognerebbe andarla a cercare
+              piu' in basso. */}
+          {!caricando && righe.length > 0 && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "0 0 6px",
+              borderBottom: `1px solid ${CREAM_BORDER}`,
+              ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED,
+              textTransform: "uppercase", letterSpacing: 0.5,
+            }}>
+              <div style={{ flex: "0 0 52px", textAlign: "center" }}>Escludi</div>
+              <div style={{ flex: "1 1 200px", minWidth: 0 }}>Master</div>
+            </div>
+          )}
+          {righe.map((r) => {
+            const fuori = !!r.master.contratto_escluso;
             const stato = r.contratto?.stato === "firmato" ? "firmato" : r.contratto ? "da_firmare" : "niente";
             return (
               <div key={r.master.id} data-riga={r.master.id} style={{
                 display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
                 padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}`,
               }}>
-                <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                <label
+                  title={fuori ? "Togli la spunta per farle ricevere il contratto" : "Spunta per non farle ricevere il contratto"}
+                  style={{ flex: "0 0 52px", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 38, cursor: "pointer" }}
+                >
+                  <input
+                    type="checkbox" data-campo="escludi" checked={fuori}
+                    disabled={alLavoro === r.master.id}
+                    onChange={(e) => spunta(r, e.target.checked)}
+                    aria-label={`Escludi ${r.master.nome} dal contratto`}
+                    style={{ width: 20, height: 20, cursor: "pointer", accentColor: "#B3261E" }}
+                  />
+                </label>
+                <div style={{ flex: "1 1 200px", minWidth: 0, opacity: fuori ? 0.6 : 1 }}>
                   <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY }}>{r.master.nome}</div>
                   <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
+                    {fuori && <>Non riceve il contratto · </>}
                     {stato === "firmato"
                       ? `Firmato il ${quando(r.contratto.firmato_il)}${r.contratto.luogo_firma ? ` a ${r.contratto.luogo_firma}` : ""}`
                       : stato === "da_firmare"
@@ -351,7 +399,7 @@ export default function PaginaContrattiMaster({
                     )}
                   </div>
                 </div>
-                <Pastiglia tipo={stato} />
+                <Pastiglia tipo={fuori ? "escluso" : stato} />
                 {stato === "firmato" && r.contratto.pdf_path && (
                   <button type="button" style={tastino} onClick={() => apri(r.contratto.pdf_path)}>Copia firmata →</button>
                 )}
@@ -374,7 +422,8 @@ export default function PaginaContrattiMaster({
           <IntestazioneArea>Chi resta fuori</IntestazioneArea>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.5, marginBottom: 10 }}>
             A chi è qui dentro la nuvola «Firma del contratto» non compare, e al suo posto legge il motivo.
-            È un dato sulla sua riga, non un nome scritto nel codice: si toglie e si rimette da qui.
+            È un dato sulla sua riga, non un nome scritto nel codice: si toglie e si rimette da qui,
+            oppure con la spunta «Escludi» nell'elenco qui sopra.
           </div>
           {righe.filter((r) => r.master.contratto_escluso).map((r) => (
             <div key={r.master.id} data-riga={r.master.id} style={{
@@ -394,7 +443,7 @@ export default function PaginaContrattiMaster({
           ))}
           <details style={{ marginTop: 12 }}>
             <summary style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>
-              Togli una master dal contratto
+              Togli una master dal contratto scrivendo il motivo
             </summary>
             <div style={{ marginTop: 10 }}>
               {righe.filter((r) => !r.master.contratto_escluso).map((r) => (
