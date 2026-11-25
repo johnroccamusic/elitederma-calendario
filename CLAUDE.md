@@ -1678,6 +1678,90 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### «Nostra da cercare» su una modella che nessuno ha chiesto (25/11/2026)
+
+Il titolare: «quando un iscritto ha richiesto una sola modella, nella
+pagina Assegna modelle risultano come "nostra da cercare" anche le
+modelle per le altre tecniche che lui non ha richiesto e che deve
+portare autonomamente. Il problema lo abbiamo riscontrato su PMU Roma.»
+
+**Misurato prima di toccare niente**, su **PMU BASE ROMA del 30/11** — la
+classe parte fra cinque giorni. Due allieve con **una modella chiesta a
+testa** comparivano «da trovare» in tutti e tre i giorni del corso:
+
+| ha chiesto | compariva «da trovare» anche in |
+|---|---|
+| 1 modella, eyeliner del **giorno 6** | giorno 2 (sopracciglia), giorno 5 (labbra) |
+| 1 modella, sopracciglia del **giorno 2** | giorno 5 (labbra), giorno 6 (eyeliner) |
+
+Quattro modelle che nessuno deve cercare.
+
+**LA CAUSA È LA DIFFERENZA FRA DUE COSE CHE SI SOMIGLIANO:**
+`iscritti.richiede_modelle` è un flag **dell'allievo**, mentre i posti
+(`tipi_modelle`) sono **per trattamento**. La vista per giorno elencava
+`iscrittiDelGiorno` = **chi è presente** quel giorno, non chi quel giorno
+ha chiesto qualcosa; e per chi non aveva posti disegnava comunque una
+riga di ricerca vuota, con la pastiglia NOSTRA e la scheda **rossa**.
+
+**E quella riga era anche INERTE**, che è la parte peggiore: il
+salvataggio passa da `creaSeMancante`, che vale `!nostra` — quindi
+scrivendoci dentro non si scriveva niente. Un posto che invita a
+lavorarci e non registra è peggio di un posto che manca.
+
+**La Dashboard modelle diceva già il numero giusto**, perché parte dai
+posti (`calcolaSlotModelle` itera `tipi_modelle`, non i giorni): erano
+**due pagine con due fabbisogni diversi per la stessa classe** —
+esattamente quello che il commento di `giorniDeiPostiModella` dice di
+voler evitare.
+
+**La regola adesso sta in `statoModelleDelGiorno`**, pura ed esportata,
+e la vista non decide più da sé: un allievo NOSTRA senza posti in quel
+giorno non è rosso, la pastiglia dice **«NON PER QUESTO GIORNO»**, e
+sotto si legge perché («per questo giorno non ha chiesto nessuna modella
+a noi: quella tecnica se la porta da sé»). Una scheda che si limita a
+tacere si legge come «ce ne siamo dimenticati». **La riga vuota resta per
+chi porta la SUA modella**: lì serve a segnare il nome quando lo si sa, e
+il posto nasce al primo carattere.
+
+**Quello che NON è stato fatto, e va deciso:** oggi da quella pagina non
+si può **aggiungere** una modella nostra per un giorno che l'allievo non
+aveva chiesto — prima si poteva, ma solo in apparenza, perché la riga non
+salvava. Aggiungere un posto vuol dire aggiungere un costo, quindi è una
+decisione del titolare e non una casella da riaprire di nascosto. Oggi si
+fa dalla scheda dell'iscritto.
+
+**E IL CONTROLLO È ENTRATO NEL TEST DI SISTEMA**, su sua richiesta («la
+problematica va nel pacchetto dei test»). Il guasto però stava nella
+**pagina**, e dal database non si vedrebbe: la guardia che lo tiene
+chiuso è nel repo (`prove/modelle-non-chieste.test.jsx`, 9), e rilegge
+`src/App.jsx` pretendendo che il fondo, la pastiglia e la riga vuota
+passino dalla funzione. **Provata rossa** rimettendo il
+`background: !nostra`.
+
+Misurando quel caso ne è però uscito **un gemello che si vede dal dato**,
+ed è il controllo n. 23 del referto: un **posto modella di un trattamento
+che quel corso non fa**. Un'iscritta al **NEEDLING di Milano** del
+28/03/2027 porta tre posti di PMU — sopracciglia, labbra, eyeliner
+sfumato — su un corso che ha un giorno solo, di needling. Non combaciando
+con nessun giorno, `giorniDeiPostiModella` li appoggia sul giorno di
+**ripiego**: tre modelle da cercare per tecniche che in quell'aula non si
+faranno. È **«guarda» e non «rotto»**, e non si corregge da sé: può
+essere una richiesta vera concordata a voce, e cancellarla da qui
+vorrebbe dire buttare via quello che qualcuno ha chiesto.
+
+Migrazione `20261125100000_test_modelle_di_un_trattamento_che_il_corso_non_fa.sql`
+(rollback dentro, nessun dato toccato). **Una cosa imparata
+applicandola**, e vale per ogni migrazione che innesta codice in una
+funzione viva: il controllo «il corpo non è quello atteso, non tocco
+niente» **è scattato al primo giro** — i commenti della funzione in
+produzione non coincidono con quelli del file della migrazione, quindi un
+commento non è un ancoraggio. Si innesta su `return; end;`, che è
+struttura e non prosa.
+
+Al 25/11/2026 il referto ha **23 controlli: 1 rotto (43 rimbalzi da
+leggere), 5 da guardare** — fra cui i 3 posti di quel needling — **e il
+resto a posto**.
+
 ### «Perché la stima parte da novembre se gliel'ho chiesta da settembre?» (24/11/2026)
 
 Il titolare, con la schermata della tabella: le due date dicevano «dal

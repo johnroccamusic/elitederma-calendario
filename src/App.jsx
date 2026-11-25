@@ -26628,6 +26628,43 @@ function giorniDeiPostiModella(tipiModelle, giorniAllievi) {
   });
 }
 
+// COSA FARE DI UN ALLIEVO IN UN GIORNO DI MODELLE (25/11/2026).
+//
+// Il titolare, su PMU BASE ROMA del 30/11: «quando un iscritto ha
+// richiesto una sola modella, risultano come "nostra da cercare" anche le
+// modelle per le altre tecniche che lui non ha richiesto e che deve
+// portare autonomamente».
+//
+// La causa: `richiede_modelle` e' un flag dell'ALLIEVO, mentre i posti
+// sono per TRATTAMENTO. La vista per giorno elencava chi e' presente quel
+// giorno — non chi quel giorno ha chiesto qualcosa — e per chi non aveva
+// posti disegnava comunque una riga di ricerca vuota, con la pastiglia
+// NOSTRA e la scheda rossa. Un'allieva che aveva chiesto una modella sola
+// (eyeliner, giorno 6) compariva da trovare anche nei giorni 2 e 5.
+//
+// E quella riga era INERTE: si salva solo con `creaSeMancante`, che vale
+// `!nostra`. Si poteva scriverci dentro e non si scriveva niente.
+//
+// La riga vuota resta per chi porta la SUA modella: li' serve a segnare
+// il nome quando si sa, e il posto nasce al primo carattere.
+//
+// La Dashboard modelle questo numero lo diceva gia' giusto, perche' parte
+// dai posti (`calcolaSlotModelle`): erano due pagine con due fabbisogni
+// diversi per la stessa classe.
+export function statoModelleDelGiorno({ nostra, postiDelGiorno }) {
+  const posti = Array.isArray(postiDelGiorno) ? postiDelGiorno : [];
+  const nienteInQuestoGiorno = posti.length === 0;
+  return {
+    nienteInQuestoGiorno,
+    // niente rosso dove non c'e' niente da fare: un rosso che non si puo'
+    // spegnere e' un rosso che si impara a saltare
+    daTrovareQui: !!nostra && !nienteInQuestoGiorno,
+    // una riga di ricerca vuota si offre solo a chi porta la sua modella
+    rigaVuota: !nostra && nienteInQuestoGiorno,
+    etichetta: nostra && nienteInQuestoGiorno ? "non-chiesta-qui" : nostra ? "nostra" : "sua",
+  };
+}
+
 // una modella e' trovata solo quando ci sono NOME e NUMERO: un nome senza
 // telefono non serve a niente — non la si puo' chiamare, e chi legge
 // l'elenco crederebbe che quel posto sia coperto
@@ -37582,17 +37619,39 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                         const postiDelGiorno = elenco
                           .map((m, indice) => ({ m, indice }))
                           .filter(({ m }) => giornoDelPostoModella(m, elenco) === g.numero_giorno);
-                        // se non ce n'e' nessuno resta una riga scrivibile,
-                        // creata al primo carattere digitato — ma solo per
-                        // chi porta la SUA modella: per gli altri sarebbe una
-                        // richiesta mai fatta (vedi aggiornaModellaAllievoGiorno)
+                        // UNA MODELLA NON CHIESTA NON E' UNA MODELLA DA
+                        // TROVARE (25/11/2026, segnalato dal titolare su
+                        // PMU BASE ROMA del 30/11). `richiede_modelle` e'
+                        // un flag dell'ALLIEVO, ma i posti sono per
+                        // trattamento: chi ne ha chiesta una sola —
+                        // l'eyeliner del giorno 6 — compariva lo
+                        // stesso nei giorni 2 e 5 con la pastiglia NOSTRA,
+                        // la scheda ROSSA «da trovare» e una riga di
+                        // ricerca vuota. Due modelle che nessuno deve
+                        // cercare, e che lei si porta da se'.
+                        //
+                        // E quella riga era anche INERTE: `creaSeMancante`
+                        // e' `!nostra`, quindi scrivendoci dentro non si
+                        // salvava niente. Peggio di un numero sbagliato,
+                        // perche' invitava a lavorarci.
+                        //
+                        // La riga vuota resta per chi porta la SUA modella:
+                        // li' serve a segnare il nome quando lo si sa, e il
+                        // posto nasce al primo carattere.
+                        const stato = statoModelleDelGiorno({ nostra, postiDelGiorno });
+                        const nienteInQuestoGiorno = stato.nienteInQuestoGiorno;
                         const daMostrare = postiDelGiorno.length > 0
                           ? postiDelGiorno
-                          : [{ m: { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }, indice: null }];
+                          : (stato.rigaVuota ? [{ m: { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }, indice: null }] : []);
                         // coperto = ogni posto di questo giorno ha nome e
                         // numero. Senza posti non e' "tutto coperto": e'
                         // una richiesta che non c'e'
                         const tuttiCoperti = postiDelGiorno.length > 0 && postiDelGiorno.every(({ m }) => modellaTrovata(m));
+                        // il rosso dice «qui c'e' da lavorare»: su un
+                        // giorno che questo allievo non ha chiesto non c'e'
+                        // niente da fare, e un rosso che non si puo'
+                        // spegnere e' un rosso che si impara a saltare
+                        const daTrovareQui = stato.daTrovareQui;
                         return (
                           // Ogni allievo dentro la sua cornice: un filo blu
                           // e gli angoli tondi. Prima erano separati da una
@@ -37615,7 +37674,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                               // chiaro finche' manca qualcuno: il colore
                               // dice a colpo d'occhio dove c'e' ancora da
                               // lavorare, senza leggere una riga
-                              background: !nostra ? "#F7F6F3" : (tuttiCoperti ? VERDE_TROVATA : ROSSO_DA_TROVARE),
+                              background: !daTrovareQui ? "#F7F6F3" : (tuttiCoperti ? VERDE_TROVATA : ROSSO_DA_TROVARE),
                               // il filo blu su tutte, comprese quelle di
                               // chi porta la sua modella: e' quello che
                               // separa un allievo dall'altro, e sulle
@@ -37627,10 +37686,24 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ ...fontBody, fontSize: 14, fontWeight: isMobile ? 700 : 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
-                                {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
+                              <span
+                                data-stato-modella={stato.etichetta}
+                                style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+                                  background: nostra && nienteInQuestoGiorno ? "#EDEFF2" : nostra ? "#F7EDDB" : "#FDECEC",
+                                  color: nostra && nienteInQuestoGiorno ? MUTED : nostra ? "#8A6D1D" : "#C0392B" }}>
+                                {nostra && nienteInQuestoGiorno ? "NON PER QUESTO GIORNO" : nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
                               </span>
                             </div>
+
+                            {/* si dice PERCHE' non c'e' niente da fare: una
+                                scheda che si limita a tacere si legge come
+                                «ce ne siamo dimenticati» */}
+                            {nostra && nienteInQuestoGiorno && (
+                              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+                                Per questo giorno non ha chiesto nessuna modella a noi: {g.tipo_modella_allievi ? `la modella ${String(g.tipo_modella_allievi).toLowerCase()} ` : "quella di questo trattamento "}
+                                se la porta da sé. Le modelle che ci ha chiesto sono negli altri giorni.
+                              </div>
+                            )}
 
                             {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
                               <RigaModella
