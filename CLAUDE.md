@@ -1678,6 +1678,39 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### In fondo alla scheda mancava quello che si paga AL CORSO (25/11/2026)
+
+Il titolare, due schermate dopo il lavoro sul dermografo: «anche se hai
+messo che il pagamento del dermografo è in contanti, il suo valore
+comunque non risulta da incassare in fondo al modulo: la somma da
+ricevere al corso non comprende comunque il dermografo». E subito dopo:
+«idem per i materiali extra che elenchi».
+
+**«Restano da pagare» era giusto, ed era la cosa sbagliata da leggere.**
+Quel numero è il residuo del **pattuito** — `totale_pattuito` meno le
+quote già pagate — e dermografo, materiale e modelle nel pattuito non ci
+sono: sono merce e servizi comprati **accanto** al corso. Ma è la cifra
+in fondo alla scheda, quella che si guarda per sapere quanto quella
+persona deve ancora dare, e ne diceva una più bassa di quella vera:
+**390 € invece di 1.340**. Due numeri diversi sulla stessa allieva,
+perché la lista della classe il conto giusto lo fa già.
+
+**Il pattuito resta quello che è** — con accanto scritto «del corso», o
+tornerebbe a sembrare il totale — e sotto c'è un riquadro rosso, **«In
+più, da incassare al corso»**, che elenca le voci una per una col loro
+nome (modelle, dermografo, materiale prenotato) e chiude con **«In tutto
+al corso»**. Le voci si nominano: un numero solo non dice che dentro c'è
+una macchina da 890 € da farsi pagare prima di consegnarla.
+
+**Il totale passa da `daIncassareAlCorsoDi`**, la stessa funzione della
+lista, della cassa e della prima nota — con un oggetto composto dai
+valori della scheda **come se fosse salvata**, perché qui si guarda
+quello che si sta scrivendo. Un quattordicesimo conto scritto a mano
+direbbe un quattordicesimo numero, ed è il difetto da cui viene tutta
+questa giornata.
+
+Prove in `prove/materiale-prenotato.test.jsx` (18).
+
 ### «Un errore nella ristampa del modulo»: il tasto non poteva riuscire (25/11/2026)
 
 Il titolare, con una schermata del fascicolo: premendo **«Genera la copia

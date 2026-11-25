@@ -37366,6 +37366,41 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
             const quantoTogliere = (q) => (sulTotaleIncassato ? parseNum(q.totale) : impEffettivo(q));
             const sommaAccontiPagati = quotePagate.filter((x) => x.pagato).reduce((somma, x) => somma + quantoTogliere(x.q), 0);
             const restanoDaPagare = totalePattuito === "" ? null : round2(parseNum(totalePattuito) - sommaAccontiPagati);
+            // GLI EXTRA SI PAGANO AL CORSO, E IN FONDO ALLA SCHEDA NON
+            // C'ERANO (25/11/2026, segnalato dal titolare: «anche se hai
+            // messo che il pagamento del dermografo è in contanti, il suo
+            // valore non risulta da incassare in fondo al modulo»).
+            //
+            // «Restano da pagare» e' il residuo del PATTUITO, e come tale
+            // era giusto: dermografo, materiale e modelle non stanno nel
+            // pattuito, sono merce e servizi comprati accanto al corso.
+            // Ma e' la cifra in fondo alla scheda, quella che si guarda
+            // per sapere quanto quella persona deve ancora dare — e ne
+            // diceva una piu' bassa di quella vera: 390 invece di 1.340.
+            // Due numeri diversi sulla stessa allieva, perche' la lista
+            // della classe il conto giusto lo fa gia'.
+            //
+            // Il pattuito resta quello che e': sotto si aggiungono gli
+            // extra, uno per uno e col loro nome, e si dice il totale.
+            // Il conto passa da `daIncassareAlCorsoDi`, la stessa
+            // funzione della lista e della cassa: un quattordicesimo
+            // conto scritto qui direbbe un quattordicesimo numero.
+            const comeSeSalvata = {
+              saldo_totale: parseNum(pagSaldo.totale) || 0,
+              numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseNum(numeroModelle) : null,
+              prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
+              dermografo_pagamento: dermografoDaPagare ? "con_corso" : null,
+              dermografo_totale: prezzoDermografoLordo,
+              dermografo_pagato: pagDermografoPagato,
+              materiale_prenotato: materiale,
+              materiale_pagato: materialePagato,
+            };
+            const extraAlCorso = [
+              { nome: "modelle", quanto: modelleTotaleDi(comeSeSalvata) },
+              { nome: "dermografo", quanto: dermografoDaIncassareDi(comeSeSalvata) },
+              { nome: "materiale prenotato", quanto: materialeDaIncassareDi(comeSeSalvata) },
+            ].filter((x) => x.quanto > 0);
+            const tuttoAlCorso = daIncassareAlCorsoDi(comeSeSalvata);
             return (
               <div style={{ ...areaSchedaIscritto, marginBottom: 10, background: BG_CHIARO }}>
                 <IntestazioneArea Icona={IconaLibroContabile}>Pagherà in totale</IntestazioneArea>
@@ -37406,6 +37441,28 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                     <IconaPortafoglio size={18} />
                     <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Restano da pagare:</span>
                     <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: restanoDaPagare > 0 ? "#C0392B" : "#2E7D32" }}>{restanoDaPagare.toFixed(2)} €</span>
+                    <span style={{ ...fontBody, fontSize: 11, color: MUTED, marginLeft: "auto" }}>del corso</span>
+                  </div>
+                )}
+                {extraAlCorso.length > 0 && (
+                  <div data-extra-al-corso style={{ marginTop: 8, padding: "10px 12px", borderRadius: 10, background: "#FDEEEC", border: "1px solid #F0C8C2" }}>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
+                      In pi&ugrave;, da incassare al corso
+                    </div>
+                    {extraAlCorso.map((x) => (
+                      <div key={x.nome} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 13, color: NAVY, padding: "2px 0" }}>
+                        <span>{x.nome}</span>
+                        <span style={{ fontWeight: 700 }}>{euroScheda(x.quanto)}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginTop: 7, paddingTop: 7, borderTop: "1px solid #F0C8C2" }}>
+                      <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>In tutto al corso</span>
+                      <span data-tutto-al-corso style={{ ...fontDisplay, fontSize: 20, fontWeight: 800, color: "#C0392B" }}>{euroScheda(tuttoAlCorso)}</span>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 5, lineHeight: 1.45 }}>
+                      &Egrave; la cifra che la master deve farsi dare in aula: il saldo del corso pi&ugrave; quello che si compra accanto.
+                      La stessa che si legge nella lista della classe.
+                    </div>
                   </div>
                 )}
               </div>

@@ -128,3 +128,36 @@ describe("dove si vede", () => {
     expect(sorgente).toContain("data-materiale-da-pagare");
   });
 });
+
+// IL CONTO IN FONDO ALLA SCHEDA (25/11/2026). Il titolare, con una
+// schermata: «anche se hai messo che il pagamento del dermografo è in
+// contanti, il suo valore comunque non risulta da incassare in fondo al
+// modulo: la somma da ricevere al corso non comprende comunque il
+// dermografo».
+//
+// «Restano da pagare» è il residuo del PATTUITO, e come tale era
+// giusto — dermografo, materiale e modelle non stanno nel pattuito.
+// Ma è la cifra in fondo alla scheda, quella che si guarda per sapere
+// quanto quella persona deve ancora dare, e ne diceva una più bassa di
+// quella vera: 390 invece di 1.340. Due numeri diversi sulla stessa
+// allieva, perché la lista della classe il conto giusto lo faceva già.
+describe("in fondo alla scheda si legge quanto deve dare in tutto", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const sorgente = fs.readFileSync(path.join(process.cwd(), "src/App.jsx"), "utf8");
+
+  it("il riquadro degli extra c'è, col totale", () => {
+    expect(sorgente).toContain("data-extra-al-corso");
+    expect(sorgente).toContain("data-tutto-al-corso");
+    expect(sorgente).toContain("In pi&ugrave;, da incassare al corso");
+  });
+
+  it("il totale passa dalla stessa funzione della lista e della cassa", () => {
+    // un quattordicesimo conto scritto qui direbbe un quattordicesimo numero
+    expect(sorgente).toContain("const tuttoAlCorso = daIncassareAlCorsoDi(comeSeSalvata);");
+  });
+
+  it("«Restano da pagare» resta il residuo del corso, e lo dice", () => {
+    expect(sorgente).toContain(">del corso</span>");
+  });
+});
