@@ -5085,6 +5085,18 @@ Cinque decisioni, e ognuna è un modo di sbagliare:
   righe vuol dire una correzione che si crede salvata mentre la prossima
   firma congelerebbe il testo di prima.
 
+**E MENTRE SI SCRIVE LA VISTA NON SI MUOVE** (corretto un'ora dopo, su
+sua segnalazione: «se inizio a digitare in un paragrafo, appena digito
+la vista si sposta da dove avevo iniziato»). Era un difetto mio, e la
+causa è di quelle che valgono oltre questo caso: il ripristino della
+posizione aveva `bozza` fra le dipendenze, e `bozza` cambia **a ogni
+lettera battuta** — quindi a ogni tasto la pagina tornava al punto in cui
+si era premuto «Modifica». Adesso dipende dal solo **entrare e uscire**
+dalla correzione; mentre si batte la posizione la tiene il browser, che
+è l'unico che sa dov'è il cursore. Una prova lo inchioda — scorre a 900,
+preme «Modifica», scorre a 1800, batte: col difetto rimesso torna a 900,
+ed è rossa.
+
 Chi ha già firmato **tiene il suo testo**, congelato alla sua firma, e
 la versione sostituita finisce in archivio da sé (trigger
 `modulo_testi_archivia` del gemello, qui `master_contratti_testi`). Il

@@ -171,10 +171,19 @@ export default function LetturaContratto({
   // altrove — è la cosa che il titolare ha chiesto per prima
   const posizione = useRef(0);
 
+  // LA POSIZIONE SI RIMETTE SOLO QUANDO SI ENTRA E SI ESCE dalla
+  // correzione, mai mentre si scrive. Con `bozza` fra le dipendenze
+  // questo scattava a OGNI LETTERA battuta, e riportava la vista al
+  // punto in cui si era premuto «Modifica»: scrivere nell'articolo 12
+  // faceva saltare la pagina su, a ogni tasto. Mentre si batte la
+  // posizione la tiene il browser, ed e' giusto cosi' — la casella che
+  // cresce sposta quello che le sta sotto, non quello che si sta
+  // leggendo.
+  const inCorrezione = !!bozza;
   useLayoutEffect(() => {
     if (!contenitore.current || !posizione.current) return;
     contenitore.current.scrollTop = posizione.current;
-  }, [bozza]);
+  }, [inCorrezione]);
 
   function apriCorrezione() {
     posizione.current = contenitore.current?.scrollTop || 0;

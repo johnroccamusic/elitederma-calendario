@@ -965,3 +965,44 @@ describe("il contratto si corregge dove si legge", () => {
     expect(fonte).toContain('CHIAVI_MECCANISMO = new Set(["chiave", "tipo", "daClausole", "id"])');
   });
 });
+
+// MENTRE SI SCRIVE LA VISTA NON SI MUOVE (25/11/2026, segnalato dal
+// titolare subito dopo: «perché se inizio a digitare in un paragrafo
+// del contratto, appena digito la vista si sposta da dove avevo
+// iniziato; quando faccio modifica la vista deve restare nel punto in
+// cui faccio la modifica, non spostarsi»).
+//
+// Era mio, e di un'ora prima: la posizione di lettura si rimetteva a
+// OGNI cambiamento della bozza, cioè a ogni lettera battuta, e
+// riportava la pagina al punto in cui si era premuto «Modifica».
+// Scrivere nell'articolo 12 faceva saltare la vista su, a ogni tasto.
+describe("correggendo, la pagina resta dov'è", () => {
+  it("battere una lettera non riporta la vista dove si era premuto Modifica", async () => {
+    rispondiCon({
+      "/rest/v1/master?": () => [{ id: "m1", nome: "MARIA ROSSI", contratto_escluso: false }],
+      "/rest/v1/master_contratti_testi": () => CHIAVI.map((k) => ({ chiave: k, corpo: DAL_CODICE[k] })),
+      "/rest/v1/master_contratti": () => [],
+    });
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await clicca(p.tasto("Rileggi il contratto caricato"));
+    await attendi(60);
+    // si legge fino a meta' documento, poi si preme «Modifica»: e' questa
+    // la posizione che il difetto rimetteva a ogni lettera battuta
+    p.nodo.querySelector('[data-campo="lettura-contratto"]').scrollTop = 900;
+    await clicca(p.nodo.querySelector('[data-campo="modifica-contratto"]'));
+    await attendi(60);
+    const lettore = p.nodo.querySelector('[data-campo="lettura-contratto"]');
+    // mentre si corregge ci si sposta: si scorre fino al capoverso da
+    // riscrivere, che non e' quello che si aveva davanti premendo
+    // «Modifica»
+    lettore.scrollTop = 1800;
+    const casella = [...lettore.querySelectorAll("textarea")].find((c) => c.value === PREMESSE.punti[0]);
+    await scrivi(casella, "A) Una parola in più.");
+    expect(lettore.scrollTop).toBe(1800);
+    // e una seconda battuta non la sposta lo stesso
+    await scrivi(casella, "A) Due parole in più.");
+    expect(lettore.scrollTop).toBe(1800);
+    await p.smonta();
+  });
+});
