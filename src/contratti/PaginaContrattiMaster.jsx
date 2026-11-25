@@ -23,7 +23,7 @@ import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, stileT
 import { confermaRimozione } from "../ui/conferma.js";
 import { urlAllegato } from "../file/allegati.js";
 import { leggiTuttiIContratti, riapriContratto, cambiaEsclusione, leggiApertura, cambiaApertura } from "./dati.js";
-import { CHIAVI, NOMI, DAL_CODICE, PARTENZA, impronta, leggiTesti, caricaDiPartenza } from "./testi.js";
+import { CHIAVI, NOMI, DAL_CODICE, PARTENZA, impronta, leggiTesti, caricaDiPartenza, salvaTesto } from "./testi.js";
 import LetturaContratto from "./LetturaContratto.jsx";
 
 const pannello = { ...areaSchedaIscritto, marginBottom: 16 };
@@ -107,6 +107,23 @@ export default function PaginaContrattiMaster({
     }
     setImpronteDb(db); setImpronteCodice(cod);
   }, []);
+
+  // LA CORREZIONE LA SCRIVE LA PAGINA, come «Carica il testo di
+  // partenza»: il lettore raccoglie quello che si batte e lo consegna
+  // qui, cosi' le scritture su `master_contratti_testi` restano in un
+  // posto solo. Ogni parte e' una riga, e la versione sostituita la
+  // archivia da se' il trigger.
+  const salvaCorrezioni = useCallback(async (modifiche) => {
+    for (const [chiave, corpo] of Object.entries(modifiche || {})) {
+      const errore = await salvaTesto(chiave, corpo, chiOpera || null);
+      // ci si ferma al primo rifiuto: andare avanti vorrebbe dire un
+      // contratto mezzo corretto, e nessuno saprebbe quale meta'
+      if (errore) return errore;
+    }
+    await ricarica();
+    setAvviso("Il testo e' stato corretto: da adesso si firma questo.");
+    return "";
+  }, [chiOpera, ricarica]);
 
   useEffect(() => { ricarica(); }, [ricarica]);
 
@@ -428,6 +445,7 @@ export default function PaginaContrattiMaster({
               impronteDb={impronteDb} impronteCodice={impronteCodice}
               soloChiave={lettura === "tutto" ? null : lettura}
               onChiudi={() => setLettura(null)}
+              onSalva={salvaCorrezioni}
             />
           )}
           {CHIAVI.map((k) => {

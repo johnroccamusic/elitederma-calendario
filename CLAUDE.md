@@ -5045,13 +5045,52 @@ un'informazione in più sul blocco, chi disegna e chi stampa continuano a
 leggere `titolo` e `punti`.
 
 Al 25/11/2026 nel database ci sono **tutte e sette le parti**, caricate
-quel giorno alle 12:08 e mai corrette. Prove in
-`prove/contratto-master.test.jsx` (58), con la pagina montata e il tasto
-premuto davvero.
+quel giorno alle 12:08. Prove in `prove/contratto-master.test.jsx` (64),
+con la pagina montata e i tasti premuti davvero.
 
-**Resta da fare, e va deciso:** una schermata per **correggere** il
-testo dall'app, come Setting → Il contratto per il modulo (oggi si
-corregge nel repo e si ricarica col tasto); e l'invio di un **promemoria**
+**E SI CORREGGE DOVE SI LEGGE** (25/11/2026, subito dopo: «qui nel
+testo del contratto vorrei un tasto modifica, che senza spostare il
+documento dalla posizione in cui ho la lettura in quel momento lo rende
+editabile e, una volta eseguita la modifica, salvabile»). Era l'ultima
+cosa che in questo capitolo restava «da fare». Dentro il lettore c'è
+**«Modifica»**: ogni capoverso diventa una casella **lì dov'era**, e la
+posizione di lettura si rimette al pixel (`scrollTop` salvato prima del
+cambio e rimesso dopo) — entrare in correzione non deve far ricominciare
+da capo un documento di ventitré articoli.
+
+Cinque decisioni, e ognuna è un modo di sbagliare:
+
+- **Si correggono i CAMPI SALVATI, non il documento composto.** Le
+  caselle nascono da una camminata sulle stringhe del `corpo` jsonb, con
+  il loro percorso: così quello che si batte torna esattamente dov'era,
+  invece di passare da una seconda composizione che un giorno si
+  scosterebbe da quella che si firma. È anche il motivo per cui in
+  correzione l'epigrafe della master non compare: alla firma la compone
+  il server coi dati di chi firma, e non c'è niente da correggere.
+- **Quello che è MECCANISMO non diventa una casella di testo**
+  (`chiave`, `tipo`, `daClausole`): decidono quale spunta è una
+  dichiarazione e se è obbligatoria. Correggerli non cambierebbe una
+  parola del contratto, romperebbe la firma.
+- **Niente si salva da sé**, come le clausole del modulo di iscrizione:
+  si entra in correzione, si scrive, si preme Salva. E si **chiede**
+  prima di scrivere, nominando **quali parti** si stanno riscrivendo —
+  «sei sicuro?» da solo non dice cosa cambia in un contratto.
+- **Si scrivono solo le parti davvero cambiate.** Salvare tutte e sette
+  a ogni virgola corretta vorrebbe dire sette versioni identiche in
+  archivio, e la storia persa dentro il rumore. Ci si ferma al primo
+  rifiuto del database: andare avanti lascerebbe un contratto corretto a
+  metà, e nessuno saprebbe quale metà.
+- **`salvaTesto` adesso conta le righe** (`.select("chiave")`): un
+  upsert senza select dice «va bene» anche a zero righe, e qui zero
+  righe vuol dire una correzione che si crede salvata mentre la prossima
+  firma congelerebbe il testo di prima.
+
+Chi ha già firmato **tiene il suo testo**, congelato alla sua firma, e
+la versione sostituita finisce in archivio da sé (trigger
+`modulo_testi_archivia` del gemello, qui `master_contratti_testi`). Il
+pannello lo scrive in giallo prima che si tocchi una casella.
+
+**Resta da fare, e va deciso:** l'invio di un **promemoria**
 a chi non ha ancora firmato, che oggi non esiste — un contratto mai
 aperto resta invisibile finché qualcuno non guarda l'elenco.
 

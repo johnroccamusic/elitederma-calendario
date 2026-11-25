@@ -23,7 +23,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { monta, clicca, attendi } from "./aiuto.js";
+import { monta, clicca, attendi, scrivi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 import FirmaContratto from "../src/contratti/FirmaContratto.jsx";
 import PaginaContrattiMaster from "../src/contratti/PaginaContrattiMaster.jsx";
@@ -838,5 +838,130 @@ describe("si rilegge il contratto che il database fa firmare", () => {
     // che il contratto esca così
     const parti = partiDaLeggere({});
     expect(JSON.stringify(parti)).toContain("[Nome e cognome]");
+  });
+});
+
+// E SI CORREGGE DOVE SI LEGGE (25/11/2026, chiesto dal titolare: «qui
+// nel testo del contratto vorrei un tasto modifica, che senza spostare
+// il documento dalla posizione in cui ho la lettura in quel momento lo
+// rende editabile e, una volta eseguita la modifica, salvabile»).
+//
+// Era l'ultima cosa che in questo capitolo restava «da fare»: il testo
+// si correggeva nel repo e si ricaricava col tasto.
+describe("il contratto si corregge dove si legge", () => {
+  const RIGHE_DB = CHIAVI.map((k) => ({
+    chiave: k, corpo: DAL_CODICE[k],
+    aggiornato_da: "testo di partenza (14/11/2026)", aggiornato_il: "2026-11-16T00:00:00Z",
+  }));
+
+  function banco(scritture) {
+    rispondiCon({
+      "/rest/v1/master?": () => [{ id: "m1", nome: "MARIA ROSSI", contratto_escluso: false }],
+      "/rest/v1/master_contratti_testi": (corpo) => {
+        if (corpo) { scritture.push(corpo); return [{ chiave: "x" }]; }
+        return RIGHE_DB;
+      },
+      "/rest/v1/master_contratti": () => [],
+    });
+  }
+
+  async function apriCorrezione(p) {
+    await clicca(p.tasto("Rileggi il contratto caricato"));
+    await attendi(60);
+    await clicca(p.nodo.querySelector('[data-campo="modifica-contratto"]'));
+    await attendi(60);
+  }
+
+  it("il tasto rende editabile quello che si sta leggendo, senza uscire dalla lettura", async () => {
+    banco([]);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await apriCorrezione(p);
+    const lettore = p.nodo.querySelector('[data-campo="lettura-contratto"]');
+    expect(lettore).toBeTruthy();
+    // le caselle ci sono, e sono le parti del testo salvato
+    const caselle = [...lettore.querySelectorAll("textarea")];
+    expect(caselle.length).toBeGreaterThan(50);
+    expect(caselle.some((c) => c.value === PREMESSE.punti[0])).toBe(true);
+    // e si dice cosa si sta facendo, prima e non dopo
+    expect(p.nodo.querySelector('[data-campo="avviso-correzione"]').textContent).toContain("da adesso in avanti");
+    await p.smonta();
+  });
+
+  it("finché non si cambia niente non c'è niente da salvare", async () => {
+    banco([]);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await apriCorrezione(p);
+    const salva = p.nodo.querySelector('[data-campo="salva-contratto"]');
+    expect(salva.disabled).toBe(true);
+    expect(salva.textContent).toContain("Non hai cambiato niente");
+    await p.smonta();
+  });
+
+  it("corretta una riga si salva SOLO quella parte, col testo nuovo", async () => {
+    const scritture = [];
+    banco(scritture);
+    window.confirm = vi.fn(() => true);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await apriCorrezione(p);
+    const casella = [...p.nodo.querySelectorAll("textarea")].find((c) => c.value === PREMESSE.punti[0]);
+    await scrivi(casella, "A) Testo corretto dal titolare.");
+    const salva = p.nodo.querySelector('[data-campo="salva-contratto"]');
+    expect(salva.disabled).toBe(false);
+    expect(salva.textContent).toContain("Salva");
+    await clicca(salva);
+    await attendi(120);
+    // una sola riga scritta: le premesse
+    expect(scritture).toHaveLength(1);
+    expect(scritture[0].chiave).toBe("premesse");
+    expect(scritture[0].corpo.punti[0]).toBe("A) Testo corretto dal titolare.");
+    // e gli altri capoversi restano quelli di prima
+    expect(scritture[0].corpo.punti[1]).toBe(PREMESSE.punti[1]);
+    await p.smonta();
+  });
+
+  it("si chiede prima di scrivere, e col «no» non si scrive niente", async () => {
+    const scritture = [];
+    banco(scritture);
+    window.confirm = vi.fn(() => false);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await apriCorrezione(p);
+    const casella = [...p.nodo.querySelectorAll("textarea")].find((c) => c.value === PREMESSE.punti[0]);
+    await scrivi(casella, "A) Qualcosa.");
+    await clicca(p.nodo.querySelector('[data-campo="salva-contratto"]'));
+    await attendi(60);
+    expect(window.confirm).toHaveBeenCalled();
+    expect(String(window.confirm.mock.calls[0][0])).toContain("Premesse");
+    expect(scritture).toHaveLength(0);
+    // e si resta in correzione, col testo battuto ancora lì
+    expect(p.nodo.querySelector('[data-campo="salva-contratto"]')).toBeTruthy();
+    await p.smonta();
+  });
+
+  it("«Annulla» butta la correzione e non scrive niente", async () => {
+    const scritture = [];
+    banco(scritture);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await apriCorrezione(p);
+    const casella = [...p.nodo.querySelectorAll("textarea")].find((c) => c.value === PREMESSE.punti[0]);
+    await scrivi(casella, "A) Da buttare.");
+    await clicca(p.nodo.querySelector('[data-campo="annulla-correzione"]'));
+    await attendi(60);
+    expect(scritture).toHaveLength(0);
+    // si torna a leggere, col testo di prima
+    expect(p.nodo.querySelector('[data-campo="lettura-contratto"]').textContent).toContain(PREMESSE.punti[0]);
+    await p.smonta();
+  });
+
+  it("quello che è meccanismo non diventa una casella di testo", () => {
+    // la chiave e il tipo di una dichiarazione decidono QUALE spunta è
+    // e se è obbligatoria: correggerle da una casella non cambierebbe
+    // una parola del contratto, romperebbe la firma
+    const fonte = fs.readFileSync(path.join(process.cwd(), "src/contratti/LetturaContratto.jsx"), "utf8");
+    expect(fonte).toContain('CHIAVI_MECCANISMO = new Set(["chiave", "tipo", "daClausole", "id"])');
   });
 });

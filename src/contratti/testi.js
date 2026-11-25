@@ -99,11 +99,17 @@ export async function leggiTesti() {
 
 export async function salvaTesto(chiave, corpo, chi) {
   if (!CHIAVI.includes(chiave)) return "Chiave sconosciuta: " + chiave;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("master_contratti_testi")
     .upsert({ chiave, corpo, aggiornato_da: chi || null, aggiornato_il: new Date().toISOString() },
-            { onConflict: "chiave" });
-  return error ? error.message : "";
+            { onConflict: "chiave" })
+    .select("chiave");
+  if (error) return error.message;
+  // UN UPSERT SENZA SELECT DICE «VA BENE» ANCHE A ZERO RIGHE, e qui
+  // zero righe vuol dire una correzione che si crede salvata e non lo e':
+  // la prossima firma congelerebbe il testo di prima.
+  if (!data || data.length === 0) return `«${NOMI[chiave] || chiave}» non e' stata scritta: ricarica la pagina e riprova.`;
+  return "";
 }
 
 /**
