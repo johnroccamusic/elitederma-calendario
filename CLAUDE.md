@@ -1678,6 +1678,46 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### «Un errore nella ristampa del modulo»: il tasto non poteva riuscire (25/11/2026)
+
+Il titolare, con una schermata del fascicolo: premendo **«Genera la copia
+firmata»** si leggeva in rosso «Edge Function returned a non-2xx status
+code».
+
+**Erano due cose, e la seconda è quella che conta.**
+
+**1. L'errore non diceva niente, e il motivo c'era.** La funzione
+risponde **409 con «Il modulo non risulta ancora ricevuto»** — ma
+`supabase.functions.invoke`, davanti a una risposta non-2xx, lascia
+`data` nullo e appende il corpo a `error.context`, quindi `error.message`
+è sempre quella frase inutile. È **la lezione dell'8/11/2026 pagata una
+seconda volta**: `testoErroreFunzione` esiste apposta, e questa pagina
+non la usava.
+
+**2. Il tasto non doveva esserci.** Il fascicolo si apre da «Modulo
+inviato» in poi, e quel tasto compariva su **ogni** scheda. Misurato:
+**265 iscrizioni su 313 non hanno mai mandato il modulo**, e **254 di
+quelle sono confermate lo stesso** — iscritte prima, o su carta. Lì non
+c'è nessuna firma da fotografare, e premerlo rispondeva sempre 409. **Un
+tasto che non può riuscire è peggio di un tasto che manca:** chi lo preme
+crede di aver sbagliato lui.
+
+E dei **48 moduli davvero tornati, oggi ce l'hanno tutti** la loro copia:
+quel ramo non serve più a un recupero, resta per i moduli che torneranno.
+
+**La frase è del titolare, parola per parola** («scrivi almeno: modulo
+non presente, inviato con vecchio sistema»): su un'iscrizione confermata
+senza modulo online si legge **«Modulo non presente: inviato con il
+vecchio sistema»**, e su una che il modulo deve ancora mandarlo «comparirà
+qui appena lei lo invia». Due frasi perché sono due situazioni: una è
+storia, l'altra è attesa.
+
+Prove in `prove/copia-firmata-solo-se-firmato.test.jsx` (5), col
+fascicolo montato nei tre casi. **E una prova esistente è andata rossa**,
+giustamente: `prove/fascicolo.test.jsx` montava un'iscritta senza
+`modulo_ricevuto_il` e si aspettava il tasto — adesso quel caso ha il
+modulo tornato, che è la condizione in cui il tasto ha senso.
+
 ### «Altro materiale»: quello che l'allieva compra insieme al corso (25/11/2026)
 
 Il titolare, subito dopo il lavoro sul dermografo: «nella stessa casella

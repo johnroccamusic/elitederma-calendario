@@ -22,6 +22,7 @@
 // in attesa di qualcosa che non arrivera'.
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase.js";
+import { testoErroreFunzione } from "../errore-funzione.js";
 import { Button } from "../ui/base.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, fontBody } from "../ui/stile.js";
 
@@ -149,13 +150,24 @@ export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} 
     onAggiornato();
   }
 
+  // la copia si puo' fare solo di un modulo tornato firmato
+  const moduloTornato = !!iscritto?.modulo_ricevuto_il;
+
   async function rigenera() {
     setRigenerando(true); setEsito("");
     try {
       const { data, error } = await supabase.functions.invoke("modulo-ricevuto", {
         body: { token: iscritto.token_modulo, soloPdf: true },
       });
-      if (error) throw new Error(error.message);
+      // L'ERRORE DEVE DIRE IL PERCHE' (25/11/2026). Premendo «Genera la
+      // copia firmata» su un'iscrizione il cui modulo non e' mai tornato
+      // si leggeva «Edge Function returned a non-2xx status code»: la
+      // funzione il motivo lo diceva — 409, «Il modulo non risulta
+      // ancora ricevuto» — ma `invoke`, davanti a una risposta non-2xx,
+      // lascia `data` nullo e appende il corpo a `error.context`, quindi
+      // `error.message` e' sempre quella frase inutile. E' la lezione
+      // dell'8/11/2026, e `testoErroreFunzione` esiste apposta.
+      if (error) throw new Error(await testoErroreFunzione(error));
       if (!data?.ok) throw new Error(data?.guastoPdf || "Non è stato possibile generare il documento.");
       setPercorso(data.percorso);
       setGeneratoIl(new Date().toISOString());
@@ -195,7 +207,9 @@ export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} 
       <Riquadro
         titolo="La copia firmata"
         nota={!percorso
-          ? "Le iscrizioni arrivate prima che questa copia esistesse non ce l'hanno: si genera adesso, e non fa ripartire nessuna mail."
+          ? (moduloTornato
+            ? "Le iscrizioni arrivate prima che questa copia esistesse non ce l'hanno: si genera adesso, e non fa ripartire nessuna mail."
+            : "La copia è la fotografia di quello che l'allieva ha sottoscritto: finché il modulo non torna firmato non c'è niente da fotografare.")
           : "È il documento allegato alla mail di conferma: dati, regolamento com'era il giorno della firma, dichiarazioni con la loro ora, firma e documento d'identità."}
       >
         {percorso ? (
@@ -212,12 +226,44 @@ export default function Fascicolo({ iscritto, chi = "", onAggiornato = () => {} 
           </>
         ) : (
           <>
-            <div style={{ ...fontBody, fontSize: 13, color: AMBRA, marginBottom: 10 }}>
-              Per questa iscrizione il documento non è ancora stato generato.
-            </div>
-            <Button onClick={rigenera} disabled={rigenerando || !iscritto?.token_modulo}>
-              {rigenerando ? "Genero…" : "Genera la copia firmata"}
-            </Button>
+            {/* IL TASTO SOLO DOVE PUO' RIUSCIRE (25/11/2026). Compariva su
+                OGNI scheda da «Modulo inviato» in poi, cioe' anche sulle
+                265 iscrizioni su 313 il cui modulo non e' mai tornato —
+                254 delle quali confermate lo stesso, perche' iscritte
+                prima o su carta. Li' non c'e' nessuna firma da
+                fotografare, e premerlo rispondeva sempre 409. Un tasto
+                che non puo' riuscire e' peggio di un tasto che manca:
+                chi lo preme crede di aver sbagliato lui.
+                E dei 48 moduli davvero tornati, OGGI CE L'HANNO TUTTI
+                (misurato: zero senza copia), quindi questo ramo e' un
+                recupero gia' finito — resta per i moduli che torneranno. */}
+            {moduloTornato ? (
+              <>
+                <div style={{ ...fontBody, fontSize: 13, color: AMBRA, marginBottom: 10 }}>
+                  Per questa iscrizione il documento non è ancora stato generato.
+                </div>
+                <Button onClick={rigenera} disabled={rigenerando || !iscritto?.token_modulo}>
+                  {rigenerando ? "Genero…" : "Genera la copia firmata"}
+                </Button>
+              </>
+            ) : (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.55 }}>
+                {/* LA FRASE E' SUA, parola per parola (25/11/2026): «scrivi
+                    almeno: modulo non presente, inviato con vecchio
+                    sistema». Dice quello che e' successo — 254 iscrizioni
+                    su 313 sono confermate senza essere mai passate dal
+                    modulo online — invece di lasciare un riquadro che
+                    sembra un pezzo mancante. */}
+                {iscritto?.stato === "confermato" ? (
+                  <>
+                    <b style={{ color: NAVY }}>Modulo non presente: inviato con il vecchio sistema.</b>{" "}
+                    Non c'è una copia firmata da generare.
+                  </>
+                ) : (
+                  <>Il modulo non è ancora tornato firmato, quindi non c'è una copia da generare. Comparirà qui appena lei lo invia.</>
+                )}
+              </div>
+            )}
           </>
         )}
         {esito && (

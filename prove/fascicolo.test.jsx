@@ -83,7 +83,9 @@ describe("il fascicolo di un'iscrizione", () => {
 
   it("senza copia firmata offre di generarla, e non finge che ci sia", async () => {
     banco(MAIL);
-    const p = await monta(<Fascicolo iscritto={{ ...ISCRITTA, modulo_pdf_path: null }} />);
+    // il modulo dev'essere TORNATO: dal 25/11/2026 la copia si offre solo
+    // dove c'e' una firma da fotografare
+    const p = await monta(<Fascicolo iscritto={{ ...ISCRITTA, modulo_pdf_path: null, modulo_ricevuto_il: "2026-10-18T09:00:00.000Z" }} />);
     expect(p.testo()).toContain("non è ancora stato generato");
     expect(p.tasto("Genera la copia firmata")).toBeTruthy();
     expect(p.tasto("Apri il modulo firmato")).toBeFalsy();
