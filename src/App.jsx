@@ -96,6 +96,7 @@ import ChiediAiDati from "./statistiche/ChiediAiDati.jsx";
 import LoghiECertificati from "./certificati/LoghiECertificati.jsx";
 import { areaSchedaIscritto, campoAreaScheda, titoloAreaScheda, IntestazioneArea, RigaLettura, CampoLettura } from "./ui/scheda.jsx";
 import { AreaAnagrafica } from "./iscrizione/AreeAnagrafiche.jsx";
+import CampoCerca from "./iscrizione/CampoCerca.jsx";
 import { AREA_ALLIEVO, AREA_FATTURAZIONE } from "./iscrizione/disposizione.js";
 import FlagVenditaFiera from "./eventi/FlagVenditaFiera.jsx";
 import { testoErroreFunzione } from "./errore-funzione.js";
@@ -7112,6 +7113,37 @@ export function dermografoRisultaPagato(i) {
   if (i?.dermografo_pagamento !== "con_corso") return null;
   return !!(i?.dermografo_pagato || i?.incassato);
 }
+// «ALTRO MATERIALE»: quello che l''allieva compra insieme al corso
+// (25/11/2026, chiesto dal titolare). Stesse regole del dermografo, e
+// non e'' un caso: e'' la stessa cosa — merce che parte col pacco e si
+// paga in aula.
+//
+// Il prezzo di ogni riga e'' il LORDO del giorno in cui si e'' prenotato,
+// congelato: il listino cambia, e quello che si chiede all''allieva e'' il
+// prezzo che le e'' stato detto.
+export function righeMaterialeDi(i) {
+  const righe = Array.isArray(i?.materiale_prenotato) ? i.materiale_prenotato : [];
+  return righe.filter((r) => r && (Number(r.quantita) || 0) > 0);
+}
+export function materialeRicavoDi(i) {
+  return round2(righeMaterialeDi(i).reduce((s, r) => s + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
+}
+export function materialeDaIncassareDi(i) {
+  if (i?.materiale_pagato) return 0;
+  return materialeRicavoDi(i);
+}
+// l''imponibile: col contante senza fattura non c''e'' IVA da scorporare,
+// come per ogni altra quota di questa scheda
+export function materialeImponibileDi(i) {
+  const lordo = materialeRicavoDi(i);
+  if (!lordo) return 0;
+  return i?.materiale_metodo === "Cash no iva" ? lordo : round2(lordo / 1.22);
+}
+export function materialeRisultaPagato(i) {
+  if (!righeMaterialeDi(i).length) return null;
+  return !!(i?.materiale_pagato || i?.incassato);
+}
+
 // QUANTO QUESTO ALLIEVO DEVE DARE AL CORSO, in un posto solo.
 //
 // Era scritto a mano in otto punti — la scheda della classe, la lista, il
@@ -7121,7 +7153,8 @@ export function dermografoRisultaPagato(i) {
 // di ordini non pagati dentro il fatturato: quando una somma vive in
 // otto copie, il giorno che le si aggiunge una voce se ne aggiorna sei.
 export function daIncassareAlCorsoDi(i) {
-  return round2((Number(i?.saldo_totale) || 0) + modelleTotaleDi(i) + dermografoDaIncassareDi(i));
+  return round2((Number(i?.saldo_totale) || 0) + modelleTotaleDi(i)
+    + dermografoDaIncassareDi(i) + materialeDaIncassareDi(i));
 }
 
 // Quanto e' ENTRATO davvero da un allievo, non quanto e' stato promesso.
@@ -7198,7 +7231,7 @@ function anticipiIncassatiDi(i) {
 function incassatoDi(i) {
   // il dermografo pagato col corso entra qui come tutto il resto: al
   // corso si incassa con una spunta sola (25/11/2026)
-  const saldo = i.incassato ? importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i) + dermografoImponibileDi(i) : 0;
+  const saldo = i.incassato ? importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i) + dermografoImponibileDi(i) + materialeImponibileDi(i) : 0;
   return round2(anticipiIncassatiDi(i) + saldo);
 }
 
@@ -15028,6 +15061,15 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
                       non venga pagato il dermografo ma venga ugualmente
                       consegnato». Avvisa e basta — consegnare o no lo decide
                       lei. */}
+                  {materialeDaIncassareDi(i) > 0 && !i.incassato && (
+                    <div data-materiale-da-pagare style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDEEEC", borderRadius: 10, padding: "5px 9px", marginTop: 5, lineHeight: 1.35 }}>
+                      Materiale prenotato da pagare: {euroScheda(materialeDaIncassareDi(i))}
+                      {i.materiale_metodo ? ` \u00b7 ${(ETICHETTA_METODO[i.materiale_metodo] || i.materiale_metodo).toLowerCase()}` : " \u00b7 metodo non scelto"}
+                      <div style={{ ...fontBody, fontSize: 12, fontWeight: 400, color: NAVY, marginTop: 3 }}>
+                        {righeMaterialeDi(i).map((r) => `${r.nome} \u00d7 ${r.quantita}`).join(" \u00b7 ")}
+                      </div>
+                    </div>
+                  )}
                   {dermografoDaIncassareDi(i) > 0 && !i.incassato && (
                     <div data-dermografo-da-pagare style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDEEEC", borderRadius: 10, padding: "5px 9px", marginTop: 5, lineHeight: 1.35, display: "inline-block" }}>
                       Dermografo da pagare: {euroScheda(dermografoDaIncassareDi(i))}
@@ -30696,7 +30738,7 @@ const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzati
 // .ordine_righe, forma { anagrafica: [...], contabili: [...], organizzativi: [...] })
 const ORDINE_RIGHE_ISCRITTO_DEFAULT = {
   anagrafica: ["modulo", "datiAnagrafici", "fatturazione"],
-  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "dermografoAParte", "quotaAcconto", "quotaPrecorso", "daAvereAlCorso", "pagheraInTotale"],
+  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "dermografoAParte", "materialePrenotato", "quotaAcconto", "quotaPrecorso", "daAvereAlCorso", "pagheraInTotale"],
   organizzativi: ["accordiCommerciali", "richiedeModelle", "tagliaDivisa", "screenAcconto", "screenRecap", "note"],
 };
 // L'ordine salvato sul database invecchia: una riga può essere stata
@@ -33938,6 +33980,10 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   const [dermografoConsegna, setDermografoConsegna] = useState("");
   const [dermografoSconto, setDermografoSconto] = useState("");
   const [pagDermografo, setPagDermografo] = useState(QUOTA_VUOTA);
+  // «Altro materiale»: le righe che l'allieva prenota col corso
+  const [materiale, setMateriale] = useState([]);
+  const [materialeMetodo, setMaterialeMetodo] = useState("");
+  const [materialePagato, setMaterialePagato] = useState(false);
   const [pagDermografoPagato, setPagDermografoPagato] = useState(false);
   // "Corso parziale": l'iscritta non c'è tutti i giorni del corso — quando
   // spuntato, un elemento per ogni giorno del corso { numero_giorno,
@@ -34311,6 +34357,46 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
   // corso" apre il conto su questa scheda
   const dermografoComprato = dermografoScelta === "tekna" || dermografoScelta === "horus";
   const dermografoDaPagare = dermografoComprato && dermografoPagamento === "con_corso";
+  // I PRODOTTI CHE SI POSSONO PRENOTARE sono quelli in listino: un
+  // prodotto fuori listino (19/11/2026) non si vende piu', e offrirlo
+  // qui vorrebbe dire prometterne uno che non si ordina. L'elenco si
+  // compone una volta sola: rifarlo a ogni lettera battuta nella
+  // ricerca vuol dire ricostruire duecento voci a ogni tasto.
+  const materialeCercabile = useMemo(() => (prodottiShop || [])
+    .filter((p) => p.attivo !== false && p.prezzo_vendita != null)
+    .map((p) => ({ valore: p.id, testo: p.nome }))
+    .sort((a, b) => a.testo.localeCompare(b.testo, "it", { numeric: true })),
+  [prodottiShop]);
+  const totaleMateriale = round2(materiale.reduce((t, r) => t + (Number(r.prezzo) || 0) * (Number(r.quantita) || 0), 0));
+  function aggiungiMateriale(prodottoId) {
+    const p = (prodottiShop || []).find((x) => x.id === prodottoId);
+    if (!p) return;
+    setMateriale((prev) => {
+      // lo stesso prodotto due volte non fa due righe: cresce la
+      // quantita'. Due righe uguali sono due righe da sommare a mente,
+      // e in aula si legge un elenco, non un rendiconto
+      const gia = prev.findIndex((r) => r.prodotto_id === prodottoId);
+      if (gia >= 0) return prev.map((r, i) => (i === gia ? { ...r, quantita: (Number(r.quantita) || 0) + 1 } : r));
+      // il prezzo e' il lordo di OGGI, congelato: il listino cambia, e
+      // quello che si chiede all'allieva e' quello che le si e' detto
+      return [...prev, { prodotto_id: p.id, nome: p.nome, quantita: 1, prezzo: prezzoAlPubblico(p) ?? 0 }];
+    });
+  }
+  function cambiaMateriale(indice, campo, valore) {
+    setMateriale((prev) => prev.map((r, i) => {
+      if (i !== indice) return r;
+      if (campo === "quantita") return { ...r, quantita: Math.max(0, Number(valore) || 0) };
+      // il prezzo si corregge a mano: uno sconto concordato, un prezzo
+      // vecchio promesso. Resta un lordo per pezzo
+      return { ...r, prezzo: valore === "" ? 0 : parseNum(valore) };
+    }));
+  }
+  function togliMateriale(indice, nome) {
+    // togliere si chiede, e la domanda dice QUALE: davanti a un elenco
+    // «sei sicuro?» non dice niente (regola dell'11/11/2026)
+    if (!confermaRimozione(`«${nome}» dal materiale prenotato`)) return;
+    setMateriale((prev) => prev.filter((_, i) => i !== indice));
+  }
   const prezzoListinoDermografo = dermografoComprato ? listinoLordoDermografo(dermografoScelta) : null;
   const prezzoDermografoLordo = prezzoListinoDermografo != null
     ? round2(Math.max(0, prezzoListinoDermografo - (dermografoSconto === "" ? 0 : parseNum(dermografoSconto))))
@@ -34700,6 +34786,9 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
       metodo: i.dermografo_metodo || "",
     });
     setPagDermografoPagato(i.dermografo_pagato === true);
+    setMateriale(Array.isArray(i.materiale_prenotato) ? i.materiale_prenotato : []);
+    setMaterialeMetodo(i.materiale_metodo || "");
+    setMaterialePagato(i.materiale_pagato === true);
     const giorniPresenzaValidi = Array.isArray(i.giorni_presenza) ? i.giorni_presenza.filter((n) => typeof n === "number") : [];
     setCorsoParziale(giorniPresenzaValidi.length > 0);
     setGiorniPresenza(giorniPresenzaValidi);
@@ -35074,6 +35163,12 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
         dermografo_totale: dermografoDaPagare && prezzoDermografoLordo != null ? prezzoDermografoLordo : null,
         dermografo_metodo: dermografoDaPagare ? (pagDermografo.metodo || null) : null,
         dermografo_pagato: dermografoDaPagare ? pagDermografoPagato : false,
+        // niente righe = niente prenotazione: si scrive null invece di
+        // un array vuoto, cosi' «non ha prenotato niente» e «ha
+        // prenotato e poi ha tolto tutto» si leggono allo stesso modo
+        materiale_prenotato: materiale.length ? materiale : null,
+        materiale_metodo: materiale.length ? (materialeMetodo || null) : null,
+        materiale_pagato: materiale.length ? materialePagato : false,
         pacchetto_kit: pacchettoKit.trim() || null,
         // IL RIFERIMENTO, non solo il nome.
         //
@@ -37000,6 +37095,100 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
             </div>
           )}
 
+          {/* «ALTRO MATERIALE» (25/11/2026, chiesto dal titolare): quello
+              che l'allieva decide di comprare insieme al corso. Sta
+              accanto al dermografo perche' e' la stessa cosa — merce che
+              parte col pacco e si paga in aula — e compare SEMPRE, anche
+              dove il kit non prevede il dermografo a parte: comprare due
+              aghi non dipende da quale pacchetto si e' scelto. */}
+          <div {...propsRiga("contabili", "materialePrenotato")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "materialePrenotato")}
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+                <IntestazioneArea Icona={IconaBorsaShop}>Altro materiale prenotato col corso</IntestazioneArea>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>
+                  Cerca il prodotto a magazzino e scegli dall&rsquo;elenco: si aggiunge qui sotto, e il totale
+                  finisce fra i soldi da incassare al corso.
+                </div>
+                <CampoCerca
+                  chiave="materiale-prenotato"
+                  valore=""
+                  vuoto="&#128269; cerca un prodotto a magazzino&hellip;"
+                  voci={materialeCercabile}
+                  onScegli={(prodottoId) => aggiungiMateriale(prodottoId)}
+                />
+                {materiale.length === 0 ? (
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10 }}>
+                    Nessun materiale prenotato.
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10 }}>
+                    {materiale.map((r, idx) => (
+                      <div key={`${r.prodotto_id}-${idx}`} data-riga-materiale style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+                        <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 600, color: NAVY, flex: "1 1 160px", minWidth: 0, overflowWrap: "anywhere" }}>{r.nome}</span>
+                        <ContatoreQuantita
+                          valore={Number(r.quantita) || 0}
+                          onCambia={(q) => cambiaMateriale(idx, "quantita", q)}
+                        />
+                        <input
+                          data-materiale-prezzo
+                          inputMode="decimal"
+                          value={r.prezzo != null ? String(r.prezzo) : ""}
+                          onChange={(e) => cambiaMateriale(idx, "prezzo", e.target.value)}
+                          style={{ ...campoAreaScheda, width: 90, flex: "0 0 auto", textAlign: "right" }}
+                        />
+                        <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, width: 90, textAlign: "right", flex: "0 0 auto" }}>
+                          {euroScheda(round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0)))}
+                        </span>
+                        <button
+                          type="button"
+                          data-togli-materiale
+                          onClick={() => togliMateriale(idx, r.nome)}
+                          title="Togli dalla prenotazione"
+                          style={{ border: "none", background: "transparent", cursor: "pointer", color: "#C0392B", fontSize: 16, lineHeight: 1, padding: "4px 6px", flex: "0 0 auto" }}
+                        >&#128465;</button>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, alignItems: "baseline", marginTop: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale da pagare</span>
+                      <span data-materiale-totale style={{ ...fontBody, fontSize: 20, fontWeight: 800, color: NAVY }}>{euroScheda(totaleMateriale)}</span>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+                      <div style={{ flex: "1 1 200px" }}>
+                        <Field label="Metodo di pagamento">
+                          <select
+                            data-materiale-metodo
+                            value={materialeMetodo}
+                            onChange={(e) => setMaterialeMetodo(e.target.value)}
+                            style={{ ...campoAreaScheda, ...(materialeMetodo ? {} : { color: "#C0392B", borderColor: "#C0392B" }) }}
+                          >
+                            <option value="">&mdash; scegli: senza non si sa come incassarlo &mdash;</option>
+                            {METODI_SALDO.map((m) => <option key={m} value={m}>{ETICHETTA_METODO[m] || m}</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 200px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 0" }}>
+                          <input type="checkbox" data-materiale-pagato checked={materialePagato} onChange={(e) => setMaterialePagato(e.target.checked)} />
+                          <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Gi&agrave; pagato prima del corso</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12, lineHeight: 1.5, marginTop: 4, color: materialePagato ? "#2E7D32" : materialeMetodo ? MUTED : "#C0392B" }}>
+                      {materialePagato
+                        ? "Risulta gi\u00e0 pagato: non entra fra i soldi da esigere al corso."
+                        : materialeMetodo
+                          ? `Si incassa AL CORSO, ${(ETICHETTA_METODO[materialeMetodo] || materialeMetodo).toLowerCase()}: ${euroScheda(totaleMateriale)} entrano nel \u00abda incassare\u00bb della classe, insieme al saldo.`
+                          : "Manca il metodo: finch\u00e9 non lo scegli, la master non sa come incassare questi soldi al corso."}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "materialePrenotato")}
+          </div>
+
           <div {...propsRiga("contabili", "quotaAcconto")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "quotaAcconto")}
@@ -37864,7 +38053,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
           {listaIscritti.map((i, idx) => {
             // anche chi ha solo il dermografo: senza, 890 euro da esigere
             // non comparivano da nessuna parte su quella scheda
-            const mostraIncasso = i.saldo_totale != null || i.numero_modelle != null || dermografoDaIncassareDi(i) > 0;
+            const mostraIncasso = i.saldo_totale != null || i.numero_modelle != null || dermografoDaIncassareDi(i) > 0 || materialeDaIncassareDi(i) > 0;
             const daIncassare = daIncassareAlCorsoDi(i);
             const aPosto = i.incassato || daIncassare === 0;
             const coloreIncasso = aPosto ? "#2E7D32" : "#C0392B";
@@ -38196,6 +38385,12 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                                 che in aula c'e' una macchina da 890 euro da
                                 farsi pagare prima di consegnarla. Avvisa e
                                 lascia decidere: non blocca niente. */}
+                            {materialeDaIncassareDi(i) > 0 && (
+                              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 11.5, fontWeight: 700, color: coloreIncasso, marginTop: 4, whiteSpace: "normal", lineHeight: 1.35 }}>
+                                di cui {euroScheda(materialeDaIncassareDi(i))} di materiale prenotato ({righeMaterialeDi(i).length} vo{righeMaterialeDi(i).length === 1 ? "ce" : "ci"})
+                                {i.materiale_metodo ? ` \u00b7 ${(ETICHETTA_METODO[i.materiale_metodo] || i.materiale_metodo).toLowerCase()}` : " \u00b7 metodo non scelto"}
+                              </div>
+                            )}
                             {dermografoDaIncassareDi(i) > 0 && (
                               <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 11.5, fontWeight: 700, color: coloreIncasso, marginTop: 4, whiteSpace: "normal", lineHeight: 1.35 }}>
                                 di cui {euroScheda(dermografoDaIncassareDi(i))} di dermografo{i.dermografo_metodo ? ` (${(ETICHETTA_METODO[i.dermografo_metodo] || i.dermografo_metodo).toLowerCase()})` : " — metodo non scelto"}
@@ -39123,8 +39318,8 @@ function contiRiepilogoClasse({
   // il dermografo segue il SUO metodo, non quello del saldo: la stessa
   // allieva puo' saldare a bonifico e pagare il dermografo in contanti,
   // e in busta ci vanno solo i contanti
-  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eContanti(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i) + (eContanti(i.dermografo_metodo) ? dermografoRicavoDi(i) : 0)) : 0), 0) + incassiExtraContanti + venditeContanti);
-  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eMetodoPos(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + (eMetodoPos(i.dermografo_metodo) ? dermografoRicavoDi(i) : 0)) : 0), 0) + incassiExtraPos + venditePos);
+  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eContanti(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i) + (eContanti(i.dermografo_metodo) ? dermografoRicavoDi(i) : 0) + (eContanti(i.materiale_metodo) ? materialeRicavoDi(i) : 0)) : 0), 0) + incassiExtraContanti + venditeContanti);
+  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eMetodoPos(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + (eMetodoPos(i.dermografo_metodo) ? dermografoRicavoDi(i) : 0) + (eMetodoPos(i.materiale_metodo) ? materialeRicavoDi(i) : 0)) : 0), 0) + incassiExtraPos + venditePos);
   // Le spese con origine_scadenziario_chiave sono i pagamenti delle righe
   // automatiche (compensi disposti dalla busta, parti bonifico saldate,
   // fatture di alloggio e location): il loro costo sta gia' in
@@ -39164,7 +39359,7 @@ function contiRiepilogoClasse({
     listaIscritti.reduce((s, i) => s
       + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0)
       + ["acconto", "precorso"].reduce((t, f) => t + (Array.isArray(i[`${f}_extra`]) ? i[`${f}_extra`] : []).reduce((u, r) => u + (r.totale || 0) + (r.metodo === "APPago" ? (r.interessi || 0) : 0), 0), 0)
-      + modelleTotaleDi(i) + dermografoRicavoDi(i), 0)
+      + modelleTotaleDi(i) + dermografoRicavoDi(i) + materialeRicavoDi(i), 0)
     + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
     + venditeLordo
   );
@@ -39172,7 +39367,7 @@ function contiRiepilogoClasse({
     listaIscritti.reduce((s, i) => s
       + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0)
       + ["acconto", "precorso"].reduce((t, f) => t + (Array.isArray(i[`${f}_extra`]) ? i[`${f}_extra`] : []).reduce((u, r) => u + (r.imponibile || 0), 0), 0)
-      + modelleTotaleDi(i) + dermografoImponibileDi(i), 0)
+      + modelleTotaleDi(i) + dermografoImponibileDi(i) + materialeImponibileDi(i), 0)
     + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
     + venditeImponibile
   );
@@ -40306,6 +40501,7 @@ function quoteIncassateDi(i, cd) {
   // il dermografo ha un metodo SUO: puo' essere incassato in contanti
   // mentre il saldo va a bonifico, e in prima nota sono due righe
   if (i.incassato && dermografoRicavoDi(i)) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, dermografoImponibileDi(i), i.dermografo_metodo || i.saldo_metodo);
+  if (i.incassato && materialeRicavoDi(i)) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, materialeImponibileDi(i), i.materiale_metodo || i.saldo_metodo);
   return fuori;
 }
 function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById, soloTrascorsi = false }) {
@@ -56535,6 +56731,7 @@ function PaginaInserimentoCostiRicavi({
     if (i.incassato && i.saldo_metodo) aggiungi("saldo", "Saldo al corso", i.saldo_incassato_il || cd?.data_inizio, (i.saldo_totale || 0) + modelleTotaleDi(i), i.saldo_metodo);
     // riga sua, perche' il metodo puo' essere un altro
     if (i.incassato && dermografoRicavoDi(i)) aggiungi("dermografo", "Dermografo al corso", i.saldo_incassato_il || cd?.data_inizio, dermografoRicavoDi(i), i.dermografo_metodo || i.saldo_metodo);
+    if (i.incassato && materialeRicavoDi(i)) aggiungi("materiale", "Materiale prenotato", i.saldo_incassato_il || cd?.data_inizio, materialeRicavoDi(i), i.materiale_metodo || i.saldo_metodo);
   });
   (venditeShop || []).forEach((v) => {
     if (v.tipo_movimento === "omaggio") return;
@@ -84337,11 +84534,27 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
   // la numerazione si conta invece di essere scritta: saltare da 01 a 03
   // farebbe cercare una sezione che non esiste
   const mostraDermografi = !!corso?.prevede_dermografi_sicurezza;
-  const numeroSezione = {
-    kit: "01", dermografi: "02",
-    abbigliamento: mostraDermografi ? "03" : "02",
-    accessori: mostraDermografi ? "04" : "03",
-  };
+  // «MATERIALE PRENOTATO» (25/11/2026, chiesto dal titolare: «in
+  // logistica appare una nuova casella, dopo quella dei dermografi, con
+  // sotto il nome dell'allieva e la lista dei materiali prenotati da
+  // pagare al corso»). Compare solo se qualcuno ha prenotato: una
+  // sezione sempre presente e quasi sempre vuota e' una sezione che si
+  // impara a saltare.
+  const allieveConMateriale = (iscrittiEdizione || [])
+    .filter((i) => righeMaterialeDi(i).length > 0)
+    .sort((a, b) => `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it"));
+  const mostraMateriale = allieveConMateriale.length > 0;
+  const numeroSezione = (() => {
+    let n = 1;
+    const prossimo = () => String(n++).padStart(2, "0");
+    return {
+      kit: prossimo(),
+      dermografi: mostraDermografi ? prossimo() : null,
+      materiale: mostraMateriale ? prossimo() : null,
+      abbigliamento: prossimo(),
+      accessori: prossimo(),
+    };
+  })();
   // il contenuto del kit non serve sempre in vista: si apre solo
   // cliccando sul nome, qui nella stessa riga del kit
   const [kitEspansi, setKitEspansi] = useState(() => new Set());
@@ -84806,7 +85019,53 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
         </SezioneAllestimento>
       )}
 
-      {/* 03 ABBIGLIAMENTO. Quante magliette partono e di che taglia: e'
+      {/* MATERIALE PRENOTATO: quello che le allieve comprano col corso.
+          Qui non c'e' niente da contare in riserva — sono pezzi di una
+          persona precisa, e chi prepara la scatola deve sapere DI CHI
+          sono. Il prezzo si legge perche' quei soldi vanno chiesti in
+          aula: e' la stessa cifra del «da incassare» della sua scheda. */}
+      {mostraMateriale && (
+        <SezioneAllestimento numero={numeroSezione.materiale} titolo="Materiale prenotato">
+          {/* SI DICE CHE IL MAGAZZINO NON LI HA ANCORA SCALATI, e non e'
+              una dimenticanza: i kit e i dermografi scalano col pacco
+              perche' qualcuno ha deciso che fosse cosi', e per questi
+              pezzi quella decisione non e' stata presa. Scriverlo e'
+              l'unico modo di non ripetere il guasto dello shop del
+              24/11 — merce uscita e giacenza ferma, per ventiquattro
+              giorni, senza che nessuno lo sapesse. */}
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#8A5A00", background: "#FFF6E5", borderRadius: 10, padding: "7px 10px", marginBottom: 8, lineHeight: 1.45 }}>
+            Questi pezzi partono col pacco ma <b>il magazzino non li scala ancora</b>: vanno contati a mano
+            quando si prepara la scatola.
+          </div>
+          {allieveConMateriale.map((i, idx) => {
+            const righe = righeMaterialeDi(i);
+            const pagato = !!(i.materiale_pagato || i.incassato);
+            return (
+              <div key={i.id} data-materiale-logistica style={{ padding: "9px 0", borderBottom: idx === allieveConMateriale.length - 1 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ ...fontBody, fontSize: ALLESTIMENTO.nome, fontWeight: 700, color: NAVY, overflowWrap: "anywhere" }}>
+                    {toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim())}
+                  </span>
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: pagato ? "#E9F6EC" : "#FDEEEC", color: pagato ? "#2E7D32" : "#C0392B" }}>
+                    {pagato ? "pagato" : `da pagare al corso: ${euroScheda(materialeRicavoDi(i))}`}
+                  </span>
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  {righe.map((r, k) => (
+                    <div key={`${r.prodotto_id}-${k}`} style={{ display: "flex", alignItems: "baseline", gap: 8, ...fontBody, fontSize: ALLESTIMENTO.colonna, color: NAVY, padding: "2px 0" }}>
+                      <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{r.nome}</span>
+                      <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>&times; {r.quantita}</span>
+                      <span style={{ color: MUTED, whiteSpace: "nowrap", width: 80, textAlign: "right" }}>{euroScheda(round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0)))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </SezioneAllestimento>
+      )}
+
+      {/* ABBIGLIAMENTO. Quante magliette partono e di che taglia: e'
           il totale che serve a chi va allo scaffale, e prima stava in
           fondo all'elenco degli iscritti — cioe' dietro un tasto da
           aprire. La riga per persona resta qui dentro, dietro

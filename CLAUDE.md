@@ -1678,6 +1678,77 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### «Altro materiale»: quello che l'allieva compra insieme al corso (25/11/2026)
+
+Il titolare, subito dopo il lavoro sul dermografo: «nella stessa casella
+dove si imposta la prenotazione del dermografo si deve poter aggiungere
+anche "altro materiale"… la creazione della lista avviene con una casella
+di ricerca con la lente in cui si trova il prodotto voluto tra tutti
+quelli in magazzino, si seleziona, e sotto si crea un elenco: "Aghi 1RL
+× 2 €xx, Lampada da dermopigmentazione €xx", totale da pagare, metodo di
+pagamento (come se fosse un mini POS), e anche questo si somma nelle
+cifre da ricevere al corso nella contabilità. In più in logistica appare
+una nuova casella, dopo quella dei dermografi, "MATERIALE PRENOTATO".»
+
+**È il fratello del dermografo pagato col corso** — merce che parte col
+pacco e si paga in aula — e segue le stesse tre decisioni prese quella
+mattina: **una spunta sola** al corso, i soldi **in contabilità come il
+saldo**, e un materiale non pagato che **avvisa senza bloccare**.
+
+**Il conto era già in un posto solo**, ed è il motivo per cui questa
+seconda parte è costata poco: `daIncassareAlCorsoDi` esisteva da
+stamattina, e il materiale si è aggiunto lì. Se «saldo + modelle» fosse
+ancora scritto a mano in tredici punti, ne avremmo aggiornati undici.
+
+**Una colonna jsonb e non una tabella**, ed è una scelta: queste righe
+nascono, si leggono e muoiono con la scheda dell'allieva, nessuno le
+interroga per conto loro, e sono due o tre per iscritto — la stessa forma
+di `tipi_modelle`, che fa lo stesso mestiere da sempre.
+
+Ogni riga è `{prodotto_id, nome, quantita, prezzo}`. Tre cose da sapere:
+il legame col magazzino è **l'id** e il `nome` è solo il ripiego del
+giorno in cui si è prenotato (la regola del 22/10); **il prezzo è il
+lordo congelato alla prenotazione**, perché il listino cambia e quello
+che si chiede all'allieva è il prezzo che le è stato detto; e si
+**corregge a mano**, per uno sconto concordato. Lo stesso prodotto
+prenotato due volte **non fa due righe**, cresce la quantità: due righe
+uguali sono due righe da sommare a mente, e in aula si legge un elenco.
+
+**Si cerca, non si scorre** (`CampoCerca`, la stessa casella del comune di
+nascita e del calcolo consumi): si scrive, l'elenco si apre lì sotto, si
+tocca una voce. **Un prodotto fuori listino non si prenota**: dal
+19/11/2026 non si vende più, e offrirlo qui vorrebbe dire prometterne uno
+che non si riordina.
+
+**Il metodo è suo, e in prima nota ha una riga sua.** Come il dermografo:
+la stessa allieva può saldare a bonifico, pagare il dermografo in
+contanti e il materiale col POS, e in busta ci vanno solo i contanti.
+
+**In logistica** la casella «Materiale prenotato» sta **dopo i
+dermografi** e compare **solo se qualcuno ha prenotato** — una sezione
+sempre presente e quasi sempre vuota si impara a saltare. Dentro: il nome
+dell'allieva, la pastiglia «da pagare al corso: 205 €» (verde quando è
+pagato) e le sue righe. La numerazione delle sezioni **si conta invece di
+essere scritta**, come già per i dermografi: saltare da 02 a 04 fa
+cercare una sezione che non esiste.
+
+**QUELLO CHE MANCA, DETTO IN PAGINA E NON SOTTACIUTO:** questi pezzi
+partono col pacco ma **il magazzino non li scala**. I kit e i dermografi
+scalano perché qualcuno ha deciso che fosse così; per questi quella
+decisione non è stata presa, e prenderla da solo vorrebbe dire o merce
+che esce senza scalare, o un doppio scarico il giorno che qualcuno la
+batte anche al banco. Finché non è decisa, la sezione in logistica lo
+**scrive in giallo**: è l'unico modo di non ripetere il guasto dello shop
+del 24/11 — merce uscita e giacenza ferma per ventiquattro giorni senza
+che nessuno lo sapesse.
+
+Migrazione `20261125120000_materiale_prenotato_dall_allieva.sql` (tre
+colonne, rollback dentro — e il rollback **avverte** che porta via
+prenotazioni già promesse a qualcuno). Prove in
+`prove/materiale-prenotato.test.jsx` (15), sull'esempio del titolare: due
+aghi e una lampada, 205 €, che si sommano ai 390 di saldo e ai 60 della
+modella senza sostituire il dermografo.
+
 ### Il dermografo pagato col corso è denaro che la master deve esigere (25/11/2026)
 
 Il titolare, davanti alla scheda di **PMU ROMA del 30/11**: «quando in un
