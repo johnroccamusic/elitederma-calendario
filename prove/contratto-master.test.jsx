@@ -28,6 +28,7 @@ import { rispondiCon } from "./preparazione.js";
 import FirmaContratto from "../src/contratti/FirmaContratto.jsx";
 import PaginaContrattiMaster from "../src/contratti/PaginaContrattiMaster.jsx";
 import { partiDaLeggere } from "../src/contratti/LetturaContratto.jsx";
+import { aTesto, daTesto, normalizzato, riconosciuto } from "../src/contratti/testo-piano.js";
 import { RIGHE, OBBLIGATORI } from "../src/contratti/disposizione.js";
 import { CHIAVI, DAL_CODICE } from "../src/contratti/testi.js";
 import {
@@ -1003,6 +1004,119 @@ describe("correggendo, la pagina resta dov'è", () => {
     // e una seconda battuta non la sposta lo stesso
     await scrivi(casella, "A) Due parole in più.");
     expect(lettore.scrollTop).toBe(1800);
+    await p.smonta();
+  });
+});
+
+// SOSTITUIRE IL CONTRATTO PER INTERO (25/11/2026, chiesto dal
+// titolare: «manca anche il tasto "sostituisci contratto" nel caso io
+// lo voglia cambiare integralmente»).
+//
+// Correggere capoverso per capoverso serve a cambiare una parola: non
+// si aggiunge un articolo, non se ne toglie uno, non si incolla un
+// testo con un numero diverso di commi. Da qui si apre la parte come un
+// testo solo.
+describe("il contratto si sostituisce per intero", () => {
+  const DAL = {
+    intestazione: DAL_CODICE.intestazione, parti: DAL_CODICE.parti, premesse: PREMESSE,
+    articoli: ARTICOLI, clausole: CLAUSOLE, manifesto: MANIFESTO, caselle: CASELLE,
+  };
+
+  // IL GIRO COMPLETO È LA GARANZIA: scritto come testo e riletto, il
+  // contratto deve tornare identico. Se una virgola non tornasse, un
+  // documento aperto e richiuso senza toccare niente si salverebbe
+  // diverso da com'era.
+  it("scritto come testo e riletto, ogni parte torna identica", () => {
+    for (const [chiave, corpo] of Object.entries(DAL)) {
+      const { corpo: tornato, errore } = daTesto(chiave, aTesto(chiave, corpo), corpo);
+      expect(errore, chiave).toBeFalsy();
+      expect(tornato, chiave).toEqual(JSON.parse(JSON.stringify(normalizzato(chiave, corpo))));
+    }
+  });
+
+  it("un articolo in più entra, e si conta", () => {
+    const testo = aTesto("articoli", ARTICOLI) + "\n\nArt. 24 – Prova\nPrimo comma.\nSecondo comma.";
+    const { corpo, errore } = daTesto("articoli", testo);
+    expect(errore).toBeFalsy();
+    expect(corpo).toHaveLength(ARTICOLI.length + 1);
+    expect(corpo[ARTICOLI.length]).toEqual({ titolo: "Art. 24 – Prova", punti: ["Primo comma.", "Secondo comma."] });
+    expect(riconosciuto("articoli", corpo)).toContain("24 articoli");
+  });
+
+  it("un testo che non si capisce NON diventa un contratto a metà", () => {
+    // un articolo col solo titolo: manca la riga vuota, o manca il comma
+    expect(daTesto("articoli", "Art. 1 – Solo titolo").errore).toBeTruthy();
+    expect(daTesto("premesse", "SOLO IL TITOLO").errore).toBeTruthy();
+    expect(daTesto("intestazione", "una riga sola").errore).toBeTruthy();
+  });
+
+  it("le dichiarazioni restano tre, e tengono la loro chiave", () => {
+    // chiave e tipo decidono quale spunta è e se è obbligatoria: non
+    // sono testo, e da un testo incollato non si possono dedurre
+    const testo = aTesto("caselle", CASELLE).replace(CASELLE[0].etichetta, "Contratto (nuovo nome)");
+    const { corpo, errore } = daTesto("caselle", testo, CASELLE);
+    expect(errore).toBeFalsy();
+    expect(corpo[0].etichetta).toBe("Contratto (nuovo nome)");
+    expect(corpo.map((c) => c.chiave)).toEqual(["contratto", "clausole", "manifesto"]);
+    expect(corpo[1].daClausole).toBe(true);
+    // e toglierne una si rifiuta
+    const dueSole = aTesto("caselle", CASELLE.slice(0, 2));
+    expect(daTesto("caselle", dueSole, CASELLE).errore).toContain("devono restare 3");
+  });
+
+  it("dalla pagina: il tasto apre il testo intero e salva quello che si incolla", async () => {
+    const scritture = [];
+    rispondiCon({
+      "/rest/v1/master?": () => [{ id: "m1", nome: "MARIA ROSSI", contratto_escluso: false }],
+      "/rest/v1/master_contratti_testi": (corpo) => {
+        if (corpo) { scritture.push(corpo); return [{ chiave: "x" }]; }
+        return CHIAVI.map((k) => ({ chiave: k, corpo: DAL_CODICE[k] }));
+      },
+      "/rest/v1/master_contratti": () => [],
+    });
+    window.confirm = vi.fn(() => true);
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    // si legge una parte sola e la si sostituisce
+    await clicca(p.nodo.querySelector('[data-testo="premesse"] [data-campo="leggi-premesse"]'));
+    await attendi(60);
+    await clicca(p.nodo.querySelector('[data-campo="sostituisci-contratto"]'));
+    await attendi(60);
+    const casella = p.nodo.querySelector('[data-intero="premesse"] textarea');
+    expect(casella.value).toContain(PREMESSE.punti[0]);
+    await scrivi(casella, "PREMESSE\nA) Prima premessa nuova.\nB) Seconda premessa nuova.");
+    expect(p.nodo.querySelector('[data-rifiuto="premesse"]')).toBeNull();
+    await clicca(p.nodo.querySelector('[data-campo="salva-contratto"]'));
+    await attendi(120);
+    expect(scritture).toHaveLength(1);
+    expect(scritture[0].corpo).toEqual({ titolo: "PREMESSE", punti: ["A) Prima premessa nuova.", "B) Seconda premessa nuova."] });
+    await p.smonta();
+  });
+
+  it("col testo storto il salvataggio è fermo, e dice perché", async () => {
+    const scritture = [];
+    rispondiCon({
+      "/rest/v1/master?": () => [{ id: "m1", nome: "MARIA ROSSI", contratto_escluso: false }],
+      "/rest/v1/master_contratti_testi": (corpo) => {
+        if (corpo) { scritture.push(corpo); return [{ chiave: "x" }]; }
+        return CHIAVI.map((k) => ({ chiave: k, corpo: DAL_CODICE[k] }));
+      },
+      "/rest/v1/master_contratti": () => [],
+    });
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await clicca(p.nodo.querySelector('[data-testo="premesse"] [data-campo="leggi-premesse"]'));
+    await attendi(60);
+    await clicca(p.nodo.querySelector('[data-campo="sostituisci-contratto"]'));
+    await attendi(60);
+    await scrivi(p.nodo.querySelector('[data-intero="premesse"] textarea'), "SOLO IL TITOLO");
+    expect(p.nodo.querySelector('[data-rifiuto="premesse"]').textContent).toContain("non si salva");
+    const salva = p.nodo.querySelector('[data-campo="salva-contratto"]');
+    expect(salva.disabled).toBe(true);
+    expect(salva.textContent).toContain("non si capisce");
+    await clicca(salva);
+    await attendi(60);
+    expect(scritture).toHaveLength(0);
     await p.smonta();
   });
 });

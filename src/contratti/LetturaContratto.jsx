@@ -30,6 +30,7 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NAVY, MUTED, GRAFITE, CREAM_BORDER, GOLD, fontBody, fontDisplay } from "../ui/stile.js";
 import { blocchiContratto, casellePronte } from "../../supabase/functions/_shared/contratto-master.js";
 import { NOMI } from "./testi.js";
+import { aTesto, daTesto, riconosciuto, COME_SI_SCRIVE } from "./testo-piano.js";
 
 // una parte del documento: il suo nome, da dove viene il testo, e i
 // blocchi da leggere. L'ordine è quello in cui si firma.
@@ -163,6 +164,16 @@ export default function LetturaContratto({
   // casella è una cosa di cui nessuno si accorge (stessa regola del
   // regolamento del modulo di iscrizione).
   const [bozza, setBozza] = useState(null);
+  // SOSTITUIRE UNA PARTE PER INTERO (25/11/2026, chiesto dal titolare:
+  // «manca anche il tasto "sostituisci contratto" nel caso io lo voglia
+  // cambiare integralmente»). Capoverso per capoverso si cambia una
+  // parola; qui si incolla un testo nuovo, con un numero diverso di
+  // articoli o di commi. `interi` dice quali parti sono aperte cosi',
+  // `scritto` cosa c'e' nella loro casella e `rifiuti` perche' un testo
+  // non si capisce — finche' non si capisce, nella bozza non entra.
+  const [interi, setInteri] = useState(() => new Set());
+  const [scritto, setScritto] = useState({});
+  const [rifiuti, setRifiuti] = useState({});
   const [salvando, setSalvando] = useState(false);
   const [erroreSalva, setErroreSalva] = useState("");
   const contenitore = useRef(null);
@@ -185,16 +196,42 @@ export default function LetturaContratto({
     contenitore.current.scrollTop = posizione.current;
   }, [inCorrezione]);
 
-  function apriCorrezione() {
+  function apriCorrezione(perIntero = false) {
     posizione.current = contenitore.current?.scrollTop || 0;
     const copia = {};
-    viste.forEach((p) => { copia[p.chiave] = JSON.parse(JSON.stringify(testi?.[p.chiave] ?? null)); });
+    const testo = {};
+    viste.forEach((p) => {
+      copia[p.chiave] = JSON.parse(JSON.stringify(testi?.[p.chiave] ?? null));
+      testo[p.chiave] = aTesto(p.chiave, copia[p.chiave]);
+    });
     setErroreSalva("");
+    setRifiuti({});
+    setScritto(testo);
+    setInteri(perIntero ? new Set(viste.map((p) => p.chiave)) : new Set());
     setBozza(copia);
   }
   function chiudiCorrezione() {
     posizione.current = contenitore.current?.scrollTop || 0;
     setBozza(null);
+    setInteri(new Set());
+    setRifiuti({});
+  }
+  // una parte sola passa da «riga per riga» a «tutta insieme» e
+  // viceversa: tornando indietro si riparte da quello che la casella
+  // grande ha capito, non da quello che c'era prima
+  function cambiaModo(chiave, perIntero) {
+    posizione.current = contenitore.current?.scrollTop || 0;
+    setScritto((t) => ({ ...t, [chiave]: aTesto(chiave, bozza[chiave]) }));
+    setInteri((s2) => { const n2 = new Set(s2); if (perIntero) n2.add(chiave); else n2.delete(chiave); return n2; });
+  }
+  // IL TESTO INCOLLATO SI RILEGGE SUBITO: se non si capisce lo si dice
+  // mentre si scrive, non al salvataggio. Finche' non si capisce la
+  // bozza resta quella di prima — un contratto non si salva a meta'.
+  function cambiaIntero(chiave, testo) {
+    setScritto((t) => ({ ...t, [chiave]: testo }));
+    const { corpo, errore } = daTesto(chiave, testo, testi?.[chiave]);
+    setRifiuti((r) => ({ ...r, [chiave]: errore || "" }));
+    if (!errore) setBozza((b) => ({ ...b, [chiave]: corpo }));
   }
   function cambia(chiave, percorso, valore) {
     setBozza((b) => ({ ...b, [chiave]: conValore(b[chiave], percorso, valore) }));
@@ -205,8 +242,9 @@ export default function LetturaContratto({
   const cambiate = bozza
     ? Object.keys(bozza).filter((k) => JSON.stringify(bozza[k]) !== JSON.stringify(testi?.[k]))
     : [];
+  const nonCapite = Object.entries(rifiuti).filter(([, e]) => e).map(([k]) => k);
   async function salva() {
-    if (!onSalva || cambiate.length === 0) return;
+    if (!onSalva || cambiate.length === 0 || nonCapite.length > 0) return;
     // SI CHIEDE, perché da qui esce quello che una persona firma, e la
     // domanda nomina cosa cambia: «sei sicuro?» da solo non dice quali
     // parti del contratto si stanno riscrivendo
@@ -280,8 +318,38 @@ export default function LetturaContratto({
                 qui l'epigrafe della master non compare: alla firma la
                 compone il server con i dati di chi firma, e non c'è
                 niente da correggere. */}
-            {bozza ? (
+            {bozza && interi.has(p.chiave) ? (
+              <div style={{ marginTop: 8 }} data-intero={p.chiave}>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.45, marginBottom: 4 }}>
+                  {COME_SI_SCRIVE[p.chiave]}
+                </div>
+                <CasellaTesto
+                  valore={scritto[p.chiave] ?? ""} titolo={`${NOMI[p.chiave]} — tutto il testo`}
+                  onCambia={(t) => cambiaIntero(p.chiave, t)}
+                />
+                {/* COSA HO CAPITO DI QUELLO CHE HAI INCOLLATO: un
+                    contratto che entra storto deve dirlo qui, non alla
+                    prossima firma */}
+                {rifiuti[p.chiave] ? (
+                  <div data-rifiuto={p.chiave} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#B3261E" }}>
+                    {rifiuti[p.chiave]} — finché non si capisce, questa parte non si salva.
+                  </div>
+                ) : (
+                  <div style={{ ...fontBody, fontSize: 11.5, color: "#1C5E33" }}>
+                    Ho letto: {riconosciuto(p.chiave, bozza[p.chiave]) || "il testo di questa parte"}.
+                  </div>
+                )}
+                <button type="button" data-campo={`riga-per-riga-${p.chiave}`} onClick={() => cambiaModo(p.chiave, false)}
+                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: "6px 0", cursor: "pointer", textDecoration: "underline" }}>
+                  Torna a correggere riga per riga
+                </button>
+              </div>
+            ) : bozza ? (
               <div style={{ marginTop: 8 }}>
+                <button type="button" data-campo={`sostituisci-${p.chiave}`} onClick={() => cambiaModo(p.chiave, true)}
+                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: "0 0 6px", cursor: "pointer", textDecoration: "underline" }}>
+                  Sostituisci tutta questa parte
+                </button>
                 {camminaStringhe(bozza[p.chiave]).map(({ percorso, valore }) => {
                   const etichetta = etichettaCampo(percorso);
                   return (
@@ -341,24 +409,41 @@ export default function LetturaContratto({
               Ho finito di rileggere
             </button>
             {onSalva && (
-              <button
-                type="button" data-campo="modifica-contratto" onClick={apriCorrezione}
-                style={{ ...fontBody, fontSize: 13, fontWeight: 700, flex: "0 1 160px", minHeight: 44,
-                         color: NAVY, background: "#FFFDF8", border: `1px solid ${GOLD}`, borderRadius: 10, cursor: "pointer" }}
-              >
-                Modifica
-              </button>
+              <>
+                <button
+                  type="button" data-campo="modifica-contratto" onClick={() => apriCorrezione(false)}
+                  style={{ ...fontBody, fontSize: 13, fontWeight: 700, flex: "0 1 150px", minHeight: 44,
+                           color: NAVY, background: "#FFFDF8", border: `1px solid ${GOLD}`, borderRadius: 10, cursor: "pointer" }}
+                >
+                  Modifica
+                </button>
+                {/* SOSTITUIRE E CORREGGERE SONO DUE GESTI, e il nome lo
+                    dice: «Modifica» cambia una parola dov'e', «Sostituisci»
+                    apre il testo intero per incollarne un altro — con un
+                    numero diverso di articoli, che riga per riga non si
+                    potrebbe fare. */}
+                <button
+                  type="button" data-campo="sostituisci-contratto" onClick={() => apriCorrezione(true)}
+                  style={{ ...fontBody, fontSize: 13, fontWeight: 700, flex: "0 1 190px", minHeight: 44,
+                           color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, cursor: "pointer" }}
+                >
+                  {soloChiave ? "Sostituisci questa parte" : "Sostituisci il contratto"}
+                </button>
+              </>
             )}
           </>
         ) : (
           <>
             <button
-              type="button" data-campo="salva-contratto" disabled={salvando || cambiate.length === 0} onClick={salva}
+              type="button" data-campo="salva-contratto" disabled={salvando || cambiate.length === 0 || nonCapite.length > 0} onClick={salva}
               style={{ ...fontBody, fontSize: 13, fontWeight: 700, flex: "1 1 160px", minHeight: 44,
-                       color: "#fff", background: cambiate.length === 0 ? MUTED : "#1C5E33", border: "none",
-                       borderRadius: 10, cursor: cambiate.length === 0 ? "default" : "pointer" }}
+                       color: "#fff", background: (cambiate.length === 0 || nonCapite.length > 0) ? MUTED : "#1C5E33", border: "none",
+                       borderRadius: 10, cursor: (cambiate.length === 0 || nonCapite.length > 0) ? "default" : "pointer" }}
             >
-              {salvando ? "Sto salvando…" : cambiate.length === 0 ? "Non hai cambiato niente" : `Salva ${cambiate.length === 1 ? "la parte corretta" : `le ${cambiate.length} parti corrette`}`}
+              {salvando ? "Sto salvando…"
+                : nonCapite.length > 0 ? `${nonCapite.length === 1 ? "Una parte non si capisce" : `${nonCapite.length} parti non si capiscono`}`
+                : cambiate.length === 0 ? "Non hai cambiato niente"
+                : `Salva ${cambiate.length === 1 ? "la parte corretta" : `le ${cambiate.length} parti corrette`}`}
             </button>
             <button
               type="button" data-campo="annulla-correzione" disabled={salvando} onClick={chiudiCorrezione}

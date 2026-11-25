@@ -5045,7 +5045,7 @@ un'informazione in più sul blocco, chi disegna e chi stampa continuano a
 leggere `titolo` e `punti`.
 
 Al 25/11/2026 nel database ci sono **tutte e sette le parti**, caricate
-quel giorno alle 12:08. Prove in `prove/contratto-master.test.jsx` (64),
+quel giorno alle 12:08. Prove in `prove/contratto-master.test.jsx` (71),
 con la pagina montata e i tasti premuti davvero.
 
 **E SI CORREGGE DOVE SI LEGGE** (25/11/2026, subito dopo: «qui nel
@@ -5101,6 +5101,48 @@ Chi ha già firmato **tiene il suo testo**, congelato alla sua firma, e
 la versione sostituita finisce in archivio da sé (trigger
 `modulo_testi_archivia` del gemello, qui `master_contratti_testi`). Il
 pannello lo scrive in giallo prima che si tocchi una casella.
+
+**E SI SOSTITUISCE PER INTERO** (25/11/2026, subito dopo: «manca anche
+il tasto "sostituisci contratto" nel caso io lo voglia cambiare
+integralmente»). «Modifica» cambia una parola dov'è; non aggiunge un
+articolo, non ne toglie uno, non accetta un testo con un numero diverso
+di commi. **«Sostituisci il contratto»** apre ogni parte come **un testo
+solo**, dentro cui si incolla quello nuovo — e dentro la correzione ogni
+parte ha il suo «Sostituisci tutta questa parte», per farne una sola.
+
+**Il formato è quello che si vede, ed è scritto sopra la casella**: una
+riga per capoverso, una riga vuota fra un articolo e il successivo, la
+prima riga di ogni blocco è il suo titolo. Nessun capoverso del
+contratto contiene un a capo (misurato: 277 stringhe, zero), quindi la
+riga è un'unità sicura.
+
+**La garanzia è il giro completo.** `aTesto` e `daTesto`
+(`src/contratti/testo-piano.js`) sono una cosa sola, e una prova le
+confronta **sul contratto vero, parte per parte**: scritto come testo e
+riletto deve tornare identico. Se una virgola non tornasse, un documento
+aperto e richiuso senza toccare niente si salverebbe diverso da com'era.
+
+Tre regole che vengono da lì:
+
+- **Quello che non si capisce non entra.** Un testo malformato — un
+  articolo col solo titolo, le premesse senza capoversi — si dice
+  **mentre si scrive**, e finché non si capisce la bozza resta quella di
+  prima e il tasto Salva è fermo: su un documento che qualcuno firma,
+  «ho fatto del mio meglio» è la risposta sbagliata.
+- **Si dice cosa si è capito**: «23 articoli · 148 commi». Un contratto
+  che entra storto deve dirlo qui, non alla prossima firma.
+- **Le dichiarazioni restano tre e nello stesso ordine.** `chiave`,
+  `tipo` e `daClausole` non sono testo: dicono quale spunta è e se è
+  obbligatoria, e da un testo incollato non si deducono. Si tengono
+  dalla versione di prima, per posizione, e toglierne una si rifiuta.
+
+**Un difetto del testo trovato facendo questo, e va detto:** il blocco
+**«Lo Stile Elitederma»** del Manifesto è un **titolo senza testo** —
+nel file del repo ha un capoverso bucato (`punti: [ , ]`), e la riga nel
+database, generata da lì, se lo porta uguale. È un pezzo perso nella
+trascrizione del PDF del 14/11, e il PDF non sta nel repo: il testo non
+si recupera da qui, lo deve dare il titolare. Da oggi se lo incolla da
+solo col tasto nuovo.
 
 **Resta da fare, e va deciso:** l'invio di un **promemoria**
 a chi non ha ancora firmato, che oggi non esiste — un contratto mai
