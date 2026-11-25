@@ -4963,6 +4963,39 @@ che passa a porta aperta, la riga cancellata che vale «chiusa»). Nove
 prove in più nel banco, fra cui quelle che leggono la migrazione e
 pretendono che il controllo venga **prima** di ogni altra cosa.
 
+**E IL CONTRATTO CARICATO SI RILEGGE** (25/11/2026, chiesto dal
+titolare: «io che ho caricato il contratto master, devo avere un tasto
+dove posso rileggere e verificare il contratto caricato»). La sezione
+«Il testo del contratto» diceva se le sette parti c'erano e se la loro
+impronta coincideva col repo: rispondeva a «è quello giusto?» **con un
+numero**, e chi l'aveva caricato doveva fidarsi di sedici cifre
+esadecimali o aprire il repo. Ora c'è **«Rileggi il contratto
+caricato»**, che lo apre per intero — e ogni riga ha il suo **«Leggi»**,
+perché per controllare le premesse non si scorrono ventitré articoli.
+
+Tre regole, e sono tutte e tre la stessa cosa: **quello che si rilegge
+dev'essere quello che si firma.** Il testo arriva dal **database** (è da
+lì che il server lo congela alla firma); i blocchi li compongono
+`blocchiContratto` e `casellePronte`, **le stesse funzioni** della
+pagina di firma e del PDF archiviato — un secondo modo di comporre il
+documento vorrebbe dire rileggere una cosa e farne firmare un'altra; e
+l'epigrafe del/della Master resta **a trattini**, perché lì non c'è
+nessuna master e quei dati si compongono alla firma.
+
+**La verifica è la riga sopra ogni parte**, non l'impronta: «dal
+database», «dal database · diverso dal repo», oppure in rosso **«non è
+nel database: questo è il testo del codice»** — che è il solo caso
+davvero grave, perché alla firma quella parte arriverebbe dal browser di
+chi firma. Per poterlo dire, `blocchiContratto` adesso marca ogni blocco
+con la sua `chiave` (parti / premesse / articoli): è
+un'informazione in più sul blocco, chi disegna e chi stampa continuano a
+leggere `titolo` e `punti`.
+
+Al 25/11/2026 nel database ci sono **tutte e sette le parti**, caricate
+quel giorno alle 12:08 e mai corrette. Prove in
+`prove/contratto-master.test.jsx` (58), con la pagina montata e il tasto
+premuto davvero.
+
 **Resta da fare, e va deciso:** una schermata per **correggere** il
 testo dall'app, come Setting → Il contratto per il modulo (oggi si
 corregge nel repo e si ricarica col tasto); e l'invio di un **promemoria**

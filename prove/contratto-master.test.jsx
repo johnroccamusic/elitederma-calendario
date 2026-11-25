@@ -27,6 +27,7 @@ import { monta, clicca, attendi } from "./aiuto.js";
 import { rispondiCon } from "./preparazione.js";
 import FirmaContratto from "../src/contratti/FirmaContratto.jsx";
 import PaginaContrattiMaster from "../src/contratti/PaginaContrattiMaster.jsx";
+import { partiDaLeggere } from "../src/contratti/LetturaContratto.jsx";
 import { RIGHE, OBBLIGATORI } from "../src/contratti/disposizione.js";
 import { CHIAVI, DAL_CODICE } from "../src/contratti/testi.js";
 import {
@@ -744,5 +745,98 @@ describe("la porta della firma", () => {
     expect(scritture).toHaveLength(1);
     expect(scritture[0][0]?.valore?.aperta ?? scritture[0].valore?.aperta).toBe(false);
     await p.smonta();
+  });
+});
+
+// RILEGGERE IL CONTRATTO CARICATO (25/11/2026, chiesto dal titolare:
+// «io che ho caricato il contratto master, devo avere un tasto dove
+// posso rileggere e verificare il contratto caricato»).
+//
+// La pagina diceva se le sette parti c'erano e se la loro impronta
+// coincideva col repo — cioè rispondeva a «è quello giusto?» con un
+// numero, e chi l'aveva caricato doveva fidarsi di sedici cifre.
+// Adesso lo si legge per intero, dal DATABASE, composto dalle stesse
+// funzioni della pagina di firma: rileggere una cosa e farne firmare
+// un'altra sarebbe il contrario del motivo per cui il tasto esiste.
+describe("si rilegge il contratto che il database fa firmare", () => {
+  const RIGHE_DB = CHIAVI.map((k) => ({
+    chiave: k, corpo: DAL_CODICE[k],
+    aggiornato_da: "testo di partenza (14/11/2026)", aggiornato_il: "2026-11-16T00:00:00Z",
+  }));
+
+  function banco(testi = RIGHE_DB) {
+    rispondiCon({
+      "/rest/v1/master?": () => [{ id: "m1", nome: "MARIA ROSSI", contratto_escluso: false }],
+      "/rest/v1/master_contratti_testi": () => testi,
+      "/rest/v1/master_contratti": () => [],
+    });
+  }
+
+  it("il tasto apre il contratto per intero, articoli compresi", async () => {
+    banco();
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    expect(p.nodo.querySelector('[data-campo="lettura-contratto"]')).toBeNull();
+    await clicca(p.tasto("Rileggi il contratto caricato"));
+    await attendi(60);
+    const lettore = p.nodo.querySelector('[data-campo="lettura-contratto"]');
+    expect(lettore).toBeTruthy();
+    // le sette parti, dalla prima all'ultima
+    for (const k of CHIAVI.filter((c) => c !== "intestazione")) {
+      expect(lettore.querySelector(`[data-parte="${k}"]`)).toBeTruthy();
+    }
+    // e il testo vero, non un riassunto
+    expect(lettore.textContent).toContain(ARTICOLI[0].titolo);
+    expect(lettore.textContent).toContain("Elitederma S.r.l.");
+    await p.smonta();
+  });
+
+  it("dice da dove viene ogni parte: è quella la verifica", async () => {
+    // una parte sola nel database: le altre, alla firma, arriverebbero
+    // dal browser di chi firma — e qui si deve vedere
+    banco(RIGHE_DB.filter((r) => r.chiave === "premesse"));
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await clicca(p.tasto("Rileggi il contratto caricato"));
+    await attendi(60);
+    const lettore = p.nodo.querySelector('[data-campo="lettura-contratto"]');
+    expect(lettore.querySelector('[data-parte="premesse"]').textContent).toContain("dal database");
+    expect(lettore.querySelector('[data-parte="articoli"]').textContent).toContain("non è nel database");
+    await p.smonta();
+  });
+
+  it("si legge anche una parte sola, senza scorrere ventitré articoli", async () => {
+    banco();
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    const riga = p.nodo.querySelector('[data-testo="premesse"]');
+    await clicca(riga.querySelector('[data-campo="leggi-premesse"]'));
+    await attendi(60);
+    const lettore = p.nodo.querySelector('[data-campo="lettura-contratto"]');
+    expect(lettore.querySelector('[data-parte="premesse"]')).toBeTruthy();
+    expect(lettore.querySelector('[data-parte="articoli"]')).toBeNull();
+    await p.smonta();
+  });
+
+  it("si richiude, e il tasto lo dice", async () => {
+    banco();
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(120);
+    await clicca(p.tasto("Rileggi il contratto caricato"));
+    await attendi(60);
+    await clicca(p.tasto("Ho finito di rileggere"));
+    await attendi(60);
+    expect(p.nodo.querySelector('[data-campo="lettura-contratto"]')).toBeNull();
+    await p.smonta();
+  });
+
+  it("i blocchi sono quelli della pagina di firma, non una seconda composizione", () => {
+    const fonte = fs.readFileSync(path.join(process.cwd(), "src/contratti/LetturaContratto.jsx"), "utf8");
+    expect(fonte).toContain("blocchiContratto");
+    expect(fonte).toContain("casellePronte");
+    // e l'epigrafe senza master resta a trattini, invece di far credere
+    // che il contratto esca così
+    const parti = partiDaLeggere({});
+    expect(JSON.stringify(parti)).toContain("[Nome e cognome]");
   });
 });

@@ -690,8 +690,14 @@ export function blocchiContratto(testi, dati) {
   const parti = t.parti || PARTI;
   const premesse = t.premesse || PREMESSE;
   const articoli = t.articoli || ARTICOLI;
+  // Ogni blocco dice DA QUALE PARTE del testo viene (`chiave`): serve a
+  // chi rilegge il contratto caricato per dire, parte per parte, se
+  // quella viene dal database o dal codice. E' un'informazione in piu'
+  // sul blocco, non un pezzo del documento: chi disegna e chi stampa
+  // leggono titolo e punti come prima.
   return [
     {
+      chiave: "parti",
       titolo: "Le parti",
       punti: [
         parti.etichettaAccademia,
@@ -700,8 +706,8 @@ export function blocchiContratto(testi, dati) {
         epigrafeMaster(dati),
       ],
     },
-    { titolo: premesse.titolo, punti: premesse.punti },
-    ...articoli,
+    { chiave: "premesse", titolo: premesse.titolo, punti: premesse.punti },
+    ...articoli.map((a) => ({ ...a, chiave: "articoli" })),
   ];
 }
 

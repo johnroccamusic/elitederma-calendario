@@ -24,6 +24,7 @@ import { confermaRimozione } from "../ui/conferma.js";
 import { urlAllegato } from "../file/allegati.js";
 import { leggiTuttiIContratti, riapriContratto, cambiaEsclusione, leggiApertura, cambiaApertura } from "./dati.js";
 import { CHIAVI, NOMI, DAL_CODICE, PARTENZA, impronta, leggiTesti, caricaDiPartenza } from "./testi.js";
+import LetturaContratto from "./LetturaContratto.jsx";
 
 const pannello = { ...areaSchedaIscritto, marginBottom: 16 };
 const quando = (iso) => {
@@ -75,6 +76,16 @@ export default function PaginaContrattiMaster({
   const [alLavoro, setAlLavoro] = useState("");
   const [motivoNuovo, setMotivoNuovo] = useState({});
   const [porta, setPorta] = useState({ aperta: false, cambiato: null });
+  // cosa si sta rileggendo: null, "tutto", oppure una delle sette parti
+  const [lettura, setLettura] = useState(null);
+  // il lettore sta in cima alla sezione, sotto il tasto; aprendolo dal
+  // tastino «Leggi» di una riga piu' in basso resterebbe fuori dallo
+  // schermo, e sembrerebbe che il tasto non abbia fatto niente
+  const nodoLettura = React.useRef(null);
+  useEffect(() => {
+    if (!lettura) return;
+    nodoLettura.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [lettura]);
 
   const ricarica = useCallback(async () => {
     setCaricando(true);
@@ -393,6 +404,32 @@ export default function PaginaContrattiMaster({
             Accanto a ogni parte ci sono due impronte: quella del database e quella del repo. Se
             coincidono, si sta facendo firmare il testo che sta nel codice.
           </div>
+          {/* E SI RILEGGE, non solo si confronta (25/11/2026, chiesto dal
+              titolare: «io che ho caricato il contratto master, devo avere
+              un tasto dove posso rileggere e verificare il contratto
+              caricato»). Un'impronta dice se due testi coincidono, non
+              cosa c'è scritto: chi ha caricato il contratto deve poterlo
+              leggere per intero, dall'app, com'è nel database. */}
+          <button
+            type="button" data-campo="rileggi-contratto"
+            onClick={() => setLettura((l) => (l === "tutto" ? null : "tutto"))}
+            style={{
+              ...fontBody, fontSize: 13, fontWeight: 700, width: "100%", minHeight: 44,
+              color: NAVY, background: "#FFFDF8", border: `1px solid ${GOLD}`,
+              borderRadius: 10, padding: "11px 14px", cursor: "pointer", marginBottom: 4,
+            }}
+          >
+            {lettura === "tutto" ? "Chiudi la lettura" : "Rileggi il contratto caricato"}
+          </button>
+          <div ref={nodoLettura} />
+          {lettura && testi && (
+            <LetturaContratto
+              testi={testi.testi} provenienza={testi.provenienza}
+              impronteDb={impronteDb} impronteCodice={impronteCodice}
+              soloChiave={lettura === "tutto" ? null : lettura}
+              onChiudi={() => setLettura(null)}
+            />
+          )}
           {CHIAVI.map((k) => {
             const p = testi?.provenienza?.[k];
             const nelDb = !!p;
@@ -419,6 +456,13 @@ export default function PaginaContrattiMaster({
                   <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#6B4E00", background: "#FFF8E6",
                                  border: "1px solid #E6CF8C", borderRadius: 999, padding: "3px 9px" }}>diverso dal repo</span>
                 )}
+                {/* leggere una parte sola: con ventitré articoli,
+                    «rileggi tutto» per controllare le premesse è una
+                    schermata da scorrere a vuoto */}
+                <button type="button" style={tastino} data-campo={`leggi-${k}`}
+                  onClick={() => setLettura((l) => (l === k ? null : k))}>
+                  {lettura === k ? "Chiudi" : "Leggi"}
+                </button>
                 <button type="button" style={tastino} disabled={caricandoTesti} onClick={() => carica([k])}>
                   {nelDb ? "Rimetti com'era" : "Carica"}
                 </button>
