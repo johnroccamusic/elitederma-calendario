@@ -1678,6 +1678,86 @@ compreso il salvataggio del trend, che manda al database **solo** quella
 chiave e lascia gli altri mesi a 100. Provata rossa togliendo la priorità
 dello storico.
 
+### Il dermografo pagato col corso è denaro che la master deve esigere (25/11/2026)
+
+Il titolare, davanti alla scheda di **PMU ROMA del 30/11**: «quando in un
+PMU parziale una persona decide di acquistare un dermografo e viene
+spuntata la casella "lo paga con il corso", deve venire fuori anche il
+metodo di pagamento previsto, e la somma dovuta deve risultare nella
+contabilità della classe dove la master deve esigere quei soldi,
+altrimenti si rischia che **non venga pagato il dermografo ma venga
+ugualmente consegnato**. Come vedi, nel totale dovuto il pagamento del
+dermografo non è previsto».
+
+**Misurato prima di toccare niente:** i dermografi «con il corso» in
+archivio sono **due, 1.780 €**, **tutti e due senza metodo di pagamento**
+e nessuno segnato pagato. Uno parte fra cinque giorni, e il pacco lo
+porta in aula.
+
+**E quei soldi non stavano in NESSUN conto.** `dermografo_totale`,
+`dermografo_imponibile`, `dermografo_metodo` e `dermografo_pagato` li
+scriveva la scheda e li rileggeva **solo la scheda**: non la contabilità
+della classe, non la prima nota, non la cassa, non il bilancio. Il
+dermografo esce dal magazzino col pacco (`dermografiRichiestiEdizione`) e
+**non passa da nessuna vendita** — quindi non c'era nessun doppio
+conteggio da temere, c'era solo un incasso che non esisteva.
+
+**Tredici punti, non uno.** «Quanto deve dare al corso» era scritto a
+mano come `saldo + modelle` in tredici posti — la scheda della classe, la
+lista, il riepilogo, la stampa, i totali, la cassa, il cruscotto ERP, lo
+scadenzario — e **nessuno dei tredici contava il dermografo**. È la
+stessa dimenticanza ripetuta del 18/11 sugli ordini non pagati: quando
+una somma vive in tredici copie, il giorno che le si aggiunge una voce se
+ne aggiornano undici. Adesso è **`daIncassareAlCorsoDi`**, un posto solo.
+
+**Le tre decisioni sono del titolare**, prese messo davanti ai conti:
+
+| | scelta | perché |
+|---|---|---|
+| la spunta | **una sola** | al corso si incassa tutto insieme; due caselle vogliono dire che una resta indietro, e la casella che resta indietro è sempre quella che nessuno guarda |
+| i soldi | **in contabilità come il saldo** | entrano in prima nota, nella cassa e nel bilancio della classe col loro imponibile e la loro IVA |
+| la consegna | **avvisa, non blocca** | un dermografo non pagato si vede in rosso in aula; consegnare o no lo decide la master |
+
+**Ricavo e incasso sono due domande diverse**, ed è la ragione delle due
+funzioni: `dermografoRicavoDi` vale sempre (è un ricavo della classe
+anche se già pagato in anticipo), `dermografoDaIncassareDi` toglie chi
+l'ha già saldato. Senza quella distinzione il bilancio della classe si
+sarebbe mosso ogni volta che qualcuno spunta una casella. E **la cifra da
+incassare non cala quando si segna «Incassato»**: resta scritta come
+saldo e modelle, o la scheda direbbe un numero prima e un altro dopo per
+gli stessi soldi.
+
+**IL METODO SEGUE IL DERMOGRAFO, NON IL SALDO.** La stessa allieva può
+saldare a bonifico e pagare il dermografo in contanti: in busta ci vanno
+solo i contanti, quindi cassa e prima nota leggono
+`dermografo_metodo` e il dermografo ha **una riga sua** in prima nota.
+I metodi offerti sono quelli del **saldo** e non quelli delle quote: al
+corso si incassa di persona, niente sito e niente finanziamenti.
+
+**Il metodo adesso sta dove lo si cerca**, dentro il riquadro «L'allievo
+acquista il dermografo a parte?», sotto il prezzo. Prima viveva in un
+**blocco quota a parte**, più in basso fra le altre quote — ed è il
+motivo per cui in tutti e due i casi in archivio era rimasto vuoto.
+Quel blocco è stato **tolto**: totale e imponibile sono già nel riquadro,
+e due posti per la stessa cosa sono un posto di troppo. Senza metodo, la
+tendina è rossa e sotto si legge «la master non sa come incassare questi
+soldi».
+
+**In aula si vede** (`data-dermografo-da-pagare`): la lista che la master
+si porta in classe diceva «+ Tekna da ritirare al corso» senza dire che
+quella macchina va pagata. Ora, finché la classe non è incassata, porta
+la pastiglia rossa «Dermografo da pagare: 890 € · metodo non scelto». E
+nella fascia dell'incasso della scheda si legge «di cui 890 € di
+dermografo»: dentro quella cifra ci sono fino a tre cose, e un numero
+solo non dice che una è una macchina da consegnare.
+
+Nessuna migrazione: le colonne c'erano già, nessun dato toccato. Prove in
+`prove/dermografo-col-corso.test.jsx` (14), sui numeri veri del caso —
+890 € e 729,51 di imponibile — con **la guardia che dura**: nessun punto
+può tornare a sommare `saldo_totale + modelleTotaleDi` a mano, tranne la
+riga «Saldo al corso» della prima nota, **scusata per iscritto** perché
+lì il dermografo entra con una riga sua che porta il suo metodo.
+
 ### «Nostra da cercare» su una modella che nessuno ha chiesto (25/11/2026)
 
 Il titolare: «quando un iscritto ha richiesto una sola modella, nella

@@ -7060,6 +7060,70 @@ function modelleTotaleDi(i) {
   if (i.prezzo_speciale_modelle != null) return i.prezzo_speciale_modelle;
   return round2((i.numero_modelle || 0) * 60);
 }
+// IL DERMOGRAFO PAGATO COL CORSO E'' DENARO CHE LA MASTER DEVE ESIGERE
+// (25/11/2026).
+//
+// Il titolare, davanti alla scheda di PMU ROMA del 30/11: «quando in un
+// PMU parziale una persona decide di acquistare un dermografo e viene
+// spuntata la casella "lo paga con il corso", deve venire fuori anche il
+// metodo di pagamento previsto, e la somma dovuta deve risultare nella
+// contabilita'' della classe dove la master deve esigere quei soldi —
+// altrimenti si rischia che non venga pagato il dermografo ma venga
+// ugualmente consegnato».
+//
+// Misurato prima di toccare niente: i dermografi «con il corso» in
+// archivio sono DUE, 1.780 euro, TUTTI E DUE senza metodo di pagamento e
+// nessuno segnato pagato. Uno parte fra cinque giorni, e il pacco lo
+// porta in aula.
+//
+// E quei soldi non stavano in NESSUN conto: `dermografo_totale`,
+// `dermografo_imponibile`, `dermografo_metodo` e `dermografo_pagato` li
+// scriveva la scheda e li rileggeva solo la scheda. Non la contabilita''
+// della classe, non la prima nota, non la cassa. Il dermografo esce dal
+// magazzino col pacco (`dermografiRichiestiEdizione`) e non passa da
+// nessuna vendita: quindi non c''e'' nessun doppio conteggio da temere,
+// c''era solo un incasso che non esisteva da nessuna parte.
+//
+// Vale solo per «con il corso»: «Acquista e paga da sito» l''ha gia''
+// pagato altrove, e «Offerto, incluso nel corso» non si paga.
+export function dermografoRicavoDi(i) {
+  if (i?.dermografo_pagamento !== "con_corso") return 0;
+  return round2(Number(i?.dermografo_totale) || 0);
+}
+// quello che resta da ESIGERE: il ricavo, meno il caso di chi l''ha gia''
+// pagato prima del corso (un bonifico arrivato in anticipo, spuntato a
+// mano). Ricavo e incasso sono due domande diverse, e tenerle separate e''
+// il motivo per cui il bilancio della classe non si muove quando
+// qualcuno segna una spunta.
+export function dermografoDaIncassareDi(i) {
+  if (i?.dermografo_pagato) return 0;
+  return dermografoRicavoDi(i);
+}
+// l''imponibile di quel dermografo, per i conti che ragionano al netto
+export function dermografoImponibileDi(i) {
+  if (!dermografoRicavoDi(i)) return 0;
+  return round2(importoNettoQuota(i?.dermografo_imponibile, i?.dermografo_totale));
+}
+// UNA SPUNTA SOLA, deciso dal titolare il 25/11/2026: al corso la master
+// incassa saldo, modelle e dermografo insieme, e li segna con lo stesso
+// gesto. Due caselle vorrebbero dire che una delle due resta indietro —
+// e quella che resta indietro e'' sempre quella che nessuno guarda.
+export function dermografoRisultaPagato(i) {
+  if (i?.dermografo_pagamento !== "con_corso") return null;
+  return !!(i?.dermografo_pagato || i?.incassato);
+}
+// QUANTO QUESTO ALLIEVO DEVE DARE AL CORSO, in un posto solo.
+//
+// Era scritto a mano in otto punti — la scheda della classe, la lista, il
+// riepilogo, la stampa, i totali, la cassa — sempre come
+// «saldo + modelle», e nessuno degli otto contava il dermografo. E'' la
+// stessa dimenticanza ripetuta che il 18/11 aveva lasciato 717.712 euro
+// di ordini non pagati dentro il fatturato: quando una somma vive in
+// otto copie, il giorno che le si aggiunge una voce se ne aggiorna sei.
+export function daIncassareAlCorsoDi(i) {
+  return round2((Number(i?.saldo_totale) || 0) + modelleTotaleDi(i) + dermografoDaIncassareDi(i));
+}
+
 // Quanto e' ENTRATO davvero da un allievo, non quanto e' stato promesso.
 //
 // Due accortezze che sembrano dettagli e non lo sono.
@@ -7132,7 +7196,9 @@ function anticipiIncassatiDi(i) {
 // spuntato "incassato". Le modelle si aggiungono li' perche' e' li' che si
 // pagano, al corso, insieme al saldo
 function incassatoDi(i) {
-  const saldo = i.incassato ? importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i) : 0;
+  // il dermografo pagato col corso entra qui come tutto il resto: al
+  // corso si incassa con una spunta sola (25/11/2026)
+  const saldo = i.incassato ? importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i) + dermografoImponibileDi(i) : 0;
   return round2(anticipiIncassatiDi(i) + saldo);
 }
 
@@ -14599,7 +14665,11 @@ function RiepilogoIscrizione({ iscritto, corso, loc, corsoData, onChiudi, titolo
               </RigaLettura>
               <RigaLettura>
                 <CampoLettura label="Metodo" valore={etichettaMetodo(d.dermografo_metodo)} />
-                <CampoLettura label="Stato" valore={d.dermografo_pagato ? "Pagato" : "Da pagare"} />
+                {/* UNA SPUNTA SOLA: al corso si incassa tutto insieme, quindi
+                    una classe segnata incassata ha pagato anche il dermografo.
+                    Leggere la sola colonna `dermografo_pagato` direbbe «da
+                    pagare» su soldi gia' in cassa. */}
+                <CampoLettura label="Stato" valore={dermografoRisultaPagato(d) ? "Pagato" : "Da pagare"} />
               </RigaLettura>
             </>
           )}
@@ -14951,6 +15021,19 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
                     <IconaBorsaShop size={14} color={MUTED} />
                     <span style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.35, overflowWrap: "anywhere" }}>{descrizioneKit(i) || "Nessun kit"}</span>
                   </div>
+                  {/* IL DERMOGRAFO DA PAGARE, dove lo si consegna (25/11/2026).
+                      La lista che la master si porta in aula dice «+ Tekna da
+                      ritirare al corso» e non diceva che quella macchina va
+                      pagata: il rischio, con le parole del titolare, e' «che
+                      non venga pagato il dermografo ma venga ugualmente
+                      consegnato». Avvisa e basta — consegnare o no lo decide
+                      lei. */}
+                  {dermografoDaIncassareDi(i) > 0 && !i.incassato && (
+                    <div data-dermografo-da-pagare style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDEEEC", borderRadius: 10, padding: "5px 9px", marginTop: 5, lineHeight: 1.35, display: "inline-block" }}>
+                      Dermografo da pagare: {euroScheda(dermografoDaIncassareDi(i))}
+                      {i.dermografo_metodo ? ` \u00b7 ${(ETICHETTA_METODO[i.dermografo_metodo] || i.dermografo_metodo).toLowerCase()}` : " \u00b7 metodo non scelto"}
+                    </div>
+                  )}
                 </div>
                 {/* Da scrivania la barra sale qui, in alto a destra: sotto
                     occupava una riga intera per tre dati corti, e lo spazio
@@ -30613,7 +30696,7 @@ const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzati
 // .ordine_righe, forma { anagrafica: [...], contabili: [...], organizzativi: [...] })
 const ORDINE_RIGHE_ISCRITTO_DEFAULT = {
   anagrafica: ["modulo", "datiAnagrafici", "fatturazione"],
-  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "dermografoAParte", "quotaAcconto", "quotaPrecorso", "quotaDermografo", "daAvereAlCorso", "pagheraInTotale"],
+  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "dermografoAParte", "quotaAcconto", "quotaPrecorso", "daAvereAlCorso", "pagheraInTotale"],
   organizzativi: ["accordiCommerciali", "richiedeModelle", "tagliaDivisa", "screenAcconto", "screenRecap", "note"],
 };
 // L'ordine salvato sul database invecchia: una riga può essere stata
@@ -36862,6 +36945,55 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                       </div>
                     </div>
                   )}
+
+                  {/* IL METODO STA QUI, dove lo si cerca (25/11/2026, chiesto
+                      dal titolare: «deve venire fuori anche il metodo di
+                      pagamento previsto»). Prima viveva in un blocco quota a
+                      parte, piu' in basso fra le altre quote, e nei due
+                      dermografi «con il corso» in archivio era rimasto VUOTO
+                      tutte e due le volte — 1.780 euro senza sapere come si
+                      incassano. Quel blocco e' stato tolto: le sue cifre
+                      (totale, imponibile) sono gia' qui sopra, e due posti
+                      per la stessa cosa sono un posto di troppo.
+                      I metodi sono quelli del SALDO e non quelli delle quote:
+                      al corso si incassa di persona, niente sito e niente
+                      finanziamenti. */}
+                  {dermografoDaPagare && (
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                      <div style={{ flex: "1 1 200px" }}>
+                        <Field label="Metodo di pagamento">
+                          <select
+                            data-dermografo-metodo
+                            value={pagDermografo.metodo || ""}
+                            onChange={(e) => setPagDermografo((prev) => ({ ...prev, metodo: e.target.value }))}
+                            style={{ ...campoAreaScheda, ...(pagDermografo.metodo ? {} : { color: "#C0392B", borderColor: "#C0392B" }) }}
+                          >
+                            <option value="">— scegli: senza non si sa come incassarlo —</option>
+                            {METODI_SALDO.map((m) => <option key={m} value={m}>{ETICHETTA_METODO[m] || m}</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 200px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "8px 0" }}>
+                          <input type="checkbox" data-dermografo-pagato checked={pagDermografoPagato} onChange={(e) => setPagDermografoPagato(e.target.checked)} />
+                          <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Gi&agrave; pagato prima del corso</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* si dice DOVE finiscono quei soldi: senza, la cifra qui
+                      sopra sembra un dato di anagrafica e nessuno sa che
+                      qualcuno deve andarli a prendere */}
+                  {dermografoDaPagare && (
+                    <div style={{ ...fontBody, fontSize: 12, lineHeight: 1.5, marginTop: 4, color: pagDermografoPagato ? "#2E7D32" : pagDermografo.metodo ? MUTED : "#C0392B" }}>
+                      {pagDermografoPagato
+                        ? "Risulta già pagato: non entra fra i soldi da esigere al corso."
+                        : pagDermografo.metodo
+                          ? `Si incassa AL CORSO, ${(ETICHETTA_METODO[pagDermografo.metodo] || pagDermografo.metodo).toLowerCase()}: ${prezzoDermografoLordo != null ? prezzoDermografoLordo.toFixed(2) : "—"} € entrano nel «da incassare» della classe, insieme al saldo.`
+                          : "Manca il metodo: finché non lo scegli, la master non sa come incassare questi soldi al corso."}
+                    </div>
+                  )}
                 </div>
               </div>
               {spaziatoreRiga("contabili", "dermografoAParte")}
@@ -36985,37 +37117,6 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
             </div>
             {spaziatoreRiga("contabili", "quotaPrecorso")}
           </div>
-
-          {/* la quota del dermografo: compare solo quando l'allievo lo compra
-              e lo paga col corso. Importo e imponibile arrivano dal blocco
-              qui sopra — qui si dice come lo paga e se è già entrato */}
-          {dermografoDaPagare && (
-            <div {...propsRiga("contabili", "quotaDermografo")}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-                {manigliaRiga("contabili", "quotaDermografo")}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <BloccoQuota
-                    titolo={`Dermografo ${dermografoScelta === "tekna" ? "Tekna" : "Horus"}`} Icona={IconaCartaPos}
-                    valori={{
-                      ...pagDermografo,
-                      totale: prezzoDermografoLordo != null ? String(prezzoDermografoLordo) : "",
-                      imponibile: imponibileDermografo != null ? String(imponibileDermografo) : "",
-                    }}
-                    opzioniMetodo={METODI_QUOTA}
-                    totaleBloccato
-                    imponibileBloccato
-                    onImponibile={() => {}}
-                    onTotale={() => {}}
-                    onMetodo={(v) => setPagDermografo((prev) => ({ ...prev, metodo: v, interessi: v === "APPago" ? prev.interessi : "" }))}
-                    onInteressi={(v) => setPagDermografo((prev) => ({ ...prev, interessi: v }))}
-                    pagato={pagDermografoPagato}
-                    onPagato={setPagDermografoPagato}
-                  />
-                </div>
-              </div>
-              {spaziatoreRiga("contabili", "quotaDermografo")}
-            </div>
-          )}
 
           <div {...propsRiga("contabili", "daAvereAlCorso")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
@@ -37761,8 +37862,10 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
             <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>
           )}
           {listaIscritti.map((i, idx) => {
-            const mostraIncasso = i.saldo_totale != null || i.numero_modelle != null;
-            const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+            // anche chi ha solo il dermografo: senza, 890 euro da esigere
+            // non comparivano da nessuna parte su quella scheda
+            const mostraIncasso = i.saldo_totale != null || i.numero_modelle != null || dermografoDaIncassareDi(i) > 0;
+            const daIncassare = daIncassareAlCorsoDi(i);
             const aPosto = i.incassato || daIncassare === 0;
             const coloreIncasso = aPosto ? "#2E7D32" : "#C0392B";
             // Zero da incassare vuol dire che non c'e' niente da incassare:
@@ -38087,6 +38190,18 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                               {nienteDaIncassare ? "Nulla da saldare" : i.incassato ? "Incassato" : "Da incassare"}
                             </div>
                             <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
+                            {/* IL DERMOGRAFO SI NOMINA (25/11/2026). Dentro
+                                quella cifra ci sono fino a tre cose — saldo,
+                                modelle, dermografo — e un numero solo non dice
+                                che in aula c'e' una macchina da 890 euro da
+                                farsi pagare prima di consegnarla. Avvisa e
+                                lascia decidere: non blocca niente. */}
+                            {dermografoDaIncassareDi(i) > 0 && (
+                              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 11.5, fontWeight: 700, color: coloreIncasso, marginTop: 4, whiteSpace: "normal", lineHeight: 1.35 }}>
+                                di cui {euroScheda(dermografoDaIncassareDi(i))} di dermografo{i.dermografo_metodo ? ` (${(ETICHETTA_METODO[i.dermografo_metodo] || i.dermografo_metodo).toLowerCase()})` : " — metodo non scelto"}
+                                {i.dermografo_consegna === "corso" && !i.incassato ? ", che ritira al corso" : ""}
+                              </div>
+                            )}
                             {/* la data dell'incasso, modificabile: e' quella
                                 con cui il saldo entra in prima nota */}
                             {i.incassato && !nienteDaIncassare && (
@@ -38216,7 +38331,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                   {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {euroScheda(modelleTotaleDi(i))}{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>}
                   {(i.saldo_totale != null || i.numero_modelle != null) && (
                     <div style={{ fontWeight: 700 }}>
-                      Da incassare: {round2((i.saldo_totale || 0) + modelleTotaleDi(i))} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
+                      Da incassare: {daIncassareAlCorsoDi(i)} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
                     </div>
                   )}
                   {i.accordi_commerciali && <div>Accordi commerciali particolare: {i.accordi_commerciali}</div>}
@@ -38226,7 +38341,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
               {listaIscritti.length > 0 && (
                 <div style={{ marginTop: 20, paddingTop: 12, borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
                   <div>Totale generale classe netto: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} € — con rate: {round2(listaIscritti.reduce((s, i) => s + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0), 0))} €</div>
-                  <div style={{ marginTop: 6 }}>Totale ancora da incassare: {round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + modelleTotaleDi(i)), 0))} €</div>
+                  <div style={{ marginTop: 6 }}>Totale ancora da incassare: {round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : daIncassareAlCorsoDi(i)), 0))} €</div>
                 </div>
               )}
             </div>
@@ -38340,7 +38455,7 @@ function VistaMaster({ param, onEsci = null }) {
         {iscritti.length === 0 && <div style={{ color: MUTED }}>Nessun iscritto.</div>}
 
         {iscritti.map((i, idx) => {
-          const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+          const daIncassare = daIncassareAlCorsoDi(i);
           const aPosto = i.incassato || daIncassare === 0;
           const colore = aPosto ? "#2E7D32" : "#C0392B";
           const nienteDaIncassare = daIncassare === 0;
@@ -38975,7 +39090,7 @@ function contiRiepilogoClasse({
   // viene o non paga non e' un incasso, e quei soldi in cassa non ci sono.
   // Acconto e pre corso arrivano prima e restano come sono.
   const tutteLeQuote = listaIscritti.flatMap((i) => quotePagateDiIscritto(i).filter((q) => q.fase !== "saldo" || i.incassato));
-  const daIncassareAncora = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + modelleTotaleDi(i)), 0));
+  const daIncassareAncora = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : daIncassareAlCorsoDi(i)), 0));
   // una vendita mista sta in tutte e due le colonne, ognuna per la sua
   // parte: sommarla per intero da un lato gonfierebbe quella cassa e
   // svuoterebbe l'altra
@@ -39005,8 +39120,11 @@ function contiRiepilogoClasse({
   // 11/10/2026), "Cash no iva", e "Contanti" delle schede vecchie. La
   // fattura cambia l'IVA, non dove finiscono i soldi — nella busta.
   const eContanti = (m) => m === "Cash con IVA" || m === "Cash no iva" || m === "Contanti";
-  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eContanti(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i)) : 0), 0) + incassiExtraContanti + venditeContanti);
-  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato && eMetodoPos(i.saldo_metodo) ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos + venditePos);
+  // il dermografo segue il SUO metodo, non quello del saldo: la stessa
+  // allieva puo' saldare a bonifico e pagare il dermografo in contanti,
+  // e in busta ci vanno solo i contanti
+  const contanti = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eContanti(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i) + (eContanti(i.dermografo_metodo) ? dermografoRicavoDi(i) : 0)) : 0), 0) + incassiExtraContanti + venditeContanti);
+  const pos = round2(listaIscritti.reduce((s, i) => s + (i.incassato ? ((eMetodoPos(i.saldo_metodo) ? (i.saldo_totale || 0) : 0) + (eMetodoPos(i.dermografo_metodo) ? dermografoRicavoDi(i) : 0)) : 0), 0) + incassiExtraPos + venditePos);
   // Le spese con origine_scadenziario_chiave sono i pagamenti delle righe
   // automatiche (compensi disposti dalla busta, parti bonifico saldate,
   // fatture di alloggio e location): il loro costo sta gia' in
@@ -39046,7 +39164,7 @@ function contiRiepilogoClasse({
     listaIscritti.reduce((s, i) => s
       + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0)
       + ["acconto", "precorso"].reduce((t, f) => t + (Array.isArray(i[`${f}_extra`]) ? i[`${f}_extra`] : []).reduce((u, r) => u + (r.totale || 0) + (r.metodo === "APPago" ? (r.interessi || 0) : 0), 0), 0)
-      + modelleTotaleDi(i), 0)
+      + modelleTotaleDi(i) + dermografoRicavoDi(i), 0)
     + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
     + venditeLordo
   );
@@ -39054,7 +39172,7 @@ function contiRiepilogoClasse({
     listaIscritti.reduce((s, i) => s
       + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0)
       + ["acconto", "precorso"].reduce((t, f) => t + (Array.isArray(i[`${f}_extra`]) ? i[`${f}_extra`] : []).reduce((u, r) => u + (r.imponibile || 0), 0), 0)
-      + modelleTotaleDi(i), 0)
+      + modelleTotaleDi(i) + dermografoImponibileDi(i), 0)
     + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
     + venditeImponibile
   );
@@ -40185,6 +40303,9 @@ function quoteIncassateDi(i, cd) {
     if (r?.pagato) metti(i.precorso_pagato_il, importoNettoQuota(r.imponibile, r.totale), r.metodo);
   });
   if (i.incassato) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, importoNettoQuota(i.saldo_imponibile, i.saldo_totale) + modelleTotaleDi(i), i.saldo_metodo);
+  // il dermografo ha un metodo SUO: puo' essere incassato in contanti
+  // mentre il saldo va a bonifico, e in prima nota sono due righe
+  if (i.incassato && dermografoRicavoDi(i)) metti(i.saldo_incassato_il ? String(i.saldo_incassato_il).slice(0, 10) : cd?.data_inizio, dermografoImponibileDi(i), i.dermografo_metodo || i.saldo_metodo);
   return fuori;
 }
 function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById, soloTrascorsi = false }) {
@@ -40315,8 +40436,8 @@ function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrate
   // saldo solo se già spuntato "incassato") meno i costi — non è un vero
   // saldo di cassa bancario (non tracciato), ma un incassato netto reale
   const cashFlow = round2(incassatoReale - costi);
-  const creditiDaIncassare = round2(iscrittiFiltrati.filter((i) => !i.incassato).reduce((s, i) => s + (i.saldo_totale || 0) + modelleTotaleDi(i), 0));
-  const pagamentiAperti = iscrittiFiltrati.filter((i) => !i.incassato && (i.saldo_totale || 0) + modelleTotaleDi(i) > 0).length;
+  const creditiDaIncassare = round2(iscrittiFiltrati.filter((i) => !i.incassato).reduce((s, i) => s + daIncassareAlCorsoDi(i), 0));
+  const pagamentiAperti = iscrittiFiltrati.filter((i) => !i.incassato && daIncassareAlCorsoDi(i) > 0).length;
   return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati, incassatoCorsiDaVenire, incassatoContanti, incassatoBanca };
 }
 
@@ -47518,7 +47639,7 @@ function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false 
       const interessi = r.metodo === "APPago" ? (r.interessi || 0) : 0;
       righe.push({ key: `precorsoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Pre corso (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: cd.data_inizio });
     });
-    const saldoDaIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+    const saldoDaIncassare = daIncassareAlCorsoDi(i);
     if (!!i.incassato === soloIncassate && saldoDaIncassare > 0) {
       righe.push({ key: `saldo_${i.id}`, iscritto: i, corsoData: cd, fase: "Saldo", importo: saldoDaIncassare, scadenza: cd.data_inizio });
     }
@@ -56412,6 +56533,8 @@ function PaginaInserimentoCostiRicavi({
       if (r.pagato && r.metodo) aggiungi(`precorso_${idx}`, "Pre corso", i.precorso_pagato_il, round2((r.totale || 0) + (r.metodo === "APPago" ? (r.interessi || 0) : 0)), r.metodo);
     });
     if (i.incassato && i.saldo_metodo) aggiungi("saldo", "Saldo al corso", i.saldo_incassato_il || cd?.data_inizio, (i.saldo_totale || 0) + modelleTotaleDi(i), i.saldo_metodo);
+    // riga sua, perche' il metodo puo' essere un altro
+    if (i.incassato && dermografoRicavoDi(i)) aggiungi("dermografo", "Dermografo al corso", i.saldo_incassato_il || cd?.data_inizio, dermografoRicavoDi(i), i.dermografo_metodo || i.saldo_metodo);
   });
   (venditeShop || []).forEach((v) => {
     if (v.tipo_movimento === "omaggio") return;
