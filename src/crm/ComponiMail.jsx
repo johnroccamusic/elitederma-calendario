@@ -532,6 +532,39 @@ export default function ComponiMail({ campagnaIniziale = null, filtri = {}, rias
 const PER_PAGINA_DESTINATARI = 50;
 export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
   const [statoScelto, setStatoScelto] = useState("tutti");
+  // RIMETTERE IN PARI GLI STATI (25/11/2026). Fino a oggi un avviso di
+  // Resend che arrivava prima che la riga avesse il suo id veniva
+  // buttato, e quella riga restava «inviata» per sempre anche se la
+  // mail era stata consegnata o era rimbalzata: sulla prima campagna
+  // vera erano 301 righe su 437. Il buco e' chiuso, ma le righe gia'
+  // cieche si rimettono in pari solo chiedendo a Resend com'e' finita,
+  // una per una — ed e' quello che fa questo tasto.
+  const [inPari, setInPari] = useState(null);
+  const [ricontato, setRicontato] = useState(0);
+  async function rimettiInPari() {
+    setInPari({ guardate: 0, aggiornate: 0, finito: false });
+    let guardate = 0, aggiornate = 0;
+    // a lotti, come l'invio: la funzione guarda cento righe per volta e
+    // dice quante ne restano
+    for (let giro = 0; giro < 60; giro++) {
+      const { data, error } = await supabase.functions.invoke("crm-campagna-riallinea", {
+        body: { campagnaId, quante: 100, minutiFermi: 0 },
+      });
+      // due modi di non riuscire: la funzione non risponde (error), o
+      // risponde dicendo perche' non puo' — per esempio la chiave di
+      // Resend che non ha i permessi di lettura. Si mostrano tutti e due
+      if (error || data?.errore) {
+        setInPari({ guardate, aggiornate, finito: true, errore: data?.errore || await testoErroreFunzione(error) });
+        return;
+      }
+      guardate += data?.guardate || 0;
+      aggiornate += data?.aggiornate || 0;
+      setInPari({ guardate, aggiornate, finito: false, restanti: data?.restanti || 0 });
+      if (!data?.guardate || !data?.restanti) break;
+    }
+    setInPari({ guardate, aggiornate, finito: true });
+    setRicontato((n) => n + 1);
+  }
   const [cerca, setCerca] = useState("");
   const [cercaScritto, setCercaScritto] = useState("");
   const [da, setDa] = useState(0);
@@ -551,7 +584,7 @@ export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
         .then(({ count }) => [st, count || 0]),
     )).then((coppie) => { if (vivo) setConteggi(Object.fromEntries(coppie)); });
     return () => { vivo = false; };
-  }, [campagnaId, aperto, aggiornamento]);
+  }, [campagnaId, aperto, aggiornamento, ricontato]);
   useEffect(() => {
     if (!campagnaId || !aperto) return;
     let vivo = true;
@@ -563,7 +596,7 @@ export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
     q.order("ultimo_evento_il", { ascending: false, nullsFirst: false }).order("nome").range(da, da + PER_PAGINA_DESTINATARI - 1)
       .then(({ data, count }) => { if (vivo) { setRighe(Array.isArray(data) ? data : []); setTotale(count || 0); } });
     return () => { vivo = false; };
-  }, [campagnaId, aperto, statoScelto, cerca, da, aggiornamento]);
+  }, [campagnaId, aperto, statoScelto, cerca, da, aggiornamento, ricontato]);
 
   if (!campagnaId) return null;
   const totaleTutti = conteggi ? Object.values(conteggi).reduce((s, n) => s + n, 0) : null;
@@ -586,6 +619,23 @@ export function DestinatariCampagna({ campagnaId, aggiornamento = 0 }) {
             {Object.entries(STATI_DESTINATARIO).map(([k, v]) => linguetta(k, v.charAt(0).toUpperCase() + v.slice(1), conteggi?.[k] || 0))}
           </div>
           <input value={cercaScritto} onChange={(e) => setCercaScritto(e.target.value)} placeholder="cerca per nome o email" style={{ ...inputStyle, width: "100%", minWidth: 0, marginBottom: 8 }} />
+          {/* UNA RIGA FERMA SU «INVIATA» NON VUOL DIRE CHE NON E'
+              ARRIVATA: vuol dire che non lo sappiamo. Si chiede a
+              Resend, che la verita' ce l'ha. Non spedisce niente. */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+            <button type="button" data-campo="rimetti-in-pari" onClick={rimettiInPari}
+              disabled={!!inPari && !inPari.finito}
+              style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: "transparent",
+                       border: `1px solid ${NAVY}`, borderRadius: 10, padding: "6px 12px",
+                       cursor: inPari && !inPari.finito ? "default" : "pointer", opacity: inPari && !inPari.finito ? 0.5 : 1 }}>
+              {inPari && !inPari.finito ? "Sto chiedendo a Resend…" : "Rimetti in pari gli stati"}
+            </button>
+            <span style={{ ...fontBody, fontSize: 11.5, color: inPari?.errore ? "#B3261E" : MUTED }}>
+              {inPari?.errore ? inPari.errore
+                : inPari ? `${numero(inPari.guardate)} chieste a Resend, ${numero(inPari.aggiornate)} rimesse in pari${inPari.finito ? "." : "…"}`
+                : "Chiede a Resend com'è finita ogni mail ancora ferma su «inviata». Non spedisce niente."}
+            </span>
+          </div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
             «Aperta» la segna il programma di posta quando scarica le immagini: Mail di iPhone lo fa da solo per tutti, Gmail solo se le mostra. È una tendenza, non una prova di lettura.
           </div>

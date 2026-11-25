@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
   }
   const esito = await r.json().catch(() => ({}));
   const adesso = new Date().toISOString();
-  let inviate = 0, fallite = 0;
+  let inviate = 0, fallite = 0, recuperati = 0;
   if (r.status === 429 || r.status >= 500) {
     // rifiuto TEMPORANEO (limite di velocita', Resend giu'): nessuno di questi
     // indirizzi e' sbagliato. Tornano in coda e chi chiama riprova fra poco;
@@ -204,15 +204,43 @@ Deno.serve(async (req) => {
   } else {
     // Resend risponde con gli id nello stesso ordine dei messaggi
     const ids: Array<{ id?: string }> = Array.isArray(esito?.data) ? esito.data : [];
-    for (let i = 0; i < destinatari.length; i++) {
-      const id = ids[i]?.id || null;
-      if (id) {
-        await admin.from("crm_campagne_destinatari").update({ stato: "inviata", resend_id: id, inviata_il: adesso, errore: null }).eq("id", destinatari[i].id);
-        inviate++;
-      } else {
-        await admin.from("crm_campagne_destinatari").update({ stato: "fallita", errore: "Resend non ha restituito un id", ultimo_evento_il: adesso }).eq("id", destinatari[i].id);
-        fallite++;
+
+    // UNA SCRITTURA SOLA PER TUTTO IL LOTTO (25/11/2026). Erano cento
+    // update in fila — due o tre secondi — e in quei secondi la riga non
+    // sapeva ancora il suo id di Resend: gli avvisi di consegna e di
+    // rimbalzo, che arrivano in meno di un secondo, non trovavano
+    // nessuna riga e si perdevano. Sulla prima campagna vera sono andati
+    // persi circa 420 avvisi su 652, e soprattutto i RIMBALZI, che sono
+    // i piu' veloci.
+    //
+    // Adesso gli id si scrivono in un colpo solo — la finestra cieca
+    // passa da secondi a millisecondi — e la stessa funzione applica
+    // subito gli avvisi che erano arrivati in anticipo e sono stati
+    // messi da parte (`email_eventi_orfani`). Da li' non si perde piu'
+    // niente, nemmeno se Resend consegna prima che il lotto sia scritto.
+    const righe = destinatari
+      .map((d, i) => ({ id: d.id, resend_id: ids[i]?.id || null }))
+      .filter((x) => x.resend_id);
+    const senzaId = destinatari.filter((_, i) => !ids[i]?.id).map((d) => d.id);
+
+    if (righe.length) {
+      const { data: scritte, error: erroreScrittura } = await admin.rpc("crm_campagna_segna_inviate", { p_righe: righe });
+      // una scrittura che non dice quante righe ha toccato mente: se il
+      // database rifiuta, le righe tornano in coda invece di restare
+      // «in_spedizione» per sempre — le mail sono gia' partite, ma la
+      // ripetizione la ferma l'Idempotency-Key di Resend
+      if (erroreScrittura) {
+        await rimettiInCoda();
+        return json({ ok: false, temporaneo: true, riprova_tra: 20, restanti: await aperti(), stato: "in_invio", errore: "Lotto spedito ma non registrato: " + erroreScrittura.message });
       }
+      inviate = Number((scritte as Array<{ segnate: number }> | null)?.[0]?.segnate ?? righe.length);
+      recuperati = Number((scritte as Array<{ recuperati: number }> | null)?.[0]?.recuperati ?? 0);
+    }
+    if (senzaId.length) {
+      await admin.from("crm_campagne_destinatari")
+        .update({ stato: "fallita", errore: "Resend non ha restituito un id", ultimo_evento_il: adesso })
+        .in("id", senzaId);
+      fallite = senzaId.length;
     }
   }
 
@@ -229,5 +257,5 @@ Deno.serve(async (req) => {
     aggiornata_il: adesso,
   }).eq("id", campagnaId);
 
-  return json({ ok: r.ok, inviate, fallite, restanti: restanti || 0, stato: finita ? "inviata" : "in_invio", inviataDa: permesso.chi, ...(r.ok ? {} : { errore: `Resend ${r.status}: ${esito?.message || ""}` }) });
+  return json({ ok: r.ok, inviate, fallite, recuperati, restanti: restanti || 0, stato: finita ? "inviata" : "in_invio", inviataDa: permesso.chi, ...(r.ok ? {} : { errore: `Resend ${r.status}: ${esito?.message || ""}` }) });
 });

@@ -108,10 +108,16 @@ describe("la campagna si spedisce: gli stati del codice e quelli del database so
 describe("il motivo di un invio non riuscito arriva fino a chi guarda", () => {
   const sorgente = fs.readFileSync(path.join(radice, "src/crm/ComponiMail.jsx"), "utf8");
 
-  it("i due invii leggono il corpo della risposta, non solo error.message", () => {
+  it("ogni chiamata a una edge function legge il corpo, non solo error.message", () => {
     expect(sorgente).toContain('import { testoErroreFunzione } from "../errore-funzione.js"');
+    // il conto NON si inchioda a un numero: si contano le invoke e si
+    // pretende che ognuna abbia la sua lettura del corpo. Inchiodarlo a
+    // due ha fatto cadere questa prova il giorno che e' nata la terza
+    // (il «rimetti in pari» del 25/11), che quella lettura ce l'aveva.
+    const invoke = sorgente.match(/supabase\.functions\.invoke\(/g) || [];
     const usi = sorgente.match(/testoErroreFunzione\(error\)/g) || [];
-    expect(usi.length).toBe(2);   // la prova e il lotto
+    expect(invoke.length).toBeGreaterThanOrEqual(3);
+    expect(usi.length).toBe(invoke.length);
   });
 
   it("e non torna il «error?.message» nudo, che dice solo «non-2xx»", () => {

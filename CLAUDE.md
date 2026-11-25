@@ -1804,6 +1804,104 @@ spostate sopra.
 Prove in `prove/lista-allestimento.test.jsx` (26), sui numeri veri di
 quella classe.
 
+### «Su 400 e passa mail, ricevute solo 92»: gli avvisi arrivavano prima della loro riga (25/11/2026)
+
+Il titolare, guardando il pannello della prima campagna vera.
+
+**MISURATO PRIMA DI TOCCARE NIENTE, e la fonte vera è Resend:** sul
+24-25/11 sono partite **652 mail**, ne sono state **consegnate 555** e ne
+sono **rimbalzate 97** (il 15%). L'app ne aveva registrate **133
+consegnate e 43 rimbalzate**: mancavano all'appello **circa 420 consegne
+e 54 rimbalzi**, e di quella campagna **301 righe su 437** erano ferme a
+«preso in carico».
+
+**LA CAUSA, in una riga.** Resend risponde al lotto con cento id, e
+l'invio li scriveva sulle righe **uno per uno**: cento scritture in fila,
+due o tre secondi. Ma Resend consegna — e incassa i rimbalzi — **in meno
+di un secondo**, e manda subito l'avviso a `email-eventi`, che cerca la
+riga **per id di Resend**. In quei secondi la riga quell'id non ce l'ha
+ancora: nessuna riga trovata, si rispondeva **200**, e l'avviso era perso
+per sempre, perché a Resend avevamo detto «ricevuto».
+
+**E a perdersi erano soprattutto i RIMBALZI, che sono i più veloci:**
+Gmail e Libero rifiutano un indirizzo inesistente all'istante, cioè
+esattamente nella finestra in cui la riga è cieca. Di sei righe ferme
+prese a caso, le due controllate una per una a Resend risultavano
+**rimbalzate** mentre da noi erano «inviata» — quindi quegli indirizzi
+**restano in lista** e alla campagna dopo si riscrive loro, perché il
+filtro «chi ha già rimbalzato» non li conosce.
+
+**TRE DIFESE, UNA DAVANTI ALL'ALTRA** (migrazione
+`20261125180000`, rollback dentro):
+
+1. **Gli id si scrivono in una volta sola.** `crm_campagna_segna_inviate`
+   prende tutto il lotto in un `jsonb` e lo scrive con un `update … from`:
+   la finestra cieca passa da secondi a millisecondi. Torna anche quante
+   righe ha segnato — una scrittura che non dice quante righe ha toccato
+   mente.
+2. **Un avviso che non trova la sua riga si mette da parte**
+   (`email_eventi_orfani`), e la scrittura degli id lo applica subito
+   dopo. Un id sconosciuto quasi sempre vuol dire **in anticipo**, non
+   **di un altro**. Si parcheggia solo quello che sposterebbe lo stato: un
+   «differita» senza riga non racconta niente, e in una notte di rinvii
+   sarebbero centinaia di righe per nulla.
+3. **Ogni ora si chiede a Resend com'è finita** ogni riga ferma su
+   «inviata» da più di un'ora (`crm-campagna-riallinea`, cron
+   `campagne-stati-in-pari` alle :40). È la rete sotto le altre due: un
+   avviso può sempre perdersi davvero, e allora quella riga non dice «non
+   arrivata», dice «non lo sappiamo». In pagina c'è lo stesso gesto a
+   mano, **«Rimetti in pari gli stati»**, dentro «Destinatari, uno per
+   uno».
+
+**LA SCALA DEGLI STATI STA NEL DATABASE, IN UN POSTO SOLO**
+(`crm_campagna_applica_evento`): la chiamano il webhook, la scrittura del
+lotto e il riallineamento. Prima viveva dentro `email-eventi`; con tre
+chiamanti, due copie direbbero due verità sulla stessa riga. Lo stato si
+sposta **solo in avanti** — un «consegnata» che arriva dopo un rimbalzo
+non lo cancella — e `ultimo_evento` si scrive sempre.
+
+**QUELLO CHE MANCA PER RIMETTERE IN PARI LE 461 RIGHE FERME, ed è una
+cosa del titolare:** la chiave di Resend che usiamo **non sa leggere**.
+Le chiavi sono «Sending access» o «Full access», e `GET /emails/{id}`
+vuole la seconda: provata davvero, risponde **401** su ogni riga. Serve
+una chiave **Full access** creata su Resend e messa nei secret di
+Supabase come **`RESEND_API_KEY_LETTURA`** — separata da quella che
+spedisce, così chi spedisce continua solo a spedire. Finché non c'è, il
+cron gira e non fa niente **dicendo perché** (e la funzione si ferma al
+primo 401 invece di fare cento domande identiche).
+
+**Da sapere, e non è un numero da pannello: il 15% di rimbalzi.** Da
+`elitederma.net` partono anche le conferme dei moduli e le copie dei
+contratti firmati, e una lista che rimbalza così brucia la reputazione
+del mittente per tutto il resto.
+
+**COSA E' PUBBLICATO E COSA NO, al 25/11/2026 sera.** Sono in produzione
+`email-eventi` **v15** (parcheggia invece di buttare) e
+`crm-campagna-riallinea` **v2** (nuova), e il cron gira. **NON è ancora
+pubblicata `crm-campagna-invia`**: il canale MCP vuole il contenuto di
+ogni file del pacchetto, e quella funzione si porta dietro
+`_shared/email.js` — 14 KB che ricopiare a mano vorrebbe dire rischiare
+un carattere sbagliato dentro la composizione delle mail, cioè il
+difetto più invisibile che ci sia. Va pubblicata dalla CLI, che legge i
+file dal disco:
+
+```
+supabase functions deploy crm-campagna-invia --project-ref snhvvipszhfllrgemsdu
+```
+
+Finché non lo è, **gli avvisi non si perdono comunque** (li parcheggia
+`email-eventi`), ma nessuno li applica da sé: li rimette in pari il
+riallineamento orario. Il repo è avanti alla produzione, e una funzione
+non pubblicata non è un ramo che non si usa — è un tasto che fa
+un'altra cosa.
+
+Prove in `prove/avvisi-in-anticipo.test.jsx` (10). **Una prova esistente
+è andata rossa, giustamente**: quella del 24/11 contava a mano gli usi di
+`testoErroreFunzione` in ComponiMail («due: la prova e il lotto») ed è
+caduta il giorno che è nata la terza chiamata. Adesso conta le `invoke` e
+pretende che ognuna abbia la sua lettura del corpo, invece di inchiodare
+un numero.
+
 ### Il materiale prenotato scala col pacco, e i prodotti si leggono in colonna (25/11/2026)
 
 Due cose dello stesso pomeriggio, tutte e due decise dal titolare.

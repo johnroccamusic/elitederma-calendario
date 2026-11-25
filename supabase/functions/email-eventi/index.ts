@@ -159,33 +159,30 @@ Deno.serve(async (req) => {
   // ha detto, nel modo piu' chiaro che c'e', di non volere altre mail:
   // si disiscrive, con il motivo scritto.
   if (!(data || []).length) {
-    const statoCampagna = tipo === "email.delivered" ? "consegnata"
-      : tipo === "email.opened" ? "aperta"
-      : tipo === "email.bounced" ? "rimbalzata"
-      : tipo === "email.complained" ? "segnalata"
-      : null;
-    // Gli avvisi di Resend arrivano fuori ordine: «consegnata» dopo «aperta»
-    // riportava la riga indietro, e un rimbalzo o una segnalazione, che sono
-    // definitivi, venivano cancellati da un avviso piu' lento. Lo stato si
-    // sposta solo in avanti in questa scala; ultimo_evento si scrive sempre.
-    const SCALA: Record<string, number> = { in_coda: 0, in_spedizione: 0, inviata: 1, consegnata: 2, aperta: 3, rimbalzata: 4, segnalata: 5, fallita: 0 };
-    const { data: attuale } = await admin.from("crm_campagne_destinatari").select("id, stato").eq("resend_id", idMail);
-    const daAvanzare = (attuale || []).filter((x: any) => statoCampagna && (SCALA[statoCampagna] ?? 0) > (SCALA[x.stato] ?? 0)).map((x: any) => x.id);
-    if (daAvanzare.length) {
-      await admin.from("crm_campagne_destinatari").update({ stato: statoCampagna }).in("id", daAvanzare);
-    }
-    const { data: dest, error: errDest } = await admin.from("crm_campagne_destinatari")
-      .update({ ultimo_evento: tipo, ultimo_evento_il: quando })
-      .eq("resend_id", idMail)
-      .select("id, contatto_id, email");
+    // LA SCALA DEGLI STATI STA NEL DATABASE, in un posto solo
+    // (`crm_campagna_applica_evento`, 25/11/2026): la chiamano questo
+    // webhook e la scrittura degli id del lotto, e due copie della
+    // stessa scala un giorno direbbero due verita' sulla stessa riga.
+    //
+    // E UN AVVISO CHE NON TROVA LA SUA RIGA NON SI BUTTA PIU'. Prima si
+    // rispondeva 200 e l'avviso era perso per sempre — Resend non lo
+    // rimanda, perche' gli abbiamo detto «ricevuto». Ma un id
+    // sconosciuto quasi sempre vuol dire **in anticipo**, non **di un
+    // altro**: il lotto e' partito e i suoi id non sono ancora scritti.
+    // Adesso si mette da parte e lo applica la scrittura del lotto.
+    const { data: esito, error: errDest } = await admin.rpc("crm_campagna_applica_evento", {
+      p_resend_id: idMail, p_tipo: tipo, p_quando: quando,
+    });
     if (errDest) return json({ ok: false, errore: errDest.message }, 500);
-    const d = (dest || [])[0];
+    const righe = (esito || []) as Array<{ destinatario_id: string | null; contatto_id: string | null; email: string | null; parcheggiato: boolean }>;
+    const d = righe.find((x) => x.destinatario_id) || null;
+    const parcheggiato = righe.some((x) => x.parcheggiato);
     if (d && tipo === "email.complained" && d.email) {
       await admin.from("crm_contatti")
         .update({ disiscritto_il: quando, disiscritto_come: "segnalazione spam", aggiornato_il: quando })
         .ilike("email", d.email.replace(/[\\%_]/g, "\\$&")).is("disiscritto_il", null);
     }
-    return json({ ok: true, tipo, righe: 0, campagna: dest?.length || 0 });
+    return json({ ok: true, tipo, righe: 0, campagna: d ? 1 : 0, parcheggiato });
   }
 
   // nessuna riga: la mail non e' partita da noi, o e' di prima del
