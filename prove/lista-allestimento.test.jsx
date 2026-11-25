@@ -11,7 +11,9 @@
 // distratta, se nessuno lo guarda.
 import { describe, it, expect } from "vitest";
 import React from "react";
-import { PannelloPreparazioneKit } from "../src/App.jsx";
+import fs from "node:fs";
+import path from "node:path";
+import { PannelloPreparazioneKit, dermografiNeiKitEdizione } from "../src/App.jsx";
 import { monta, clicca } from "./aiuto.js";
 
 const CORSO = { id: "c1", nome: "COLORI E CORREZIONI", colore: "#0E6B6B", prevede_dermografi_sicurezza: true };
@@ -72,7 +74,7 @@ describe("la pagina di allestimento segue il mockup", () => {
     const p = await pannello();
     const sezioni = [...p.nodo.querySelectorAll("[data-sezione-allestimento]")];
     expect(sezioni.map((s) => s.getAttribute("data-sezione-allestimento")))
-      .toEqual(["Kit didattici", "Dermografi", "Abbigliamento", "Accessori per il corso"]);
+      .toEqual(["Kit didattici", "Dermografi previsti nei kit + i prenotati", "Abbigliamento", "Accessori per il corso"]);
     expect(sezioni[0].textContent).toContain("01");
     expect(sezioni[1].textContent).toContain("02");
     expect(sezioni[2].textContent).toContain("03");
@@ -80,7 +82,7 @@ describe("la pagina di allestimento segue il mockup", () => {
     expect(sezioni[0].textContent).toContain("Articolo");
     expect(sezioni[0].textContent).toContain("Totale");
     expect(sezioni[1].textContent).toContain("Modello");
-    expect(sezioni[1].textContent).toContain("Allievi");
+    expect(sezioni[1].textContent).toContain("Previsti");
     await p.smonta();
   });
 
@@ -174,7 +176,7 @@ describe("04 Accessori per il corso", () => {
     const p = await pannello();
     const sezioni = [...p.nodo.querySelectorAll("[data-sezione-allestimento]")];
     expect(sezioni.map((x) => x.getAttribute("data-sezione-allestimento")))
-      .toEqual(["Kit didattici", "Dermografi", "Abbigliamento", "Accessori per il corso"]);
+      .toEqual(["Kit didattici", "Dermografi previsti nei kit + i prenotati", "Abbigliamento", "Accessori per il corso"]);
     expect(sezioni[3].textContent).toContain("04");
     await p.smonta();
     // senza dermografi scala di uno, come le altre
@@ -308,5 +310,125 @@ describe("togliere una consulenza", () => {
     await clicca(cestino);
     expect(salvataggi).toEqual([{ consulenze_edizione: [] }]);
     await p.smonta();
+  });
+});
+
+// I DERMOGRAFI DENTRO AI KIT SI ELENCANO, SENZA DOPPIARE LO SCARICO
+// (25/11/2026, chiesto dal titolare davanti alla lista di una classe
+// PMU: «quando un kit prevede un dermografo, lo devi elencare sotto in
+// dermografi. Attenzione però a non doppiare lo scarico: la voce
+// dermografi è solo una specifica di quello che è previsto nei kit,
+// inclusi quelli acquistati a parte»).
+//
+// Il caso vero: sette allieve, cinque col KIT ELITE (Tekna dentro), una
+// col KIT PRO (Horus dentro), una col kit parziale, e una che il Tekna
+// l'ha comprato a parte. La sezione diceva «1», e nella scatola ne
+// andavano sette.
+describe("i dermografi previsti nei kit", () => {
+  const CORSO_PMU = { id: "c9", nome: "PMU BASE", colore: "#0E6B6B", prevede_dermografi_sicurezza: true };
+  const DATA_PMU = { id: "cd9", corso_id: "c9", location_id: "l1", data_inizio: "2099-12-01", data_fine: "2099-12-05" };
+  const KIT_PMU = [
+    { id: "ke", nome: "KIT ELITE Completo", corso_id: "c9", tipo: "kit", ordine: 1 },
+    { id: "kp", nome: "KIT PRO nuovo con Horus", corso_id: "c9", tipo: "kit", ordine: 2 },
+    { id: "kz", nome: "KIT PMU parz.", corso_id: "c9", tipo: "kit", ordine: 3 },
+  ];
+  const PROD_PMU = [
+    { id: "d-tekna", nome: "Dermografo Tekna Elitederma" },
+    { id: "d-horus", nome: "Dermografo Horus Elitederma" },
+    { id: "pelle", nome: "Pelle sintetica Premium" },
+  ];
+  const DIST_PMU = [
+    { id: "x1", kit_id: "ke", corso_id: "c9", prodotto_id: "d-tekna", quantita: 1, tipo: "kit" },
+    { id: "x2", kit_id: "ke", corso_id: "c9", prodotto_id: "pelle", quantita: 3, tipo: "kit" },
+    { id: "x3", kit_id: "kp", corso_id: "c9", prodotto_id: "d-horus", quantita: 1, tipo: "kit" },
+    { id: "x4", kit_id: "kz", corso_id: "c9", prodotto_id: "pelle", quantita: 1, tipo: "kit" },
+  ];
+  const ISCRITTI_PMU = [
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, nome: `E${i}`, cognome: "P", pacchetto_kit: "KIT ELITE Completo", kit_id: "ke" })),
+    { id: "p1", nome: "P", cognome: "P", pacchetto_kit: "KIT PRO nuovo con Horus", kit_id: "kp" },
+    // lei il kit non lo prevede e il dermografo l'ha comprato a parte
+    { id: "z1", nome: "Z", cognome: "P", pacchetto_kit: "KIT PMU parz.", kit_id: "kz", dermografo_scelta: "tekna" },
+  ];
+
+  function pannelloPmu(extra = {}) {
+    return monta(
+      <PannelloPreparazioneKit
+        corsoData={DATA_PMU} corso={CORSO_PMU} loc={LOC}
+        statoEdizione={{ corso_data_id: "cd9", riserva_per_kit: {}, accessori_quantita: {} }}
+        kitDefinizioni={KIT_PMU} corsiKitProdotti={DIST_PMU} prodottiShop={PROD_PMU}
+        iscrittiEdizione={ISCRITTI_PMU} inventarioSede={[]} prodottiApertiMagazzino={[]}
+        nomeUtente="Raf" onSalvaCampi={() => {}} onCambiaTagliaIscritto={() => {}}
+        {...extra}
+      />
+    );
+  }
+
+  it("conta quelli dentro i kit, per modello", () => {
+    const conto = dermografiNeiKitEdizione(ISCRITTI_PMU, KIT_PMU, "c9", {}, DIST_PMU, PROD_PMU);
+    expect(conto).toEqual({ tekna: 5, horus: 1 });
+  });
+
+  it("i kit di riserva portano il loro dermografo: partono anche quelli", () => {
+    const conto = dermografiNeiKitEdizione(ISCRITTI_PMU, KIT_PMU, "c9", { ke: 2 }, DIST_PMU, PROD_PMU);
+    expect(conto.tekna).toBe(7);
+  });
+
+  it("un kit senza dermografo non ne inventa uno", () => {
+    const conto = dermografiNeiKitEdizione(
+      [{ id: "s1", pacchetto_kit: "KIT PMU parz.", kit_id: "kz" }], KIT_PMU, "c9", {}, DIST_PMU, PROD_PMU);
+    expect(conto).toEqual({});
+  });
+
+  it("la riga somma kit e prenotati, e dice da dove vengono", async () => {
+    const p = await pannelloPmu();
+    const riga = p.nodo.querySelector('[data-riga-allestimento="Dermografo Tekna"]');
+    const celle = [...riga.children];
+    // cinque dentro i kit più uno comprato a parte
+    expect(celle[0].textContent).toContain("Nei kit: 5");
+    expect(celle[0].textContent).toContain("prenotati a parte: 1");
+    expect(celle[1].textContent).toBe("6");
+    expect(celle[3].textContent).toBe("6");
+    const horus = [...p.nodo.querySelector('[data-riga-allestimento="Dermografo Horus"]').children];
+    expect(horus[1].textContent).toBe("1");
+    await p.smonta();
+  });
+
+  it("la riserva si somma al totale e resta l'unica cosa che si scrive", async () => {
+    const p = await pannelloPmu({ statoEdizione: { corso_data_id: "cd9", riserva_per_kit: {}, accessori_quantita: {}, dermografi_riserva: { tekna: 2 } } });
+    const celle = [...p.nodo.querySelector('[data-riga-allestimento="Dermografo Tekna"]').children];
+    expect(celle[1].textContent).toBe("6");
+    expect(celle[3].textContent).toBe("8");
+    await p.smonta();
+  });
+
+  it("la sezione dice che quelli nei kit scalano col kit", async () => {
+    const p = await pannelloPmu();
+    const sezione = [...p.nodo.querySelectorAll("[data-sezione-allestimento]")]
+      .find((s) => s.getAttribute("data-sezione-allestimento").startsWith("Dermografi"));
+    expect(sezione.textContent).toContain("scalano col kit");
+    await p.smonta();
+  });
+
+  it("la sezione compare anche dove il corso non manda dermografi di sicurezza, se un kit ne contiene uno", async () => {
+    const p = await pannelloPmu({ corso: { ...CORSO_PMU, prevede_dermografi_sicurezza: false } });
+    expect([...p.nodo.querySelectorAll("[data-sezione-allestimento]")]
+      .some((s) => s.getAttribute("data-sezione-allestimento").startsWith("Dermografi"))).toBe(true);
+    await p.smonta();
+  });
+
+  // LA GUARDIA CHE DURA: lo scarico non deve MAI leggere questo conto.
+  // Un dermografo dentro un kit scala con la distinta del suo kit;
+  // sommarlo anche a scarico_dermografi vorrebbe dire farne uscire due,
+  // e sono 890 euro a pezzo.
+  it("il magazzino non legge il conto dei dermografi nei kit", () => {
+    const sorgente = fs.readFileSync(path.join(process.cwd(), "src/App.jsx"), "utf8");
+    const scarico = sorgente.slice(
+      sorgente.indexOf("async function sincronizzaMagazzinoInterno"),
+      sorgente.indexOf("async function ripristinaMagazzinoDaScaricoInterno"),
+    );
+    expect(scarico.length).toBeGreaterThan(500);
+    expect(scarico).not.toContain("dermografiNeiKitEdizione");
+    // quello che scarica resta: comprati a parte più riserva
+    expect(scarico).toContain("const dermografiRichiesti = dermografiRichiestiEdizione(");
   });
 });

@@ -83436,6 +83436,44 @@ function kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corsoId) {
 // sopra, più eventuali kit di riserva aggiunti a mano per ciascun tipo
 // (riserva_per_kit, mai sovrascritti dal ricalcolo automatico — restano
 // finché non li si toglie a mano, anche se cambiano gli iscritti)
+// I DERMOGRAFI CHE STANNO DENTRO AI KIT, per modello (25/11/2026,
+// chiesto dal titolare: «quando un kit prevede un dermografo, lo devi
+// elencare sotto in dermografi»).
+//
+// Tredici pacchetti su cinquantasei ne contengono uno (misurato prima di
+// scrivere): chi prepara, guardando la sola sezione «Dermografi»,
+// leggeva zero e nella scatola ne andavano cinque. La sezione adesso
+// dice tutto quello che parte, da qualunque strada venga.
+//
+// È UN CONTO PER CHI GUARDA, NON PER IL MAGAZZINO, e questa è la
+// riga da non sbagliare: un dermografo dentro un kit scala già con la
+// distinta del suo kit, come ogni altro suo pezzo. Sommarlo anche a
+// `scarico_dermografi` vorrebbe dire farne uscire il doppio — una
+// macchina da 890 euro, in silenzio. Da questa funzione non deve
+// dipendere nessuno scarico: lo scarico dei dermografi resta quello
+// comprato a parte dagli allievi più quelli di riserva.
+//
+// Si contano le righe `tipo: "kit"` con la loro quantita' (oggi sempre
+// una, ma se qualcuno ne scrivesse due il conto deve seguirla); un
+// dermografo messo fra gli ACCESSORI di un kit no, perche' li' la
+// quantita' che parte la scrive la logistica e si conta gia' nella sua
+// sezione.
+function dermografiNeiKitEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riservaPerKit, corsiKitProdotti, prodottiShop) {
+  const perModello = {};
+  const kit = totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riservaPerKit);
+  Object.entries(kit).forEach(([kitId, quanti]) => {
+    const n = Number(quanti) || 0;
+    if (!kitId || n <= 0) return;
+    (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && r.tipo === "kit").forEach((r) => {
+      const prodotto = (prodottiShop || []).find((p) => p.id === r.prodotto_id);
+      if (!prodotto || !/dermografo/i.test(prodotto.nome || "")) return;
+      const regola = DERMOGRAFI.find((d) => d.cercaNome.test(prodotto.nome || ""));
+      const chiave = regola?.chiave || prodotto.nome;
+      perModello[chiave] = (perModello[chiave] || 0) + n * (Number(r.quantita) || 0);
+    });
+  });
+  return perModello;
+}
 function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riservaPerKit) {
   const totale = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corsoId);
   Object.entries(riservaPerKit || {}).forEach(([kitId, q]) => {
@@ -84678,10 +84716,20 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
   // il magazzino scarica (totaleKitPerEdizione), non un secondo calcolo
   const kitDaPreparare = Object.values(totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null, riservaPerKit))
     .reduce((n, q) => n + (Number(q) || 0), 0);
-  // i dermografi hanno una sezione solo dove il corso li manda, quindi
-  // la numerazione si conta invece di essere scritta: saltare da 01 a 03
-  // farebbe cercare una sezione che non esiste
-  const mostraDermografi = !!corso?.prevede_dermografi_sicurezza;
+  const dermografiRiserva = statoEdizione.dermografi_riserva || {};
+  const dermografiDegliAllievi = dermografiRichiestiEdizione(iscrittiEdizione);
+  // quelli che viaggiano DENTRO un kit: non li compra nessuno a parte e
+  // scalano con la distinta del loro kit — qui si elencano e basta
+  const dermografiNeiKit = dermografiNeiKitEdizione(
+    iscrittiEdizione, kitDefinizioni, corso?.id || null, riservaPerKit, corsiKitProdotti, prodottiShop,
+  );
+  // la sezione compare anche se il corso non manda dermografi di
+  // sicurezza, quando un kit ne contiene uno o qualcuno l'ha comprato a
+  // parte: è roba che sta nella scatola, e una scatola con dentro una
+  // macchina da 890 euro non può non averla scritta da nessuna parte
+  const mostraDermografi = !!corso?.prevede_dermografi_sicurezza
+    || Object.values(dermografiNeiKit).some((q) => q > 0)
+    || Object.values(dermografiDegliAllievi).some((q) => q > 0);
   // «MATERIALE PRENOTATO» (25/11/2026, chiesto dal titolare: «in
   // logistica appare una nuova casella, dopo quella dei dermografi, con
   // sotto il nome dell'allieva e la lista dei materiali prenotati da
@@ -84692,6 +84740,9 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
     .filter((i) => righeMaterialeDi(i).length > 0)
     .sort((a, b) => `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it"));
   const mostraMateriale = allieveConMateriale.length > 0;
+  // i dermografi hanno una sezione solo dove servono, quindi la
+  // numerazione si conta invece di essere scritta: saltare da 01 a 03
+  // farebbe cercare una sezione che non esiste
   const numeroSezione = (() => {
     let n = 1;
     const prossimo = () => String(n++).padStart(2, "0");
@@ -84709,8 +84760,6 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
   function cambiaRiservaKit(kitId, valore) {
     onSalvaCampi({ riserva_per_kit: { ...riservaPerKit, [kitId]: valore === "" ? 0 : Math.max(0, Number(valore)) } });
   }
-  const dermografiRiserva = statoEdizione.dermografi_riserva || {};
-  const dermografiDegliAllievi = dermografiRichiestiEdizione(iscrittiEdizione);
   function cambiaDermografiRiserva(modello, valore) {
     onSalvaCampi({ dermografi_riserva: { ...dermografiRiserva, [modello]: valore === "" ? 0 : Math.max(0, Number(valore)) } });
   }
@@ -85140,15 +85189,33 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
         })}
       </SezioneAllestimento>
 
-      {/* i dermografi degli allievi li conta la loro scheda; qui si
-          aggiungono solo quelli di riserva, che nessun allievo ha
-          comprato ma che partono lo stesso — e alla chiusura del corso
-          vanno guardati uno per uno, sono i pezzi più costosi del pacco.
-          Su un corso che non li manda (laminazione, extension, henne) le
-          righe non compaiono affatto: lo dice il corso, in Setting. */}
+      {/* TUTTI I DERMOGRAFI CHE PARTONO, DA QUALUNQUE STRADA VENGANO
+          (25/11/2026, chiesto dal titolare: «quando un kit prevede un
+          dermografo, lo devi elencare sotto in dermografi... la voce
+          dermografi è solo una specifica di quello che è previsto nei
+          kit, inclusi quelli acquistati a parte»).
+
+          Prima questa sezione contava SOLO quelli comprati a parte:
+          sulla classe PMU di dicembre si leggeva «1» mentre nella
+          scatola ne andavano sei, perché cinque stavano dentro i kit.
+          Tredici pacchetti su cinquantasei ne contengono uno.
+
+          E LO SCARICO NON SI DOPPIA, che è la parte da non rompere: un
+          dermografo dentro un kit scala già con la distinta del suo kit,
+          come ogni altro pezzo di quel kit. Da questa sezione il
+          magazzino prende solo quelli comprati a parte e quelli di
+          riserva — esattamente come prima, perché quelli non stanno in
+          nessuna distinta e nessun altro li scaricherebbe. La colonna
+          «Previsti» è un conto per chi prepara la scatola, non un ordine
+          al magazzino. */}
       {mostraDermografi && (
-        <SezioneAllestimento numero={numeroSezione.dermografi} titolo="Dermografi" colonne={["Modello", "Allievi", "Riserva", "Totale"]}>
+        <SezioneAllestimento numero={numeroSezione.dermografi} titolo="Dermografi previsti nei kit + i prenotati" colonne={["Modello", "Previsti", "Riserva", "Totale"]}>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45, padding: "2px 0 8px" }}>
+            Quelli dentro un kit <b>scalano col kit</b>: qui si elencano per sapere quanti ne partono in tutto.
+            Dal magazzino, da questa sezione, escono solo i prenotati a parte e quelli di riserva.
+          </div>
           {DERMOGRAFI.map((d, idx) => {
+            const neiKit = dermografiNeiKit[d.chiave] || 0;
             const agliAllievi = dermografiDegliAllievi[d.chiave] || 0;
             const riserva = Number(dermografiRiserva[d.chiave]) || 0;
             return (
@@ -85157,10 +85224,10 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
                 ultima={idx === DERMOGRAFI.length - 1}
                 icona={<IconaDermografoAdvisor size={ALLESTIMENTO.icona} color={NAVY} />}
                 nome={d.etichetta}
-                nota={`Allievi: ${agliAllievi}`}
-                numero={agliAllievi}
+                nota={`Nei kit: ${neiKit} · prenotati a parte: ${agliAllievi}`}
+                numero={neiKit + agliAllievi}
                 contatore={<ContatoreQuantita frecce compatto valore={riserva} titolo="Quanti dermografi di riserva partono" onCambia={(n) => cambiaDermografiRiserva(d.chiave, n)} />}
-                totale={agliAllievi + riserva}
+                totale={neiKit + agliAllievi + riserva}
               />
             );
           })}
@@ -94856,7 +94923,7 @@ export {
   pezziGiaNelPacco, avvisoProdottoGiaNelPacco,
   PannelloPreparazioneKit,
   PaginaLogisticaProdotti,
-  movimentiKitDaDelta, righeScarico, materialePrenotatoEdizione,
+  movimentiKitDaDelta, righeScarico, materialePrenotatoEdizione, dermografiNeiKitEdizione,
   RiepilogoVenditaIscritto,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
   bustaChiusa, statoViaggioBusta, bustaDepositata, statoViaggioAppendice, appendiceDepositata,

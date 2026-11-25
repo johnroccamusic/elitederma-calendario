@@ -1751,6 +1751,59 @@ giustamente: `prove/fascicolo.test.jsx` montava un'iscritta senza
 `modulo_ricevuto_il` e si aspettava il tasto — adesso quel caso ha il
 modulo tornato, che è la condizione in cui il tasto ha senso.
 
+### «Dermografi previsti nei kit + i prenotati» (25/11/2026)
+
+Il titolare, davanti alla lista di allestimento di una classe PMU:
+«quando un kit prevede un dermografo, lo devi elencare sotto in
+dermografi. **Attenzione però a non doppiare lo scarico**: la voce
+dermografi è solo una specifica di quello che è previsto nei kit,
+inclusi quelli acquistati a parte».
+
+**Il conto era vero e diceva un'altra cosa.** Quella sezione contava
+**solo** i dermografi comprati a parte: sulla sua classe si leggeva
+**1**, e nella scatola ne andavano **sette** — cinque Tekna dentro i KIT
+ELITE, un Horus dentro il KIT PRO, e un Tekna comprato a parte.
+Misurato: **tredici pacchetti su cinquantasei** contengono un
+dermografo, tutti come riga `tipo: "kit"` della loro distinta.
+
+Adesso la sezione si chiama come l'ha chiamata lui e ogni riga dice da
+dove vengono i pezzi: **«Nei kit: 5 · prenotati a parte: 1»**, la colonna
+«Previsti» è la loro somma, e il totale aggiunge la riserva.
+
+**E LO SCARICO NON SI DOPPIA, che è tutta la parte delicata.** Un
+dermografo dentro un kit **scala già con la distinta del suo kit**, come
+ogni altro suo pezzo; sommarlo anche a `scarico_dermografi` vorrebbe dire
+farne uscire due, cioè 890 € in silenzio. Quindi
+`dermografiNeiKitEdizione` è **un conto per chi guarda, non un ordine al
+magazzino**, e una prova rilegge il corpo di `sincronizzaMagazzinoInterno`
+pretendendo che quella funzione lì dentro non compaia mai. Dal magazzino,
+da questa sezione, continuano a uscire **i comprati a parte e quelli di
+riserva**, esattamente come prima.
+
+**Su una cosa la frase del titolare e il codice di oggi non coincidono, e
+non l'ho cambiata da solo:** «si scaricheranno dal magazzino solo i
+dermografi immessi di riserva». Oggi scalano anche quelli **comprati a
+parte** dall'allieva e ritirati al corso — e devono, perché non stanno in
+nessuna distinta: nessun altro li scaricherebbe, e il pacco partirebbe con
+una macchina e la giacenza ferma (il guasto dello shop del 24/11). Resta
+com'è finché non lo dice lui.
+
+La sezione compare ora **anche dove il corso non manda dermografi di
+sicurezza**, se un kit ne contiene uno o qualcuno l'ha comprato: una
+scatola con dentro un dermografo non può non averlo scritto da nessuna
+parte. La lista di raccolta non cambia di una riga — lì i dermografi dei
+kit erano già contati dalla distinta, e lo dice il suo commento dal
+30/10.
+
+**Una trappola ripagata scrivendo questo**, la terza volta in questo
+file: `mostraDermografi` adesso legge `dermografiNeiKit`, e la `const`
+stava **sotto**. In App.jsx una const usata prima della sua riga non dà
+un avviso: dà la pagina che non si apre. Le tre dichiarazioni sono state
+spostate sopra.
+
+Prove in `prove/lista-allestimento.test.jsx` (26), sui numeri veri di
+quella classe.
+
 ### Il materiale prenotato scala col pacco, e i prodotti si leggono in colonna (25/11/2026)
 
 Due cose dello stesso pomeriggio, tutte e due decise dal titolare.
