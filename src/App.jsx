@@ -30066,13 +30066,59 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true, se
         {/* Modelle, taglia e accordi finivano sotto "Pagamenti" senza che
             nessuno lo dicesse, e la taglia della divisa in mezzo alle
             cifre sembrava un importo. Hanno una loro intestazione. */}
-        {((i.richiede_modelle && i.numero_modelle != null) || i.taglia_divisa || i.accordi_commerciali) && (
+        {((i.richiede_modelle && i.numero_modelle != null) || dermografoRicavoDi(i) > 0 || righeMaterialeDi(i).length > 0 || i.taglia_divisa || i.accordi_commerciali) && (
           <div style={{ gridColumn: "1 / -1", fontSize: isMobile ? 17 : 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: isMobile ? 0.3 : 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Dati operativi</div>
         )}
         {i.richiede_modelle && i.numero_modelle != null && (
           <>
             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Modelle da pagare</div>
             <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", ...(isMobile ? { fontSize: 17 } : {}) }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {euroScheda(modelleTotaleDi(i))}{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+          </>
+        )}
+        {/* LA MERCE SI LEGGE IN COLONNA, NON DENTRO LA FASCIA ROSSA
+            (25/11/2026, correzione del titolare: «invece di fare sta
+            pecionata nella macchia rossa in basso non potevi elencare i
+            prodotti in alto in colonna ben visibili sotto a dati
+            operativi»). Dermografo e materiale prenotato sono cose che
+            qualcuno deve mettere in una scatola e farsi pagare: vanno
+            lette una per una, col loro nome e il loro prezzo, dove si
+            leggono le modelle e la taglia. La fascia in fondo dice
+            quanto, non cosa. */}
+        {dermografoRicavoDi(i) > 0 && (
+          <>
+            <div data-dermografo-riga style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Dermografo col corso</div>
+            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", ...(isMobile ? { fontSize: 17 } : {}) }}>
+              {/* senza modello scritto resta «Dermografo»: una riga che
+                  comincia con una freccia non si capisce di cosa parli */}
+              <div style={{ fontWeight: 700 }}>{etichettaDermografo(dermografoAcquistato(i)) || "Dermografo"} → {euroScheda(dermografoRicavoDi(i))}</div>
+              {/* senza metodo non si sa come incassarli, e si dice qui
+                  invece che in fondo: è la riga di quella merce */}
+              <div style={{ fontSize: isMobile ? 13 : 11.5, fontWeight: 600, color: i.dermografo_metodo ? MUTED : "#C0392B", marginTop: 2 }}>
+                {i.dermografo_metodo ? (ETICHETTA_METODO[i.dermografo_metodo] || i.dermografo_metodo) : "metodo non scelto"}
+                {i.dermografo_pagato || i.incassato ? " · pagato" : i.dermografo_consegna === "corso" ? " · da pagare prima di consegnarlo" : ""}
+              </div>
+            </div>
+          </>
+        )}
+        {righeMaterialeDi(i).length > 0 && (
+          <>
+            <div data-materiale-riga style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, ...(isMobile ? { fontSize: 17 } : {}) }}>Materiale prenotato</div>
+            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", ...(isMobile ? { fontSize: 17 } : {}) }}>
+              {righeMaterialeDi(i).map((r, k) => (
+                <div key={`${r.prodotto_id}-${k}`} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "1px 0" }}>
+                  <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{r.nome} <span style={{ fontWeight: 700 }}>&times; {r.quantita}</span></span>
+                  <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{euroScheda(round2((Number(r.prezzo) || 0) * (Number(r.quantita) || 0)))}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginTop: 4, fontWeight: 700 }}>
+                <span style={{ flex: 1, minWidth: 0 }}>Totale</span>
+                <span style={{ whiteSpace: "nowrap" }}>{euroScheda(materialeRicavoDi(i))}</span>
+              </div>
+              <div style={{ fontSize: isMobile ? 13 : 11.5, fontWeight: 600, color: i.materiale_metodo ? MUTED : "#C0392B", marginTop: 2 }}>
+                {i.materiale_metodo ? (ETICHETTA_METODO[i.materiale_metodo] || i.materiale_metodo) : "metodo non scelto"}
+                {i.materiale_pagato || i.incassato ? " · pagato" : " · da incassare al corso"}
+              </div>
+            </div>
           </>
         )}
         {i.taglia_divisa && (
@@ -38436,22 +38482,22 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
                               {nienteDaIncassare ? "Nulla da saldare" : i.incassato ? "Incassato" : "Da incassare"}
                             </div>
                             <div style={{ ...fontBody, fontSize: isMobile ? 30 : 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap", lineHeight: 1.1 }}>{euroScheda(daIncassare)}</div>
-                            {/* IL DERMOGRAFO SI NOMINA (25/11/2026). Dentro
-                                quella cifra ci sono fino a tre cose — saldo,
-                                modelle, dermografo — e un numero solo non dice
-                                che in aula c'e' una macchina da 890 euro da
-                                farsi pagare prima di consegnarla. Avvisa e
-                                lascia decidere: non blocca niente. */}
-                            {materialeDaIncassareDi(i) > 0 && (
+                            {/* LA FASCIA DICE QUANTO, NON COSA (25/11/2026,
+                                correzione del titolare). Qui stavano due
+                                righe «di cui» che ripetevano a parole
+                                quello che adesso si legge in colonna, in
+                                «Dati operativi», voce per voce col suo
+                                prezzo: la stessa cosa scritta due volte è
+                                una da leggere e una da saltare, e quella
+                                stipata in fondo a un riquadro rosso è
+                                sempre la seconda. Resta il richiamo che
+                                dentro la cifra c'è della merce. */}
+                            {(materialeDaIncassareDi(i) > 0 || dermografoDaIncassareDi(i) > 0) && !i.incassato && (
                               <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 11.5, fontWeight: 700, color: coloreIncasso, marginTop: 4, whiteSpace: "normal", lineHeight: 1.35 }}>
-                                di cui {euroScheda(materialeDaIncassareDi(i))} di materiale prenotato ({righeMaterialeDi(i).length} vo{righeMaterialeDi(i).length === 1 ? "ce" : "ci"})
-                                {i.materiale_metodo ? ` \u00b7 ${(ETICHETTA_METODO[i.materiale_metodo] || i.materiale_metodo).toLowerCase()}` : " \u00b7 metodo non scelto"}
-                              </div>
-                            )}
-                            {dermografoDaIncassareDi(i) > 0 && (
-                              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 11.5, fontWeight: 700, color: coloreIncasso, marginTop: 4, whiteSpace: "normal", lineHeight: 1.35 }}>
-                                di cui {euroScheda(dermografoDaIncassareDi(i))} di dermografo{i.dermografo_metodo ? ` (${(ETICHETTA_METODO[i.dermografo_metodo] || i.dermografo_metodo).toLowerCase()})` : " — metodo non scelto"}
-                                {i.dermografo_consegna === "corso" && !i.incassato ? ", che ritira al corso" : ""}
+                                comprende {[
+                                  dermografoDaIncassareDi(i) > 0 ? "il dermografo" : null,
+                                  materialeDaIncassareDi(i) > 0 ? "il materiale prenotato" : null,
+                                ].filter(Boolean).join(" e ")}: l'elenco è qui sopra, in Dati operativi
                               </div>
                             )}
                             {/* la data dell'incasso, modificabile: e' quella
@@ -83262,6 +83308,32 @@ function dermografiRichiestiEdizione(iscrittiEdizione) {
   });
   return conteggio;
 }
+// IL MATERIALE PRENOTATO DI UN'EDIZIONE, prodotto per prodotto
+// (25/11/2026, deciso dal titolare: «il materiale prenotato lo mette
+// Raf nel pacco e scala quando esce dal magazzino insieme con la roba
+// dei kit»). Le righe sono della singola allieva (iscritti.
+// materiale_prenotato), ma chi va allo scaffale e il magazzino vogliono
+// il totale: due allieve che prenotano lo stesso ago fanno una riga da
+// due pezzi, non due righe da sommare a mente.
+//
+// Il legame col magazzino è l'id, come in tutta l'app: il `nome` sulla
+// riga è il ripiego del giorno in cui si è prenotato. Una riga senza
+// id non si può scaricare e non si inventa: chi chiama la nomina
+// (`senzaProdotto`) invece di lasciarla cadere, o il pacco partirebbe
+// con della merce che il magazzino non ha mai visto uscire.
+function materialePrenotatoEdizione(iscrittiEdizione) {
+  const conteggio = {};
+  const senzaProdotto = [];
+  (iscrittiEdizione || []).forEach((i) => {
+    righeMaterialeDi(i).forEach((r) => {
+      const q = Number(r.quantita) || 0;
+      if (q <= 0) return;
+      if (!r.prodotto_id) { senzaProdotto.push(r.nome || "prodotto senza nome"); return; }
+      conteggio[r.prodotto_id] = (conteggio[r.prodotto_id] || 0) + q;
+    });
+  });
+  return { perProdotto: conteggio, senzaProdotto };
+}
 // Cosa parte per un'edizione, in un oggetto solo: kit (per gli iscritti e
 // di riserva), gli allievi con il loro kit e il loro dermografo, i
 // dermografi assegnati e di riserva, gli accessori, la merce da vendere e
@@ -83328,6 +83400,13 @@ function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId, c
     // "assegnati" esclude già chi il dermografo se l'è fatto mandare a
     // casa: quello nel pacco del corso non c'è mai stato
     dermografi: { assegnati: dermografiRichiestiEdizione(iscrittiEdizione || []), riserva: stato?.dermografi_riserva || {} },
+    // la merce che le allieve hanno comprato col corso: parte nel pacco e
+    // scala dal magazzino come i kit. Resta FUORI dal rientro apposta
+    // (vedi registraPartenza in rientri/dati.ts, che legge kit, accessori,
+    // merce da vendere e dermografi di riserva): questi pezzi sono di una
+    // persona, se li porta a casa, e chiederne conto alla master vorrebbe
+    // dire farle cercare della roba che non c'è più.
+    materiale_prenotato: materialePrenotatoEdizione(iscrittiEdizione || []).perProdotto,
     accessori,
     merce_vendita: merceVendita,
     // "da_vendere" viaggia con la consulenza: chi riceve il pacco deve
@@ -83946,6 +84025,10 @@ function listaRaccoltaMateriale({ iscrittiEdizione, statoEdizione, kitDefinizion
   });
   Object.entries(sped.accessori || {}).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: Number(q) || 0, da: "accessori ed extra" }));
   Object.entries(sped.merce_vendita || {}).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: Number(q) || 0, da: "da vendere al corso" }));
+  // il materiale prenotato dalle allieve: lo mette nel pacco chi prepara,
+  // quindi va preso dallo scaffale con tutto il resto. Un prodotto che
+  // arriva anche da un kit resta UNA riga, con tutte e due le provenienze
+  Object.entries(sped.materiale_prenotato || {}).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: Number(q) || 0, da: "materiale prenotato dalle allieve" }));
   const consulenzePer = {};
   (sped.consulenze || []).forEach((c) => { consulenzePer[c.prodotto_id] = (consulenzePer[c.prodotto_id] || 0) + 1; });
   Object.entries(consulenzePer).forEach(([pid, q]) => aggiungi(`prodotto::${pid}`, { prodottoId: pid, nomeRiga: nome(pid), quantita: q, da: "consulenze" }));
@@ -84574,7 +84657,15 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
     const differenzeDerm = [...new Set([...Object.keys(dermRichiesti), ...Object.keys(dermScaricati)])]
       .map((m) => ({ nome: etichettaDermografo(m), diff: (dermRichiesti[m] || 0) - (dermScaricati[m] || 0) }))
       .filter((r) => r.diff !== 0);
-    const tutte = [...differenzeKit, ...differenzeDerm];
+    // il materiale prenotato scala col pacco, quindi una prenotazione
+    // aggiunta o tolta dopo lo scarico è magazzino da rimettere in pari
+    // esattamente come un kit in più
+    const matRichiesto = materialePrenotatoEdizione(iscrittiEdizione).perProdotto;
+    const matScaricato = statoEdizione.scarico_materiale || {};
+    const differenzeMat = [...new Set([...Object.keys(matRichiesto), ...Object.keys(matScaricato)])]
+      .map((pid) => ({ nome: (prodottiShop || []).find((p) => p.id === pid)?.nome || "prodotto", diff: (matRichiesto[pid] || 0) - (matScaricato[pid] || 0) }))
+      .filter((r) => r.diff !== 0);
+    const tutte = [...differenzeKit, ...differenzeDerm, ...differenzeMat];
     return tutte.length > 0 ? tutte : null;
   })();
   const kitRichiesti = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null);
@@ -85083,16 +85174,17 @@ function PannelloPreparazioneKit({ agganciato = false, corsoData, corso, loc, st
           aula: e' la stessa cifra del «da incassare» della sua scheda. */}
       {mostraMateriale && (
         <SezioneAllestimento numero={numeroSezione.materiale} titolo="Materiale prenotato">
-          {/* SI DICE CHE IL MAGAZZINO NON LI HA ANCORA SCALATI, e non e'
-              una dimenticanza: i kit e i dermografi scalano col pacco
-              perche' qualcuno ha deciso che fosse cosi', e per questi
-              pezzi quella decisione non e' stata presa. Scriverlo e'
-              l'unico modo di non ripetere il guasto dello shop del
-              24/11 — merce uscita e giacenza ferma, per ventiquattro
-              giorni, senza che nessuno lo sapesse. */}
-          <div style={{ ...fontBody, fontSize: 11.5, color: "#8A5A00", background: "#FFF6E5", borderRadius: 10, padding: "7px 10px", marginBottom: 8, lineHeight: 1.45 }}>
-            Questi pezzi partono col pacco ma <b>il magazzino non li scala ancora</b>: vanno contati a mano
-            quando si prepara la scatola.
+          {/* LA DECISIONE È STATA PRESA (25/11/2026): «il materiale
+              prenotato lo mette Raf nel pacco e scala quando esce dal
+              magazzino insieme con la roba dei kit». Fino a ieri qui
+              c'era scritto in giallo che il magazzino NON li scalava —
+              era vero, e andava detto. Adesso scalano, e va detto
+              altrettanto: chi prepara non deve contarli a mano da
+              nessuna parte, e i pezzi stanno già nella lista di
+              raccolta insieme a quelli dei kit. */}
+          <div style={{ ...fontBody, fontSize: 11.5, color: NAVY, background: "#F3F7F3", borderRadius: 10, padding: "7px 10px", marginBottom: 8, lineHeight: 1.45 }}>
+            Questi pezzi partono col pacco e <b>scalano dal magazzino insieme ai kit</b>, quando il pacco si
+            dichiara preparato. Li trovi gi&agrave; contati nella lista di raccolta.
           </div>
           {allieveConMateriale.map((i, idx) => {
             const righe = righeMaterialeDi(i);
@@ -85660,6 +85752,34 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       mostraAvviso(`Non trovo in magazzino: ${dermografiSenzaProdotto.join(", ")}.\n\nControlla che il prodotto esista in anagrafica con quel nome. Il resto del kit non è stato scaricato.`);
       return false;
     }
+
+    // MATERIALE PRENOTATO DALLE ALLIEVE (25/11/2026, deciso dal titolare:
+    // «lo mette Raf nel pacco e scala quando esce dal magazzino insieme
+    // con la roba dei kit»). Stessa regola dei dermografi: non sta in
+    // nessuna distinta, lo portano le schede degli iscritti, e si applica
+    // solo la DIFFERENZA rispetto a quanto risulta già scaricato — così
+    // un'allieva che cambia prenotazione restituisce l'uno e prende
+    // l'altro invece di sommarsi.
+    //
+    // Non c'è nessun doppio scarico da temere: questa merce non passa da
+    // una vendita (si paga al corso, dentro `daIncassareAlCorsoDi`),
+    // quindi il magazzino la vede uscire una volta sola. È il contrario
+    // degli extra «da vendere», che restano fuori proprio perché li
+    // scaricherà la vendita.
+    const materiale = materialePrenotatoEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id));
+    if (materiale.senzaProdotto.length) {
+      mostraAvviso(`Nel materiale prenotato ci sono righe senza prodotto di magazzino: ${materiale.senzaProdotto.join(", ")}.\n\nNon so cosa scaricare, e il pacco partirebbe con della merce che il magazzino non ha mai visto uscire. Correggi quelle righe nella scheda dell'allieva. Il magazzino non è stato toccato.`);
+      return false;
+    }
+    const materialeScaricato = stato.scarico_materiale || {};
+    const nuovoScaricoMateriale = {};
+    new Set([...Object.keys(materiale.perProdotto), ...Object.keys(materialeScaricato)]).forEach((prodottoId) => {
+      const target = materiale.perProdotto[prodottoId] || 0;
+      const giaScaricato = materialeScaricato[prodottoId] || 0;
+      const delta = target - giaScaricato;
+      if (delta !== 0) deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) - delta;
+      if (target > 0) nuovoScaricoMateriale[prodottoId] = target;
+    });
     new Set([...Object.keys(richiesti), ...Object.keys(scaricoAttuale)]).forEach((kitId) => {
       const target = richiesti[kitId] || 0;
       const giaScaricato = scaricoAttuale[kitId] || 0;
@@ -85768,7 +85888,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       return false;
     }
     setAvanzamentoScarico({ fatti: righeBlocco.length, totale: righeBlocco.length });
-    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati, scarico_dermografi: nuovoScaricoDermografi });
+    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati, scarico_dermografi: nuovoScaricoDermografi, scarico_materiale: nuovoScaricoMateriale });
     return true;
   }
   // ricarica in stock esattamente quanto è registrato come
@@ -85804,6 +85924,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const prodottoId = chiave.split("::")[1];
       if (prodottoId && giaScaricato) deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + giaScaricato;
     });
+    // e il materiale prenotato dalle allieve, che da oggi scala col pacco:
+    // tornare indietro deve rimettere a scaffale tutto quello che era
+    // uscito, o il magazzino resta sbilanciato nel verso che fa comodo
+    Object.entries(stato.scarico_materiale || {}).forEach(([prodottoId, giaScaricato]) => {
+      if (prodottoId && giaScaricato) deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + giaScaricato;
+    });
     // DALLA STESSA PORTA DELLO SCARICO (6/11/2026): il bundle si apre nei suoi
     // pezzi anche quando si torna indietro. Rimettere a scaffale il bundle
     // mentre lo scarico aveva tolto i componenti lascerebbe il magazzino
@@ -85820,7 +85946,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       if (erroreRientro) { mostraAvviso("Rientro NON eseguito, nessun prodotto e' stato toccato — " + erroreRientro); return; }
       setAvanzamentoScarico({ fatti: righeRientro.length, totale: righeRientro.length });
     }
-    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
+    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {}, scarico_materiale: {} });
   }
   async function ripristinaKitRientro(corsoData) {
     // Se la master ha chiuso il suo inventario, si rimette a scaffale
@@ -85869,8 +85995,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const erroreGuasti = await registraDifettosi({ corsoDataId: corsoData.id, voci: guasti });
       if (erroreGuasti) window.alert("I prodotti sono rientrati, ma i guasti non sono stati registrati: " + erroreGuasti);
 
+      // il registro del materiale prenotato si azzera come gli altri, ma
+      // quella merce NON torna a scaffale: se l'è portata a casa chi
+      // l'ha comprata, e non sta in nessun inventario di fine corso
       await salvaCampiEdizione(corsoData.id, {
-        scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {},
+        scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {}, scarico_materiale: {},
         fase_rientro: FASE_LOGISTICA_COMPLETATA,
       });
       const quantiGuasti = guasti.reduce((n, g) => n + g.quantita, 0);
@@ -94727,7 +94856,8 @@ export {
   pezziGiaNelPacco, avvisoProdottoGiaNelPacco,
   PannelloPreparazioneKit,
   PaginaLogisticaProdotti,
-  movimentiKitDaDelta, righeScarico,
+  movimentiKitDaDelta, righeScarico, materialePrenotatoEdizione,
+  RiepilogoVenditaIscritto,
   datiEreditatiDallaVendita, venditeDellaPrimaBusta, contiAppendici, ivaTrimestraleAnno, FUORI_BUSTA, AllegatoLink,
   bustaChiusa, statoViaggioBusta, bustaDepositata, statoViaggioAppendice, appendiceDepositata,
   venditaInAppendice, semaforoContabilita, contabilitaDaApprovare,

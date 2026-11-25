@@ -1751,6 +1751,102 @@ giustamente: `prove/fascicolo.test.jsx` montava un'iscritta senza
 `modulo_ricevuto_il` e si aspettava il tasto — adesso quel caso ha il
 modulo tornato, che è la condizione in cui il tasto ha senso.
 
+### Il materiale prenotato scala col pacco, e i prodotti si leggono in colonna (25/11/2026)
+
+Due cose dello stesso pomeriggio, tutte e due decise dal titolare.
+
+**1. LA DECISIONE CHE MANCAVA.** Testuale: «il materiale prenotato lo
+mette Raf nel pacco e scala quando esce dal magazzino insieme con la
+roba dei kit». Era l'unico punto lasciato aperto la mattina: quei pezzi
+partivano nella scatola e la giacenza restava ferma, e la sezione in
+logistica lo scriveva in giallo. Adesso lo dice al contrario — «scalano
+dal magazzino insieme ai kit» — perché una cosa vera va scritta in tutti
+e due i versi.
+
+Com'è fatto, e segue in tutto la strada del **dermografo**, che ha lo
+stesso problema: non sta in nessuna distinta, lo portano le schede degli
+iscritti.
+
+- **`materialePrenotatoEdizione(iscrittiEdizione)`** somma le righe per
+  prodotto: due allieve che prenotano lo stesso ago fanno **una** riga da
+  cinque pezzi. Il legame col magazzino è l'**id**, e una riga senza id
+  **si nomina** (`senzaProdotto`) e **ferma lo scarico**: senza, il pacco
+  partirebbe con della merce che la giacenza non vede uscire — il guasto
+  dello shop del 24/11 da un'altra porta.
+- **Si applica sempre la DIFFERENZA**, contro il registro
+  `logistica_kit_edizioni.scarico_materiale` (migrazione
+  `20261125160000`, rollback dentro): un'allieva che cambia prenotazione
+  restituisce l'uno e prende l'altro, e una risincronizzazione non fa
+  uscire niente due volte. È la lezione di Udine del 22/09.
+- **Nessun doppio scarico da temere**: questa merce non passa da una
+  vendita (si paga al corso, dentro `daIncassareAlCorsoDi`), quindi il
+  magazzino la vede uscire una volta sola. È il contrario degli extra «da
+  vendere», che restano fuori dallo scarico proprio perché li scaricherà
+  la vendita.
+- **Chi prepara la trova nella lista di raccolta**, sommata ai pezzi dei
+  kit: un prodotto che arriva da tutte e due le strade resta **una** riga
+  che dice da dove viene. Senza, Raf dovrebbe prenderla da un'altra
+  schermata, e il tasto «preso» non coprirebbe quei pezzi.
+- **Tornando indietro i pezzi tornano a scaffale** (lo stesso registro
+  letto al contrario), mentre **a fine corso il registro si azzera e la
+  merce NON rientra**: se l'è portata a casa chi l'ha comprata, e non sta
+  in nessun inventario di fine corso. Per la stessa ragione resta fuori
+  dalla fotografia del rientro (`registraPartenza` legge kit, accessori,
+  merce da vendere e dermografi di riserva): chiederne conto alla master
+  vorrebbe dire farle cercare della roba che non c'è più.
+- **Una prenotazione aggiunta DOPO lo scarico** compare fra le cose «da
+  riallineare», come un kit in più.
+
+**Nessun dato da rimettere in pari**: misurato prima di toccare niente,
+l'unica classe con del materiale prenotato (PMU ROMA del 30/11, due
+pezzi) non aveva ancora allestito il pacco — quindi nessuno scarico già
+avvenuto da ricostruire e nessuno da annullare.
+
+**Quello che NON è stato toccato, e va deciso:** `quantitaInviataPerProdotto`
+— cioè «Prodotti usati per i kit», il Bilancio del corso e il Calcolo
+consumi — **non** conta questa merce. È una scelta: quelle tre pagine
+misurano il **consumo** di una classe per allieva, e il materiale
+prenotato è merce comprata una volta sola. Ma ne segue un'asimmetria da
+sapere, ed è di denaro: il Bilancio del corso **conta il ricavo** del
+materiale (`materialeRicavoDi`, dal 25/11 di stamattina) e **non conta il
+costo** dei pezzi che escono dal magazzino, quindi su quella classe
+risulta un po' più ricco del vero. Finché le prenotazioni sono due righe
+da 53,80 € non sposta niente; va deciso prima che diventino un'abitudine.
+
+**2. «MA INVECE DI FARE STA PECIONATA NELLA MACCHIA ROSSA IN BASSO».**
+Il titolare, davanti alla scheda: «non potevi elencare i prodotti in alto
+in colonna ben visibili sotto a dati operativi, incasso modella, poi
+prodotti ecc...?».
+
+Aveva ragione. Dermografo e materiale stavano in due righe piccole dentro
+la fascia rossa dell'incasso — «di cui 53,80 € di materiale prenotato (2
+voci) · contanti» — cioè la stessa cosa detta due volte, una da leggere e
+una da saltare, e quella stipata in fondo a un riquadro rosso è sempre la
+seconda. Sono **merce**: qualcuno deve metterla in una scatola e farsela
+pagare, quindi si legge **dove si leggono le modelle e la taglia**, in
+«Dati operativi», voce per voce:
+
+> **Dermografo col corso** · Dermografo Tekna → 890,00 €
+> contanti · da pagare prima di consegnarlo
+>
+> **Materiale prenotato** · Gold Master 1RL **× 2** 26,90 € · Gold Master
+> 3RL **× 1** 26,90 € · **Totale 53,80 €** — contanti
+
+Tre decisioni: il **metodo mancante si dice lì**, in rosso, sulla riga di
+quella merce e non in fondo alla scheda; il **modello si legge** («la
+macchina» non dice quale si consegna, e senza modello scritto resta
+«Dermografo» invece di una freccia che comincia nel vuoto); e la fascia
+rossa **dice quanto, non cosa** — resta una riga sola che richiama
+l'elenco qui sopra, perché dentro quella cifra c'è della merce e chi
+guarda solo il totale deve saperlo.
+
+Vale in tutte e due le pagine che montano `RiepilogoVenditaIscritto`: la
+scheda del venditore e la pagina della master.
+
+Prove in `prove/materiale-prenotato.test.jsx` (33), con il riepilogo
+montato per davvero — i nomi dei prodotti, i pezzi, il totale, il metodo
+mancante, e chi non ha comprato niente che non vede nessuna riga in più.
+
 ### «Altro materiale»: quello che l'allieva compra insieme al corso (25/11/2026)
 
 Il titolare, subito dopo il lavoro sul dermografo: «nella stessa casella
