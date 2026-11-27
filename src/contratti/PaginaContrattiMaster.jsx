@@ -21,6 +21,7 @@ import { supabase } from "../supabase.js";
 import { areaSchedaIscritto, IntestazioneArea } from "../ui/scheda.jsx";
 import { NAVY, MUTED, CREAM_BORDER, GRAFITE, GOLD, fontBody, fontDisplay, stileTitoloPagina, inputStyle } from "../ui/stile.js";
 import { confermaRimozione } from "../ui/conferma.js";
+import { dettaglioErroreFunzione } from "../errore-funzione.js";
 import { urlAllegato } from "../file/allegati.js";
 import { leggiTuttiIContratti, riapriContratto, cambiaEsclusione, leggiApertura, cambiaApertura } from "./dati.js";
 import { CHIAVI, NOMI, DAL_CODICE, PARTENZA, impronta, leggiTesti, caricaDiPartenza, salvaTesto } from "./testi.js";
@@ -179,7 +180,25 @@ export default function PaginaContrattiMaster({
     });
     setAlLavoro("");
     if (error || !data?.ok) {
-      setErrore(`La copia non è stata composta: ${data?.errore || error?.message || "nessuna risposta"}`);
+      // L'ERRORE DICEVA «non-2xx» E NIENTE ALTRO, ed è la lezione
+      // dell'8/11/2026 pagata una terza volta: `invoke`, davanti a una
+      // risposta che non è 2xx, lascia `data` nullo e appende il corpo a
+      // `error.context`, quindi `data?.errore || error?.message` mostra
+      // sempre la frase inutile. Il titolare ha premuto questo tasto il
+      // 26/11/2026 su un contratto firmato e ha letto quella.
+      //
+      // E IL MOTIVO VERO ERA CHE LA FUNZIONE NON È PUBBLICATA: 404 con
+      // `code: NOT_FOUND`. Quel caso si dice per intero — la firma è
+      // registrata, la copia manca, e non c'è niente che chi preme possa
+      // fare — invece di far credere a quella persona di aver sbagliato
+      // lei (la regola del 25/11/2026).
+      const { testo, nonPubblicata } = error
+        ? await dettaglioErroreFunzione(error)
+        : { testo: data?.errore || "nessuna risposta", nonPubblicata: false };
+      setErrore(nonPubblicata
+        ? `La copia di ${riga.master.nome} non si può ancora comporre: ${testo}. `
+          + "La firma è registrata e non si perde — appena la funzione è pubblicata, questo tasto la fa."
+        : `La copia non è stata composta: ${testo}`);
       return;
     }
     setAvviso(`Copia rifatta e rimandata a ${riga.master.nome}.`);
@@ -411,6 +430,17 @@ export default function PaginaContrattiMaster({
                   {grado === "firmato" && r.contratto.contratto_firmato?.origine === "client" && (
                     <div style={{ ...fontBody, fontSize: 11.5, color: "#B3261E", lineHeight: 1.5 }}>
                       Testo preso dal browser, non dal database
+                    </div>
+                  )}
+                  {/* UN CONTRATTO FIRMATO SENZA LA SUA COPIA (27/11/2026).
+                      La copia e' quello che quella persona si porta a
+                      casa: senza, ha sottoscritto un documento e non ne
+                      ha niente in mano. Si legge sulla riga, in rosso,
+                      perche' il tasto accanto dice «Fai la copia» e da
+                      solo si legge come una comodita'. */}
+                  {grado === "firmato" && !r.contratto.pdf_path && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: "#B3261E", lineHeight: 1.5 }}>
+                      La copia firmata non è stata composta: lei non ce l'ha.
                     </div>
                   )}
                   {grado === "firmato" && r.contratto.contratto_firmato?.uguale_a_quello_mostrato === false && (

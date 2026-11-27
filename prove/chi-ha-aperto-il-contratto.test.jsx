@@ -351,6 +351,66 @@ describe("«Contratti master» mostra dove ognuna si e' fermata", () => {
   });
 });
 
+// UN TASTO CHE NON PUO' RIUSCIRE DEVE DIRE PERCHE' (27/11/2026). Il
+// titolare ha premuto «Fai la copia» sull'unico contratto firmato e ha
+// letto «Edge Function returned a non-2xx status code»: la funzione
+// `contratto-master-firmato` non e' pubblicata, e il 404 della
+// piattaforma arriva con `message` e non con `errore` — quindi perfino
+// `testoErroreFunzione` tornava la frase inutile.
+describe("«Fai la copia» su una funzione non pubblicata", () => {
+  function bancoCopia(risposta) {
+    rispondiCon({
+      "/rest/v1/master?": () => [{ id: "m1", nome: "HA FIRMATO", contratto_escluso: false }],
+      "/rest/v1/master_contratti_testi": () => [],
+      "/rest/v1/master_contratti": () => [{
+        id: "c1", master_id: "m1", stato: "firmato", firmato_il: "2026-11-25T17:52:00Z",
+        luogo_firma: "Milano", contratto_firmato: { origine: "server" }, pdf_path: null,
+      }],
+      "/rest/v1/impostazioni_layout_tabelle": () => [{ valore: { aperta: true } }],
+      "/functions/v1/contratto-master-firmato": () => risposta,
+    });
+  }
+
+  it("dice che la funzione non e' pubblicata, e che la firma non si perde", async () => {
+    bancoCopia(new Response(JSON.stringify({ code: "NOT_FOUND", message: "Requested function was not found" }),
+                            { status: 404, headers: { "Content-Type": "application/json" } }));
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(150);
+    await clicca(p.tasto("Fai la copia"));
+    await attendi(150);
+    const testo = p.testo();
+    expect(testo).toContain("non è pubblicata sul server");
+    expect(testo).toContain("La firma è registrata e non si perde");
+    // e NON la frase che non dice niente
+    expect(testo).not.toContain("non-2xx");
+    await p.smonta();
+  });
+
+  it("un rifiuto vero della funzione si legge per quello che dice", async () => {
+    bancoCopia(new Response(JSON.stringify({ ok: false, errore: "Il contratto non risulta firmato." }),
+                            { status: 409, headers: { "Content-Type": "application/json" } }));
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(150);
+    await clicca(p.tasto("Fai la copia"));
+    await attendi(150);
+    expect(p.testo()).toContain("Il contratto non risulta firmato.");
+    expect(p.testo()).not.toContain("non è pubblicata sul server");
+    await p.smonta();
+  });
+
+  // LA COPIA E' QUELLO CHE QUELLA PERSONA SI PORTA A CASA: un firmato
+  // senza copia va detto sulla riga, non lasciato dedurre dal nome del
+  // tasto accanto.
+  it("un contratto firmato senza copia lo dice sulla riga", async () => {
+    bancoCopia(new Response("{}", { status: 200 }));
+    const p = await monta(<PaginaContrattiMaster />);
+    await attendi(150);
+    expect(p.nodo.querySelector('[data-riga="m1"]').textContent)
+      .toContain("La copia firmata non è stata composta: lei non ce l'ha.");
+    await p.smonta();
+  });
+});
+
 describe("la guardia sulla migrazione", () => {
   it("i secondi hanno un tetto", () => {
     expect(sql).toMatch(/least\(greatest\(coalesce\(p_secondi, 0\), 0\), \d+\)/);

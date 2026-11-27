@@ -5336,6 +5336,82 @@ a chi non ha ancora firmato — che adesso si saprebbe a chi mandare, e a
 chi invece basta ricordare che il contratto esiste perché non l'ha
 nemmeno aperto.
 
+### «Fai la copia» non poteva riuscire: la funzione non era pubblicata (27/11/2026)
+
+Il titolare, il 26/11: «ho premuto "fai una copia" all'unico firmato ma mi
+ha dato un errore».
+
+**Il tasto non poteva riuscire.** `contratto-master-firmato` — quella che
+compone la copia firmata in PDF e la manda — **non è mai stata
+pubblicata**: è scritta dal 16/11, `deno check` verde, e in produzione non
+c'è. Verificato in due modi: l'elenco delle funzioni vive (58 nel repo, 58
+pubblicate, e **l'unica del repo che non c'è di là è lei**) e una chiamata
+vera, che risponde **404 `{"code":"NOT_FOUND","message":"Requested
+function was not found"}`**.
+
+**Conseguenza già accaduta, ed è di documenti:** DEBORA FUMAGALLI ha
+firmato il 25/11 alle 18:52 e **la sua copia non esiste** (`pdf_path` e
+`copia_inviata_il` vuoti). Ha sottoscritto un contratto e non ne ha niente
+in mano.
+
+**E L'ERRORE NON DICEVA IL PERCHÉ — la terza volta per lo stesso
+motivo.** `supabase.functions.invoke`, davanti a una risposta non-2xx,
+lascia `data` nullo e appende il corpo a `error.context`: il pannello
+faceva `data?.errore || error?.message` e mostrava «Edge Function returned
+a non-2xx status code». `testoErroreFunzione` esiste dall'8/11/2026
+apposta, **e nemmeno lei bastava**: legge `corpo.errore`, e il 404 della
+piattaforma porta `message` e `code`, non `errore` — quindi tornava
+comunque la frase inutile, proprio nel caso in cui il tasto non poteva
+riuscire per niente.
+
+Adesso in `src/errore-funzione.js` c'è **`dettaglioErroreFunzione`**, che
+legge il corpo **una volta sola** e torna `{ testo, nonPubblicata, stato }`.
+Tre decisioni:
+
+- **il corpo si legge da una COPIA** (`clone()`). `Response.json()` consuma
+  il flusso: due funzioni che leggono lo stesso errore a turno funzionano o
+  no secondo l'ordine in cui le si chiama, e un errore che dipende
+  dall'ordine è un errore che un giorno tace. È un difetto che mi sono
+  fatto da solo nel primo giro, e si vedeva solo chiamandole due volte;
+- **una funzione non pubblicata si riconosce dalla coppia 404 +
+  `code: "NOT_FOUND"`**, non dal 404 da solo: una funzione viva che non
+  trova la riga che cerca risponde 404 e quel messaggio va letto per quello
+  che dice;
+- **quel caso si dice per intero**: «questa funzione non è pubblicata sul
+  server, quindi il tasto non può riuscire: non dipende da chi lo preme», e
+  sulla riga del contratto si aggiunge che **la firma è registrata e non si
+  perde**. Un tasto che non può riuscire è peggio di un tasto che manca —
+  chi lo preme crede di aver sbagliato lui (la regola del 25/11/2026).
+
+**E un contratto firmato senza la sua copia lo dice la riga**, in rosso:
+«La copia firmata non è stata composta: lei non ce l'ha». Il tasto accanto
+dice «Fai la copia» invece di «Rimanda la copia», ma da solo si legge come
+una comodità e non come una cosa che manca a qualcuno.
+
+**DUE FUNZIONI DA PUBBLICARE DALLA CLI, e vanno lanciate dal titolare**
+(il classificatore dell'auto-mode nega `supabase functions deploy`; il
+canale MCP vuole il contenuto di ogni file, e qui sono 134 KB fra cui i
+93 KB del testo del contratto — ricopiarli a mano vorrebbe dire rischiare
+un carattere sbagliato dentro un documento che qualcuno archivia):
+
+```
+supabase functions deploy contratto-master-firmato --project-ref snhvvipszhfllrgemsdu
+supabase functions deploy crm-campagna-invia --project-ref snhvvipszhfllrgemsdu
+```
+
+La seconda è quella in attesa dal 25/11: in produzione c'è ancora la **v2**
+del 31/10 — verificato leggendo il file servito, che scrive gli id di
+Resend **uno per uno** invece di passare da `crm_campagna_segna_inviate`,
+cioè la finestra cieca di secondi in cui gli avvisi si perdevano è ancora
+aperta. Tutte e due passano `deno check`.
+
+Prove in `prove/chi-ha-aperto-il-contratto.test.jsx` (+3) e
+`prove/errore-funzione.test.jsx`: il 404 della piattaforma che dice la
+cosa giusta, un rifiuto vero della funzione che si legge per quello che
+dice, lo stesso errore letto **due volte** senza perdere il motivo, e la
+riga del firmato senza copia. **Provata rossa** rimettendo
+`data?.errore || error?.message`.
+
 ### Il buono Amazon verificato risultava non verificato (16/11/2026)
 
 Dalla logistica: «quando clicchiamo il tasto con cui diciamo che abbiamo
