@@ -368,17 +368,10 @@ export async function creaListinoPdf(righe, { getPdfLib, onAvanzamento } = {}) {
   return { bytes: await pdf.save(), prodotti: quanti, pagine: pdf.getPageCount() };
 }
 
-export function scaricaPdf(bytes, nomeFile) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nomeFile;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+// LO SCARICO STA IN UN POSTO SOLO (27/11/2026): era scritto identico
+// qui, in `eventi/bolla.js` e in App.jsx. Si ri-esporta perche' i cinque
+// punti che lo importano da questo file continuino a trovarlo.
+export { scaricaPdf } from "../file/pdf.js";
 
 // usato solo dal banco di prova: tiene fuori supabase da chi vuole
 // provare l'impaginazione senza rete

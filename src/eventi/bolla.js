@@ -141,11 +141,5 @@ export async function creaBollaPdf({ evento, righe, bolla, societa, getPdfLib })
   return pdf.save();
 }
 
-export function scaricaPdf(bytes, nomeFile) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = nomeFile;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+// Vedi `src/file/pdf.js`: era la terza copia delle stesse otto righe.
+export { scaricaPdf } from "../file/pdf.js";

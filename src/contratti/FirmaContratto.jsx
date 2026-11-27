@@ -34,6 +34,8 @@ import { avvisoCampo } from "../iscrizione/disposizione.js";
 import { RIGHE, OBBLIGATORI } from "./disposizione.js";
 import { leggiContratto, salvaBozza, caricaFile, firmaContratto, segnaLettura } from "./dati.js";
 import { DAL_CODICE } from "./testi.js";
+import { creaPdfContrattoDaLeggere, nomeFileContrattoDaLeggere } from "./contrattoPdf.js";
+import { scaricaPdf } from "../file/pdf.js";
 import { urlAllegato } from "../file/allegati.js";
 import {
   blocchiContratto, casellePronte, epigrafeMaster, luogoEData, mancantiPerFirmare,
@@ -57,7 +59,7 @@ const quando = (iso) => {
  * pagina è un muro, e chi lo trova aperto scorre fino in fondo senza
  * sapere di aver attraversato qualcosa. `onLetto` scatta alla CHIUSURA.
  */
-function Documento({ titolo, sottotitolo, blocchi, letto, onLetto, segno }) {
+function Documento({ titolo, sottotitolo, blocchi, letto, onLetto, segno, pdf = null }) {
   const [aperto, setAperto] = useState(false);
   // DA QUANDO E' APERTO. Serve a una cosa sola, e non e' un controllo:
   // dire a chi amministra quanto quel testo e' stato tenuto aperto. Un
@@ -77,19 +79,48 @@ function Documento({ titolo, sottotitolo, blocchi, letto, onLetto, segno }) {
       {sottotitolo && (
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, lineHeight: 1.5, marginBottom: 10 }}>{sottotitolo}</div>
       )}
-      <button
-        type="button"
-        data-campo={`apri-${segno}`}
-        onClick={() => (aperto ? chiudi() : apri())}
-        style={{
-          ...fontBody, fontSize: 13, fontWeight: 700, width: "100%", minHeight: 44,
-          color: NAVY, background: letto ? "#F2F9F3" : "#FFFDF8",
-          border: `1px ${letto ? "solid" : "dashed"} ${letto ? "#CFE6D5" : GOLD}`,
-          borderRadius: 10, padding: "11px 14px", cursor: "pointer",
-        }}
-      >
-        {aperto ? "Ho finito di leggere — chiudi" : letto ? "✓ letto — riapri" : "Apri e leggi"}
-      </button>
+      {/* I DUE TASTI IN FILA, e sono due cose diverse: uno apre il testo
+          qui dentro — ed e' quello che la pagina conta come lettura — e
+          l'altro te lo da' da portare via. Il PDF NON apre nessuna
+          porta: se bastasse scaricarlo per poter firmare, la regola
+          «non si firma un documento che non si e' aperto» diventerebbe
+          «non si firma un documento che non si e' scaricato». */}
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          data-campo={`apri-${segno}`}
+          onClick={() => (aperto ? chiudi() : apri())}
+          style={{
+            ...fontBody, fontSize: 13, fontWeight: 700, flex: "1 1 200px", minHeight: 44,
+            color: NAVY, background: letto ? "#F2F9F3" : "#FFFDF8",
+            border: `1px ${letto ? "solid" : "dashed"} ${letto ? "#CFE6D5" : GOLD}`,
+            borderRadius: 10, padding: "11px 14px", cursor: "pointer",
+          }}
+        >
+          {aperto ? "Ho finito di leggere — chiudi" : letto ? "✓ letto — riapri" : "Apri e leggi"}
+        </button>
+        {pdf && (
+          <button
+            type="button"
+            data-campo={`pdf-${segno}`}
+            onClick={pdf.onScarica}
+            aria-disabled={pdf.inCorso ? "true" : "false"}
+            style={{
+              ...fontBody, fontSize: 13, fontWeight: 700, minHeight: 44, flex: "0 1 auto",
+              color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`,
+              borderRadius: 10, padding: "11px 14px", cursor: pdf.inCorso ? "default" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {pdf.inCorso ? "Preparo il PDF…" : "Scarica il PDF"}
+          </button>
+        )}
+      </div>
+      {pdf && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.45 }}>
+          {pdf.nota}
+        </div>
+      )}
       {aperto && (
         <div style={{ marginTop: 12, maxHeight: "60vh", overflowY: "auto", WebkitOverflowScrolling: "touch",
                       border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "14px 14px 4px", background: "#fff" }}>
@@ -129,7 +160,15 @@ function Documento({ titolo, sottotitolo, blocchi, letto, onLetto, segno }) {
   );
 }
 
-export default function FirmaContratto({ masterId, nomeMaster = "", onBack, TastoIndietro = null, isMobile = false }) {
+export default function FirmaContratto({
+  masterId, nomeMaster = "", onBack, TastoIndietro = null, isMobile = false,
+  // IL PDF SI PUO' INIETTARE, come nella bolla di accompagnamento: una
+  // prova che monta la pagina preme il tasto per davvero senza comporre
+  // trecento chili di documento a ogni giro, e una prova a parte compone
+  // il PDF vero e lo apre.
+  generaPdf = creaPdfContrattoDaLeggere,
+  scarica = scaricaPdf,
+}) {
   const [dati, setDati] = useState(null);
   const [caricando, setCaricando] = useState(true);
   const [errore, setErrore] = useState("");
@@ -144,6 +183,8 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
   const [firmando, setFirmando] = useState(false);
   const [fatto, setFatto] = useState(null);
   const [linkCopia, setLinkCopia] = useState("");
+  const [pdfInCorso, setPdfInCorso] = useState(false);
+  const [errorePdf, setErrorePdf] = useState("");
   // DICHIARATA PRIMA DI CHI LA USA: `ricarica` la scrive, e una `const`
   // usata sopra la sua riga qui non da' un avviso, da' la pagina che non
   // si apre (la trappola di App.jsx, pagata tre volte).
@@ -277,6 +318,34 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
       setErroreFirma(String(e?.message || e));
     } finally {
       setFirmando(false);
+    }
+  }
+
+  /**
+   * IL TESTO DA PORTARE VIA. Lo compone il browser con pdf-lib, come
+   * ogni altro PDF di questa app tranne i due che devono partire
+   * allegati a una mail del server.
+   *
+   * LA TRACCIA SI SCRIVE, e non e' un dettaglio: dal 27/11/2026
+   * «Contratti master» dice chi ha posto attenzione al contratto, e una
+   * master che si scarica il testo e lo legge sul computer, senza
+   * questa riga, risulterebbe fra quelle che non l'hanno nemmeno
+   * aperto — cioe' il segnalatore direbbe il contrario del vero proprio
+   * di chi ci ha messo piu' cura. Si segna DOPO che il file e' uscito:
+   * dirlo prima di saperlo e' il guasto dei carrelli sospesi del 7/11.
+   */
+  async function scaricaIlTesto() {
+    if (pdfInCorso) return;
+    setPdfInCorso(true); setErrorePdf("");
+    try {
+      const bytes = await generaPdf({ testi, dati: risposte });
+      scarica(bytes, nomeFileContrattoDaLeggere());
+      segnaLettura(masterId, "pdf");
+    } catch (e) {
+      setErrorePdf("Il PDF non è stato composto: " + String(e?.message || e)
+        + ". Il testo lo leggi comunque qui sopra, con «Apri e leggi».");
+    } finally {
+      setPdfInCorso(false);
     }
   }
 
@@ -426,12 +495,22 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
         blocchi={blocchi}
         letto={contrattoLetto}
         onLetto={(secondi) => { setContrattoLetto(true); segnaLettura(masterId, "contratto", secondi); }}
+        pdf={{
+          onScarica: scaricaIlTesto,
+          inCorso: pdfInCorso,
+          // LA NOTA DICE COSA C'E' DENTRO E COSA NON C'E'. Un «scarica il
+          // PDF» accanto a un contratto, senza questa riga, si legge come
+          // «ecco la tua copia»: e la copia del contratto sottoscritto e'
+          // un'altra cosa, arriva per email dopo la firma.
+          nota: errorePdf || "Nel PDF ci sono il contratto per intero, le clausole da approvare e l'Allegato A: "
+            + "serve per leggerlo con calma o stamparlo. Non è la copia firmata — quella ti arriva per email dopo la firma.",
+        }}
       />
 
       <Documento
         segno="manifesto"
         titolo={testi.manifesto.titolo}
-        sottotitolo={`${testi.manifesto.versione} — non contiene obblighi, divieti o sanzioni: esprime valori e stile dell'Accademia (art. 23.2).`}
+        sottotitolo={`${testi.manifesto.versione} — non contiene obblighi, divieti o sanzioni: esprime valori e stile dell'Accademia (art. 23.2). È anche dentro il PDF che si scarica qui sopra.`}
         blocchi={testi.manifesto.blocchi}
         letto={manifestoLetto}
         onLetto={(secondi) => { setManifestoLetto(true); segnaLettura(masterId, "manifesto", secondi); }}

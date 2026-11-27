@@ -19,6 +19,13 @@
 // NIENTE QUI DENTRO SI DISEGNA e niente parla col database: sono conti
 // puri, e le prove li girano senza montare nessuna pagina.
 //
+// E CHI SI SCARICA IL PDF NON SPARISCE (27/11/2026). Dal tasto nuovo
+// nella pagina della firma il contratto si porta via in PDF: quella
+// master il testo nella pagina non lo apre, quindi resta «aperto, non
+// letto» — vero — ma la riga lo dice. Il gradino non cambia: dice dove
+// si e' fermata DENTRO la pagina, e un sesto gradino per una cosa che
+// si legge meglio come una riga accanto rifarebbe tutti i conteggi.
+//
 // I SECONDI VANNO LETTI PER QUELLO CHE SONO: quanto il riquadro del
 // testo e' stato tenuto aperto, sommato su tutte le volte. Non provano
 // la lettura — niente la prova, ed e' scritto accanto a questa regola da
@@ -133,8 +140,28 @@ export function righeDiLettura(master, contratto) {
     fuori.push(`Contratto letto il ${quando(c.testo_letto_il)}`
       + (c.testo_aperture > 1 ? ` (aperto ${volte(c.testo_aperture)})` : "")
       + (t ? ` · tenuto aperto ${t}` : ""));
+  } else if (c.pdf_scaricato_il) {
+    // NON E' LA STESSA FRASE, e la differenza conta: «non l'ha mai
+    // aperto» accanto a «ha scaricato il PDF» si leggerebbe come due
+    // righe che si contraddicono, mentre sono la stessa storia — quel
+    // testo non l'ha letto QUI, se l'e' portato via.
+    fuori.push("Il testo non l'ha aperto in questa pagina: se l'è portato via in PDF.");
   } else {
     fuori.push("Il testo del contratto non l'ha mai aperto.");
+  }
+
+  // IL PDF SCARICATO (27/11/2026). Le maestre hanno chiesto di poter
+  // leggere il contratto fuori dall'app: chi lo fa, nella pagina il
+  // testo non lo apre — e senza questa riga risulterebbe fra chi non ci
+  // ha messo attenzione, cioe' il contrario del vero. Quanto l'abbia
+  // tenuto davanti agli occhi non lo sa nessuno, e non si finge di
+  // saperlo: qui non ci sono secondi.
+  if (c.pdf_scaricato_il) {
+    const quante = volte(c.pdf_scaricati);
+    const ultima = c.pdf_scaricato_ultimo_il && c.pdf_scaricato_ultimo_il !== c.pdf_scaricato_il
+      ? `, l'ultima il ${quando(c.pdf_scaricato_ultimo_il)}`
+      : "";
+    fuori.push(`PDF del contratto scaricato${quante ? ` ${quante}` : ""}: la prima volta il ${quando(c.pdf_scaricato_il)}${ultima}`);
   }
 
   if (c.manifesto_letto_il) {

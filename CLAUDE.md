@@ -5336,6 +5336,112 @@ a chi non ha ancora firmato — che adesso si saprebbe a chi mandare, e a
 chi invece basta ricordare che il contratto esiste perché non l'ha
 nemmeno aperto.
 
+**E IL TESTO SI PORTA VIA IN PDF** (27/11/2026, chiesto dal titolare:
+«le maestre che devono firmare il contratto mi hanno chiesto un tasto
+che generi un PDF per la lettura del testo. Quindi nella loro area,
+vicino a dove c'è scritto apri, puoi anche mettere un tasto che fa il
+PDF»).
+
+Accanto a **«Apri e leggi»** del contratto c'è **«Scarica il PDF»**:
+diciassette pagine A4 — il contratto per intero con l'epigrafe composta
+dai dati che lei sta scrivendo, le sedici clausole degli artt. 1341-1342
+c.c., le tre dichiarazioni **vuote** e l'Allegato A. Lo compone il
+browser con pdf-lib, come ogni altro PDF di questa app tranne i due che
+devono partire allegati a una mail del server.
+
+**NON È LA COPIA FIRMATA, e il foglio lo dice tre volte**: in testa, in
+fondo a **ogni** pagina («COPIA PER LA LETTURA — NON È IL DOCUMENTO
+FIRMATO») e nel nome del file. Non è prudenza: il danno peggiore qui è
+una master che crede di avere in mano il documento sottoscritto, e una
+pagina staccata dalle altre non deve poter passare per una pagina del
+contratto firmato. Sotto il tasto si legge cosa c'è dentro e che la
+copia firmata arriva per email dopo la firma.
+
+**IL TASTO È UNO**, sul contratto, e l'Allegato A sta dentro quel foglio
+(lo dice il suo sottotitolo): due tasti che scaricano lo stesso file
+sono una scelta che non esiste.
+
+**SCARICARE IL PDF NON APRE NESSUNA PORTA.** La lettura si segna
+richiudendo il testo nella pagina, come dal 16/11: se bastasse il PDF,
+«non si firma un documento che non si è aperto» diventerebbe «non si
+firma un documento che non si è scaricato». Una prova lo inchioda, ed è
+stata **provata rossa** facendo accendere le due spunte dal tasto nuovo.
+
+**MA LO SCARICO SI REGISTRA, e questa è la parte che non si vedeva.**
+Il segnalatore di stamattina dice chi ha posto attenzione al contratto
+guardando chi ha aperto e richiuso il testo **nella pagina**. Una master
+che si scarica il PDF e se lo legge sul computer — cioè esattamente
+quello che le maestre hanno chiesto di poter fare — nella pagina quel
+testo non lo apre: senza una riga che lo dica, comparirebbe fra quelle
+che «non l'hanno mai aperto», e il segnalatore direbbe il contrario del
+vero **proprio di chi ci ha messo più cura**. Il tasto nuovo, da solo,
+rompeva la misura di ieri.
+
+Quindi `contratto_master_segna_lettura` ha un quarto evento, `pdf`
+(`pdf_scaricato_il`, `_ultimo_il`, `pdf_scaricati`), e in «Contratti
+master» la riga dice «PDF del contratto scaricato 2 volte: la prima
+volta il …». Tre decisioni:
+
+- **il gradino NON cambia.** I cinque gradini dicono dove quella persona
+  si è fermata *dentro la pagina* e sono esclusivi: un sesto gradino
+  rifarebbe tutti i conteggi per una cosa che si legge meglio come una
+  riga accanto. Chi scarica e non apre resta «aperto, non letto» — che è
+  vero — e la riga sotto dice il resto;
+- **la frase cambia, perché due righe non si contraddicano.** Dove c'è
+  uno scarico non si legge più «il testo del contratto non l'ha mai
+  aperto» ma «il testo non l'ha aperto in questa pagina: se l'è portato
+  via in PDF». È la stessa storia, non due;
+- **il PDF non ha secondi.** Quanto quel foglio sia stato tenuto davanti
+  agli occhi, fuori dall'app, non lo sa nessuno: uno zero fra i secondi
+  del testo abbasserebbe una media che non c'entra niente. Una prova lo
+  pretende.
+
+**Quello che il PDF non riscrive è il testo.** Le sezioni le compone
+`sezioniDaLeggere` (pura) dalle **stesse** funzioni della pagina della
+firma e della copia del server — `blocchiContratto`, `casellePronte`, le
+righe di `master_contratti_testi` — quindi una correzione fatta da «Il
+testo del contratto» si vede nel PDF alla prossima apertura. Una prova
+rilegge `contrattoPdf.js` e pretende che non contenga nemmeno un pezzo
+di clausola. **L'impaginazione invece è sua**, e somiglia a quella della
+copia firmata senza esserne una copia: quel file gira in Deno, importa
+pdf-lib da un indirizzo che Vite non sa risolvere, e rifattorizzarlo
+adesso vorrebbe dire metterci le mani il giorno prima che componga il
+suo primo contratto vero (quello di Debora, ancora da fare). Quello che
+non deve divergere è il testo, e il testo è condiviso.
+
+**La funzione pura esiste per una ragione tecnica che vale ricordare:**
+pdf-lib comprime i flussi di testo, quindi un PDF generato **non si
+rilegge con un confronto sui byte** — una prova sui soli byte direbbe
+«il file esiste» senza dire «dentro c'è il contratto». Da `sezioniDaLeggere`
+si controlla articolo per articolo; e il PDF vero si genera comunque in
+jsdom, perché un carattere fuori WinAnsi fa fallire pdf-lib a metà
+strada e nessuna prova sulla struttura lo vedrebbe. **Il foglio è stato
+riletto per davvero** (estratto il testo con pdfjs): 17 pagine, contratto
+1-11, clausole 12, dichiarazioni 13, Allegato A 14-17, l'avviso su tutte
+e diciassette.
+
+**Lo scarico di un PDF stava in TRE posti** (`prezzi/listinoPdf.js`,
+`eventi/bolla.js`, `scaricaPdfBytes` in App.jsx), otto righe identiche:
+ora è in `src/file/pdf.js` e i primi due lo ri-esportano, così i cinque
+punti che lo importano non cambiano una riga. **App.jsx ha ancora la
+sua**: quando qualcuno ci passa, la faccia delegare lì.
+
+Migrazione `20261127160000_il_contratto_si_scarica_in_pdf.sql` (tre
+colonne, rollback dentro — e il rollback dice che il tasto continua a
+funzionare ma lo scarico non lascia più traccia). **Nessun backfill, e
+non è una dimenticanza**: prima di oggi quel tasto non esisteva, quindi
+nessuno può aver scaricato niente, e una data messa «per coerenza»
+sarebbe un fatto inventato. Provata in transazione annullata: due
+scarichi fanno contatore 2 con prima e ultima volta, i secondi del testo
+non si muovono, un evento inventato è rifiutato e su un contratto
+**firmato** non si scrive niente. Prove in
+`prove/contratto-in-pdf-da-leggere.test.jsx` (22).
+
+**Da decidere:** lo stesso tasto in «Contratti master → Rileggi il
+contratto caricato», per chi lo controlla prima di aprire la firma. È la
+stessa funzione e due righe di pagina; non è stato chiesto, e la
+richiesta parlava dell'area delle master.
+
 ### «Fai la copia» non poteva riuscire: la funzione non era pubblicata (27/11/2026)
 
 Il titolare, il 26/11: «ho premuto "fai una copia" all'unico firmato ma mi
