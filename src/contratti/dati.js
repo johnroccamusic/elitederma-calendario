@@ -50,6 +50,30 @@ export async function salvaBozza(masterId, dati) {
   return { ok: !!data?.ok, errore: data?.ok ? "" : (data?.errore || "Non è stato possibile salvare."), motivo: data?.motivo };
 }
 
+/**
+ * CHI HA APERTO, E QUANTO CI E' STATO (27/11/2026).
+ *
+ * Tre eventi: `pagina` (ha aperto la pagina della firma), `contratto` e
+ * `manifesto` (ha aperto E RICHIUSO quel documento, con i secondi per
+ * cui l'ha tenuto aperto). Le regole stanno dentro
+ * `contratto_master_segna_lettura`: non si scrive su un contratto
+ * firmato, non si scrive per chi e' escluso, non si scrive a firma
+ * chiusa, e i secondi hanno un tetto.
+ *
+ * NON FA RUMORE SE FALLISCE, e questa e' la decisione: e' una traccia
+ * per chi amministra, non un passo della firma. Un errore qui non deve
+ * comparire davanti a chi sta leggendo un contratto da sottoscrivere —
+ * chi legge non ha niente da correggere e non capirebbe cosa fare.
+ */
+export async function segnaLettura(masterId, evento, secondi = 0) {
+  if (!masterId || !evento) return { ok: false, errore: "Manca la master o l'evento." };
+  const { data, error } = await supabase.rpc("contratto_master_segna_lettura", {
+    p_master_id: masterId, p_evento: evento, p_secondi: Math.max(0, Math.round(secondi) || 0),
+  });
+  if (error) return { ok: false, errore: error.message };
+  return { ok: !!data?.ok, motivo: data?.motivo, errore: data?.ok ? "" : (data?.errore || "") };
+}
+
 export async function firmaContratto({ masterId, dati, firma, docFronte, docRetro, spunte, testi }) {
   const { data, error } = await supabase.rpc("contratto_master_salva", {
     p_master_id: masterId,

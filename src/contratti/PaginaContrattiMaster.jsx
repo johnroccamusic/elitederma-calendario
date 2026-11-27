@@ -25,6 +25,7 @@ import { urlAllegato } from "../file/allegati.js";
 import { leggiTuttiIContratti, riapriContratto, cambiaEsclusione, leggiApertura, cambiaApertura } from "./dati.js";
 import { CHIAVI, NOMI, DAL_CODICE, PARTENZA, impronta, leggiTesti, caricaDiPartenza, salvaTesto } from "./testi.js";
 import LetturaContratto from "./LetturaContratto.jsx";
+import { GRADI, NOMI_GRADO, contaGradi, gradoContratto, righeDiLettura } from "./lettura.js";
 
 const pannello = { ...areaSchedaIscritto, marginBottom: 16 };
 const quando = (iso) => {
@@ -37,11 +38,23 @@ const quando = (iso) => {
   } catch { return String(iso); }
 };
 
+// UNA PASTIGLIA PER GRADINO, e i due in mezzo sono la richiesta del
+// 27/11/2026: «Da firmare» da solo metteva nella stessa riga chi non ha
+// mai aperto la pagina e chi ha letto ventitre' articoli e si e' fermato
+// davanti alla firma. Il blu dice «ha letto»: e' l'unico colore qui che
+// non vuol dire ne' fatto ne' da fare.
 const PASTIGLIE = {
-  firmato:    { testo: "Firmato",      fondo: "#F2F9F3", bordo: "#CFE6D5", colore: "#1C5E33" },
-  da_firmare: { testo: "Da firmare",   fondo: "#FFF8E6", bordo: "#E6CF8C", colore: "#6B4E00" },
-  niente:     { testo: "Non iniziato", fondo: "#F3F0E9", bordo: CREAM_BORDER, colore: MUTED },
-  escluso:    { testo: "Fuori",        fondo: "#FDECEC", bordo: "#F0C9C9", colore: "#B3261E" },
+  firmato:    { testo: "Firmato",       fondo: "#F2F9F3", bordo: "#CFE6D5", colore: "#1C5E33" },
+  letto:      { testo: "Ha letto",      fondo: "#EEF4FB", bordo: "#C7D8EC", colore: "#1B4A7A" },
+  aperto:     { testo: "Solo aperto",   fondo: "#FFF8E6", bordo: "#E6CF8C", colore: "#6B4E00" },
+  mai:        { testo: "Mai aperto",    fondo: "#F3F0E9", bordo: CREAM_BORDER, colore: MUTED },
+  fuori:      { testo: "Fuori",         fondo: "#FDECEC", bordo: "#F0C9C9", colore: "#B3261E" },
+  // restano i due nomi di prima: li nomina ancora il pannello delle esclusioni
+  niente:     { testo: "Non iniziato",  fondo: "#F3F0E9", bordo: CREAM_BORDER, colore: MUTED },
+  escluso:    { testo: "Fuori",         fondo: "#FDECEC", bordo: "#F0C9C9", colore: "#B3261E" },
+};
+const COLORI_GRADO = {
+  firmato: "#1C5E33", letto: "#1B4A7A", aperto: "#6B4E00", mai: MUTED, fuori: "#B3261E",
 };
 
 function Pastiglia({ tipo }) {
@@ -127,15 +140,11 @@ export default function PaginaContrattiMaster({
 
   useEffect(() => { ricarica(); }, [ricarica]);
 
-  const conti = useMemo(() => {
-    let firmati = 0, daFirmare = 0, esclusi = 0;
-    for (const r of righe) {
-      if (r.master.contratto_escluso) esclusi += 1;
-      else if (r.contratto?.stato === "firmato") firmati += 1;
-      else daFirmare += 1;
-    }
-    return { firmati, daFirmare, esclusi };
-  }, [righe]);
+  // IL CONTO LO FA `contaGradi`, in un posto solo: le righe sotto usano
+  // `gradoContratto` per la loro pastiglia, e due idee di «a che punto
+  // sta» darebbero un segnalatore che non torna con l'elenco che ha
+  // sotto.
+  const conti = useMemo(() => contaGradi(righe), [righe]);
 
   async function apri(percorso) {
     const { url, errore: e } = await urlAllegato("master-documenti", percorso);
@@ -259,13 +268,23 @@ export default function PaginaContrattiMaster({
           quando va rifatto.
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isMobile ? 8 : 14, marginBottom: 18 }}>
-          {[["Firmati", conti.firmati, "#1C5E33"], ["Da firmare", conti.daFirmare, "#6B4E00"], ["Fuori", conti.esclusi, "#B3261E"]].map(([t, n, col]) => (
-            <div key={t} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
-              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{t}</div>
-              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: col }}>{n}</div>
+        {/* CINQUE SEGNALATORI E NON TRE (27/11/2026). I due in mezzo
+            sono la domanda del titolare: chi ha aperto il testo senza
+            firmare, e chi ha solo aperto la pagina. `auto-fit` perche'
+            cinque riquadri a larghezza fissa sul telefono escono dallo
+            schermo. */}
+        <div data-campo="segnalatori" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(104px, 1fr))", gap: isMobile ? 8 : 12, marginBottom: 10 }}>
+          {GRADI.map((g) => (
+            <div key={g} data-segnalatore={g} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+              <div style={{ ...fontBody, fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.3, minHeight: 26 }}>{NOMI_GRADO[g]}</div>
+              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: COLORI_GRADO[g] }}>{conti[g]}</div>
             </div>
           ))}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.55, marginBottom: 18 }}>
+          «Ha letto» vuol dire che ha aperto e richiuso il testo del contratto senza firmare. Accanto a ogni
+          nome c'e' quante volte ha aperto la pagina e quanto ha tenuto aperto il testo: dice dove si e'
+          fermata, <b>non</b> che l'abbia letto davvero — quello non lo dimostra niente.
         </div>
 
         {avviso && (
@@ -362,9 +381,9 @@ export default function PaginaContrattiMaster({
           )}
           {righe.map((r) => {
             const fuori = !!r.master.contratto_escluso;
-            const stato = r.contratto?.stato === "firmato" ? "firmato" : r.contratto ? "da_firmare" : "niente";
+            const grado = gradoContratto(r.master, r.contratto);
             return (
-              <div key={r.master.id} data-riga={r.master.id} style={{
+              <div key={r.master.id} data-riga={r.master.id} data-grado={grado} style={{
                 display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
                 padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}`,
               }}>
@@ -380,36 +399,37 @@ export default function PaginaContrattiMaster({
                     style={{ width: 20, height: 20, cursor: "pointer", accentColor: "#B3261E" }}
                   />
                 </label>
-                <div style={{ flex: "1 1 200px", minWidth: 0, opacity: fuori ? 0.6 : 1 }}>
+                <div style={{ flex: "1 1 240px", minWidth: 0, opacity: fuori ? 0.6 : 1 }}>
                   <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY }}>{r.master.nome}</div>
-                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
-                    {fuori && <>Non riceve il contratto · </>}
-                    {stato === "firmato"
-                      ? `Firmato il ${quando(r.contratto.firmato_il)}${r.contratto.luogo_firma ? ` a ${r.contratto.luogo_firma}` : ""}`
-                      : stato === "da_firmare"
-                        ? (r.contratto.riaperto_il
-                            ? `Riaperto il ${quando(r.contratto.riaperto_il)}${r.contratto.riaperto_perche ? `: ${r.contratto.riaperto_perche}` : ""}`
-                            : "Ha cominciato a compilarlo")
-                        : "Non l'ha ancora aperto"}
-                    {stato === "firmato" && r.contratto.contratto_firmato?.origine === "client" && (
-                      <> · <span style={{ color: "#B3261E" }}>testo preso dal browser, non dal database</span></>
-                    )}
-                    {stato === "firmato" && r.contratto.contratto_firmato?.uguale_a_quello_mostrato === false && (
-                      <> · <span style={{ color: "#8A6A1B" }}>il testo era stato corretto mentre firmava</span></>
-                    )}
-                  </div>
+                  {/* UNA RIGA PER COSA, e non un paragrafo: chi guarda
+                      cerca una cosa per volta — se ha aperto, se ha letto
+                      il testo, se ha scritto qualcosa — e un blocco di
+                      prosa si salta. */}
+                  {righeDiLettura(r.master, r.contratto).map((frase, i) => (
+                    <div key={i} style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>{frase}</div>
+                  ))}
+                  {grado === "firmato" && r.contratto.contratto_firmato?.origine === "client" && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: "#B3261E", lineHeight: 1.5 }}>
+                      Testo preso dal browser, non dal database
+                    </div>
+                  )}
+                  {grado === "firmato" && r.contratto.contratto_firmato?.uguale_a_quello_mostrato === false && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: "#8A6A1B", lineHeight: 1.5 }}>
+                      Il testo era stato corretto mentre firmava
+                    </div>
+                  )}
                 </div>
-                <Pastiglia tipo={fuori ? "escluso" : stato} />
-                {stato === "firmato" && r.contratto.pdf_path && (
+                <Pastiglia tipo={grado} />
+                {grado === "firmato" && r.contratto.pdf_path && (
                   <button type="button" style={tastino} onClick={() => apri(r.contratto.pdf_path)}>Copia firmata →</button>
                 )}
-                {stato === "firmato" && (
+                {grado === "firmato" && (
                   <button type="button" style={tastino} disabled={alLavoro === r.master.id}
                     onClick={() => rigenera(r)}>
                     {alLavoro === r.master.id ? "…" : r.contratto.pdf_path ? "Rimanda la copia" : "Fai la copia"}
                   </button>
                 )}
-                {stato === "firmato" && (
+                {grado === "firmato" && (
                   <button type="button" style={{ ...tastino, color: "#B3261E" }} disabled={alLavoro === r.master.id}
                     onClick={() => riapri(r)}>Riapri</button>
                 )}

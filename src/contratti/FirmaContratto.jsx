@@ -32,7 +32,7 @@ import { Avviso, Letto, DaRiempire, Foto, Dichiarazione } from "../iscrizione/Pa
 import { cascataResidenza } from "../iscrizione/cascata-residenza.js";
 import { avvisoCampo } from "../iscrizione/disposizione.js";
 import { RIGHE, OBBLIGATORI } from "./disposizione.js";
-import { leggiContratto, salvaBozza, caricaFile, firmaContratto } from "./dati.js";
+import { leggiContratto, salvaBozza, caricaFile, firmaContratto, segnaLettura } from "./dati.js";
 import { DAL_CODICE } from "./testi.js";
 import { urlAllegato } from "../file/allegati.js";
 import {
@@ -59,7 +59,18 @@ const quando = (iso) => {
  */
 function Documento({ titolo, sottotitolo, blocchi, letto, onLetto, segno }) {
   const [aperto, setAperto] = useState(false);
-  const chiudi = () => { setAperto(false); onLetto(); };
+  // DA QUANDO E' APERTO. Serve a una cosa sola, e non e' un controllo:
+  // dire a chi amministra quanto quel testo e' stato tenuto aperto. Un
+  // contratto di ventitre' articoli richiuso dopo quattro secondi non
+  // prova niente, ma si vede (27/11/2026).
+  const apertoDa = useRef(0);
+  const apri = () => { apertoDa.current = Date.now(); setAperto(true); };
+  const chiudi = () => {
+    const secondi = apertoDa.current ? Math.round((Date.now() - apertoDa.current) / 1000) : 0;
+    apertoDa.current = 0;
+    setAperto(false);
+    onLetto(secondi);
+  };
   return (
     <div style={pannello}>
       <IntestazioneArea>{titolo}</IntestazioneArea>
@@ -69,7 +80,7 @@ function Documento({ titolo, sottotitolo, blocchi, letto, onLetto, segno }) {
       <button
         type="button"
         data-campo={`apri-${segno}`}
-        onClick={() => (aperto ? chiudi() : setAperto(true))}
+        onClick={() => (aperto ? chiudi() : apri())}
         style={{
           ...fontBody, fontSize: 13, fontWeight: 700, width: "100%", minHeight: 44,
           color: NAVY, background: letto ? "#F2F9F3" : "#FFFDF8",
@@ -133,22 +144,53 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
   const [firmando, setFirmando] = useState(false);
   const [fatto, setFatto] = useState(null);
   const [linkCopia, setLinkCopia] = useState("");
+  // DICHIARATA PRIMA DI CHI LA USA: `ricarica` la scrive, e una `const`
+  // usata sopra la sua riga qui non da' un avviso, da' la pagina che non
+  // si apre (la trappola di App.jsx, pagata tre volte).
+  const ultimaBozza = useRef("");
 
   const ricarica = useCallback(async () => {
     const { dati: d, errore: e } = await leggiContratto(masterId);
     setCaricando(false);
     if (e) { setErrore(e); return; }
     setDati(d);
-    if (d?.dati) setRisposte(d.dati);
+    if (d?.dati) {
+      setRisposte(d.dati);
+      // LA BOZZA PARTE SOLO DOPO UN TOCCO SUO, e questa riga e' tutta la
+      // differenza: fino al 27/11/2026 la pagina salvava al montaggio i
+      // dati PRECOMPILATI dall'anagrafica, e in archivio nascevano
+      // dodici righe su cui «Contratti master» scriveva «Ha cominciato a
+      // compilarlo» senza che nessuno avesse battuto un tasto.
+      ultimaBozza.current = JSON.stringify(d.dati);
+    }
+    // APERTO E RICHIUSO IERI RESTA APERTO E RICHIUSO. Le due spunte
+    // vivevano solo nello stato del browser: chi tornava il giorno dopo
+    // doveva riaprire il testo per poter firmare. Adesso la lettura e'
+    // scritta, e la regola («non si firma un documento che non si e'
+    // aperto») resta soddisfatta da quella volta.
+    if (d?.contratto?.testo_letto_il) setContrattoLetto(true);
+    if (d?.contratto?.manifesto_letto_il) setManifestoLetto(true);
   }, [masterId]);
 
   useEffect(() => { ricarica(); }, [ricarica]);
+
+  // CHE LA PAGINA SIA STATA APERTA, una volta per visita. E' il primo
+  // gradino di «chi ha posto attenzione»: senza, di chi apre e non
+  // firma non resta niente da nessuna parte. Non si aspetta la risposta
+  // e un rifiuto non si mostra: chi sta per firmare non ha niente da
+  // correggere.
+  const aperturaSegnata = useRef(false);
+  useEffect(() => {
+    if (!dati || dati.firmato || dati.master?.escluso || dati.aperta === false) return;
+    if (aperturaSegnata.current) return;
+    aperturaSegnata.current = true;
+    segnaLettura(masterId, "pagina");
+  }, [dati, masterId]);
 
   // LA BOZZA, CON UN RESPIRO. Il contratto è lungo e si compila in più
   // volte: quello che si scrive va nel database dopo un secondo di
   // silenzio, non a ogni lettera — e non si dice «salvato», perché
   // dirlo prima di saperlo è il guasto dei carrelli sospesi del 7/11.
-  const ultimaBozza = useRef("");
   useEffect(() => {
     if (!dati || dati.firmato || dati.master?.escluso) return;
     const corpo = JSON.stringify(risposte);
@@ -383,7 +425,7 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
         sottotitolo="Le parti, le premesse e gli articoli da 1 a 23. L'epigrafe si compone da sé con i dati che scrivi qui sotto: rileggila prima di firmare."
         blocchi={blocchi}
         letto={contrattoLetto}
-        onLetto={() => setContrattoLetto(true)}
+        onLetto={(secondi) => { setContrattoLetto(true); segnaLettura(masterId, "contratto", secondi); }}
       />
 
       <Documento
@@ -392,7 +434,7 @@ export default function FirmaContratto({ masterId, nomeMaster = "", onBack, Tast
         sottotitolo={`${testi.manifesto.versione} — non contiene obblighi, divieti o sanzioni: esprime valori e stile dell'Accademia (art. 23.2).`}
         blocchi={testi.manifesto.blocchi}
         letto={manifestoLetto}
-        onLetto={() => setManifestoLetto(true)}
+        onLetto={(secondi) => { setManifestoLetto(true); segnaLettura(masterId, "manifesto", secondi); }}
       />
 
       <div style={pannello}>

@@ -529,7 +529,12 @@ describe("«Contratti master», montata", () => {
     });
   }
 
-  it("conta firmati, da firmare e fuori, e nomina chi resta fuori col motivo", async () => {
+  // LA FRASE DI UNA RIGA NON COMPILATA E' CAMBIATA IL 27/11/2026: diceva
+  // «Non l'ha ancora aperto» su chi non aveva nemmeno una riga, e «Ha
+  // cominciato a compilarlo» su chi ne aveva una — che era falso, perche'
+  // quella riga nasceva da se' coi dati precompilati. Adesso i gradini
+  // sono cinque e lo dicono in `lettura.js`.
+  it("conta i gradini e nomina chi resta fuori col motivo", async () => {
     bancoElenco(
       [
         { id: "m1", nome: "MARIA ROSSI", contratto_escluso: false },
@@ -544,7 +549,7 @@ describe("«Contratti master», montata", () => {
     expect(testo).toContain("MARIA ROSSI");
     expect(testo).toContain("Firmato il");
     expect(testo).toContain("ANNA BIANCHI");
-    expect(testo).toContain("Non l'ha ancora aperto");
+    expect(testo).toContain("Non ha mai aperto la pagina della firma.");
     expect(testo).toContain("Condizioni da riscrivere.");
     await p.smonta();
   });

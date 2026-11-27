@@ -5242,9 +5242,99 @@ trascrizione del PDF del 14/11, e il PDF non sta nel repo: il testo non
 si recupera da qui, lo deve dare il titolare. Da oggi se lo incolla da
 solo col tasto nuovo.
 
+**E SI VEDE CHI HA APERTO IL TESTO, ANCHE SENZA FIRMARE** (27/11/2026,
+chiesto dal titolare: «un segnalatore per vedere almeno chi abbia aperto
+il testo magari senza firmare perché non so chi ha posto attenzione o
+meno al contratto»).
+
+**Prima non restava niente.** La pagina obbliga ad aprire e richiudere il
+contratto e l'Allegato A prima di firmare, ma quelle due spunte vivevano
+**solo nello stato del browser**: chiusa la pagina senza firmare, di quel
+passaggio non c'era traccia. `testo_letto_il` esisteva come colonna e la
+scriveva soltanto `contratto_master_salva`, cioè si riempiva nello stesso
+istante della firma — diceva «ha letto» solo di chi aveva già firmato,
+l'unico caso in cui non serve saperlo.
+
+**E l'elenco diceva una cosa falsa.** «Contratti master» scriveva «Ha
+cominciato a compilarlo» su ogni riga `da_firmare`. Ma quella riga
+**nasceva da sé**: la pagina salvava la bozza al montaggio con i dati
+**precompilati dall'anagrafica**, senza che nessuno avesse battuto un
+tasto. Misurato prima di toccare niente: **dodici righe su dodici**,
+tutte nate la sera del 25/11 fra le 18:17 e le 20:39, e nessuna di quelle
+persone aveva scritto niente.
+
+**Cinque gradini, esclusivi** (`src/contratti/lettura.js`, puro e
+provato senza database): **firmato** · **ha letto** (aperto e richiuso il
+testo, non ha firmato) · **solo aperto** (la pagina sì, il testo mai) ·
+**mai aperto** · **fuori**. «Da firmare» da solo metteva nella stessa riga
+chi non è mai entrato e chi ha letto ventitré articoli e si è fermato
+davanti alla firma: **sono due persone da richiamare in due modi
+diversi.** Il conto lo fa `contaGradi` e le righe usano `gradoContratto`:
+un segnalatore che non torna con l'elenco che ha sotto non si legge più.
+
+**Il tempo risponde alla sua domanda, e va letto per quello che è.** Si
+registra **quanto il testo è stato tenuto aperto**, sommato su tutte le
+volte, e la pagina lo scrive accanto alla data. Non prova la lettura —
+niente la prova, ed è scritto accanto a questa regola da sempre — ma un
+contratto di ventitré articoli richiuso dopo quattro secondi dice
+qualcosa, e fino a oggi non lo diceva a nessuno. La pagina lo dichiara
+sotto i segnalatori, invece di far credere il contrario.
+
+Tre decisioni dentro `contratto_master_segna_lettura` (tre eventi:
+`pagina`, `contratto`, `manifesto`):
+
+- **una firma non si tocca.** Chi rilegge il proprio contratto firmato
+  non deve muovere una data su una riga sottoscritta: ogni scrittura vale
+  `where stato = 'da_firmare'`, e una prova lo inchioda;
+- **i secondi hanno un tetto** (un'ora per apertura). Una scheda lasciata
+  aperta tutta la notte direbbe «sette ore di lettura»: un numero falso
+  che nessuno metterebbe in dubbio;
+- **la riga nasce dall'apertura**, vuota, e **la bozza parte solo dopo un
+  tocco suo** — `dati_scritti_il` lo scrive `contratto_master_bozza`
+  soltanto se i dati che arrivano sono **diversi** da quelli già in riga.
+  Una bozza identica a quella che c'è non è una scrittura, ed era
+  esattamente quello che mandava la pagina al montaggio.
+
+E **l'inserimento si protegge con l'eccezione, non con un `ON
+CONFLICT`**: l'indice che impedisce due contratti aperti sulla stessa
+master è **parziale**, cioè la trappola del 24/11/2026 che ha tenuto lo
+shop senza scaricare il magazzino per ventiquattro giorni.
+
+**Una conseguenza voluta:** chi ha aperto e richiuso il testo ieri **non
+deve riaprirlo oggi** per poter firmare. La regola («non si firma un
+documento che non si è aperto») resta soddisfatta da quella volta, e
+adesso la lettura è scritta invece di vivere in una variabile del
+browser.
+
+**Dove siamo al 27/11/2026, misurato:** 19 master, 7 fuori, 12 dentro.
+**Tutte e dodici hanno aperto la pagina** (il 25/11 fra le 18:17 e le
+20:39), **una ha firmato** (Debora Fumagalli, 18:52) e **nessuna delle
+altre undici ha mai aperto il testo** né ha scritto un dato suo. Il
+backfill ha letto `creato_il` come prima apertura: fino a oggi una riga
+di contratto nasceva in un modo solo — quella pagina che si apriva — e
+quindi non inventa niente.
+
+**E convive con la spunta «Escludi»** del 25/11/2026, che il titolare
+aveva scritto sulla stessa pagina da un'altra macchina: l'elenco tiene
+dentro anche le escluse — la spunta deve restare dove la si è messa — e
+una riga esclusa dice **prima** che è fuori e **poi dove era arrivata**.
+Se quella persona aveva già letto il testo va saputo, ed è il genere di
+cosa che si scopre proprio nel momento in cui si spunta la casella. Quel
+commit non aveva prove («su questa macchina manca Node»): adesso ce ne
+sono due, la casella su ogni riga e l'esclusa che non perde la sua
+lettura.
+
+Migrazione `20261127120000_chi_ha_aperto_il_contratto.sql` (rollback
+dentro; tornando indietro si perde la traccia di chi ha aperto senza
+firmare, e i contratti firmati non si toccano). Prove in
+`prove/chi-ha-aperto-il-contratto.test.jsx` (26), con le due pagine
+montate e i tasti premuti davvero — **provata rossa** togliendo la
+registrazione dell'apertura.
+
 **Resta da fare, e va deciso:** l'invio di un **promemoria**
-a chi non ha ancora firmato, che oggi non esiste — un contratto mai
-aperto resta invisibile finché qualcuno non guarda l'elenco.
+a chi non ha ancora firmato — che adesso si saprebbe a chi mandare, e a
+chi invece basta ricordare che il contratto esiste perché non l'ha
+nemmeno aperto.
 
 ### Il buono Amazon verificato risultava non verificato (16/11/2026)
 
