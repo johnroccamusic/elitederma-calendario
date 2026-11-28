@@ -98,6 +98,35 @@ Deno.serve(async (req) => {
     if (lista.length < PER_PAGINA) break;
   }
 
+  // 2-ter. I PEZZI PROMESSI A UN CARRELLO SOSPESO NON SONO IN VENDITA.
+  //
+  // Quello che il sito puo' vendere non e' la giacenza: e' la giacenza
+  // MENO i pezzi gia' impegnati in un carrello messo da parte al banco.
+  // Lo fa `allineaShop` apposta, da quando il sito continuava a vendere
+  // pezzi che il banco aveva gia' promesso a qualcuno.
+  //
+  // Confrontando la giacenza nuda risultavano scarti che non esistono —
+  // e si riconoscevano dal fatto che tornavano a zero esatti sommando i
+  // carrelli: "Borsa da lavoro" -3 con tre carrelli che ne avevano uno
+  // ciascuno, "Pelle sintetica trico" -5 con un carrello da cinque.
+  //
+  // E' la terza volta in questa stessa funzione: la regola e' misurare
+  // il numero che scrive chi scrive, non quello che sembra giusto.
+  //
+  // Si leggono PRIMA dei bundle: servono anche a loro, sui componenti.
+  const promessi = new Map<string, number>();
+  const { data: righeSospesi } = await admin
+    .from("impostazioni_layout_tabelle").select("valore")
+    .eq("chiave", "pos_carrelliSospesi").maybeSingle();
+  for (const carrello of (righeSospesi?.valore as any[]) || []) {
+    for (const r of carrello?.carrello || []) {
+      const id = r?.prodottoId;
+      const q = Number(r?.quantita) || 0;
+      if (!id || !q) continue;
+      promessi.set(id, (promessi.get(id) || 0) + q);
+    }
+  }
+
   // 2-bis. I BUNDLE NON HANNO UNA GIACENZA PROPRIA.
   //
   // La loro disponibilita' e' quanti se ne possono comporre coi
@@ -134,36 +163,16 @@ Deno.serve(async (req) => {
       let possibili = Infinity;
       for (const c of suoi) {
         const per = Number(c.quantita_per_bundle) || 0;
-        possibili = Math.min(possibili, per > 0 ? Math.floor((giacenzaDi.get(c.componente_id) ?? 0) / per) : 0);
+        // i pezzi liberi del componente, non quelli in casa: un colore
+        // promesso a un carrello sospeso non compone nessun kit. Lo toglie
+        // gia' `woo-riallinea-shop` quando scrive il numero sul sito, e
+        // qui non lo si toglieva — il 17/11/2026 il Kit 3 colori tecnici
+        // risultava -6 (sei Orange in un carrello) e lo Starter Kit
+        // Eyebrows -4 (sei Nairobi), con il sito che aveva ragione.
+        const liberi = Math.max(0, (giacenzaDi.get(c.componente_id) ?? 0) - (promessi.get(c.componente_id) || 0));
+        possibili = Math.min(possibili, per > 0 ? Math.floor(liberi / per) : 0);
       }
       if (Number.isFinite(possibili)) daComporre.set(b.id, possibili);
-    }
-  }
-
-  // 2-ter. I PEZZI PROMESSI A UN CARRELLO SOSPESO NON SONO IN VENDITA.
-  //
-  // Quello che il sito puo' vendere non e' la giacenza: e' la giacenza
-  // MENO i pezzi gia' impegnati in un carrello messo da parte al banco.
-  // Lo fa `allineaShop` apposta, da quando il sito continuava a vendere
-  // pezzi che il banco aveva gia' promesso a qualcuno.
-  //
-  // Confrontando la giacenza nuda risultavano scarti che non esistono —
-  // e si riconoscevano dal fatto che tornavano a zero esatti sommando i
-  // carrelli: "Borsa da lavoro" -3 con tre carrelli che ne avevano uno
-  // ciascuno, "Pelle sintetica trico" -5 con un carrello da cinque.
-  //
-  // E' la terza volta in questa stessa funzione: la regola e' misurare
-  // il numero che scrive chi scrive, non quello che sembra giusto.
-  const promessi = new Map<string, number>();
-  const { data: righeSospesi } = await admin
-    .from("impostazioni_layout_tabelle").select("valore")
-    .eq("chiave", "pos_carrelliSospesi").maybeSingle();
-  for (const carrello of (righeSospesi?.valore as any[]) || []) {
-    for (const r of carrello?.carrello || []) {
-      const id = r?.prodottoId;
-      const q = Number(r?.quantita) || 0;
-      if (!id || !q) continue;
-      promessi.set(id, (promessi.get(id) || 0) + q);
     }
   }
 
