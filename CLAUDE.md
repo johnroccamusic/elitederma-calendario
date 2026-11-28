@@ -803,6 +803,71 @@ anche prima di salvare) sta dentro Setting → Quota coordinatore. Il calcolo è
 della classe**. Impostato il 28/10/2026: Elena, 0,5%, corsi dal
 01/10/2026. Prove in `prove/quota-coordinatore.test.jsx`.
 
+### E quella scheda la vedevano tutti (28/11/2026)
+
+Il titolare: «le commissioni sui corsi di Elena le vedono tutti.
+allarme». Vero. **La scheda non aveva nessuna condizione**: stava dietro
+al solo `mesiCoordinatore.length > 0 &&`, quindi la leggeva chiunque
+aprisse la linguetta «Commissioni sui corsi» della Dashboard venditori.
+
+**Misurato prima di toccare niente:** quella tessera ce l'hanno
+**quattordici venditori**, Elena compresa — cioè tredici persone che
+leggevano, mese per mese, quanto spetta alla quattordicesima. Il
+compenso di una persona, in chiaro, a tutta la squadra.
+
+**La regola era già in quella pagina, due riquadri sopra:**
+`PannelloNotifiche` si mostra solo a chi è entrato come sé stesso
+(`venditoreBloccato?.id === venditoreSel.id`), e per lo stesso motivo —
+accendere le notifiche di un altro dal proprio telefono. Qui la stessa
+cosa: `vedeQuotaCoordinatore` dice che **la vede chi la prende, o chi
+amministra**, cioè chi la paga. Agli altri non compare niente, nemmeno
+un riquadro che dica «qui c'è una scheda che non puoi vedere»:
+racconterebbe comunque che quella persona prende una quota.
+
+**L'IDENTITÀ È QUELLA BLOCCATA, MAI QUELLA DELLA TENDINA**, ed è il
+primo modo di riaprire il buco credendo di averlo chiuso. Nello stato
+con la tendina — quella da cui si scegli un venditore — ci arriva
+**chiunque non sia l'utente generico**: lo decide `apriLoginVenditore`
+su `chiave_sistema !== "__user"`, non il ruolo. Quindi leggere
+`venditoreSel` vorrebbe dire che basta scegliere ELENA dalla tendina per
+aprire la sua scheda. Per la stessa ragione «amministra» è
+`programmatore || amministratore` e **non** l'assenza del blocco: la
+dashboard adesso riceve `ruoloUtente`, che prima non le arrivava.
+
+**E L'ID VIENE PRIMA DEL NOME.** L'impostazione ha sempre salvato il solo
+`personaNome`, e da oggi quel nome decide anche chi vede la scheda — ma
+un nome non è un'identità. **Elena ne ha due**: il venditore «ELENA» e
+l'utenza d'ufficio «Elena Rocca», collegate dallo stesso
+`utenti_app.venditore_id`. Un confronto sul nome di chi è entrato
+l'avrebbe esclusa proprio dalla scheda che è sua, perché da quella porta
+il nome che arriva è «Elena Rocca». Quindi la riga porta ora anche
+`personaId` (migrazione `20261128120000`, scritto solo dove il nome
+combacia con **un** venditore solo: un id sbagliato non è un id
+mancante, nasconderebbe la scheda a chi la prende e la mostrerebbe a
+un'altra). Il nome resta come ripiego per un coordinatore che fra i
+venditori non c'è, e in quel caso Setting lo **dice in giallo** invece
+di tacere. Da Setting l'id si scrive da sé a ogni salvataggio.
+
+Nessun importo si muove e non cambia chi prende la quota: cambia da cosa
+si riconosce chi la legge.
+
+Prove in `prove/quota-coordinatore-la-vede-chi-la-prende.test.jsx` (16):
+la regola e i suoi bordi, la scheda **montata per davvero** nei tre casi
+— un altro venditore che non vede la scheda e non legge nemmeno il nome,
+Elena che la vede con le sue righe, chi amministra che la vede anche
+guardando la dashboard di un altro — e le guardie che rileggono
+`src/App.jsx`: la condizione nuda che non deve tornare, l'identità che
+viene dal venditore bloccato e non dalla tendina, il ruolo che arriva da
+chi monta la dashboard. **Provata rossa** rimettendo il buco: cadono tre
+prove, compresa quella montata.
+
+**Una cosa da sapere per chi cerca guasti simili:** una prova che monta
+una pagina questo buco non l'avrebbe mai visto da sola. Il componente
+mostrava fedelmente quello che gli arrivava — mancava una *condizione*,
+e la condizione la decide chi lo monta. È la stessa famiglia del
+19/11/2026 («è anche venditore» e «venditore collegato»): il difetto sta
+nel collegamento, e lì arrivano solo le guardie che rileggono il codice.
+
 ### La cassa contanti si legge un mese alla volta (28/10/2026)
 
 Deciso dal titolare: chi usa la cassa non deve leggere «quanto è entrato
