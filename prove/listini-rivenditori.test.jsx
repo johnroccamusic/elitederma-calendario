@@ -28,9 +28,9 @@ import {
 } from "../src/rivenditori/regole.js";
 import {
   csvListinoRivenditori, colonneListino, titoloListino, righeEsportabili, righeIntestazione,
-  creaListinoRivenditoriPdf, categorieDelListino, nomeCategoria, intestazioneACapo,
+  creaListinoRivenditoriPdf, categorieDelListino, nomeCategoria, intestazioneACapo, regoleSconti,
 } from "../src/rivenditori/listinoPdf.js";
-import { CHIAVE_CATEGORIE_ESCLUSE } from "../src/rivenditori/dati.js";
+import { CHIAVE_CATEGORIE_ESCLUSE, CHIAVE_PRODOTTI_ESCLUSI } from "../src/rivenditori/dati.js";
 import { soloWinAnsi } from "../src/prezzi/winansi.js";
 import { creaRegolamentoPdf, spezzaInRighe } from "../src/rivenditori/regolamentoPdf.js";
 import { composizioneRegolamento, tabellaRiassortimenti, esempioRientro } from "../src/rivenditori/regolamento-testo.js";
@@ -773,6 +773,97 @@ describe("la pagina divide i prodotti per categoria", () => {
     const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
     await attendi(120);
     expect(p.nodo.querySelector("[data-escluse]").textContent).toContain("Tutte le 3 categorie");
+    await p.smonta();
+  });
+});
+
+// LE REGOLE IN APERTURA E LA SPUNTA PER PRODOTTO (18/11/2026, chieste dal
+// titolare: «all'inizio le regole per ottenere la scontistica», e «tutti i
+// flag vicino a tutti i prodotti, se ne deflaggo uno esce dal listino
+// definitivamente»).
+describe("le regole degli sconti aprono il listino", () => {
+  it("si compongono dalle soglie dei livelli, non da un testo scritto a mano", () => {
+    const testo = regoleSconti(LIVELLI, 50).flatMap((b) => [b.titolo, ...b.righe]).join("\n");
+    expect(testo).toContain("Partner - sconto fino al 10%: si entra con € 500 di acquisti cumulati");
+    expect(testo).toContain("Distributor - sconto fino al 50%: si entra con un singolo ordine da € 3.000");
+    expect(testo).toContain("per mantenerlo servono € 7.500 di acquisti in dodici mesi");
+    expect(testo).toContain("almeno € 500");
+    // e seguono la tabella: alzata una soglia, il listino la dice nuova
+    const alzati = LIVELLI.map((l) => (l.codice === "distributor" ? { ...l, mantenimento_eur: 9000 } : l));
+    expect(regoleSconti(alzati, 50).flatMap((b) => b.righe).join(" ")).toContain("€ 9.000");
+  });
+
+  it("con un livello solo NON nominano gli altri livelli", () => {
+    const pro = LIVELLI.filter((l) => l.codice === "professional");
+    const testo = regoleSconti(pro, 50).flatMap((b) => [b.titolo, ...b.righe]).join(" ");
+    expect(testo).toContain("Professional");
+    ["Partner", "Standard", "Premium", "Distributor"].forEach((nome) => expect(testo).not.toContain(nome));
+    expect(testo).toContain("almeno € 250");
+    // nemmeno la soglia d'ingresso di un altro livello
+    expect(testo).not.toContain("€ 3.000");
+  });
+
+  it("senza livelli scelti non c'è niente da spiegare", () => {
+    expect(regoleSconti([], 50)).toEqual([]);
+  });
+
+  it("il PDF con le regole in testa esce lo stesso, con tutti i livelli e con uno", async () => {
+    const tutti = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: null });
+    const uno = await creaListinoRivenditoriPdf(LISTINO, LIVELLI.slice(2, 3), { logo: null });
+    [tutti, uno].forEach((r) => {
+      expect(new TextDecoder().decode(r.bytes.slice(0, 5))).toBe("%PDF-");
+      expect(r.prodotti).toBe(4);
+    });
+  });
+
+  it("la pagina mostra le stesse regole prima di generare", async () => {
+    database();
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    await clicca(p.nodo.querySelector("[data-apri-regole]"));
+    expect(p.nodo.querySelector("[data-regole]").textContent).toContain("Come si conserva lo sconto");
+    await p.smonta();
+  });
+});
+
+describe("ogni prodotto ha la sua spunta", () => {
+  it("un prodotto tolto esce dal listino, dal foglio e dal PDF; gli altri restano", async () => {
+    const rimaste = righeEsportabili(LISTINO, [], ["p-arizona"]).map((r) => r.nome);
+    expect(rimaste).not.toContain("Arizona");
+    expect(rimaste).toContain("Dynamic BLKOUT Ink 240 ml (8 oz)");
+    expect(csvListinoRivenditori(LISTINO, LIVELLI, [], ["p-arizona"])).not.toContain("Arizona");
+    const pdf = await creaListinoRivenditoriPdf(LISTINO, LIVELLI, { logo: null, prodottiEsclusi: ["p-arizona"] });
+    expect(pdf.prodotti).toBe(3);
+    // e la categoria resta: si toglie un prodotto, non il suo reparto
+    expect(categorieDelListino(LISTINO).map((c) => c.nome)).toContain("PIGMENTI");
+  });
+
+  it("togliendo la spunta la scelta si salva per id, e la riga resta in pagina", async () => {
+    const scritture = [];
+    database({ "impostazioni_layout_tabelle": (corpo) => { if (corpo) scritture.push(corpo); return []; } });
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    const spunta = p.nodo.querySelector('[data-prodotto-spunta="Arizona"]');
+    expect(spunta.checked).toBe(true);
+    await clicca(spunta);
+    await attendi(60);
+    const scritta = scritture.flat().find((c) => c && c.chiave === CHIAVE_PRODOTTI_ESCLUSI);
+    expect(scritta, "l'esclusione del prodotto non è stata scritta").toBeTruthy();
+    expect(scritta.valore).toEqual(["p-arizona"]);
+    expect(p.nodo.querySelector('[data-tolto="Arizona"]')).toBeTruthy();
+    expect(p.nodo.querySelector('[data-prezzo="Arizona"]')).toBeTruthy();
+    expect(p.nodo.querySelector("[data-prodotti-tolti]").textContent).toContain("Un prodotto tolto");
+    await p.smonta();
+  });
+
+  it("un prodotto che non può entrare in nessun listino ha la spunta spenta", async () => {
+    const soloBanco = { ...ARIZONA, id: "p-banco", nome: "Solo al banco", sullo_shop: false };
+    database({ "v_listino_rivenditori": [...LISTINO, soloBanco] });
+    const p = await monta(<PaginaListiniRivenditori onBack={() => {}} />);
+    await attendi(120);
+    const spunta = p.nodo.querySelector('[data-prodotto-spunta="Solo al banco"]');
+    expect(spunta.disabled).toBe(true);
+    expect(spunta.checked).toBe(false);
     await p.smonta();
   });
 });
