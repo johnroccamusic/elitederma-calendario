@@ -8577,6 +8577,37 @@ tiene il carrello di un altro telefono, toglie solo quello che questo
 dispositivo ha davvero buttato, e la lettura fallita **non scrive niente** —
 era esattamente così che sparivano.
 
+### Un carrello cancellato tornava da solo (18/11/2026)
+
+Raffaele: cancellava il carrello «stella» e dopo pochi minuti era di
+nuovo in elenco. Lo storico (`carrelli_sospesi_storico`) lo mostra
+sparito e ricomparso **tre volte** fra il 17 e il 18/11, e un altro
+carrello due volte. La fusione del 7/11 sapeva togliere solo quello che
+**questo** dispositivo aveva buttato: un telefono con la lista in memoria
+da prima della cancellazione, al primo salvataggio suo, trovava il
+carrello nella propria copia e non nel database, lo prendeva per un
+carrello suo non ancora arrivato e lo rimetteva.
+
+Ora chi cancella (vende, riprende o butta un carrello) scrive l'id in
+una seconda riga, `pos_carrelliSospesi_eliminati` (`{ id: quando }`,
+tenuta 90 giorni), **prima** della lista; ogni fusione la rilegge e
+toglie anche quelli. Se una delle due letture fallisce non si scrive
+niente, come per la lista. Prove in
+`prove/carrelli-sospesi-non-si-perdono.test.js`.
+
+**E i carrelli buttati vanno in un cestino** (18/11/2026, chiesto dal
+titolare: «le cancellazioni da parte degli amministratori hanno priorità
+su tutti»). Chi preme il cestino su un carrello sospeso — nel POS o in
+Magazzino e shop — prima ne scrive la copia intera in
+`pos_carrelliSospesi_cestino` (con chi, quando e se amministra), e solo
+se quella arriva al server il carrello si toglie; per sei mesi si rimette
+col tasto «Cestino (N)» in fondo ai due pannelli. Rimettere toglie la
+lapide e riscrive il carrello con l'ora di adesso. Venduti e ripresi non
+ci vanno: hanno finito il loro lavoro. **La priorità di chi amministra**:
+una cancellazione vince su qualunque copia o salvataggio arrivi dopo, e
+un carrello buttato da chi amministra lo rimette solo chi amministra.
+Prove nello stesso file.
+
 ### Si iscrive anche chi vive in Svizzera (7/11/2026, sera)
 
 Il titolare: «estendi la possibilità di iscrivere clienti dalla
