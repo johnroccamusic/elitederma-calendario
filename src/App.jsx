@@ -813,6 +813,49 @@ function quotaCoordinatorePerMese(iscritti, corsiDate, impostazione) {
   });
   return [...perMese.values()].sort((a, b) => a.chiave.localeCompare(b.chiave));
 }
+// CHI VEDE LA SCHEDA DELLA QUOTA COORDINATORE (28/11/2026).
+//
+// Fino a oggi: nessuno. La scheda stava dietro al solo
+// `mesiCoordinatore.length > 0 &&`, cioe' si mostrava a chiunque aprisse
+// la linguetta "Commissioni" della Dashboard venditori — e quella
+// tessera ce l'hanno QUATTORDICI venditori. Tredici persone leggevano,
+// mese per mese, quanto spetta alla quattordicesima.
+//
+// La regola e' quella del pannello delle notifiche, due riquadri sopra
+// nella stessa pagina: si vede se la si prende, oppure se si amministra
+// — chi la paga. Nessun riquadro al posto suo per gli altri: una riga
+// che dice "qui c'e' una scheda che non puoi vedere" racconta comunque
+// che quella persona prende una quota.
+//
+// DUE COSE DA NON CAMBIARE, e ognuna e' un modo di riaprire il buco.
+//
+// `identita` e' quella BLOCCATA, mai quella scelta dalla tendina. Nello
+// stato senza blocco ci arriva chiunque non sia l'utente generico — lo
+// decide `apriLoginVenditore` su `chiave_sistema !== "__user"`, non il
+// ruolo — quindi leggere il venditore selezionato vorrebbe dire che
+// basta scegliere il coordinatore dalla tendina per aprire la sua
+// scheda.
+//
+// L'ID VIENE PRIMA DEL NOME, e il nome vale solo in sua assenza. Elena
+// ha due identita' — il venditore "ELENA" e l'utenza d'ufficio "Elena
+// Rocca", collegate fra loro — quindi un confronto sul nome di chi e'
+// entrato la escluderebbe proprio dalla scheda che e' sua; e con un id
+// scritto, due omonimi non devono poter leggere la stessa cifra. Il nome
+// resta per la riga salvata prima di oggi, che un id non ce l'ha.
+function nomePersonaNorm(v) {
+  return String(v || "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+function vedeQuotaCoordinatore(impostazione, { amministra = false, identita = [] } = {}) {
+  if (amministra) return true;
+  const id = String(impostazione?.personaId || "").trim();
+  const nome = nomePersonaNorm(impostazione?.personaNome);
+  if (!id && !nome) return false;
+  return (identita || []).some((p) => {
+    if (!p) return false;
+    if (id) return String(p.id || "") === id;
+    return !!nome && nomePersonaNorm(p.nome) === nome;
+  });
+}
 const QUOTE_COLONNE_PUNTI_DEFAULT = [25, 30, 50];
 // Il margine operativo (21/09/2026): una fetta del prezzo netto di
 // vendita che si mette da parte prima di ragionare sul resto. La
@@ -12340,13 +12383,15 @@ function nomeMese(chiave) {
   return `${(MESI[m - 1] || "").toUpperCase()} ${anno || ""}`.trim();
 }
 
-function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile }) {
+export function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile, amministra = false, identita = [] }) {
   const [liquidazioni, setLiquidazioni] = useState(null);
   // la quota coordinatore, se qualcuno l'ha accesa in Setting: una scheda
   // sua, in cima, separata dalla quota venditore
   const [quotaCoordSalvata] = useImpostazioneCondivisa(CHIAVE_QUOTA_COORDINATORE, QUOTA_COORDINATORE_DEFAULT);
   const quotaCoord = { ...QUOTA_COORDINATORE_DEFAULT, ...(quotaCoordSalvata || {}) };
   const mesiCoordinatore = useMemo(() => quotaCoordinatorePerMese(iscritti, corsiDate, quotaCoord), [iscritti, corsiDate, quotaCoord.personaNome, quotaCoord.percentuale, quotaCoord.dal]); // eslint-disable-line react-hooks/exhaustive-deps
+  // la decide `vedeQuotaCoordinatore`: chi la prende, o chi amministra
+  const vedeCoordinatore = vedeQuotaCoordinatore(quotaCoord, { amministra, identita });
   const [msg, setMsg] = useState("");
   const [inCorso, setInCorso] = useState("");
 
@@ -12491,7 +12536,10 @@ function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile })
     <div>
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>{msg}</div>}
 
-      {mesiCoordinatore.length > 0 && (
+      {/* La scheda la vede chi la prende e chi amministra, e nessun altro:
+          `vedeCoordinatore` arriva dalla dashboard, che sa chi e' entrato
+          — vedi `vedeQuotaCoordinatore`. */}
+      {vedeCoordinatore && mesiCoordinatore.length > 0 && (
         <div data-campo="quota-coordinatore" style={{ ...cardStyle, marginBottom: 14, borderLeft: `4px solid ${GOLD}`, padding: isMobile ? "12px 10px" : "16px 16px" }}>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY }}>Quota coordinatore — {quotaCoord.personaNome}</div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, margin: "2px 0 10px" }}>
@@ -12574,6 +12622,7 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
   registraInterceptaIndietro,
   venditeShop, prodottiShop, targetVenditeProdotti,
   titolo = "Dashboard venditori",
+  ruoloUtente = "",
 }) {
   const isMobile = useIsMobile();
   // se un venditore ha fatto login (venditoreBloccato valorizzato), la
@@ -12601,6 +12650,20 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
   const venditoreSel = venditoreBloccato
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
     : (venditori.find((v) => v.id === venditoreSelId) || null);
+  // CHI GUARDA, che non e' chi e' selezionato. Serve alla scheda della
+  // quota coordinatore: `venditoreBloccato` e' l'identita' di chi e'
+  // entrato, mentre `venditoreSel` segue la tendina — e nello stato con
+  // la tendina ci arriva chiunque non sia l'utente generico, non solo
+  // chi amministra. Il nome si rilegge dalla riga di `venditori`, perche'
+  // chi entra da un'utenza d'ufficio collegata porta il PROPRIO nome
+  // ("Elena Rocca") e non quello del venditore ("ELENA").
+  const amministra = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
+  const identitaChiGuarda = venditoreBloccato
+    ? [{
+        id: venditoreBloccato.id,
+        nome: (venditori.find((v) => v.id === venditoreBloccato.id) || {}).nome || venditoreBloccato.nome,
+      }]
+    : [];
   const oggiStr = dataOggiStr();
   // target del venditore selezionato, sia quelli vendita PRODOTTI (POS)
   // sia quelli sui CORSI venduti (denaro o punti) — due silo diversi, ma
@@ -13172,6 +13235,7 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
               <CommissioniSuiCorsi
                 iscritti={iscritti} corsiDate={corsiDate}
                 corsi={corsi} location={location} isMobile={isMobile}
+                amministra={amministra} identita={identitaChiGuarda}
               />
             )}
 
@@ -21254,6 +21318,16 @@ function ImpostazioniQuotaCoordinatore({ venditori = [], master = [], iscritti =
   const persone = [...new Set([...(venditori || []).map((v) => v.nome), ...(master || []).map((m) => m.nome)].filter(Boolean).map((n) => String(n).toUpperCase()))].sort();
   const n = parseNum(pct);
   const valida = !!persona && Number.isFinite(n) && n >= 0 && n <= 100;
+  // L'ID DEL VENDITORE, accanto al nome (28/11/2026). La tendina qui
+  // sopra offre nomi — e il nome e' l'unica cosa che l'impostazione ha
+  // mai salvato — ma da oggi il nome decide anche CHI VEDE la scheda
+  // nella Dashboard venditori, e li' l'identita' di chi e' entrato e' un
+  // id. Si risolve contro `venditori` e non contro `master`, perche' e'
+  // quello l'elenco da cui la dashboard prende l'identita'; un nome che
+  // li' non c'e' (una master che non vende) resta senza id e il
+  // riconoscimento ricade sul nome, come prima.
+  const venditoriOmonimi = (venditori || []).filter((v) => String(v?.nome || "").trim().toUpperCase() === persona);
+  const idPersona = venditoriOmonimi.length === 1 ? venditoriOmonimi[0].id : "";
   return (
     <div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.5, marginBottom: 12 }}>
@@ -21270,7 +21344,14 @@ function ImpostazioniQuotaCoordinatore({ venditori = [], master = [], iscritti =
         <div style={{ flex: 1 }}><Field label="Vale dai corsi che iniziano dal"><input data-campo="coord-dal" type="date" style={inputStyle} value={dal} onChange={(e) => setDal(e.target.value)} /></Field></div>
       </div>
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginBottom: 8 }}>{msg}</div>}
-      <Button disabled={!valida} onClick={() => { salva({ personaNome: persona, percentuale: n, dal: dal || "" }); setMsg(`Salvato: ${persona}, ${String(n).replace(".", ",")}% del pattuito${dal ? ` dai corsi dal ${fmtData(dal)}` : ""}.`); }} style={{ width: "100%" }}>Salva</Button>
+      {persona && !idPersona && (
+        <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1F", background: "#FFF8E1", border: "1px solid #E8D9A0", borderRadius: 8, padding: "7px 10px", marginBottom: 8 }}>
+          {venditoriOmonimi.length > 1
+            ? `Fra i venditori ci sono ${venditoriOmonimi.length} persone che si chiamano ${persona}: la scheda si riconosce dal nome, quindi la vedrebbero tutte. Dai un nome distinto a quelle righe.`
+            : `${persona} non ha una riga fra i venditori: la scheda in Commissioni sui corsi si riconosce dal nome, e la vede solo chi entra con quel nome.`}
+        </div>
+      )}
+      <Button disabled={!valida} onClick={() => { salva({ personaNome: persona, personaId: idPersona, percentuale: n, dal: dal || "" }); setMsg(`Salvato: ${persona}, ${String(n).replace(".", ",")}% del pattuito${dal ? ` dai corsi dal ${fmtData(dal)}` : ""}.`); }} style={{ width: "100%" }}>Salva</Button>
 
       {/* L'ANALISI STA QUI, non nella dashboard di chi la prende (28/10/2026,
           deciso dal titolare): mese per mese iscrizioni, pattuito e quota,
@@ -94194,6 +94275,7 @@ function Gestionale() {
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
           titolo={etichettaTasto("home", "dashboardvenditori", "Dashboard venditori")}
+          ruoloUtente={ruoloUtente}
         />
       )}
 
@@ -94916,7 +94998,7 @@ export {
   scontoAFasceCarrello, percentualeFasciaDi, fasceCorsiPerPagamento, serieScontoConPercentuali,
   costoBundleDaDistinta, conCostoDeiBundle, costoAcquistoDi, marginePercentualeDi,
   SchedaFatturaDaEmettere, PannelloScontiEventi, PannelloScostamenti, PannelloScartiShop,
-  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, ModaleGestisciSede, quotaCoordinatorePerMese,
+  PaginaOrdiniInArrivo, Modal, PaginaVenditeShop, PaginaAdvisor, RiquadroSegnalatore, stileRigaSegnalatori, PaginaMagazzino, CestinoVendite, ModaleGestisciAlloggio, ModaleGestisciSede, quotaCoordinatorePerMese, vedeQuotaCoordinatore,
   calcolaVociScadenziario, vociCashRinviate, contiRiepilogoClasse, costoKitDellaClasse,
   listaRaccoltaMateriale, RaccoltaMateriale,
   composizioneKit, listaMancanti, ComposizioneKit, RigaCorsoLogistica,
