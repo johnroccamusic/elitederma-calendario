@@ -115,6 +115,21 @@ describe("la scheda, montata", () => {
     const p = await scheda({ amministra: true, identita: [MARIO] });
     expect(p.nodo.querySelector('[data-campo="quota-coordinatore"]')).not.toBeNull();
   });
+
+  // LIQUIDARE E' UN ATTO CONTABILE: congela un importo e dichiara che
+  // quel mese e' stato pagato. Fino al 28/11/2026 il tasto lo poteva
+  // premere qualunque venditore che aprisse questa pagina.
+  it("Elena vede la sua scheda ma NON puo' liquidare", async () => {
+    const p = await scheda({ identita: [{ id: "v-elena", nome: "ELENA" }] });
+    expect(p.nodo.querySelector('[data-campo="quota-coordinatore"]')).not.toBeNull();
+    expect(p.tasto("Liquida")).toBeUndefined();
+    expect(p.tasto("Riapri")).toBeUndefined();
+  });
+
+  it("chi amministra puo' liquidare", async () => {
+    const p = await scheda({ amministra: true, identita: [MARIO] });
+    expect(p.tasto("Liquida")).toBeTruthy();
+  });
 });
 
 // LA GUARDIA. Il guasto non stava in un componente — stava in una
@@ -161,5 +176,32 @@ describe("la guardia: il buco non si riapre", () => {
 
   it("Setting salva anche l'id del coordinatore", () => {
     expect(SORGENTE).toContain("personaId: idPersona");
+  });
+
+  // «commissioni sui corsi e' una sezione aperta solo ad elena che ha
+  // una percentuale sui corsi. fine. gli altri neppure devono sapere
+  // che esiste» — quindi non si nasconde la scheda dentro una linguetta
+  // che tutti vedono: si toglie la linguetta.
+  it("la LINGUETTA esiste solo per chi vede le commissioni", () => {
+    const i = SORGENTE.indexOf('chiave: "commissioni", testo: "Commissioni sui corsi"');
+    expect(i).toBeGreaterThan(0);
+    expect(SORGENTE.slice(Math.max(0, i - 220), i)).toContain("vedeCommissioni ?");
+  });
+
+  it("e il contenuto non si disegna comunque senza il permesso", () => {
+    expect(SORGENTE).toContain('{tabDashboardVenditore === "commissioni" && vedeCommissioni && (');
+  });
+
+  it("la linguetta la decide la stessa funzione della scheda", () => {
+    const i = SORGENTE.indexOf("const vedeCommissioni = vedeQuotaCoordinatore(");
+    expect(i).toBeGreaterThan(0);
+    expect(SORGENTE.slice(i, i + 300)).toContain("identita: identitaChiGuarda");
+  });
+
+  it("i due tasti contabili sono di chi amministra, e la riga si firma", () => {
+    expect(SORGENTE).toContain("liquidato_da: operatore || null");
+    const i = SORGENTE.indexOf('{inCorso === m.chiave ? "Liquido…" : "Liquida"}');
+    expect(i).toBeGreaterThan(0);
+    expect(SORGENTE.slice(Math.max(0, i - 400), i)).toContain("amministra && (");
   });
 });

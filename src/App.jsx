@@ -12383,7 +12383,7 @@ function nomeMese(chiave) {
   return `${(MESI[m - 1] || "").toUpperCase()} ${anno || ""}`.trim();
 }
 
-export function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile, amministra = false, identita = [] }) {
+export function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMobile, amministra = false, identita = [], operatore = "" }) {
   const [liquidazioni, setLiquidazioni] = useState(null);
   // la quota coordinatore, se qualcuno l'ha accesa in Setting: una scheda
   // sua, in cima, separata dalla quota venditore
@@ -12458,6 +12458,11 @@ export function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMo
       // `percentuale` resta a null: la colonna e' della vecchia regola a
       // percentuale, qui l'importo e' la somma delle quote venditore
       mese: m.chiave, importo: m.totale, iscritti: m.iscritti, edizioni: m.righe.length,
+      // CHI HA LIQUIDATO (28/11/2026). Liquidare e' un atto contabile:
+      // congela un importo e dichiara che quel mese e' stato pagato.
+      // Senza un nome accanto, fra sei mesi non si sa chi l'ha fatto —
+      // e fino a oggi quel tasto lo poteva premere qualunque venditore.
+      liquidato_da: operatore || null,
     });
     setInCorso("");
     if (error) { setMsg("Non sono riuscito a liquidare: " + testoErrore(error)); return; }
@@ -12495,9 +12500,14 @@ export function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMo
           <span style={{ ...fontDisplay, fontSize: isMobile ? 14 : 16, fontWeight: 700, color: NAVY, letterSpacing: 0.4 }}>{nomeMese(m.chiave)}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{m.iscritti} iscrizion{m.iscritti === 1 ? "e" : "i"}</span>
-            <Button variant="ghost" onClick={() => liquida(m)} disabled={inCorso === m.chiave}>
-              {inCorso === m.chiave ? "Liquido…" : "Liquida"}
-            </Button>
+            {/* liquidare e riaprire li fa chi amministra: sono scritture
+                contabili, e il tasto lo poteva premere chiunque aprisse
+                questa pagina (28/11/2026) */}
+            {amministra && (
+              <Button variant="ghost" onClick={() => liquida(m)} disabled={inCorso === m.chiave}>
+                {inCorso === m.chiave ? "Liquido…" : "Liquida"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -12597,12 +12607,12 @@ export function CommissioniSuiCorsi({ iscritti, corsiDate, corsi, location, isMo
                 <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, minWidth: isMobile ? 112 : 140 }}>{nomeMese(m.chiave)}</span>
                 <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 170px", minWidth: 0 }}>
                   {quanti} iscrizion{quanti === 1 ? "e" : "i"}
-                  {l ? `${l.percentuale != null ? ` · ${String(l.percentuale).replace(".", ",")}%` : ""} · liquidato il ${fmtData(String(l.liquidato_il).slice(0, 10))}` : " · da liquidare"}
+                  {l ? `${l.percentuale != null ? ` · ${String(l.percentuale).replace(".", ",")}%` : ""} · liquidato il ${fmtData(String(l.liquidato_il).slice(0, 10))}${l.liquidato_da ? ` da ${l.liquidato_da}` : ""}` : " · da liquidare"}
                 </span>
                 <span style={{ ...fontBody, fontSize: 13, fontWeight: 800, color: l ? NAVY : "#B07D2B", whiteSpace: "nowrap" }}>{fmtEuroErp2(importo)}</span>
-                {l
+                {amministra && (l
                   ? <Button variant="ghost" onClick={() => riapri(l)} disabled={inCorso === m.chiave}>Riapri</Button>
-                  : <Button variant="ghost" onClick={() => liquida(m)} disabled={inCorso === m.chiave}>{inCorso === m.chiave ? "Liquido…" : "Liquida"}</Button>}
+                  : <Button variant="ghost" onClick={() => liquida(m)} disabled={inCorso === m.chiave}>{inCorso === m.chiave ? "Liquido…" : "Liquida"}</Button>)}
               </div>
             );
           })}
@@ -12622,7 +12632,7 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
   registraInterceptaIndietro,
   venditeShop, prodottiShop, targetVenditeProdotti,
   titolo = "Dashboard venditori",
-  ruoloUtente = "",
+  ruoloUtente = "", operatore = "",
 }) {
   const isMobile = useIsMobile();
   // se un venditore ha fatto login (venditoreBloccato valorizzato), la
@@ -12664,6 +12674,24 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
         nome: (venditori.find((v) => v.id === venditoreBloccato.id) || {}).nome || venditoreBloccato.nome,
       }]
     : [];
+  // LA SEZIONE INTERA E' DI CHI PRENDE LA QUOTA (28/11/2026, deciso dal
+  // titolare con queste parole: «commissioni sui corsi e' una sezione
+  // aperta solo ad elena che ha una percentuale sui corsi. fine. gli
+  // altri neppure devono sapere che esiste»).
+  //
+  // Quindi non si nasconde la scheda dentro una linguetta che tutti
+  // vedono: si toglie LA LINGUETTA. Una tessera che si apre su una
+  // pagina vuota, o che dice «non puoi vedere questo», racconta
+  // comunque che qualcuno prende una percentuale sui corsi.
+  //
+  // Conseguenza voluta, e va saputa: da qui in avanti un venditore non
+  // vede le proprie quote in nessun posto dell'app — «Le tue
+  // iscrizioni» non le mostra. Era la richiesta.
+  const [quotaCoordDash] = useImpostazioneCondivisa(CHIAVE_QUOTA_COORDINATORE, QUOTA_COORDINATORE_DEFAULT);
+  const vedeCommissioni = vedeQuotaCoordinatore(
+    { ...QUOTA_COORDINATORE_DEFAULT, ...(quotaCoordDash || {}) },
+    { amministra, identita: identitaChiGuarda },
+  );
   const oggiStr = dataOggiStr();
   // target del venditore selezionato, sia quelli vendita PRODOTTI (POS)
   // sia quelli sui CORSI venduti (denaro o punti) — due silo diversi, ma
@@ -12954,7 +12982,9 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
                 { chiave: "corsi", testo: <>Calendario<br />iscrizioni</>, Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
                 { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
                 { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
-                { chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga },
+                // la tessera esiste solo per chi prende la quota, e per
+                // chi amministra: vedi `vedeCommissioni` qui sopra
+                ...(vedeCommissioni ? [{ chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga }] : []),
               ].map((t) => (
                 <TileHome
                   key={t.chiave} title={t.testo} Icona={t.Icona} badge={t.badge}
@@ -12987,7 +13017,7 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
             {tabDashboardVenditore !== "corsi" && (
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 14, textAlign: "center", textTransform: "uppercase" }}>
                 {tabDashboardVenditore === "performance" ? "Performance di vendita"
-                  : tabDashboardVenditore === "commissioni" ? "Commissioni sui corsi"
+                  : tabDashboardVenditore === "commissioni" ? (vedeCommissioni ? "Commissioni sui corsi" : "")
                   : "Le tue iscrizioni"}
               </div>
             )}
@@ -13231,11 +13261,11 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
                 registraInterceptaIndietro={registraInterceptaIndietro}
               />
             )}
-            {tabDashboardVenditore === "commissioni" && (
+            {tabDashboardVenditore === "commissioni" && vedeCommissioni && (
               <CommissioniSuiCorsi
                 iscritti={iscritti} corsiDate={corsiDate}
                 corsi={corsi} location={location} isMobile={isMobile}
-                amministra={amministra} identita={identitaChiGuarda}
+                amministra={amministra} identita={identitaChiGuarda} operatore={operatore}
               />
             )}
 
@@ -94275,7 +94305,7 @@ function Gestionale() {
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
           titolo={etichettaTasto("home", "dashboardvenditori", "Dashboard venditori")}
-          ruoloUtente={ruoloUtente}
+          ruoloUtente={ruoloUtente} operatore={operatoreApp?.nome || ""}
         />
       )}
 

@@ -127,10 +127,30 @@ describe("il venditore iscrive", () => {
         onBack={() => {}} ricarica={() => {}} apriData={() => {}}
       />
     );
-    await clicca(p.tasto("Commissioni sui corsi"));
+    // Si preme «Le tue iscrizioni» e non «Commissioni sui corsi»: dal
+    // 28/11/2026 quella tessera non esiste per un venditore qualunque —
+    // la sezione e' di chi prende la quota coordinatore, e «gli altri
+    // neppure devono sapere che esiste». Mario non ce l'ha, quindi
+    // premerla qui era premere una tessera che non c'e'. La prova
+    // guarda lo spostamento dell'acceso, che e' quello che le interessa.
+    await clicca(p.tasto("Le tue iscrizioni"));
     const accese = [...p.nodo.querySelectorAll('[data-aperto="1"]')];
     expect(accese).toHaveLength(1);
-    expect(accese[0].textContent).toMatch(/Commissioni sui corsi/);
+    expect(accese[0].textContent).toMatch(/Le tue iscrizioni/);
+  });
+
+  // e la tessera delle commissioni, per lui, non c'e' affatto
+  it("un venditore qualunque non vede la tessera delle commissioni", async () => {
+    const p = await monta(
+      <PaginaDashboardVenditori
+        venditoreBloccato={MARIO} venditori={[MARIO]}
+        corsi={[CORSO]} location={[SEDE]} corsiDate={[CD]} iscritti={[]} master={[]}
+        venditeShop={[]} prodottiShop={[]} targetVenditeProdotti={[]} eventi={[]}
+        onBack={() => {}} ricarica={() => {}} apriData={() => {}}
+      />
+    );
+    expect(p.tasto("Commissioni sui corsi")).toBeUndefined();
+    expect(p.testo()).not.toContain("Commissioni sui corsi");
   });
 
   it("nella classe il tasto Iscrivi apre il modulo", async () => {
