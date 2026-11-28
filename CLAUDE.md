@@ -5455,10 +5455,20 @@ pubblicate, e **l'unica del repo che non c'è di là è lei**) e una chiamata
 vera, che risponde **404 `{"code":"NOT_FOUND","message":"Requested
 function was not found"}`**.
 
-**Conseguenza già accaduta, ed è di documenti:** DEBORA FUMAGALLI ha
-firmato il 25/11 alle 18:52 e **la sua copia non esiste** (`pdf_path` e
-`copia_inviata_il` vuoti). Ha sottoscritto un contratto e non ne ha niente
-in mano.
+**Conseguenza già accaduta, ed è di documenti. Al 28/11/2026 sono
+CINQUE, non una.** Dal 25/11 hanno firmato DEBORA FUMAGALLI (25/11
+22:22), MARIA T. NAPOLEONE (27/11 11:37), VALENTINA CALASCIBETTA (27/11
+13:44), ELIA CITO (27/11 18:17) e ANDREA PAURA (27/11 21:44) — ore di
+Roma, da `firmato_il`; la riga di prima diceva «18:52» per Debora, che
+era una lettura in UTC presa per locale. **Nessuna delle cinque ha la
+sua copia** (`pdf_path` e `copia_inviata_il` vuoti su tutte e cinque).
+Hanno sottoscritto un contratto e non ne hanno niente in mano.
+
+**La buona notizia è che non si perde nulla e non si rifirma niente:**
+controllato riga per riga, tutte e cinque portano firma, fronte e retro
+del documento, il testo congelato e le tre dichiarazioni con la loro
+ora. Appena la funzione è pubblicata, «Fai la copia» le compone tutte e
+cinque dal fascicolo — è esattamente il ramo scritto per questo caso.
 
 **E L'ERRORE NON DICEVA IL PERCHÉ — la terza volta per lo stesso
 motivo.** `supabase.functions.invoke`, davanti a una risposta non-2xx,
@@ -5510,6 +5520,25 @@ del 31/10 — verificato leggendo il file servito, che scrive gli id di
 Resend **uno per uno** invece di passare da `crm_campagna_segna_inviate`,
 cioè la finestra cieca di secondi in cui gli avvisi si perdevano è ancora
 aperta. Tutte e due passano `deno check`.
+
+**Ricontrollato il 28/11/2026, e niente è cambiato:** delle funzioni vive
+`contratto-master-firmato` **continua a non esserci** e
+`crm-campagna-invia` è ancora la **v2** del 31/10; la CLI su questa
+macchina è autenticata e il progetto collegato (`supabase projects list`
+risponde, `Elitederma-Genyon` linked), e `deno check` è verde su tutte e
+due — quindi non manca niente, manca il comando. Nel frattempo le firme
+senza copia sono passate da una a cinque (vedi sopra). Riprovato il
+deploy: negato di nuovo dal classificatore.
+
+**E il riallineamento orario gira a vuoto, per la ragione già scritta:**
+il cron `campagne-stati-in-pari` ha girato il 28/11 alle 11:40 con esito
+`succeeded`, ma **150 destinatari restano fermi su «inviata» dal 24/11**.
+`crm-campagna-riallinea` ricade su `RESEND_API_KEY` quando
+`RESEND_API_KEY_LETTURA` non c'è, quella chiave non sa **leggere**, e la
+funzione si ferma al primo 401 dicendo perché. Gli avvisi parcheggiati
+non applicati sono **zero**, quindi `email-eventi` v15 fa la sua parte:
+quello che manca è solo la chiave «Full access». Finché non c'è, quelle
+150 righe non dicono «non arrivata» — dicono «non lo sappiamo».
 
 Prove in `prove/chi-ha-aperto-il-contratto.test.jsx` (+3) e
 `prove/errore-funzione.test.jsx`: il 404 della piattaforma che dice la
