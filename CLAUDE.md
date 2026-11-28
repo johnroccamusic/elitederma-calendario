@@ -868,6 +868,54 @@ e la condizione la decide chi lo monta. È la stessa famiglia del
 19/11/2026 («è anche venditore» e «venditore collegato»): il difetto sta
 nel collegamento, e lì arrivano solo le guardie che rileggono il codice.
 
+**E POI LA SEZIONE INTERA È SPARITA PER GLI ALTRI** (28/11/2026, poche
+ore dopo). Messo davanti alla misura, il titolare ha deciso più in
+grande di quello che gli avevo proposto, parola per parola:
+«commissioni sui corsi è una sezione aperta solo ad elena che ha una
+percentuale sui corsi. fine. gli altri neppure devono sapere che
+esiste».
+
+Quindi non si nasconde la scheda dentro una linguetta che tutti vedono:
+**si toglie la linguetta**. Una tessera che si apre su una pagina vuota,
+o che dice «non puoi vedere questo», racconta comunque che qualcuno
+prende una percentuale sui corsi. La decide la stessa
+`vedeQuotaCoordinatore`, e il contenuto resta chiuso anche se la
+linguetta fosse rimasta accesa da prima — nascondere un tasto non è
+chiudere una porta.
+
+**Conseguenza voluta, e va saputa: un venditore non vede più le proprie
+quote in nessun posto dell'app.** Controllato prima di dirlo: «Le tue
+iscrizioni» non le mostra. Era la richiesta, non una dimenticanza.
+
+**E QUELLA PAGINA MOSTRAVA PIÙ DI QUELLO CHE SEMBRAVA.** Il conto dei
+mesi (`mesi`) non filtra per chi guarda: somma `quota_venditore` di
+**tutte** le iscrizioni. Quindi ogni venditore leggeva il monte
+commissioni di ogni classe — misurato: a ottobre **8.835 € su 99
+iscrizioni** spalmati su 14 venditori, con la fetta più grande da
+**3.710 €**. Non è stato filtrato: la pagina adesso la apre solo chi la
+deve leggere, e per Elena e per chi amministra quella vista d'insieme è
+giusta.
+
+**LIQUIDARE È UN ATTO CONTABILE, e non aveva nessun controllo.**
+«Liquida» congela un importo e dichiara che quel mese è stato pagato;
+«Riapri» cancella la riga. Li poteva premere **qualunque** venditore che
+aprisse la linguetta, e la riga che nasceva non diceva chi avesse
+premuto. Dal 28/11 i due tasti sono di chi amministra e la riga porta il
+nome dell'operatore, che lo storico mostra accanto alla data
+(«liquidato il … da …»). Migrazione `20261128130000`, applicata: una
+colonna, rollback dentro.
+
+**Nessun dato da rimettere in pari:** `commissioni_corsi_liquidazioni`
+è **vuota** (zero righe, misurato prima di toccare), quindi nessuno
+l'aveva mai premuto — e una firma messa «per coerenza» su una
+liquidazione mai avvenuta sarebbe un fatto inventato.
+
+**Una prova esistente è andata rossa, giustamente:** quella del
+14/11/2026 premeva «Commissioni sui corsi» montando Mario, cioè una
+tessera che da oggi lui non ha. Adesso preme «Le tue iscrizioni» — lo
+spostamento dell'acceso è quello che quella prova guarda — e accanto c'è
+una prova nuova che pretende che per lui quella tessera non esista.
+
 ### La cassa contanti si legge un mese alla volta (28/10/2026)
 
 Deciso dal titolare: chi usa la cassa non deve leggere «quanto è entrato
