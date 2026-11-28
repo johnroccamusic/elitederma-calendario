@@ -198,6 +198,31 @@ describe("la guardia: il buco non si riapre", () => {
     expect(SORGENTE.slice(i, i + 300)).toContain("identita: identitaChiGuarda");
   });
 
+  // «altrimenti si vedono 3 bottoni a sinistra e un vuoto a destra»: la
+  // griglia era inchiodata a quattro colonne, quindi togliendo una
+  // tessera restava al suo posto un buco della sua misura.
+  it("le colonne della griglia le conta l'elenco delle tessere", () => {
+    const i = SORGENTE.indexOf("const tessereVenditore = [");
+    expect(i).toBeGreaterThan(0);
+    const j = SORGENTE.indexOf("tessereVenditore.map((t) => (");
+    expect(j).toBeGreaterThan(i);
+    const griglia = SORGENTE.slice(SORGENTE.lastIndexOf("<div style={{ display: \"grid\"", j), j);
+    expect(griglia).toContain("repeat(${tessereVenditore.length}");
+    // le quattro colonne fisse non devono tornare, in nessuno dei due rami
+    expect(griglia).not.toContain('"repeat(4, minmax(0, 1fr))"');
+    expect(griglia).not.toContain('"repeat(4, calc((100% - 3 * 14px) / 4))"');
+  });
+
+  it("la tessera resta della misura di sempre: si centra, non si allarga", () => {
+    // la larghezza massima segue il numero di tessere, quindi tre tessere
+    // occupano tre quarti di quella larghezza e la griglia le centra;
+    // un 820 inchiodato le avrebbe allargate per riempire il vuoto
+    expect(SORGENTE).toContain("const larghezzaTessereDash = tessereVenditore.length * larghezzaTesseraDash");
+    const j = SORGENTE.indexOf("tessereVenditore.map((t) => (");
+    const griglia = SORGENTE.slice(SORGENTE.lastIndexOf("<div style={{ display: \"grid\"", j), j);
+    expect(griglia).toContain("larghezzaTessereDash");
+  });
+
   it("i due tasti contabili sono di chi amministra, e la riga si firma", () => {
     expect(SORGENTE).toContain("liquidato_da: operatore || null");
     const i = SORGENTE.indexOf('{inCorso === m.chiave ? "Liquido…" : "Liquida"}');

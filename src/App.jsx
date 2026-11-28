@@ -12710,6 +12710,36 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
     : [];
   const numeroDateProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
 
+  // LE TESSERE DI QUESTA DASHBOARD, IN UN POSTO SOLO: da qui escono sia
+  // i tasti sia QUANTE COLONNE ha la griglia. Dal 28/11/2026
+  // «Commissioni sui corsi» esiste solo per chi prende la quota, quindi
+  // il numero non e' piu' fisso — e con la griglia inchiodata a quattro
+  // colonne i tre tasti che restano si ammucchiavano a sinistra, con a
+  // destra un buco grande come una tessera. Le colonne le conta
+  // `tessereVenditore.length`, cosi' il giorno che una tessera nasce o
+  // sparisce non c'e' un secondo numero da ricordarsi.
+  const tessereVenditore = [
+    // "Calendario iscrizioni" e non "Iscrivi allievo"
+    // (21/10/2026): la tessera non apre un modulo, apre il
+    // calendario delle date — ed e' proprio il nome vecchio
+    // che faceva aspettare un modulo a chi la premeva. Le due
+    // parole stanno una sull'altra per richiesta, col `<br/>`
+    // invece di affidarsi a dove va a capo: la larghezza della
+    // tessera cambia col telefono e con Aspetto dell'app.
+    { chiave: "corsi", testo: <>Calendario<br />iscrizioni</>, Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
+    { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
+    { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
+    // la tessera esiste solo per chi prende la quota, e per
+    // chi amministra: vedi `vedeCommissioni` qui sopra
+    ...(vedeCommissioni ? [{ chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga }] : []),
+  ];
+  // La tessera resta della misura che aveva quando erano quattro: qui si
+  // centra quello che resta, non si allarga. Una tessera piu' larga
+  // perche' un'altra e' sparita sarebbe un cambio che nessuno ha chiesto.
+  const LARGHEZZA_TESSERE_DASH = 820;
+  const larghezzaTesseraDash = (LARGHEZZA_TESSERE_DASH - 14 * 3) / 4;
+  const larghezzaTessereDash = tessereVenditore.length * larghezzaTesseraDash + (tessereVenditore.length - 1) * 14;
+
   const range = useMemo(() => {
     const oggi = new Date();
     if (periodo === "mese") {
@@ -12970,22 +13000,8 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
             {/* sul telefono la stessa griglia della home (quattro colonne,
                 stesso spazio): i tre tasti stanno vicini come li'. Prima
                 erano tre colonne larghe e i tasti finivano lontani */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, calc((100% - 3 * 14px) / 4))" : "repeat(4, minmax(0, 1fr))", gap: 14, justifyContent: "center", maxWidth: isMobile ? "none" : 820, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
-              {[
-                // "Calendario iscrizioni" e non "Iscrivi allievo"
-                // (21/10/2026): la tessera non apre un modulo, apre il
-                // calendario delle date — ed e' proprio il nome vecchio
-                // che faceva aspettare un modulo a chi la premeva. Le due
-                // parole stanno una sull'altra per richiesta, col `<br/>`
-                // invece di affidarsi a dove va a capo: la larghezza della
-                // tessera cambia col telefono e con Aspetto dell'app.
-                { chiave: "corsi", testo: <>Calendario<br />iscrizioni</>, Icona: IconaPersonaAggiungi, badge: `${numeroDateProgrammazione} date` },
-                { chiave: "performance", testo: "Performance di vendita", Icona: IconaFrecciaTrend },
-                { chiave: "iscrizioni", testo: "Le tue iscrizioni", Icona: IconaLaureaErp },
-                // la tessera esiste solo per chi prende la quota, e per
-                // chi amministra: vedi `vedeCommissioni` qui sopra
-                ...(vedeCommissioni ? [{ chiave: "commissioni", testo: "Commissioni sui corsi", Icona: IconaTargetRiga }] : []),
-              ].map((t) => (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? `repeat(${tessereVenditore.length}, calc((100% - 3 * 14px) / 4))` : `repeat(${tessereVenditore.length}, minmax(0, 1fr))`, gap: 14, justifyContent: "center", maxWidth: isMobile ? "none" : larghezzaTessereDash, margin: `0 auto ${isMobile ? 14 : 22}px` }}>
+              {tessereVenditore.map((t) => (
                 <TileHome
                   key={t.chiave} title={t.testo} Icona={t.Icona} badge={t.badge}
                   onClick={() => {
