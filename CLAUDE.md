@@ -916,6 +916,137 @@ tessera che da oggi lui non ha. Adesso preme «Le tue iscrizioni» — lo
 spostamento dell'acceso è quello che quella prova guarda — e accanto c'è
 una prova nuova che pretende che per lui quella tessera non esista.
 
+### Le liste delle password si archiviano (28/11/2026)
+
+Il titolare: «possiamo mettere vicino alla lista dove sono le password di
+ogni utente il tasto archivia, che le mette in una lista di archiviati
+senza cancellarne i dati e almeno pulisco le liste?».
+
+**Misurato prima di toccare niente, e non era una pulizia estetica:** 22
+venditori, 19 master, 8 assistenti, 7 utenze — **56 righe**, e sui
+venditori **tutti e 22 hanno una password che apre l'app**. Tre non hanno
+mai chiuso un'iscrizione (MARIA LAURA, MARIO, VALENTINA) e sette sono
+fermi da agosto o prima, mentre in cima ce ne sono cinque che lavorano
+ogni settimana. Sono porte aperte di cui nessuno ricorda il perché.
+
+**PERCHÉ NON SI CANCELLA**, ed è la ragione per cui il titolare ha chiesto
+l'archivio e non il cestino: queste righe sono la storia di chi ha
+venduto, tenuto un corso, firmato un consenso o incassato. `iscritti` le
+nomina — **per NOME**, in `tutor` — `corsi_date.master_id` le punta, e
+punti, provvigioni e commissioni le contano. Cancellarne una vuol dire
+staccare quelle iscrizioni dal loro venditore.
+
+**ARCHIVIATO VUOL DIRE CHE LA PORTA SI CHIUDE**, deciso da lui messo
+davanti alle due strade. La lista si pulisce **e** la password non apre
+più niente. L'altra strada — pulire la lista e lasciare la password buona
+— è la peggiore delle due: l'accesso resta aperto e quella riga non si
+vede più da nessuna parte, quindi nessuno se ne accorge. È la regola che
+questo file ripete da ottobre: nascondere un tasto non è chiudere una
+porta.
+
+**Dove vive quella serratura, detto con precisione:** nel **Gate** di
+`App.jsx`, cioè dove vive la password. Con un account Supabase solo per
+tutto lo staff (§ 4) l'accesso non è un accesso del database e una policy
+non può distinguere una persona dall'altra: **non è una serratura più
+profonda di quella che protegge la password stessa**, e va saputo. Il
+giorno in cui i ruoli passeranno dal JWT diventa una policy.
+
+**TRE COLONNE E NON UNA** (migrazione `20261128160000`, applicata, nessun
+dato toccato — 56 righe, zero archiviate): `archiviato_il` dice da quando
+(«da quando questa persona non entra più» è la prima domanda davanti a un
+accesso che non funziona), `archiviato_da` **chi** ha premuto — come
+`liquidato_da` di stamattina, perché togliere un accesso è un atto e un
+atto senza un nome non si spiega a nessuno — e `archiviato_motivo` il
+perché, che fra sei mesi è l'unica cosa che distingue «ha smesso» da
+«archiviata per sbaglio». Il motivo è **facoltativo**: si batte Invio e si
+archivia, perché il senso del tasto è pulire una lista in fretta;
+obbligarlo vorrebbe dire una frase inventata ogni volta.
+
+**UNA PASSWORD, DUE PORTE: l'archivio segue la persona, non la riga.** Una
+master con un venditore collegato ha **una** password sola — quella della
+master, ricopiata sulla riga del venditore (`allineaPasswordVenditore`).
+Archiviandone solo una, quella password continuerebbe ad aprire l'app
+dall'altra porta: lista pulita e cancello aperto. Quindi le due righe si
+archiviano insieme e insieme si ripristinano (`righeCollegateDaArchiviare`).
+Un'**utenza d'ufficio** collegata a un venditore **non segue**, ed è
+voluto: quella è una password di un altro mestiere — Raffaele fa ufficio e
+vende — e chiuderla di nascosto sarebbe una sorpresa.
+
+**LE TRE RIGHE DI SISTEMA NON SI ARCHIVIANO.** «Utente generico»,
+«Amministratore», «Programmatore» non sono persone, sono identità
+condivise: archiviare la prima vuol dire che nell'app non entra più
+nessuno. Il tasto vive sotto `!sistema`, come l'Elimina che gli sta
+accanto — e **Archivia viene prima**, perché dei due è quello che si
+disfa.
+
+**CHI È IN ARCHIVIO LO LEGGE, invece di credere di aver sbagliato a
+battere.** La sua password è quella giusta e non apre più niente:
+«Codice non corretto» lo manda a riprovarla, poi a farsela ridire, e
+infine a segnalare un guasto che non c'è. Ora si legge «questo accesso è
+stato archiviato: la password è giusta, ma non apre più l'app». Non si
+rivela niente a nessuno — chi batte quella password è la persona che ce
+l'ha.
+
+**E CHI VIENE ARCHIVIATO MENTRE È DENTRO non resta dentro.** Il Gate non
+lo fa più entrare, ma la sessione vive nel browser: la rilettura dei
+permessi all'apertura (7/11/2026) adesso legge anche `archiviato_il` e
+**esce**, invece di lasciar lavorare un accesso che non c'è più.
+
+**SPARISCE DOVE SI SCEGLIE, RESTA DOVE È GIÀ SCRITTO** (seconda decisione
+sua). Dieci tendine filtrate — il master di una classe in Operativo corsi
+e nella scheda corso, il master alla creazione del corso, il «venditore
+collegato» dei due pannelli, i selettori delle due dashboard, l'accesso
+venditore, la persona della quota coordinatore, chi firma il reperimento
+di una modella, e il **tutor** di un'iscrizione.
+
+**La sola accortezza che conta è `daScegliere`:** un archiviato non si
+può più scegliere, **ma quello già scritto su quella riga resta in
+elenco**, marcato «(archiviato)». Una tendina che non contiene il valore
+che sta mostrando lo cancella al primo tocco — è la lezione del
+14/11/2026 sui kit spenti, e qui sarebbe peggio: il legame fra
+un'iscritta e il suo venditore è **il nome**, quindi un nome sparito
+dalla tendina si porterebbe via la provvigione al primo salvataggio della
+scheda. Per questo `daScegliere` confronta sia l'id sia il nome.
+
+**Due conseguenze volute, e vanno sapute.** La prima: dai selettori delle
+due dashboard un archiviato non si scegli più, quindi la sua pagina non
+si apre da lì — i suoi numeri però restano in Statistiche venditori, in
+Commissioni e nelle classi passate, e dall'elenco «Archiviati» si rimette
+in servizio con un tasto. La seconda: le tre liste di chi può firmare il
+reperimento che arrivano dalla **pagina pubblica** delle modelle
+(`modelle_vista`) **non portano** `archiviato_il`, quindi di là un
+archiviato compare ancora. Cambiare quella funzione vuol dire toccare una
+`security definer` di una rotta pubblica per un guadagno estetico: non è
+stato fatto.
+
+**L'elenco unito dei venditori porta l'archivio della master**, o una
+flaggata «è anche venditore» e messa in archivio resterebbe nelle tendine
+dei venditori, che leggono quell'elenco e non la tabella `master`.
+
+**E l'archivio si scrive contando le righe cambiate** (`.select("id")`):
+un update senza select dice «va bene» anche a zero righe, e qui vorrebbe
+dire una lista che sembra pulita con la porta ancora aperta.
+
+Prove in `prove/archivio-delle-liste.test.jsx` (28): le regole e i loro
+bordi (la colonna assente che vale «in servizio», il già scelto per id e
+per nome, il motivo vuoto che non diventa una frase), le pagine **montate
+e premute** — la lista senza gli archiviati, «Archiviati (1)» che si apre
+e dice chi/quando/da chi/perché, la sezione che non c'è quando l'archivio
+è vuoto, il tasto che scrive **solo** le tre chiavi e su quella riga, la
+domanda annullata che non scrive niente, la master che trascina il suo
+venditore — la tendina del tutor nella scheda vera, e le **guardie che
+rileggono `src/App.jsx`**: tutte e quattro le select del cancello devono
+chiedere `archiviato_il` e tutte e quattro le ricerche devono escludere
+gli archiviati. **Provate rosse** rimettendo il buco: cadono sei prove,
+fra cui quella della colonna mancante — che è il modo in cui questo si
+riaprirebbe davvero, perché `undefined` non dà nessun errore e fa entrare.
+
+**Provato anche sul database vero, in transazione annullata:** archiviato
+MARIO, il cancello con la sua password trova **zero** righe, in lista
+restano 21, le iscrizioni che lo nominano non si muovono. Dopo il
+rollback: 22 righe, zero archiviate.
+
+
 ### La cassa contanti si legge un mese alla volta (28/10/2026)
 
 Deciso dal titolare: chi usa la cassa non deve leggere «quanto è entrato

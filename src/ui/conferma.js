@@ -60,3 +60,31 @@ export function confermaRimozione(cosa, conseguenza = "") {
   const coda = String(conseguenza || "").trim();
   return window.confirm(coda ? `${domanda}\n\n${coda}` : domanda);
 }
+
+/**
+ * LA TERZA, PER QUELLO CHE SI METTE DA PARTE (28/11/2026). Archiviare
+ * una persona non e' cancellarla — i suoi dati, le sue iscrizioni e i
+ * suoi compensi restano tutti — e non e' nemmeno «toglierla» da un
+ * elenco: e' una porta che si chiude, perche' la sua password smette di
+ * aprire l'app. Quindi la domanda e' sua, e dice quella conseguenza.
+ *
+ * E' un `prompt` e non un `confirm` perche' fa due cose in un gesto: la
+ * conferma e il MOTIVO, che fra sei mesi e' l'unica cosa che distingue
+ * «ha smesso» da «archiviata per sbaglio». Il motivo e' facoltativo —
+ * si batte Invio e si archivia — perche' il senso del tasto e' pulire
+ * una lista in fretta; obbligarlo vorrebbe dire una frase inventata
+ * ogni volta, che e' peggio di nessuna frase.
+ *
+ * @param {string} cosa chi si archivia, nominato: «il venditore MARIO».
+ * @param {string} [conseguenza] cosa comporta.
+ * @returns {string|null} il motivo (anche vuoto) o `null` se annullato.
+ */
+export function chiediMotivoArchiviazione(cosa, conseguenza = "") {
+  const oggetto = String(cosa || "").trim();
+  const testa = oggetto ? `Metti in archivio ${oggetto}.` : "Metti in archivio.";
+  const coda = String(conseguenza || "").trim();
+  return window.prompt(
+    `${testa}${coda ? `\n\n${coda}` : ""}\n\nScrivi il motivo (facoltativo) e premi OK. Annulla per lasciare tutto com'è.`,
+    "",
+  );
+}

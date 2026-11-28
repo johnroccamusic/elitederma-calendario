@@ -16,7 +16,7 @@ import {
 import { Button, Field, CampoNumero, ContatoreQuantita, FrecceSuGiu, TastoLivelloPrecedente, CampoRicerca, IconaCasa, IconaCartellaShop } from "./ui/base.jsx";
 import { combaciaPerParole } from "./cerca-testo.js";
 import { qrSvg } from "./ui/qr.js";
-import { confermaCancellazione, confermaRimozione } from "./ui/conferma.js";
+import { confermaCancellazione, confermaRimozione, chiediMotivoArchiviazione } from "./ui/conferma.js";
 import { nettoDaLordo } from "./prezzi/netto.js";
 import { caricaKitInAula } from "./rientri/pos";
 // LE PAGINE CHE SI APRONO A RICHIESTA.
@@ -117,6 +117,7 @@ import { statoSincronizzazione, ultimoGiroRiuscito, minutiDa, daQuanto, MINUTI_M
 import { BACKORDER_TESTO_PREDEFINITO, messaggioBackorder } from "../supabase/functions/_shared/bundle.js";
 import { passaDalListino, frazioneDelTetto, scontoListinoPct, effettoSulCatalogo, dannoDellaForzatura } from "../supabase/functions/_shared/sconto-listino.js";
 import { leggiListinoAdmin } from "./rivenditori/dati.js";
+import { eArchiviata, inServizio, inArchivio, daScegliere, etichettaArchivio, campiArchiviazione, campiRipristino } from "./archivio-persone.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -7658,7 +7659,13 @@ function Gate({ onOk }) {
           onKeyDown={(e) => e.key === "Enter" && check()}
         />
         <Button onClick={check} disabled={verificando} style={{ width: "100%" }}>{verificando ? "Verifico…" : "Entra"}</Button>
-        {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
+        {err && (
+          <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10, lineHeight: 1.4 }}>
+            {err === "archiviato"
+              ? "Questo accesso è stato archiviato: la password è giusta, ma non apre più l'app. Chiedi a chi amministra di ripristinarlo da Gestione utenti."
+              : "Codice non corretto"}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -7675,10 +7682,16 @@ function Gate({ onOk }) {
       // le colonne si elencano una per una, quindi ogni permesso nuovo va
       // aggiunto anche qui: "puo_omaggi" era stato dimenticato, e chi
       // l'aveva spuntato entrava lo stesso senza poter fare omaggi
-      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi, supervisore"),
-      supabase.from("master").select("id, nome, password, permessi, venditore_id, e_venditore, supervisore"),
-      supabase.from("venditori").select("id, nome, password, permessi"),
-      supabase.from("assistente").select("id, nome, password, permessi, master_id"),
+      // `archiviato_il` DEVE STARE IN TUTTE E QUATTRO (28/11/2026). Una
+      // colonna che manca da questo elenco non da' nessun errore: arriva
+      // `undefined`, `!undefined` e' vero, e l'archiviato entra come se
+      // niente fosse — e' il guasto del 16/11/2026 («campo assente =
+      // colonna non chiesta») applicato a una porta. Una prova rilegge
+      // queste quattro righe e pretende che la colonna ci sia.
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore, puo_omaggi, supervisore, archiviato_il"),
+      supabase.from("master").select("id, nome, password, permessi, venditore_id, e_venditore, supervisore, archiviato_il"),
+      supabase.from("venditori").select("id, nome, password, permessi, archiviato_il"),
+      supabase.from("assistente").select("id, nome, password, permessi, master_id, archiviato_il"),
     ]);
     setVerificando(false);
     const righe = utenti || [];
@@ -7696,20 +7709,20 @@ function Gate({ onOk }) {
     const sUser = rigaSistema("__user");
     const sAdmin = rigaSistema("__admin");
     const sProgrammatore = rigaSistema("__programmatore");
-    const nominale = righe.find((u) => !u.chiave_sistema && code && u.password === code);
+    const nominale = righe.find((u) => !u.chiave_sistema && code && u.password === code && !eArchiviata(u));
     // le master entrano con la propria password (Password menù > Password
     // Master), impostata voce per voce sulla riga "master" già esistente
     // in Setting — a differenza dei venditori, non scelgono il proprio
     // nome da una tendina: la password stessa identifica la master, e
     // l'unico tasto che vedono è "Dashboard master", già sulla propria scheda
-    const masterTrovata = (masterRighe || []).find((m) => !!m.password && code && m.password === code);
+    const masterTrovata = (masterRighe || []).find((m) => !!m.password && code && m.password === code && !eArchiviata(m));
     // stesso meccanismo delle master: il venditore entra qui direttamente
     // con la propria password (Password menù > Password venditori), senza
     // passare dalla tendina "Utente generico" + selezione nome. Dal
     // 21/10/2026 atterra in Home come tutti: `venditoreId` serve ancora,
     // ma piu' avanti — e' quello che fa aprire ad "apriLoginVenditore" la
     // dashboard bloccata sui suoi dati invece del selettore dei venditori
-    const venditoreTrovato = (venditoriRighe || []).find((v) => !!v.password && code && v.password === code);
+    const venditoreTrovato = (venditoriRighe || []).find((v) => !!v.password && code && v.password === code && !eArchiviata(v));
     // collegamento esplicito (Password menù > Password Master > "Venditore
     // collegato"), non più affidato alla coincidenza delle due password:
     // funziona in entrambe le direzioni, qualunque delle due password usi
@@ -7727,7 +7740,7 @@ function Gate({ onOk }) {
     // trova dentro la dashboard che ha gia'. Una seconda password per la
     // stessa persona vuol dire due chiavi per la stessa porta, e prima o
     // poi una delle due resta quella vecchia.
-    const assistenteTrovata = (assistentiRighe || []).find((a) => !a.master_id && !!a.password && code && a.password === code);
+    const assistenteTrovata = (assistentiRighe || []).find((a) => !a.master_id && !!a.password && code && a.password === code && !eArchiviata(a));
     // e, entrando come master, quale assistente e' la stessa persona:
     // serve a mostrarle anche le classi dove assiste
     const assistenteDellaMaster = masterTrovata ? (assistentiRighe || []).find((a) => a.master_id === masterTrovata.id) : null;
@@ -7840,7 +7853,19 @@ function Gate({ onOk }) {
       sessionStorage.setItem("edc_utente", JSON.stringify(utente));
       onOk(ruolo, utente);
     } else {
-      setErr(true);
+      // CHI E' IN ARCHIVIO LO LEGGE, invece di credere di aver sbagliato
+      // a battere (28/11/2026). La sua password e' quella giusta e non
+      // apre piu' niente: «Codice non corretto» lo manda a riprovarla,
+      // poi a farsela ridire, e infine a segnalare un guasto che non
+      // c'e'. E' la regola del 25/11/2026 — un tasto che non puo'
+      // riuscire e' peggio di un tasto che manca, perche' chi lo preme
+      // crede di aver sbagliato lui. Non si rivela niente a nessuno: chi
+      // batte quella password e' la persona che ce l'ha.
+      const conQuestaPassword = [
+        ...righe.filter((u) => !u.chiave_sistema),
+        ...(masterRighe || []), ...(venditoriRighe || []), ...(assistentiRighe || []),
+      ].some((r) => eArchiviata(r) && !!r.password && r.password === code);
+      setErr(conQuestaPassword ? "archiviato" : true);
     }
   }
 }
@@ -9294,7 +9319,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     selettore: (
                       <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
                         <option value="">—</option>
-                        {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                        {daScegliere(master, valoreCampo(cd, "master_id")).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}{etichettaArchivio(m, true)}</option>)}
                       </select>
                     ),
                     azione: (
@@ -12335,7 +12360,9 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
       <Field label="Il tuo nome">
         <select style={inputStyle} value={venditoreId} onChange={(e) => setVenditoreId(e.target.value)}>
           <option value="">— scegli —</option>
-          {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+          {/* e' un accesso: un archiviato non si scegli, e non c'e'
+              nessun valore gia' scritto da proteggere */}
+          {inServizio(venditori).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
         </select>
       </Field>
       <Field label="Password">
@@ -12967,7 +12994,7 @@ export function PaginaDashboardVenditori({ eventi = [], onApriEvento,
           {venditoreBloccato ? null : (
             <select style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={venditoreSelId} onChange={(e) => setVenditoreSelId(e.target.value)}>
               <option value="">— scegli venditore —</option>
-              {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+              {daScegliere(venditori, venditoreSelId).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}{etichettaArchivio(v)}</option>)}
             </select>
           )}
         </div>
@@ -16197,7 +16224,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
               onChange={(e) => setMasterSelId(e.target.value)}
             >
               <option value="">— scegli master —</option>
-              {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+              {daScegliere(master, masterSelId).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}{etichettaArchivio(m, true)}</option>)}
             </select>
             {assistentiSenzaDashboard.length > 0 && (
               <select
@@ -19251,6 +19278,146 @@ async function invocaConUnSecondoTentativo(nomeFunzione, opzioni) {
   return supabase.functions.invoke(nomeFunzione, opzioni);
 }
 
+// L'ARCHIVIO DELLE QUATTRO LISTE (28/11/2026).
+//
+// Il titolare: «possiamo mettere vicino alla lista dove sono le password
+// di ogni utente il tasto archivia, che le mette in una lista di
+// archiviati senza cancellarne i dati e almeno pulisco le liste?».
+//
+// Il tasto e l'elenco sono scritti UNA VOLTA e usati da tutte e quattro
+// — Gestione utenti, Password Master, Password venditori, Password
+// assistenti. Quattro copie vorrebbero dire quattro frasi diverse per la
+// stessa domanda e, prima o poi, una che si dimentica di scrivere chi ha
+// premuto: togliere un accesso e' un atto, e un atto senza un nome e' il
+// difetto che «Liquida» aveva fino a stamattina.
+//
+// L'ARCHIVIO SEGUE LA PERSONA, NON LA RIGA. Una master con un venditore
+// collegato ha UNA password sola — quella della master, ricopiata sulla
+// riga del venditore (vedi `allineaPasswordVenditore`). Archiviando solo
+// una delle due, quella password continuerebbe ad aprire l'app dall'altra
+// porta: la lista sarebbe pulita e il cancello aperto, cioe' il modo
+// peggiore di sbagliare qui. Quindi le due righe si archiviano insieme,
+// e insieme si ripristinano. Un'utenza d'ufficio collegata a un venditore
+// NON segue: quella e' una password sua, di un'altra persona o di un
+// altro mestiere (Raffaele fa ufficio e vende), e chiuderla di nascosto
+// sarebbe una sorpresa.
+export function righeCollegateDaArchiviare(tabella, riga, { master = [], venditori = [] } = {}) {
+  if (tabella === "master" && riga?.venditore_id) {
+    return [{ tabella: "venditori", id: riga.venditore_id }];
+  }
+  if (tabella === "venditori") {
+    const m = (master || []).find((x) => x.venditore_id === riga?.id);
+    return m ? [{ tabella: "master", id: m.id }] : [];
+  }
+  return [];
+}
+
+// Il tasto, su una riga in servizio. Scrive su quella riga e sulle sue
+// collegate, e conta le righe cambiate: un update senza `select` dice
+// «va bene» anche quando non ha toccato niente, e qui vorrebbe dire una
+// lista che sembra pulita con la porta ancora aperta.
+function TastoArchivia({ tabella, riga, nome, femminile = false, operatore, collegate = [], ricarica, compatto = false }) {
+  const [inCorso, setInCorso] = useState(false);
+  async function archivia() {
+    const motivo = chiediMotivoArchiviazione(
+      `${nome}`,
+      "Non comparirà più nelle liste e non si potrà più scegliere, e la sua password non aprirà più l'app. Nessun dato si perde: le sue iscrizioni, le sue classi, i suoi punti e i suoi compensi restano come sono, e si rimette dentro da «Archiviati».",
+    );
+    if (motivo === null) return;
+    setInCorso(true);
+    const campi = campiArchiviazione(operatore, motivo);
+    const { data, error } = await supabase.from(tabella).update(campi).eq("id", riga.id).select("id");
+    if (error) { setInCorso(false); window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) {
+      setInCorso(false);
+      window.alert("Il database non ha archiviato nessuna riga: ricarica la pagina e riprova.");
+      return;
+    }
+    for (const c of collegate) {
+      await supabase.from(c.tabella).update(campi).eq("id", c.id);
+    }
+    setInCorso(false);
+    ricarica([...new Set([tabella, ...collegate.map((c) => c.tabella)])]);
+  }
+  return (
+    <button
+      onClick={archivia}
+      disabled={inCorso}
+      title={`Mette ${nome} in archivio: sparisce dalle liste e la sua password non apre più l'app. Non si perde niente e si rimette dentro da «Archiviati».`}
+      style={{ ...fontBody, fontSize: compatto ? 11 : 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: compatto ? "6px 9px" : "8px 12px", cursor: inCorso ? "default" : "pointer", whiteSpace: "nowrap" }}
+    >
+      {inCorso ? "Archivio…" : "Archivia"}
+    </button>
+  );
+}
+
+// L'elenco di chi e' in archivio, in fondo alla sua lista. Chiuso di suo:
+// e' la lista che non si guarda, ed era il punto del tasto qui sopra.
+// Se non c'e' nessuno in archivio la sezione NON compare — una sezione
+// sempre presente e quasi sempre vuota si impara a saltare (la regola del
+// 25/11/2026).
+function ElencoArchiviati({ tabella, righe, femminile = false, ricarica, collegamenti = {} }) {
+  const [aperto, setAperto] = useState(false);
+  const [inCorso, setInCorso] = useState(null);
+  const archiviate = inArchivio(righe);
+  if (archiviate.length === 0) return null;
+  async function ripristina(riga) {
+    setInCorso(riga.id);
+    const campi = campiRipristino();
+    const { data, error } = await supabase.from(tabella).update(campi).eq("id", riga.id).select("id");
+    if (error) { setInCorso(null); window.alert("Errore: " + testoErrore(error)); return; }
+    if (!(data || []).length) {
+      setInCorso(null);
+      window.alert("Il database non ha ripristinato nessuna riga: ricarica la pagina e riprova.");
+      return;
+    }
+    // le collegate tornano dentro con lei, per la stessa ragione per cui
+    // ci sono andate insieme: una password, due porte
+    const collegate = righeCollegateDaArchiviare(tabella, riga, collegamenti);
+    for (const c of collegate) {
+      await supabase.from(c.tabella).update(campi).eq("id", c.id);
+    }
+    setInCorso(null);
+    ricarica([...new Set([tabella, ...collegate.map((c) => c.tabella)])]);
+  }
+  return (
+    <div style={{ marginTop: 14, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+      <button
+        onClick={() => setAperto((a) => !a)}
+        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+      >
+        {aperto ? "▾" : "▸"} {femminile ? "Archiviate" : "Archiviati"} ({archiviate.length})
+      </button>
+      {aperto && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
+            {femminile ? "Queste non compaiono" : "Questi non compaiono"} nelle liste e la loro password non apre l&apos;app. Tutti i dati sono dove erano: iscrizioni, classi, punti e compensi non si sono mossi.
+          </div>
+          {archiviate.map((r) => (
+            <div key={r.id} data-archiviato={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{String(r.nome || "").toUpperCase()}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                  {`In archivio dal ${fmtData(r.archiviato_il)}`}
+                  {r.archiviato_da ? ` · ${r.archiviato_da}` : ""}
+                  {r.archiviato_motivo ? ` · ${r.archiviato_motivo}` : ""}
+                </div>
+              </div>
+              <button
+                onClick={() => ripristina(r)}
+                disabled={inCorso === r.id}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 6, padding: "7px 12px", cursor: inCorso === r.id ? "default" : "pointer", whiteSpace: "nowrap" }}
+              >
+                {inCorso === r.id ? "Rimetto…" : "Rimetti in servizio"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // una riga della tabella "Gestione utenti": nome + password (si salvano
 // da soli appena si clicca fuori dal campo, come la password Master) e un
 // quadratino per ogni tasto della home (TASTI_HOME) — spuntarlo/togliere
@@ -19260,7 +19427,7 @@ async function invocaConUnSecondoTentativo(nomeFunzione, opzioni) {
 // piuttosto che uscire dal campo). Le 3 righe di sistema non ancora
 // salvate (id nullo, mostrate coi valori di sempre) vengono create al
 // primo salvataggio
-const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, venditori, ricarica }, ref) {
+const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, venditori, ricarica, operatore = "" }, ref) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
@@ -19317,7 +19484,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
       style={{ ...inputStyle, padding: "6px 8px", fontSize: 11 }}
     >
       <option value="">— nessuno —</option>
-      {(venditori || []).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+      {daScegliere(venditori, utente.venditore_id).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}{etichettaArchivio(v)}</option>)}
     </select>
   );
   // profilo "kiosk": entra dritto su Gestione corsi, mai in Home, sola
@@ -19420,12 +19587,17 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
           ))}
         </div>
         {!sistema && (
-          <button
-            onClick={elimina}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "9px 12px", cursor: "pointer", width: "100%" }}
-          >
-            Elimina
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <TastoArchivia tabella="utenti_app" riga={utente} nome={`l'utenza ${utente.nome}`} operatore={operatore} ricarica={ricarica} />
+            </div>
+            <button
+              onClick={elimina}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "9px 12px", cursor: "pointer" }}
+            >
+              Elimina
+            </button>
+          </div>
         )}
       </div>
     );
@@ -19473,13 +19645,19 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         </td>
       ))}
       <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+        {/* Archivia viene PRIMA di Elimina, ed e' il tasto neutro:
+            cancellare una riga stacca le iscrizioni che la nominano, e
+            dei due e' quello che non si disfa. */}
         {!sistema && (
-          <button
-            onClick={elimina}
-            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
-          >
-            Elimina
-          </button>
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+            <TastoArchivia tabella="utenti_app" riga={utente} nome={`l'utenza ${utente.nome}`} operatore={operatore} ricarica={ricarica} compatto />
+            <button
+              onClick={elimina}
+              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+            >
+              Elimina
+            </button>
+          </div>
         )}
       </td>
     </tr>
@@ -19516,13 +19694,17 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
 // e una colonna per ogni tasto della home (TASTI_HOME): un tasto non
 // spuntato per una riga resta disattivato e non cliccabile in home per
 // chi entra con quella password, senza dover chiedere nessuna password
-function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
+function TabellaGestioneUtenti({ utentiApp, venditori, ricarica, operatore = "" }) {
   const isMobile = useIsMobile();
   const righeSistema = RIGHE_SISTEMA_DEFAULT.map((def) => {
     const esistente = utentiApp.find((u) => u.chiave_sistema === def.chiave);
     return esistente || { id: null, chiave_sistema: def.chiave, nome: def.nome, password: def.passwordDefault, permessi: def.permessiDefault };
   });
-  const righeNominali = utentiApp.filter((u) => !u.chiave_sistema);
+  // in lista ci sono le righe in servizio; quelle in archivio stanno
+  // nell'elenco in fondo. Le tre righe di SISTEMA non si archiviano: non
+  // sono persone, sono identita' condivise — e senza "Utente generico"
+  // nell'app non entra piu' nessuno.
+  const righeNominali = inServizio(utentiApp.filter((u) => !u.chiave_sistema));
   // le righe di sistema restano in testa nell'ordine naturale; cliccando
   // un'intestazione si riordina tutto l'elenco
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
@@ -19557,7 +19739,8 @@ function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
     { chiave: "amministratore", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "solocalendario", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     { chiave: "modificamodelle", larghezza: LARGHEZZA_COLONNA_SPUNTA }, { chiave: "omaggipos", larghezza: LARGHEZZA_COLONNA_SPUNTA },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
-    { chiave: "azioni", larghezza: 44 },
+    // due tasti, Archivia ed Elimina: a 44 px ci stava solo il secondo
+    { chiave: "azioni", larghezza: 160 },
   ];
   const larghezzaTabellaUtenti = colonneUtenti.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -19584,7 +19767,7 @@ function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
       {isMobile ? (
         <div style={{ marginTop: 14 }}>
           {righe.map((u) => (
-            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} venditori={venditori} ricarica={ricarica} />
+            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} venditori={venditori} ricarica={ricarica} operatore={operatore} />
           ))}
         </div>
       ) : (
@@ -19618,7 +19801,7 @@ function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
             </thead>
             <tbody>
               {righe.map((u) => (
-                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} venditori={venditori} ricarica={ricarica} />
+                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} venditori={venditori} ricarica={ricarica} operatore={operatore} />
               ))}
             </tbody>
           </table>
@@ -19627,6 +19810,7 @@ function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
       <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Button onClick={salvaTutto} disabled={salvandoTutto}>{salvandoTutto ? "Salvo…" : "Salva"}</Button>
       </div>
+      <ElencoArchiviati tabella="utenti_app" righe={utentiApp} ricarica={ricarica} />
       {/* le due colonne che si somigliano ma non c'entrano niente l'una con
           l'altra: senza questo promemoria si finisce per spuntare la prima
           pensando di dare i poteri della seconda */}
@@ -19648,7 +19832,7 @@ function TabellaGestioneUtenti({ utentiApp, venditori, ricarica }) {
 // una riga di "Password Master": nome (di sola lettura, si aggiorna da
 // solo in base a Setting > Definisci Master) + password (si salva da sola
 // appena si esce dalla casella, niente tasto Salva) + una casella per
-function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
+function RigaTabellaMaster({ masterRec, venditori, ricarica, operatore = "", tutteMaster = [] }) {
   const isMobile = useIsMobile();
   const [password, setPassword] = useState(masterRec.password || "");
   const [permessiLocali, setPermessiLocali] = useState(masterRec.permessi || []);
@@ -19725,7 +19909,7 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
         style={{ ...inputStyle, padding: "6px 8px", fontSize: 11 }}
       >
         <option value="">— nessuno —</option>
-        {(venditori || []).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+        {daScegliere(venditori, masterRec.venditore_id).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}{etichettaArchivio(v)}</option>)}
       </select>
       {masterRec.e_venditore && !masterRec.venditore_id && (
         <div style={{ ...fontBody, fontSize: 10, color: MUTED, marginTop: 4, lineHeight: 1.25 }}>
@@ -19733,6 +19917,15 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
         </div>
       )}
     </>
+  );
+  // Archiviando una master si archivia anche la riga del venditore
+  // collegato: la password e' una sola per tutte e due le porte.
+  const tastoArchivia = (
+    <TastoArchivia
+      tabella="master" riga={masterRec} nome={`la master ${masterRec.nome}`} femminile
+      operatore={operatore} ricarica={ricarica} compatto={!isMobile}
+      collegate={righeCollegateDaArchiviare("master", masterRec, { master: tutteMaster, venditori })}
+    />
   );
   if (isMobile) {
     return (
@@ -19760,6 +19953,7 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
             <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
           </label>
         ))}
+        <div style={{ marginTop: 12 }}>{tastoArchivia}</div>
       </div>
     );
   }
@@ -19787,6 +19981,7 @@ function RigaTabellaMaster({ masterRec, venditori, ricarica }) {
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
         </td>
       ))}
+      <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>{tastoArchivia}</td>
     </tr>
   );
 }
@@ -19810,7 +20005,7 @@ const AREE_SCHEDA_ASSISTENTE = [
 // una riga di "Password assistenti". Gemella di RigaTabellaMaster, senza
 // il venditore collegato: un'assistente non vende col suo codice — vende
 // al corso dov'e', con lo sconto di quel corso.
-function RigaTabellaAssistente({ assistenteRec, ricarica }) {
+function RigaTabellaAssistente({ assistenteRec, ricarica, operatore = "" }) {
   const isMobile = useIsMobile();
   const [password, setPassword] = useState(assistenteRec.password || "");
   const [permessiLocali, setPermessiLocali] = useState(assistenteRec.permessi || []);
@@ -19833,6 +20028,15 @@ function RigaTabellaAssistente({ assistenteRec, ricarica }) {
     ricarica(["assistente"]);
   }
   const tutte = [...TASTI_HOME, ...AREE_SCHEDA_ASSISTENTE];
+  // Niente collegate: chi e' anche master non ha una password qui (entra
+  // dalla sua), quindi archiviare questa riga non lascia nessuna porta
+  // aperta — e la master si archivia da Password Master.
+  const tastoArchivia = (
+    <TastoArchivia
+      tabella="assistente" riga={assistenteRec} nome={`l'assistente ${assistenteRec.nome}`} femminile
+      operatore={operatore} ricarica={ricarica} compatto={!isMobile}
+    />
+  );
 
   if (isMobile) {
     return (
@@ -19850,6 +20054,7 @@ function RigaTabellaAssistente({ assistenteRec, ricarica }) {
             <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
           </label>
         ))}
+        <div style={{ marginTop: 12 }}>{tastoArchivia}</div>
       </div>
     );
   }
@@ -19872,13 +20077,15 @@ function RigaTabellaAssistente({ assistenteRec, ricarica }) {
           )}
         </td>
       ))}
+      <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>{tastoArchivia}</td>
     </tr>
   );
 }
 
-function TabellaPasswordAssistenti({ assistente, ricarica }) {
+export function TabellaPasswordAssistenti({ assistente, ricarica, operatore = "" }) {
   const isMobile = useIsMobile();
-  const ordinate = [...(assistente || [])].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  // in lista quelle in servizio; le archiviate stanno in fondo
+  const ordinate = inServizio(assistente).sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
   const tutte = [...TASTI_HOME, ...AREE_SCHEDA_ASSISTENTE];
   const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, lineHeight: 1.2, verticalAlign: "bottom" };
   return (
@@ -19890,7 +20097,7 @@ function TabellaPasswordAssistenti({ assistente, ricarica }) {
       {ordinate.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assistente definita in Setting.</div>
       ) : isMobile ? (
-        <div>{ordinate.map((a) => <RigaTabellaAssistente key={a.id} assistenteRec={a} ricarica={ricarica} />)}</div>
+        <div>{ordinate.map((a) => <RigaTabellaAssistente key={a.id} assistenteRec={a} ricarica={ricarica} operatore={operatore} />)}</div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
           <table style={{ borderCollapse: "collapse" }}>
@@ -19903,12 +20110,14 @@ function TabellaPasswordAssistenti({ assistente, ricarica }) {
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>
                   </th>
                 ))}
+                <th style={thStyle}></th>
               </tr>
             </thead>
-            <tbody>{ordinate.map((a) => <RigaTabellaAssistente key={a.id} assistenteRec={a} ricarica={ricarica} />)}</tbody>
+            <tbody>{ordinate.map((a) => <RigaTabellaAssistente key={a.id} assistenteRec={a} ricarica={ricarica} operatore={operatore} />)}</tbody>
           </table>
         </div>
       )}
+      <ElencoArchiviati tabella="assistente" righe={assistente} femminile ricarica={ricarica} />
     </div>
   );
 }
@@ -19918,11 +20127,12 @@ function TabellaPasswordAssistenti({ assistente, ricarica }) {
 // creazione/eliminazione qui: si aggiungono/tolgono master da Setting).
 // Chi entra con la password di una master trova già la sua Dashboard
 // master aperta sulla propria scheda, senza scegliere nulla; se ha anche
-export function TabellaPasswordMaster({ master, venditori, ricarica }) {
+export function TabellaPasswordMaster({ master, venditori, ricarica, operatore = "" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
   const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || "";
-  const masterOrdinate = ordina(master, {
+  // in lista le master in servizio; quelle in archivio stanno in fondo
+  const masterOrdinate = ordina(inServizio(master), {
     nome: (m) => m.nome || "",
     venditore: (m) => nomeVenditore(m.venditore_id),
   });
@@ -19936,6 +20146,7 @@ export function TabellaPasswordMaster({ master, venditori, ricarica }) {
     // proprio quello serve: poterla spegnere per qualche giorno — durante
     // dei lavori, o a chi in quel periodo non deve entrare.
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
+    { chiave: "azioni", larghezza: 110 },
   ];
   const larghezzaTabellaMaster = colonneMaster.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -19955,7 +20166,7 @@ export function TabellaPasswordMaster({ master, venditori, ricarica }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
       ) : isMobile ? (
         <div>
-          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} venditori={venditori} ricarica={ricarica} />)}
+          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} venditori={venditori} ricarica={ricarica} operatore={operatore} tutteMaster={master} />)}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
@@ -19972,14 +20183,16 @@ export function TabellaPasswordMaster({ master, venditori, ricarica }) {
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
+                <th style={thStyle}></th>
               </tr>
             </thead>
             <tbody>
-              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} venditori={venditori} ricarica={ricarica} />)}
+              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} venditori={venditori} ricarica={ricarica} operatore={operatore} tutteMaster={master} />)}
             </tbody>
           </table>
         </div>
       )}
+      <ElencoArchiviati tabella="master" righe={master} femminile ricarica={ricarica} collegamenti={{ master, venditori }} />
     </div>
   );
 }
@@ -19990,7 +20203,7 @@ export function TabellaPasswordMaster({ master, venditori, ricarica }) {
 // venditori, unica fonte per crearli/rinominarli/eliminarli) e la
 // password non si legge mai in chiaro: digitarne una nuova e premere
 // "Imposta password" la sostituisce via la Edge Function dedicata
-function RigaTabellaVenditore({ venditore, masterCollegata, ricarica }) {
+function RigaTabellaVenditore({ venditore, masterCollegata, ricarica, operatore = "", tutteMaster = [] }) {
   const isMobile = useIsMobile();
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
   useEffect(() => { setPermessiLocali(venditore.permessi || []); }, [venditore.permessi]);
@@ -20055,6 +20268,15 @@ function RigaTabellaVenditore({ venditore, masterCollegata, ricarica }) {
       onBlur={salvaCognome}
     />
   );
+  // Archiviando un venditore si archivia anche la master che e' la
+  // stessa persona: una password, due porte.
+  const tastoArchivia = (
+    <TastoArchivia
+      tabella="venditori" riga={venditore} nome={`il venditore ${venditore.nome.toUpperCase()}`}
+      operatore={operatore} ricarica={ricarica} compatto={!isMobile}
+      collegate={righeCollegateDaArchiviare("venditori", venditore, { master: tutteMaster })}
+    />
+  );
   if (isMobile) {
     return (
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
@@ -20076,6 +20298,7 @@ function RigaTabellaVenditore({ venditore, masterCollegata, ricarica }) {
             <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
           </label>
         ))}
+        <div style={{ marginTop: 12 }}>{tastoArchivia}</div>
       </div>
     );
   }
@@ -20093,6 +20316,7 @@ function RigaTabellaVenditore({ venditore, masterCollegata, ricarica }) {
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
         </td>
       ))}
+      <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>{tastoArchivia}</td>
     </tr>
   );
 }
@@ -20103,15 +20327,17 @@ function RigaTabellaVenditore({ venditore, masterCollegata, ricarica }) {
 // (dal tasto "Dashboard venditori" in home) trova subito la sua Dashboard
 // venditori, senza dover scegliere o inserire altro, e vede in home solo
 // i tasti qui spuntati — esattamente come un utente nominale
-function TabellaPasswordVenditori({ venditori, master, ricarica }) {
+export function TabellaPasswordVenditori({ venditori, master, ricarica, operatore = "" }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
-  const venditoriOrdinati = ordina(venditori, { nome: (v) => v.nome || "" });
+  // in lista quelli in servizio; gli archiviati stanno in fondo
+  const venditoriOrdinati = ordina(inServizio(venditori), { nome: (v) => v.nome || "" });
   const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
   const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordVenditori_larghezzeColonne");
   const colonneVenditori = [
     { chiave: "nome", larghezza: 140 }, { chiave: "cognome", larghezza: 150 }, { chiave: "password", larghezza: 140 }, { chiave: "accesso", larghezza: 170 },
     ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: LARGHEZZA_COLONNA_SPUNTA })),
+    { chiave: "azioni", larghezza: 110 },
   ];
   const larghezzaTabellaVenditori = colonneVenditori.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   function colonnaPerTutti(chiave, etichetta) {
@@ -20131,7 +20357,7 @@ function TabellaPasswordVenditori({ venditori, master, ricarica }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun venditore definito in Impostazioni.</div>
       ) : isMobile ? (
         <div>
-          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} ricarica={ricarica} />)}
+          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} ricarica={ricarica} operatore={operatore} tutteMaster={master} />)}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
@@ -20151,14 +20377,16 @@ function TabellaPasswordVenditori({ venditori, master, ricarica }) {
                     <IntestazioneVerticale>{t.etichetta}</IntestazioneVerticale>{maniglia(t.chiave, larghezzaDi(t.chiave, LARGHEZZA_COLONNA_SPUNTA))}
                   </th>
                 ))}
+                <th style={thStyle}></th>
               </tr>
             </thead>
             <tbody>
-              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} ricarica={ricarica} />)}
+              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} masterCollegata={(master || []).find((m) => m.venditore_id === v.id) || null} ricarica={ricarica} operatore={operatore} tutteMaster={master} />)}
             </tbody>
           </table>
         </div>
       )}
+      <ElencoArchiviati tabella="venditori" righe={venditori} ricarica={ricarica} collegamenti={{ master, venditori }} />
     </div>
   );
 }
@@ -20923,7 +21151,7 @@ function PaginaImpostazioniHub({ areaIniziale = "setting", onChiediAccessoUtenti
     </div>
   );
 }
-function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, assistente = [], ricarica, onBack, senzaIntestazione = false }) {
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, assistente = [], ricarica, onBack, senzaIntestazione = false, operatore = "" }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -20943,14 +21171,14 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, venditori, assist
         )}
 
         <div style={{ marginBottom: 28 }}>
-          <TabellaGestioneUtenti utentiApp={utentiApp} venditori={venditori} ricarica={ricarica} />
+          <TabellaGestioneUtenti utentiApp={utentiApp} venditori={venditori} ricarica={ricarica} operatore={operatore} />
         </div>
 
-        <TabellaPasswordMaster master={master} venditori={venditori} ricarica={ricarica} />
+        <TabellaPasswordMaster master={master} venditori={venditori} ricarica={ricarica} operatore={operatore} />
 
-        <TabellaPasswordAssistenti assistente={assistente} ricarica={ricarica} />
+        <TabellaPasswordAssistenti assistente={assistente} ricarica={ricarica} operatore={operatore} />
 
-        <TabellaPasswordVenditori venditori={venditori} master={master} ricarica={ricarica} />
+        <TabellaPasswordVenditori venditori={venditori} master={master} ricarica={ricarica} operatore={operatore} />
 
         <div style={{ maxWidth: 400 }}>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di questa rotellina</div>
@@ -21361,7 +21589,13 @@ function ImpostazioniQuotaCoordinatore({ venditori = [], master = [], iscritti =
   const [dal, setDal] = useState(corrente.dal || "");
   const [msg, setMsg] = useState("");
   useEffect(() => { setPersona(corrente.personaNome || ""); setPct(corrente.percentuale ? String(corrente.percentuale).replace(".", ",") : ""); setDal(corrente.dal || ""); }, [salvata]); // eslint-disable-line react-hooks/exhaustive-deps
-  const persone = [...new Set([...(venditori || []).map((v) => v.nome), ...(master || []).map((m) => m.nome)].filter(Boolean).map((n) => String(n).toUpperCase()))].sort();
+  // chi e' in archivio non si puo' piu' scegliere, ma quello GIA' scritto
+  // resta in elenco: una tendina che non contiene il valore che mostra lo
+  // cancella al primo tocco, e qui quel valore decide di chi e' la quota
+  const persone = [...new Set([
+    ...daScegliere(venditori, persona).map((v) => v.nome),
+    ...daScegliere(master, persona).map((m) => m.nome),
+  ].filter(Boolean).map((n) => String(n).toUpperCase()))].sort();
   const n = parseNum(pct);
   const valida = !!persona && Number.isFinite(n) && n >= 0 && n <= 100;
   // L'ID DEL VENDITORE, accanto al nome (28/11/2026). La tendina qui
@@ -26441,7 +26675,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
             <Field label="Master">
               <select style={inputStyle} value={masterId} onChange={(e) => setMasterId(e.target.value)}>
                 <option value="">— scegli —</option>
-                {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                {daScegliere(master, masterId).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}{etichettaArchivio(m, true)}</option>)}
               </select>
             </Field>
             <Field label="Tipo di corso">
@@ -26674,10 +26908,21 @@ function PallinoTipoModellaCompatto({ tipo }) {
 // sua quota.
 function componiReperitoriModelle(master, venditori, utenti) {
   const elenco = [
-    ...(master || []).map((r) => ({ tipo: "master", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
-    ...(venditori || []).map((r) => ({ tipo: "venditore", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
-    ...(utenti || []).map((r) => ({ tipo: "utente", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0 })),
-  ].filter((r) => r.id && String(r.nome || "").trim());
+    ...(master || []).map((r) => ({ tipo: "master", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0, archiviato_il: r.archiviato_il || null })),
+    ...(venditori || []).map((r) => ({ tipo: "venditore", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0, archiviato_il: r.archiviato_il || null })),
+    ...(utenti || []).map((r) => ({ tipo: "utente", id: r.id, nome: r.nome, quota: Number(r.quota_reperimento) || 0, archiviato_il: r.archiviato_il || null })),
+  ].filter((r) => r.id && String(r.nome || "").trim())
+    // CHI E' IN ARCHIVIO NON SI OFFRE PIU' (28/11/2026): firmare il
+    // reperimento di una modella e' un gesto nuovo, e si fa scegliendo
+    // una persona. Quello gia' scritto su una modella non si tocca — lo
+    // mostra `nomeReperitore` risalendo per id, non questa tendina.
+    //
+    // DA SAPERE: le tre liste che arrivano dalla pagina pubblica
+    // (`modelle_vista`) NON portano `archiviato_il`, quindi di la' un
+    // archiviato compare ancora. Cambiare quella funzione vuol dire
+    // toccare una `security definer` di una rotta pubblica per un
+    // guadagno estetico: non e' stato fatto, e va saputo.
+    .filter((r) => !r.archiviato_il);
   // Due schede della stessa persona non devono diventare due voci in
   // tendina. Le si riconosce in due modi: per nome uguale, e per il
   // collegamento esplicito "e' anche un venditore" (master.venditore_id,
@@ -26704,10 +26949,10 @@ function componiReperitoriModelle(master, venditori, utenti) {
 // pubblica di ricerca modelle): si leggono solo le tre colonne che servono
 // — su utenti_app un "select *" porterebbe in giro anche le password
 async function caricaReperitoriModelle() {
-  const colonne = "id, nome, venditore_id, quota_reperimento";
+  const colonne = "id, nome, venditore_id, quota_reperimento, archiviato_il";
   const [m, v, u] = await Promise.all([
     supabase.from("master").select(colonne).eq("gestione_modelle", true),
-    supabase.from("venditori").select("id, nome, quota_reperimento").eq("gestione_modelle", true),
+    supabase.from("venditori").select("id, nome, quota_reperimento, archiviato_il").eq("gestione_modelle", true),
     supabase.from("utenti_app").select(colonne).eq("gestione_modelle", true),
   ]);
   return componiReperitoriModelle(m.data, v.data, u.data);
@@ -29187,7 +29432,7 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
         <Field label="Assegna Master (non obbligatorio)">
           <select style={inputStyle} value={masterSel} onChange={(e) => setMasterSel(e.target.value)}>
             <option value="">La assegno in seguito</option>
-            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+            {daScegliere(master, masterSel).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}{etichettaArchivio(m, true)}</option>)}
           </select>
         </Field>
       )}
@@ -36614,7 +36859,7 @@ export function SchedaData({ ruoloUtente, venditoreLoggato = null, chiOpera = ""
           <Field label="Master">
             <select style={inputStyle} value={modMasterSelScheda} onChange={(e) => setModMasterSelScheda(e.target.value)}>
               <option value="">La assegno in seguito</option>
-              {(master || []).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+              {daScegliere(master, modMasterSelScheda).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}{etichettaArchivio(m, true)}</option>)}
             </select>
           </Field>
           <Field label="Posti massimi">
@@ -91258,6 +91503,13 @@ function Gestionale() {
         permessi: m.permessi || [], password: m.password || null,
         email: m.email || null, email_accesso: m.email_accesso || null,
         fornitore_id: null,
+        // l'archivio viaggia con la riga: una master flaggata «e anche
+        // venditore» e messa in archivio deve sparire anche dalle
+        // tendine dei venditori, che leggono QUESTO elenco e non la
+        // tabella `master` (28/11/2026)
+        archiviato_il: m.archiviato_il || null,
+        archiviato_da: m.archiviato_da || null,
+        archiviato_motivo: m.archiviato_motivo || null,
         // chi legge l'elenco e vuole sapere da dove viene questa riga
         da_master: true,
       }));
@@ -91557,7 +91809,7 @@ function Gestionale() {
     // con le sole colonne sempre presenti e riempio le opzionali con i
     // valori di default, così i venditori restano visibili e utilizzabili.
     venditori: async () => {
-      const ve = await supabase.from("venditori").select("id, nome, cognome, ts, permessi, password, email, email_accesso, fornitore_id").order("nome");
+      const ve = await supabase.from("venditori").select("id, nome, cognome, ts, permessi, password, email, email_accesso, fornitore_id, archiviato_il, archiviato_da, archiviato_motivo").order("nome");
       let venditoriData = ve.data;
       if (ve.error) {
         let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
@@ -92188,11 +92440,14 @@ function Gestionale() {
         : (utenteLoggato.venditoreId && utenteLoggato.venditoreId === utenteLoggato.id) ? "venditore"
           : "utente";
     const tabella = { master: "master", assistente: "assistente", venditore: "venditori", utente: "utenti_app" }[tipo];
+    // `archiviato_il` in tutte e quattro, per lo stesso motivo del Gate:
+    // una colonna che manca da qui arriva `undefined` e l'archiviato
+    // resta dentro per sempre, senza che niente lo dica.
     const colonne = {
-      master: "id, permessi, venditore_id, e_venditore, supervisore",
-      assistente: "id, permessi, master_id",
-      venditore: "id, permessi",
-      utente: "id, permessi, amministratore, solo_calendario, puo_omaggi, supervisore",
+      master: "id, permessi, venditore_id, e_venditore, supervisore, archiviato_il",
+      assistente: "id, permessi, master_id, archiviato_il",
+      venditore: "id, permessi, archiviato_il",
+      utente: "id, permessi, amministratore, solo_calendario, puo_omaggi, supervisore, archiviato_il",
     }[tipo];
     const idDaLeggere = tipo === "master" ? utenteLoggato.masterId
       : tipo === "assistente" ? utenteLoggato.assistenteId
@@ -92206,6 +92461,15 @@ function Gestionale() {
       // vorrebbe dire azzerare i permessi di chi sta usando l'app
       const riga = Array.isArray(data) ? null : data;
       if (annullato || !riga?.id) return;
+
+      // ARCHIVIATA MENTRE ERA DENTRO (28/11/2026). Il Gate non la fa piu'
+      // entrare, ma chi ha la pagina aperta da prima ci resta: la
+      // sessione vive nel browser. Qui la riga si rilegge a ogni
+      // apertura, quindi e' il posto in cui accorgersene — e si esce,
+      // invece di continuare a lavorare con un accesso che non c'e' piu'.
+      // Non si rilegge nessun permesso prima di uscire: non servirebbe a
+      // niente e scriverebbe nella sessione una riga archiviata.
+      if (eArchiviata(riga)) { esci(); return; }
 
       // la riga collegata, se c'e': i permessi si ereditano in tutte e due
       // le direzioni, e il Gate fa lo stesso
@@ -93692,7 +93956,7 @@ function Gestionale() {
           areaIniziale={areaImpostazioni}
           onChiediAccessoUtenti={chiediAccessoUtenti}
           onBack={() => setView("home")}
-          propsUtenti={{ passwordMenu, utentiApp, master, venditori: venditoriTabella, assistente, ricarica: fetchDati, onBack: () => setView("home") }}
+          propsUtenti={{ passwordMenu, utentiApp, master, venditori: venditoriTabella, assistente, ricarica: fetchDati, onBack: () => setView("home"), operatore: operatoreApp?.nome || "" }}
           propsSetting={{
             ruoloUtente, utenteLoggato, iscritti, corsiDate, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella,
             venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi,

@@ -38,6 +38,7 @@ import CampoComuneNascita from "./CampoComune.jsx";
 // un elenco di 232 voci non e' una tendina: si cerca (vedi CampoCerca)
 import CampoCerca from "./CampoCerca.jsx";
 import CampoTelefono from "./CampoTelefono.jsx";
+import { daScegliere, etichettaArchivio } from "../archivio-persone.js";
 
 // un campo escluso dal modulo non si nasconde: resta dov'e', solo
 // smorzato. Chi guarda la pagina deve vedere la scheda intera e capire
@@ -477,7 +478,13 @@ function Casella({ campo, valore, scrivi, esceDalCampo, venditori, spenta, casca
             ripetere «venditore» dentro la casella la allungava fino a
             farla tagliare sul telefono — si leggeva «SCEGLI VENDITOI». */}
         <option value="">— scegli —</option>
-        {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
+        {/* CHI E' IN ARCHIVIO NON SI SCEGLIE PIU' (28/11/2026), ma quello
+            gia' scritto su questa scheda resta: il legame fra un'iscritta
+            e il suo venditore e' proprio questo NOME, e farlo sparire
+            dalla tendina vorrebbe dire che il primo salvataggio lo
+            cancella. Il ripiego «(non in elenco)» qui sotto resta per i
+            nomi che in anagrafica non ci sono mai stati. */}
+        {daScegliere(venditori, valore).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}{etichettaArchivio(v)}</option>)}
         {/* valore già presente ma non (più) in elenco: resta visibile
             invece di sparire silenziosamente */}
         {valore && !(venditori || []).some((v) => v.nome.toUpperCase() === String(valore).toUpperCase()) && (
